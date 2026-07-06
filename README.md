@@ -49,3 +49,21 @@ Sounder modes:
 - `none`: mix participant mic tracks only.
 
 The merge script requires `ffmpeg` on your PATH. Sounder asset URLs point at the app's `/api/sounders/play` route, so keep the app running when using `--sounders=reconstruct` unless those URLs are replaced with direct blob URLs.
+
+## TURN Server
+
+Peer-to-peer mesh audio is enabled by default. Set `NEXT_PUBLIC_RTC_AUDIO_ENABLED=false` to hide the audio room controls and fall back to the pre-existing local recording behavior.
+
+The mesh room uses WebRTC audio only. V1 targets Chrome on Windows 10 and Chrome on iOS; Chrome on iOS uses the iOS WebKit runtime, so autoplay and mic permission must be verified on a real iPhone before relying on it for a live show.
+
+The app expects a coturn-compatible TURN server using short-lived REST credentials:
+
+```bash
+STUN_URLS=stun:turn.example.com:3478
+TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp
+TURN_STATIC_AUTH_SECRET=replace-me
+TURN_TTL_SECONDS=3600
+RTC_CLEANUP_ADMIN_SECRET=replace-me
+```
+
+`TURN_STATIC_AUTH_SECRET` is used only by `/api/sessions/[sessionId]/rtc/ice`; browsers receive temporary usernames and HMAC credentials, never the static secret. See [docs/turn-server.md](docs/turn-server.md) for local setup and production firewall rules.

@@ -49,6 +49,7 @@ export default async function SessionPage({
       date={session.createdAt.slice(0, 10)}
       hostName={participant.displayName}
       participantClientId={participant.clientId}
+      participantAccessToken={participant.accessToken}
       participantRole={participant.role}
       initialStatus={session.status}
       initialEndedAt={session.endedAt ?? null}

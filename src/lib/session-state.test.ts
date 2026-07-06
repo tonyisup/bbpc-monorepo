@@ -191,6 +191,109 @@ describe('session event replay', () => {
     ]);
   });
 
+  it('replays audio participant intervals and disconnects', () => {
+    const initial = createInitialState('EP', '2026-06-23', 'Harley');
+    const state = applySessionSyncEvents(initial, [
+      {
+        kind: 'audio-joined',
+        participant: {
+          clientId: 'guest-1',
+          name: 'Guest',
+          role: 'participant',
+          joinedAudioAt: 1200,
+          recordingStartedAt: 1000,
+        },
+      },
+      {
+        kind: 'audio-disconnect-started',
+        disconnect: {
+          disconnectId: 'disc-1',
+          clientId: 'guest-1',
+          startedAt: 2500,
+          recordingStartedAt: 1000,
+          reason: 'ice-disconnected',
+        },
+      },
+      {
+        kind: 'audio-disconnect-ended',
+        disconnect: {
+          disconnectId: 'disc-1',
+          clientId: 'guest-1',
+          endedAt: 4000,
+          recordingStartedAt: 1000,
+        },
+      },
+      {
+        kind: 'audio-left',
+        participant: {
+          clientId: 'guest-1',
+          leftAudioAt: 6000,
+          recordingStartedAt: 1000,
+        },
+      },
+    ]);
+
+    assert.deepEqual(state.audioParticipants, [
+      {
+        client_id: 'guest-1',
+        name: 'Guest',
+        role: 'participant',
+        joined_audio_at_ms: 200,
+        joined_audio_at_epoch_ms: 1200,
+        left_audio_at_ms: 5000,
+        left_audio_at_epoch_ms: 6000,
+        disconnects: [
+          {
+            disconnect_id: 'disc-1',
+            started_at_ms: 1500,
+            started_at_epoch_ms: 2500,
+            ended_at_ms: 3000,
+            ended_at_epoch_ms: 4000,
+            reason: 'ice-disconnected',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('dedupes repeated audio disconnect starts', () => {
+    const initial = createInitialState('EP', '2026-06-23', 'Harley');
+    const state = applySessionSyncEvents(initial, [
+      {
+        kind: 'audio-joined',
+        participant: {
+          clientId: 'guest-1',
+          name: 'Guest',
+          role: 'participant',
+          joinedAudioAt: 1000,
+          recordingStartedAt: 1000,
+        },
+      },
+      {
+        kind: 'audio-disconnect-started',
+        disconnect: {
+          disconnectId: 'disc-1',
+          clientId: 'guest-1',
+          startedAt: 2000,
+          recordingStartedAt: 1000,
+          reason: 'heartbeat-timeout',
+        },
+      },
+      {
+        kind: 'audio-disconnect-started',
+        disconnect: {
+          disconnectId: 'disc-1',
+          clientId: 'guest-1',
+          startedAt: 2000,
+          recordingStartedAt: 1000,
+          reason: 'heartbeat-timeout',
+        },
+      },
+    ]);
+
+    assert.equal(state.audioParticipants[0].disconnects.length, 1);
+  });
+
   it('preserves explicit sounder timestamps when reducing an action', () => {
     const initial = createInitialState('EP', '2026-06-23', 'Harley');
     const state = sessionReducer(initial, {

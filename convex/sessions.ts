@@ -373,6 +373,25 @@ async function deleteByPublicSessionId(
   return docs.length;
 }
 
+async function deleteRtcByPublicSessionId(ctx: MutationCtx, publicSessionId: string) {
+  const presence = await ctx.db
+    .query('rtcPresence')
+    .withIndex('by_public_session_id', q => q.eq('publicSessionId', publicSessionId))
+    .collect();
+  const signals = await ctx.db
+    .query('rtcSignals')
+    .withIndex('by_created_at', q => q.eq('publicSessionId', publicSessionId))
+    .collect();
+
+  for (const doc of presence) await ctx.db.delete(doc._id);
+  for (const doc of signals) await ctx.db.delete(doc._id);
+
+  return {
+    rtcPresence: presence.length,
+    rtcSignals: signals.length,
+  };
+}
+
 export const cleanupEndedSessions = mutation({
   args: {
     olderThan: v.number(),
@@ -394,6 +413,8 @@ export const cleanupEndedSessions = mutation({
       sessions: 0,
       invites: 0,
       participants: 0,
+      rtcPresence: 0,
+      rtcSignals: 0,
       events: 0,
       manifests: 0,
       favorites: 0,
@@ -403,6 +424,9 @@ export const cleanupEndedSessions = mutation({
     for (const session of sessions) {
       deleted.invites += await deleteByPublicSessionId(ctx, 'sessionInvites', session.publicId);
       deleted.participants += await deleteByPublicSessionId(ctx, 'participants', session.publicId);
+      const deletedRtc = await deleteRtcByPublicSessionId(ctx, session.publicId);
+      deleted.rtcPresence += deletedRtc.rtcPresence;
+      deleted.rtcSignals += deletedRtc.rtcSignals;
       deleted.events += await deleteByPublicSessionId(ctx, 'sessionEvents', session.publicId);
       deleted.manifests += await deleteByPublicSessionId(ctx, 'sessionManifests', session.publicId);
       deleted.favorites += await deleteByPublicSessionId(ctx, 'sessionFavorites', session.publicId);
@@ -432,6 +456,7 @@ export const deleteSessionData = mutation({
       manifests: await deleteByPublicSessionId(ctx, 'sessionManifests', args.publicId),
       favorites: await deleteByPublicSessionId(ctx, 'sessionFavorites', args.publicId),
       recordings: await deleteByPublicSessionId(ctx, 'recordingUploads', args.publicId),
+      ...await deleteRtcByPublicSessionId(ctx, args.publicId),
     };
 
     await ctx.db.delete(session._id);
