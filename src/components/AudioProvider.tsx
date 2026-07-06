@@ -10,21 +10,29 @@ interface AudioManager {
 
 const AudioContext = createContext<AudioManager | null>(null);
 
+type MediaElementSourceFactory = (
+  ctx: AudioContext,
+  audio: HTMLMediaElement,
+) => MediaElementAudioSourceNode;
+
+export function connectSounderToRecordingGraph(
+  audio: HTMLMediaElement,
+  destination: MediaStreamAudioDestinationNode,
+  createSource: MediaElementSourceFactory = (ctx, media) => ctx.createMediaElementSource(media),
+) {
+  const ctx = destination.context as AudioContext;
+  if (ctx.state === 'suspended') {
+    void ctx.resume();
+  }
+
+  const source = createSource(ctx, audio);
+  source.connect(ctx.destination);
+  source.connect(destination);
+}
+
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const activeRef = useRef<Set<HTMLAudioElement>>(new Set());
   const sounderDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
-  // Ensure we have an AudioContext for createMediaElementSource
-  const getAudioContext = useCallback(() => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    }
-    if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume();
-    }
-    return audioCtxRef.current;
-  }, []);
 
   const play = useCallback((url: string, options: { record?: boolean } = {}): HTMLAudioElement => {
     const audio = new Audio();
@@ -35,10 +43,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     // Route to sounder destination if recording
     if (sounderDestRef.current && options.record !== false) {
       try {
-        const ctx = getAudioContext();
-        const source = ctx.createMediaElementSource(audio);
-        source.connect(sounderDestRef.current);
-        source.connect(ctx.destination);
+        connectSounderToRecordingGraph(audio, sounderDestRef.current);
       } catch {
         // If already connected or CORS issue, just play normally
       }
@@ -57,7 +62,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     });
 
     return audio;
-  }, [getAudioContext]);
+  }, []);
 
   const stopAll = useCallback(() => {
     for (const audio of activeRef.current) {
