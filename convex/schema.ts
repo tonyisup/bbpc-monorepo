@@ -33,6 +33,39 @@ export default defineSchema({
     .index('by_public_session_id', ['publicSessionId'])
     .index('by_access', ['publicSessionId', 'clientId', 'accessToken']),
 
+  rtcPresence: defineTable({
+    publicSessionId: v.string(),
+    clientId: v.string(),
+    displayName: v.string(),
+    role: v.union(v.literal('owner'), v.literal('participant')),
+    joinedAudioAt: v.number(),
+    lastSeenAt: v.number(),
+    muted: v.boolean(),
+    recording: v.boolean(),
+  })
+    .index('by_public_session_id', ['publicSessionId'])
+    .index('by_participant', ['publicSessionId', 'clientId'])
+    .index('by_last_seen', ['publicSessionId', 'lastSeenAt']),
+
+  rtcSignals: defineTable({
+    publicSessionId: v.string(),
+    fromClientId: v.string(),
+    toClientId: v.string(),
+    signalId: v.string(),
+    createdAt: v.number(),
+    type: v.union(
+      v.literal('offer'),
+      v.literal('answer'),
+      v.literal('ice-candidate'),
+      v.literal('leave'),
+      v.literal('renegotiate'),
+    ),
+    payload: v.any(),
+  })
+    .index('by_recipient', ['publicSessionId', 'toClientId'])
+    .index('by_signal_id', ['signalId'])
+    .index('by_created_at', ['publicSessionId', 'createdAt']),
+
   sessionEvents: defineTable({
     publicSessionId: v.string(),
     eventId: v.string(),

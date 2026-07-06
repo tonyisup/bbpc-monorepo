@@ -70,7 +70,7 @@ export function ExportBar({ manifest }: ExportBarProps) {
           : 'Download Merge Bundle'}
       </button>
       <span className="ml-auto text-xs text-[var(--muted)] self-center">
-        {manifest.episode} · {manifest.recording_participants.length} recording intervals · {manifest.sounders_used.length} sounders · {manifest.notes.length} notes
+        {manifest.episode} · {manifest.recording_participants.length} recording intervals · {manifest.audio_participants.length} audio intervals · {manifest.sounders_used.length} sounders · {manifest.notes.length} notes
       </span>
     </div>
   );

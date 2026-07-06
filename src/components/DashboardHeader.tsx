@@ -6,6 +6,7 @@ import { useAudio } from './AudioProvider';
 import { useRecordingEngine } from '@/hooks/useRecordingEngine';
 import type { RecordingTracks } from '@/hooks/useRecordingEngine';
 import { useRecordingSync } from '@/hooks/useRecordingSync';
+import { useMeshAudioRoom } from '@/hooks/useMeshAudioRoom';
 
 function formatElapsed(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -58,6 +59,14 @@ function VUMeter({ level }: { level: number }) {
   );
 }
 
+function audioConnectionLabel(state: string): string {
+  if (state === 'connected') return 'connected';
+  if (state === 'connecting' || state === 'new') return 'connecting';
+  if (state === 'disconnected') return 'reconnecting';
+  if (state === 'failed' || state === 'closed') return 'disconnected';
+  return state;
+}
+
 export function DashboardHeader() {
   const {
     state,
@@ -66,6 +75,7 @@ export function DashboardHeader() {
     sessionId,
     inviteUrl,
     participantClientId,
+    participantAccessToken,
     participantRole,
     sessionStatus,
   } = useSession();
@@ -151,6 +161,58 @@ export function DashboardHeader() {
   // Realtime recording sync
   const recordingStartRef = useRef<number>(0);
   const isOwner = participantRole === 'owner';
+  const rtcAudioEnabled = process.env.NEXT_PUBLIC_RTC_AUDIO_ENABLED !== 'false';
+  const meshAudio = useMeshAudioRoom({
+    enabled: rtcAudioEnabled,
+    sessionId,
+    clientId: participantClientId,
+    accessToken: participantAccessToken,
+    displayName: hostName,
+    role: participantRole,
+    recording: recording.state.isRecording,
+    recordingStartedAt: state.recordingStart,
+    sessionEnded: sessionStatus === 'ended',
+    onAudioJoined: joinedAudioAt => {
+      dispatch({
+        type: 'JOIN_AUDIO',
+        participant: {
+          clientId: participantClientId,
+          name: hostName,
+          role: participantRole,
+          joinedAudioAt,
+          recordingStartedAt: state.recordingStart,
+        },
+      });
+    },
+    onAudioLeft: leftAudioAt => {
+      dispatch({
+        type: 'LEAVE_AUDIO',
+        participant: {
+          clientId: participantClientId,
+          leftAudioAt,
+          recordingStartedAt: state.recordingStart,
+        },
+      });
+    },
+    onDisconnectStarted: disconnect => {
+      dispatch({
+        type: 'START_AUDIO_DISCONNECT',
+        disconnect: {
+          ...disconnect,
+          recordingStartedAt: state.recordingStart,
+        },
+      });
+    },
+    onDisconnectEnded: disconnect => {
+      dispatch({
+        type: 'END_AUDIO_DISCONNECT',
+        disconnect: {
+          ...disconnect,
+          recordingStartedAt: state.recordingStart,
+        },
+      });
+    },
+  });
 
   const uploadTrack = useCallback(async (
     sessionId: string,
@@ -240,18 +302,25 @@ export function DashboardHeader() {
   const joinActiveRecording = useCallback(async (recordingStartedAt: number) => {
     if (sessionStatus === 'ended' || recording.state.isRecording) return;
 
-    const hasPermission = await recording.requestMicPermission();
-    if (!hasPermission) return;
+    let micStream: MediaStream | null = null;
+    if (rtcAudioEnabled) {
+      if (!meshAudio.state.joined) await meshAudio.joinAudio();
+      micStream = meshAudio.getLocalStream();
+      if (!micStream) return;
+    } else {
+      const hasPermission = await recording.requestMicPermission();
+      if (!hasPermission) return;
+    }
     setMicPermissionOk(true);
 
     try {
-      await recording.startRecording();
+      await recording.startRecording({ mediaStream: micStream ?? undefined, ownsMediaStream: !micStream });
       recordingStartRef.current = recordingStartedAt;
       dispatchRecordingJoin(recordingStartedAt, Date.now());
     } catch (err) {
       console.error('[Recording] Failed to join recording:', err);
     }
-  }, [dispatchRecordingJoin, recording, sessionStatus]);
+  }, [dispatchRecordingJoin, meshAudio, recording, rtcAudioEnabled, sessionStatus]);
 
   const leaveActiveRecording = useCallback(async (reason: 'left' | 'host-stopped') => {
     const recordingStartedAt = recordingStartRef.current || state.recordingStart;
@@ -305,8 +374,15 @@ export function DashboardHeader() {
     if (!isOwner || sessionStatus === 'ended') return;
 
     // Request mic permission first
-    const hasPermission = await recording.requestMicPermission();
-    if (!hasPermission) return;
+    let micStream: MediaStream | null = null;
+    if (rtcAudioEnabled) {
+      if (!meshAudio.state.joined) await meshAudio.joinAudio();
+      micStream = meshAudio.getLocalStream();
+      if (!micStream) return;
+    } else {
+      const hasPermission = await recording.requestMicPermission();
+      if (!hasPermission) return;
+    }
     setMicPermissionOk(true);
 
     const now = Date.now();
@@ -325,7 +401,10 @@ export function DashboardHeader() {
     });
 
     // Start WebRTC audio recording (mic + sounders)
-    await recording.startRecording();
+    await recording.startRecording({
+      mediaStream: micStream ?? undefined,
+      ownsMediaStream: !micStream,
+    });
 
     // Broadcast to guests
     broadcastStart(now, {
@@ -389,6 +468,9 @@ export function DashboardHeader() {
       if (hostRecordingActive || localRecordingActive) {
         await handleStopRecording();
       }
+      if (meshAudio.state.joined) {
+        await meshAudio.leaveAudio();
+      }
 
       const res = await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
       if (!res.ok) throw new Error(`End session failed: ${res.status}`);
@@ -410,7 +492,7 @@ export function DashboardHeader() {
   }, [leaveActiveRecording, localRecordingActive, sessionEnded]);
 
   return (
-    <header className="flex items-center justify-between px-6 py-3 border-b border-[var(--card-border)] bg-[var(--card-bg)]">
+    <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[var(--card-border)] bg-[var(--card-bg)]">
       <div className="flex items-center gap-4">
         {/* Episode name — click to edit (only when not recording) */}
         {editingEpisode && canEditEpisode ? (
@@ -443,6 +525,91 @@ export function DashboardHeader() {
       </div>
 
       <div className="flex items-center gap-3">
+        {rtcAudioEnabled && (
+          <div className="flex items-center gap-2 pr-3 border-r border-[var(--card-border)]">
+            {!meshAudio.state.joined ? (
+              <button
+                onClick={() => void meshAudio.joinAudio()}
+                disabled={meshAudio.state.joining || sessionEnded}
+                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {meshAudio.state.joining ? 'Joining...' : 'Join Audio'}
+              </button>
+            ) : (
+              <button
+                onClick={() => void meshAudio.leaveAudio()}
+                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] transition-colors"
+              >
+                Leave Audio
+              </button>
+            )}
+
+            <button
+              onClick={() => meshAudio.setMuted(!meshAudio.state.muted)}
+              disabled={!meshAudio.state.joined}
+              className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {meshAudio.state.muted ? 'Unmute' : 'Mute'}
+            </button>
+
+            <select
+              value={meshAudio.state.selectedInputDeviceId ?? ''}
+              onChange={event => void meshAudio.setInputDevice(event.target.value)}
+              disabled={!meshAudio.state.joined || meshAudio.inputDevices.length === 0}
+              className="max-w-36 px-2 py-1.5 text-xs rounded border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--foreground)] disabled:opacity-50"
+              title="Input device"
+            >
+              <option value="">Default mic</option>
+              {meshAudio.inputDevices.map(device => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label || `Mic ${device.deviceId.slice(0, 6)}`}
+                </option>
+              ))}
+            </select>
+
+            {meshAudio.state.playbackBlocked && (
+              <button
+                onClick={() => void meshAudio.retryPlayback()}
+                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--warning)] text-[var(--warning)] hover:bg-[var(--warning)] hover:text-black transition-colors"
+              >
+                Tap to enable audio
+              </button>
+            )}
+
+            {meshAudio.state.participants.length > 0 && (
+              <div className="hidden xl:flex items-center gap-1 max-w-xl overflow-x-auto">
+                {meshAudio.state.participants.map(participant => {
+                  const label = audioConnectionLabel(participant.connectionState);
+                  const warning = state.isRecording && !participant.recording;
+                  return (
+                    <span
+                      key={participant.clientId}
+                      className={`whitespace-nowrap px-2 py-1 text-[11px] rounded border ${
+                        warning
+                          ? 'border-[var(--warning)] text-[var(--warning)]'
+                          : 'border-[var(--card-border)] text-[var(--muted)]'
+                      }`}
+                      title={`${participant.displayName}: ${label}`}
+                    >
+                      {participant.displayName}
+                      {participant.muted ? ' muted' : ''}
+                      {participant.recording ? ' rec' : ''}
+                      {' '}
+                      {label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {meshAudio.state.error && (
+              <span className="max-w-44 truncate text-xs text-[var(--danger)]" title={meshAudio.state.error}>
+                {meshAudio.state.error}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* WebRTC Audio Recording Status */}
         <div className="flex items-center gap-2 pr-3 border-r border-[var(--card-border)]">
           {recording.state.error ? (

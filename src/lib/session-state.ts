@@ -15,6 +15,7 @@ export function createInitialState(
     sounders,
     soundersUsed: [],
     recordingParticipants: [],
+    audioParticipants: [],
     notes: [],
     segments: [],
     editCues: [],
@@ -94,6 +95,148 @@ function applyRecordingLeave(
   };
 }
 
+function audioMsSince(recordingStartedAt: number | null, timestamp: number): number {
+  return recordingStartedAt ? msSince(recordingStartedAt, timestamp) : 0;
+}
+
+function upsertAudioJoin(
+  state: SessionState,
+  participant: {
+    clientId: string;
+    name: string;
+    role: 'owner' | 'participant';
+    joinedAudioAt: number;
+    recordingStartedAt: number | null;
+  },
+): SessionState {
+  const existingOpenIndex = state.audioParticipants.findIndex(existing => (
+    existing.client_id === participant.clientId && existing.left_audio_at_epoch_ms === null
+  ));
+
+  const interval = {
+    client_id: participant.clientId,
+    name: participant.name,
+    role: participant.role,
+    joined_audio_at_ms: audioMsSince(participant.recordingStartedAt, participant.joinedAudioAt),
+    joined_audio_at_epoch_ms: participant.joinedAudioAt,
+    left_audio_at_ms: null,
+    left_audio_at_epoch_ms: null,
+    disconnects: existingOpenIndex >= 0 ? state.audioParticipants[existingOpenIndex].disconnects : [],
+  };
+
+  if (existingOpenIndex >= 0) {
+    return {
+      ...state,
+      audioParticipants: state.audioParticipants.map((existing, index) => (
+        index === existingOpenIndex ? { ...existing, ...interval } : existing
+      )),
+    };
+  }
+
+  return {
+    ...state,
+    audioParticipants: [...state.audioParticipants, interval],
+  };
+}
+
+function applyAudioLeave(
+  state: SessionState,
+  participant: {
+    clientId: string;
+    leftAudioAt: number;
+    recordingStartedAt: number | null;
+  },
+): SessionState {
+  const existingOpenIndex = state.audioParticipants.findIndex(existing => (
+    existing.client_id === participant.clientId && existing.left_audio_at_epoch_ms === null
+  ));
+
+  if (existingOpenIndex < 0) return state;
+
+  return {
+    ...state,
+    audioParticipants: state.audioParticipants.map((existing, index) => (
+      index === existingOpenIndex
+        ? {
+            ...existing,
+            left_audio_at_ms: audioMsSince(participant.recordingStartedAt, participant.leftAudioAt),
+            left_audio_at_epoch_ms: participant.leftAudioAt,
+          }
+        : existing
+    )),
+  };
+}
+
+function applyAudioDisconnectStart(
+  state: SessionState,
+  disconnect: {
+    disconnectId: string;
+    clientId: string;
+    startedAt: number;
+    recordingStartedAt: number | null;
+    reason: 'ice-disconnected' | 'ice-failed' | 'heartbeat-timeout' | 'page-hidden-timeout';
+  },
+): SessionState {
+  const existingOpenIndex = state.audioParticipants.findIndex(existing => (
+    existing.client_id === disconnect.clientId && existing.left_audio_at_epoch_ms === null
+  ));
+
+  if (existingOpenIndex < 0) return state;
+
+  return {
+    ...state,
+    audioParticipants: state.audioParticipants.map((existing, index) => {
+      if (index !== existingOpenIndex) return existing;
+      if (existing.disconnects.some(item => item.disconnect_id === disconnect.disconnectId)) return existing;
+
+      return {
+        ...existing,
+        disconnects: [
+          ...existing.disconnects,
+          {
+            disconnect_id: disconnect.disconnectId,
+            started_at_ms: audioMsSince(disconnect.recordingStartedAt, disconnect.startedAt),
+            started_at_epoch_ms: disconnect.startedAt,
+            ended_at_ms: null,
+            ended_at_epoch_ms: null,
+            reason: disconnect.reason,
+          },
+        ],
+      };
+    }),
+  };
+}
+
+function applyAudioDisconnectEnd(
+  state: SessionState,
+  disconnect: {
+    disconnectId: string;
+    clientId: string;
+    endedAt: number;
+    recordingStartedAt: number | null;
+  },
+): SessionState {
+  return {
+    ...state,
+    audioParticipants: state.audioParticipants.map(existing => {
+      if (existing.client_id !== disconnect.clientId) return existing;
+
+      return {
+        ...existing,
+        disconnects: existing.disconnects.map(item => (
+          item.disconnect_id === disconnect.disconnectId && item.ended_at_epoch_ms === null
+            ? {
+                ...item,
+                ended_at_ms: audioMsSince(disconnect.recordingStartedAt, disconnect.endedAt),
+                ended_at_epoch_ms: disconnect.endedAt,
+              }
+            : item
+        )),
+      };
+    }),
+  };
+}
+
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case 'START_RECORDING': {
@@ -117,6 +260,18 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
 
     case 'LEAVE_RECORDING':
       return applyRecordingLeave(state, action.participant);
+
+    case 'JOIN_AUDIO':
+      return upsertAudioJoin(state, action.participant);
+
+    case 'LEAVE_AUDIO':
+      return applyAudioLeave(state, action.participant);
+
+    case 'START_AUDIO_DISCONNECT':
+      return applyAudioDisconnectStart(state, action.disconnect);
+
+    case 'END_AUDIO_DISCONNECT':
+      return applyAudioDisconnectEnd(state, action.disconnect);
 
     case 'TRIGGER_SOUNDER': {
       const playedAt = action.played_at_ms ?? (state.recordingStart != null ? Date.now() - state.recordingStart : 0);
@@ -207,6 +362,14 @@ export function actionToSyncEvent(
       return { kind: 'recording-joined', participant: action.participant, from: clientEventSourceId };
     case 'LEAVE_RECORDING':
       return { kind: 'recording-left', participant: action.participant, from: clientEventSourceId };
+    case 'JOIN_AUDIO':
+      return { kind: 'audio-joined', participant: action.participant, from: clientEventSourceId };
+    case 'LEAVE_AUDIO':
+      return { kind: 'audio-left', participant: action.participant, from: clientEventSourceId };
+    case 'START_AUDIO_DISCONNECT':
+      return { kind: 'audio-disconnect-started', disconnect: action.disconnect, from: clientEventSourceId };
+    case 'END_AUDIO_DISCONNECT':
+      return { kind: 'audio-disconnect-ended', disconnect: action.disconnect, from: clientEventSourceId };
     case 'START_SEGMENT':
       return { kind: 'segment-start', segment: action.segment, from: clientEventSourceId };
     case 'END_SEGMENT':
@@ -261,6 +424,14 @@ export function syncEventToAction(event: SessionSyncEvent): SessionAction | null
       return { type: 'JOIN_RECORDING', participant: event.participant };
     case 'recording-left':
       return { type: 'LEAVE_RECORDING', participant: event.participant };
+    case 'audio-joined':
+      return { type: 'JOIN_AUDIO', participant: event.participant };
+    case 'audio-left':
+      return { type: 'LEAVE_AUDIO', participant: event.participant };
+    case 'audio-disconnect-started':
+      return { type: 'START_AUDIO_DISCONNECT', disconnect: event.disconnect };
+    case 'audio-disconnect-ended':
+      return { type: 'END_AUDIO_DISCONNECT', disconnect: event.disconnect };
     case 'segment-start':
       return { type: 'START_SEGMENT', segment: event.segment };
     case 'segment-end':
@@ -302,8 +473,9 @@ export function sessionStateToManifest(
     session_id: sessionId,
     recording_start: state.recordingStart,
     recording_end: state.isRecording ? null : (state.recordingStart ?? 0) + elapsedMs,
-    manifest_version: '1.0',
+    manifest_version: '1.1',
     recording_participants: state.recordingParticipants,
+    audio_participants: state.audioParticipants,
     sounders_used: state.soundersUsed,
     notes: state.notes,
     segments: state.segments,

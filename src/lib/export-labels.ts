@@ -78,6 +78,7 @@ export function downloadSessionMergeBundle(
 
   const labels = manifestToAudacityLabels(manifest);
   const labelsFilename = `${manifest.episode}-labels.txt`;
+  const mergeWarnings = buildMergeWarnings(manifest, recordings);
   const bundle: SessionMergeBundle = {
     bundle_version: '1.0',
     generated_at: new Date().toISOString(),
@@ -96,12 +97,40 @@ export function downloadSessionMergeBundle(
       'Download each sounder_assets[].downloadUrl for sounder reconstruction.',
       'Align each recording with manifest.recording_participants and recordings[].startedAt.',
       'Use labels.text as the Audacity label track contents.',
+      ...mergeWarnings,
     ],
   };
 
   const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
   triggerDownload(blob, `${manifest.episode}-merge-bundle.json`);
   return bundle;
+}
+
+function buildMergeWarnings(manifest: Manifest, recordings: RecordingUploadMetadata[]): string[] {
+  const warnings: string[] = [];
+  const micRecordingNames = new Set(
+    recordings
+      .filter(recording => recording.trackType === 'mic')
+      .map(recording => recording.hostName),
+  );
+  const recordingParticipantIds = new Set(manifest.recording_participants.map(participant => participant.client_id));
+
+  for (const participant of manifest.recording_participants) {
+    if (!micRecordingNames.has(participant.name)) {
+      warnings.push(`Warning: participant recording upload missing for ${participant.name}.`);
+    }
+  }
+
+  for (const audioParticipant of manifest.audio_participants ?? []) {
+    if (!recordingParticipantIds.has(audioParticipant.client_id)) {
+      warnings.push(`Warning: ${audioParticipant.name} joined audio but was not recording.`);
+    }
+    if (audioParticipant.disconnects.length > 0) {
+      warnings.push(`Warning: ${audioParticipant.name} had ${audioParticipant.disconnects.length} audio disconnect interval(s).`);
+    }
+  }
+
+  return warnings;
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

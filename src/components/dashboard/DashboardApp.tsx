@@ -31,6 +31,7 @@ interface DashboardAppProps {
   date: string;
   hostName: string;
   participantClientId: string;
+  participantAccessToken: string;
   participantRole: SessionRole;
   initialStatus: SessionStatus;
   initialEndedAt: string | null;
@@ -93,6 +94,7 @@ export function DashboardApp({
   date,
   hostName,
   participantClientId,
+  participantAccessToken,
   participantRole,
   initialStatus,
   initialEndedAt,
@@ -108,6 +110,7 @@ export function DashboardApp({
             date={date}
             hostName={hostName}
             participantClientId={participantClientId}
+            participantAccessToken={participantAccessToken}
             participantRole={participantRole}
             initialStatus={initialStatus}
             initialEndedAt={initialEndedAt}

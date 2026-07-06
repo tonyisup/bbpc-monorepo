@@ -12,7 +12,7 @@ export interface RecordingState {
 
 export interface RecordingEngine {
   state: RecordingState;
-  startRecording: () => Promise<void>;
+  startRecording: (options?: { mediaStream?: MediaStream; ownsMediaStream?: boolean }) => Promise<void>;
   stopRecording: () => Promise<RecordingTracks>;
   requestMicPermission: () => Promise<boolean>;
 }
@@ -61,6 +61,7 @@ export function useRecordingEngine(): RecordingEngine {
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const ownsMicStreamRef = useRef(true);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const sounderDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
@@ -122,7 +123,7 @@ export function useRecordingEngine(): RecordingEngine {
     }
   }, []);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (options?: { mediaStream?: MediaStream; ownsMediaStream?: boolean }) => {
     try {
       setState(prev => ({ ...prev, error: null, isRecording: true, micLevel: 0, durationMs: 0 }));
       startedAtRef.current = Date.now();
@@ -131,7 +132,7 @@ export function useRecordingEngine(): RecordingEngine {
       audioCtxRef.current = ctx;
 
       // --- Mic track ---
-      const micStream = await navigator.mediaDevices.getUserMedia({
+      const micStream = options?.mediaStream ?? await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -140,6 +141,7 @@ export function useRecordingEngine(): RecordingEngine {
         },
       });
       micStreamRef.current = micStream;
+      ownsMicStreamRef.current = options?.mediaStream ? options.ownsMediaStream ?? false : true;
 
       const micSource = ctx.createMediaStreamSource(micStream);
       micSourceRef.current = micSource;
@@ -224,7 +226,7 @@ export function useRecordingEngine(): RecordingEngine {
     });
 
     // Cleanup
-    if (micStreamRef.current) {
+    if (micStreamRef.current && ownsMicStreamRef.current) {
       micStreamRef.current.getTracks().forEach(t => t.stop());
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
@@ -232,6 +234,7 @@ export function useRecordingEngine(): RecordingEngine {
     }
 
     micStreamRef.current = null;
+    ownsMicStreamRef.current = true;
     micSourceRef.current = null;
     micDestRef.current = null;
     sounderDestRef.current = null;

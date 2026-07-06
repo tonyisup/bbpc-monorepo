@@ -64,6 +64,52 @@ export interface RecordingParticipantInterval {
   leave_reason?: 'left' | 'host-stopped';
 }
 
+export type AudioDisconnectReason =
+  | 'ice-disconnected'
+  | 'ice-failed'
+  | 'heartbeat-timeout'
+  | 'page-hidden-timeout'
+  | 'left';
+
+export interface AudioParticipantInterval {
+  client_id: string;
+  name: string;
+  role: 'owner' | 'participant';
+  joined_audio_at_ms: number;
+  joined_audio_at_epoch_ms: number;
+  left_audio_at_ms: number | null;
+  left_audio_at_epoch_ms: number | null;
+  disconnects: Array<{
+    disconnect_id: string;
+    started_at_ms: number;
+    started_at_epoch_ms: number;
+    ended_at_ms: number | null;
+    ended_at_epoch_ms: number | null;
+    reason: AudioDisconnectReason;
+  }>;
+}
+
+export type RtcSignalType = 'offer' | 'answer' | 'ice-candidate' | 'leave' | 'renegotiate';
+
+export interface RtcPresence {
+  clientId: string;
+  displayName: string;
+  role: 'owner' | 'participant';
+  joinedAudioAt: number;
+  lastSeenAt: number;
+  muted: boolean;
+  recording: boolean;
+}
+
+export interface RtcSignal {
+  fromClientId: string;
+  toClientId: string;
+  signalId: string;
+  createdAt: number;
+  type: RtcSignalType;
+  payload: unknown;
+}
+
 export interface RecordingUploadMetadata {
   id: string;
   publicSessionId?: string;
@@ -85,8 +131,9 @@ export interface Manifest {
   hosts: string[];
   recording_start: number | null;
   recording_end: number | null;
-  manifest_version: '1.0';
+  manifest_version: '1.1';
   recording_participants: RecordingParticipantInterval[];
+  audio_participants: AudioParticipantInterval[];
   sounders_used: Array<{ id: string; name: string; played_at_ms: number; played_by: string }>;
   notes: SessionNote[];
   segments: Segment[];
@@ -120,6 +167,7 @@ export interface SessionState {
   sounders: Sounder[];
   soundersUsed: Manifest['sounders_used'];
   recordingParticipants: RecordingParticipantInterval[];
+  audioParticipants: AudioParticipantInterval[];
   notes: SessionNote[];
   segments: Segment[];
   editCues: EditCue[];
@@ -162,6 +210,43 @@ export type SessionAction =
         leftAt: number;
         recordingStartedAt: number;
         reason?: 'left' | 'host-stopped';
+      };
+    }
+  | {
+      type: 'JOIN_AUDIO';
+      participant: {
+        clientId: string;
+        name: string;
+        role: 'owner' | 'participant';
+        joinedAudioAt: number;
+        recordingStartedAt: number | null;
+      };
+    }
+  | {
+      type: 'LEAVE_AUDIO';
+      participant: {
+        clientId: string;
+        leftAudioAt: number;
+        recordingStartedAt: number | null;
+      };
+    }
+  | {
+      type: 'START_AUDIO_DISCONNECT';
+      disconnect: {
+        disconnectId: string;
+        clientId: string;
+        startedAt: number;
+        recordingStartedAt: number | null;
+        reason: Exclude<AudioDisconnectReason, 'left'>;
+      };
+    }
+  | {
+      type: 'END_AUDIO_DISCONNECT';
+      disconnect: {
+        disconnectId: string;
+        clientId: string;
+        endedAt: number;
+        recordingStartedAt: number | null;
       };
     }
   | { type: 'TRIGGER_SOUNDER'; sounder: Sounder; played_at_ms?: number; played_by?: string }
@@ -292,11 +377,60 @@ export interface SessionSyncEpisodeUpdateEvent {
   from?: string;
 }
 
+export interface SessionSyncAudioJoinEvent {
+  kind: 'audio-joined';
+  participant: {
+    clientId: string;
+    name: string;
+    role: 'owner' | 'participant';
+    joinedAudioAt: number;
+    recordingStartedAt: number | null;
+  };
+  from?: string;
+}
+
+export interface SessionSyncAudioLeaveEvent {
+  kind: 'audio-left';
+  participant: {
+    clientId: string;
+    leftAudioAt: number;
+    recordingStartedAt: number | null;
+  };
+  from?: string;
+}
+
+export interface SessionSyncAudioDisconnectStartEvent {
+  kind: 'audio-disconnect-started';
+  disconnect: {
+    disconnectId: string;
+    clientId: string;
+    startedAt: number;
+    recordingStartedAt: number | null;
+    reason: Exclude<AudioDisconnectReason, 'left'>;
+  };
+  from?: string;
+}
+
+export interface SessionSyncAudioDisconnectEndEvent {
+  kind: 'audio-disconnect-ended';
+  disconnect: {
+    disconnectId: string;
+    clientId: string;
+    endedAt: number;
+    recordingStartedAt: number | null;
+  };
+  from?: string;
+}
+
 // All events that affect session state
 export type SessionSyncStateEvent =
   | SessionSyncSounderEvent
   | SessionSyncRecordingJoinEvent
   | SessionSyncRecordingLeaveEvent
+  | SessionSyncAudioJoinEvent
+  | SessionSyncAudioLeaveEvent
+  | SessionSyncAudioDisconnectStartEvent
+  | SessionSyncAudioDisconnectEndEvent
   | SessionSyncNoteEvent
   | SessionSyncNoteDeleteEvent
   | SessionSyncSegmentStartEvent

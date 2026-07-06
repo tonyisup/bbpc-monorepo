@@ -36,6 +36,7 @@ interface SessionContextValue {
   sessionId: string;
   inviteUrl: string;
   participantClientId: string;
+  participantAccessToken: string;
   participantRole: SessionRole;
   sessionStatus: SessionStatus;
   endedAt: string | null;
@@ -51,6 +52,7 @@ interface SessionProviderProps {
   date?: string;
   hostName?: string;
   participantClientId: string;
+  participantAccessToken: string;
   participantRole: SessionRole;
   initialStatus: SessionStatus;
   initialEndedAt?: string | null;
@@ -69,6 +71,7 @@ export function SessionProvider({
   date = new Date().toISOString().slice(0, 10),
   hostName = 'host',
   participantClientId,
+  participantAccessToken,
   participantRole,
   initialStatus,
   initialEndedAt = null,
@@ -145,6 +148,7 @@ export function SessionProvider({
         sessionId,
         inviteUrl,
         participantClientId,
+        participantAccessToken,
         participantRole,
         sessionStatus,
         endedAt,

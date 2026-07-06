@@ -116,6 +116,35 @@ function recordingDelayMs(bundle, recording) {
   return Math.max(0, Math.round(recording.startedAt - start));
 }
 
+function buildMergeWarnings(bundle) {
+  const manifest = bundle.manifest ?? {};
+  const recordings = bundle.recordings ?? [];
+  const warnings = [...(bundle.merge_notes ?? []).filter(note => String(note).startsWith('Warning:'))];
+  const micRecordingNames = new Set(
+    recordings
+      .filter(recording => recording.trackType === 'mic')
+      .map(recording => recording.hostName),
+  );
+  const recordingParticipantIds = new Set((manifest.recording_participants ?? []).map(participant => participant.client_id));
+
+  for (const participant of manifest.recording_participants ?? []) {
+    if (!micRecordingNames.has(participant.name)) {
+      warnings.push(`Warning: participant recording upload missing for ${participant.name}.`);
+    }
+  }
+
+  for (const audioParticipant of manifest.audio_participants ?? []) {
+    if (!recordingParticipantIds.has(audioParticipant.client_id)) {
+      warnings.push(`Warning: ${audioParticipant.name} joined audio but was not recording.`);
+    }
+    if ((audioParticipant.disconnects ?? []).length > 0) {
+      warnings.push(`Warning: ${audioParticipant.name} had ${audioParticipant.disconnects.length} audio disconnect interval(s).`);
+    }
+  }
+
+  return Array.from(new Set(warnings));
+}
+
 function buildFfmpegArgs({ inputs, outputPath, format }) {
   const args = ['-y'];
   const filterParts = [];
@@ -226,6 +255,7 @@ if (mixInputs.length === 0) {
 }
 
 const ffmpegArgs = buildFfmpegArgs({ inputs: mixInputs, outputPath, format });
+const warnings = buildMergeWarnings(bundle);
 const mergePlan = {
   session_id: sessionId,
   episode: bundle.episode,
@@ -235,6 +265,7 @@ const mergePlan = {
   inputs: mixInputs,
   downloadedRecordings,
   downloadedSounders,
+  warnings,
   ffmpeg: {
     command: 'ffmpeg',
     args: ffmpegArgs,
@@ -251,6 +282,7 @@ await fs.writeFile(
 if (dryRun) {
   console.log(`Prepared merge workspace: ${outDir}`);
   console.log(`Dry run: ${path.join(outDir, 'merge.sh')}`);
+  for (const warning of warnings) console.warn(`[merge] ${warning}`);
   process.exit(0);
 }
 
@@ -260,4 +292,5 @@ if (ffmpegCheck.status !== 0) {
 }
 
 await runFfmpeg(ffmpegArgs);
+for (const warning of warnings) console.warn(`[merge] ${warning}`);
 console.log(`Merged audio written to ${outputPath}`);
