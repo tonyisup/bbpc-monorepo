@@ -1,5 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { requireAdminSecret } from './access';
 
 const sounderInput = v.object({
   id: v.string(),
@@ -40,10 +41,12 @@ export const list = query({
 
 export const replaceAll = mutation({
   args: {
+    adminSecret: v.string(),
     sounders: v.array(sounderInput),
     updatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    requireAdminSecret(args.adminSecret);
     const existing = await ctx.db.query('sounders').collect();
 
     for (const sounder of existing) {

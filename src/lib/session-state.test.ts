@@ -4,6 +4,7 @@ import {
   applySessionSyncEvents,
   createInitialState,
   sessionReducer,
+  sessionStateToManifest,
   syncEventToAction,
 } from './session-state';
 import type { SessionSyncEvent, Sounder } from '@/types';
@@ -305,5 +306,22 @@ describe('session event replay', () => {
 
     assert.equal(state.soundersUsed[0].played_at_ms, 12345);
     assert.equal(state.soundersUsed[0].played_by, 'Tony');
+  });
+
+  it('persists the real recording stop time in the manifest', () => {
+    const initial = createInitialState('EP', '2026-06-23', 'Harley');
+    const started = sessionReducer(initial, { type: 'START_RECORDING', startedAt: 1_000 });
+    const stopped = sessionReducer(started, {
+      type: 'STOP_RECORDING',
+      participant: {
+        clientId: 'host-1',
+        leftAt: 7_000,
+        recordingStartedAt: 1_000,
+        reason: 'host-stopped',
+      },
+    });
+
+    assert.equal(stopped.recordingEnd, 7_000);
+    assert.equal(sessionStateToManifest(stopped, 'session-1').recording_end, 7_000);
   });
 });

@@ -163,6 +163,7 @@ export interface SessionState {
   date: string;
   hostName: string;
   recordingStart: number | null; // Date.now() when recording started, null if not started
+  recordingEnd: number | null;
   isRecording: boolean;
   sounders: Sounder[];
   soundersUsed: Manifest['sounders_used'];

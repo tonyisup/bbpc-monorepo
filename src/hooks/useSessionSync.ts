@@ -7,6 +7,8 @@ import type { SessionSyncEvent } from '@/types';
 
 interface UseSessionSyncOptions {
   sessionId: string;
+  clientId: string;
+  accessToken: string;
   onRemoteEvent: (event: SessionSyncEvent) => void;
   onLiveRemoteEvent?: (event: SessionSyncEvent) => void;
 }
@@ -32,11 +34,37 @@ function removeUndefined(value: unknown): unknown {
   return value;
 }
 
+export function deliverSessionEvents(
+  events: Array<{ eventId: string; payload: unknown }>,
+  processedEventIds: Set<string>,
+  initialized: boolean,
+  onRemoteEvent: (event: SessionSyncEvent) => void,
+  onLiveRemoteEvent?: (event: SessionSyncEvent) => void,
+): void {
+  for (const event of events) {
+    if (processedEventIds.has(event.eventId)) continue;
+    processedEventIds.add(event.eventId);
+    const payload = event.payload as SessionSyncEvent;
+    onRemoteEvent(payload);
+    if (initialized) onLiveRemoteEvent?.(payload);
+  }
+}
+
 /**
  * Subscribe to and publish session events through Convex.
  */
-export function useSessionSync({ sessionId, onRemoteEvent, onLiveRemoteEvent }: UseSessionSyncOptions) {
-  const events = useQuery(api.sessions.listSessionEvents, { publicId: sessionId });
+export function useSessionSync({
+  sessionId,
+  clientId,
+  accessToken,
+  onRemoteEvent,
+  onLiveRemoteEvent,
+}: UseSessionSyncOptions) {
+  const events = useQuery(api.sessions.listSessionEvents, {
+    publicId: sessionId,
+    clientId,
+    accessToken,
+  });
   const appendEvent = useMutation(api.sessions.appendSessionEvent);
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
@@ -54,16 +82,13 @@ export function useSessionSync({ sessionId, onRemoteEvent, onLiveRemoteEvent }: 
   useEffect(() => {
     if (!events) return;
 
-    const isInitialReplay = !initializedRef.current;
-    for (const event of events) {
-      if (processedEventIdsRef.current.has(event.eventId)) continue;
-      processedEventIdsRef.current.add(event.eventId);
-      const payload = event.payload as SessionSyncEvent;
-      onRemoteRef.current(payload);
-      if (!isInitialReplay) {
-        onLiveRemoteRef.current?.(payload);
-      }
-    }
+    deliverSessionEvents(
+      events,
+      processedEventIdsRef.current,
+      initializedRef.current,
+      onRemoteRef.current,
+      onLiveRemoteRef.current,
+    );
     initializedRef.current = true;
   }, [events]);
 
@@ -71,15 +96,16 @@ export function useSessionSync({ sessionId, onRemoteEvent, onLiveRemoteEvent }: 
     try {
       await appendEvent({
         publicId: sessionId,
+        clientId,
+        accessToken,
         eventId: createEventId(sessionId, event.from),
-        actorId: event.from ?? 'unknown',
         createdAt: Date.now(),
-        payload: removeUndefined(event),
+        payload: removeUndefined(event) as SessionSyncEvent,
       });
     } catch (err) {
       console.error('[Convex] Failed to append session event:', err);
     }
-  }, [appendEvent, sessionId]);
+  }, [accessToken, appendEvent, clientId, sessionId]);
 
   return { sendEvent };
 }

@@ -16,9 +16,6 @@ export default async function SessionPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const session = await getSession(sessionId);
-  if (!session) notFound();
-
   const cookieStore = await cookies();
   const grants = readSessionGrantsFromCookieValue(cookieStore.get(SESSION_GRANTS_COOKIE)?.value);
   const grant = grants.find(candidate => candidate.sessionId === sessionId);
@@ -36,6 +33,9 @@ export default async function SessionPage({
       </main>
     );
   }
+
+  const session = await getSession(sessionId, grant!);
+  if (!session) notFound();
 
   const headersList = await headers();
   const origin = getOrigin(headersList);

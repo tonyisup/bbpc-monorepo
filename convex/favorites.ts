@@ -1,5 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { requireParticipant } from './access';
 
 const favoriteInput = v.object({
   id: v.string(),
@@ -12,8 +13,11 @@ const favoriteInput = v.object({
 export const list = query({
   args: {
     publicSessionId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicSessionId, args.clientId, args.accessToken);
     const favorites = await ctx.db
       .query('sessionFavorites')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicSessionId))
@@ -34,10 +38,13 @@ export const list = query({
 export const replaceAll = mutation({
   args: {
     publicSessionId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
     favorites: v.array(favoriteInput),
     updatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicSessionId, args.clientId, args.accessToken);
     const existing = await ctx.db
       .query('sessionFavorites')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicSessionId))
@@ -63,4 +70,3 @@ export const replaceAll = mutation({
     return { count: args.favorites.length };
   },
 });
-

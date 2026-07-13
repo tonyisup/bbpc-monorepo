@@ -8,11 +8,13 @@
  * @module
  */
 
+import type * as access from "../access.js";
 import type * as favorites from "../favorites.js";
 import type * as manifests from "../manifests.js";
 import type * as recordings from "../recordings.js";
 import type * as rtc from "../rtc.js";
 import type * as segmentTemplates from "../segmentTemplates.js";
+import type * as sessionEvent from "../sessionEvent.js";
 import type * as sessions from "../sessions.js";
 import type * as sounders from "../sounders.js";
 
@@ -23,11 +25,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  access: typeof access;
   favorites: typeof favorites;
   manifests: typeof manifests;
   recordings: typeof recordings;
   rtc: typeof rtc;
   segmentTemplates: typeof segmentTemplates;
+  sessionEvent: typeof sessionEvent;
   sessions: typeof sessions;
   sounders: typeof sounders;
 }>;

@@ -8,7 +8,7 @@ import {
   upsertSessionGrant,
 } from '@/lib/sessions/cookies';
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const { session, grant } = await createSession();
   const cookieStore = await cookies();
   const grants = upsertSessionGrant(
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     grant,
   );
   const url = new URL(`/sessions/${session.id}`, request.url);
-  const response = NextResponse.redirect(url);
+  const response = NextResponse.redirect(url, 303);
 
   response.cookies.set(
     SESSION_GRANTS_COOKIE,

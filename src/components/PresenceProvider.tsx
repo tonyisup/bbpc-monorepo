@@ -24,10 +24,16 @@ const PresenceContext = createContext<PresenceContextValue>({
 interface PresenceProviderProps {
   children: React.ReactNode;
   sessionId: string;
+  clientId: string;
+  accessToken: string;
 }
 
-export function PresenceProvider({ children, sessionId }: PresenceProviderProps) {
-  const members = useQuery(api.sessions.listParticipants, { publicId: sessionId });
+export function PresenceProvider({ children, sessionId, clientId, accessToken }: PresenceProviderProps) {
+  const members = useQuery(api.sessions.listParticipants, {
+    publicId: sessionId,
+    clientId,
+    accessToken,
+  });
 
   return (
     <PresenceContext.Provider
@@ -45,4 +51,3 @@ export function PresenceProvider({ children, sessionId }: PresenceProviderProps)
 export function usePresence(): PresenceContextValue {
   return useContext(PresenceContext);
 }
-
