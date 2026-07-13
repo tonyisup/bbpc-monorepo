@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     grant,
   );
   const url = new URL(`/sessions/${session.id}`, request.url);
-  const response = NextResponse.redirect(url);
+  const response = NextResponse.redirect(url, 303);
 
   response.cookies.set(
     SESSION_GRANTS_COOKIE,

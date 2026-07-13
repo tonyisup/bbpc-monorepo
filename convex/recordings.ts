@@ -37,6 +37,9 @@ export const saveUpload = mutation({
       .unique();
 
     if (existing) {
+      if (existing.publicSessionId !== args.publicSessionId) {
+        throw new Error('Recording upload belongs to a different session');
+      }
       await ctx.db.patch(existing._id, upload);
       return existing._id;
     }

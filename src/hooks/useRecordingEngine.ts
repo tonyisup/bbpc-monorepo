@@ -199,9 +199,16 @@ export function useRecordingEngine(): RecordingEngine {
         await audioCtxRef.current.close();
       }
       micStreamRef.current = null;
+      ownsMicStreamRef.current = true;
+      micSourceRef.current = null;
+      micDestRef.current = null;
+      sounderDestRef.current = null;
       micRecorderRef.current = null;
       sounderRecorderRef.current = null;
+      analyserRef.current = null;
       audioCtxRef.current = null;
+      micChunksRef.current = [];
+      sounderChunksRef.current = [];
       setSounderDestination(null);
       setState(prev => ({
         ...prev,

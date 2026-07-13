@@ -43,7 +43,16 @@ export async function requireOwner(
 
 export function requireAdminSecret(adminSecret: string): void {
   const expected = process.env.SESSION_ADMIN_SECRET;
-  if (!expected || adminSecret !== expected) {
+  if (!expected) {
+    throw new Error('Administrative access required');
+  }
+
+  let mismatch = adminSecret.length ^ expected.length;
+  for (let index = 0; index < expected.length; index += 1) {
+    mismatch |= (adminSecret.charCodeAt(index) | 0) ^ expected.charCodeAt(index);
+  }
+
+  if (mismatch !== 0) {
     throw new Error('Administrative access required');
   }
 }

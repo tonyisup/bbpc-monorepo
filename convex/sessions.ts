@@ -270,9 +270,10 @@ export const endSession = mutation({
       };
     }
 
+    const endedAt = Date.now();
     await ctx.db.patch(session._id, {
       status: 'ended',
-      endedAt: args.endedAt,
+      endedAt,
     });
 
     return {
@@ -280,7 +281,7 @@ export const endSession = mutation({
       episode: session.episode,
       status: 'ended' as const,
       createdAt: new Date(session.createdAt).toISOString(),
-      endedAt: new Date(args.endedAt).toISOString(),
+      endedAt: new Date(endedAt).toISOString(),
     };
   },
 });
@@ -339,6 +340,10 @@ export const appendSessionEvent = mutation({
       || (payload.kind === 'recording-left' && payload.participant.clientId !== participant.clientId)
       || (payload.kind === 'audio-joined' && payload.participant.clientId !== participant.clientId)
       || (payload.kind === 'audio-left' && payload.participant.clientId !== participant.clientId)
+      || (payload.kind === 'audio-disconnect-started'
+        && payload.disconnect.clientId !== participant.clientId)
+      || (payload.kind === 'audio-disconnect-ended'
+        && payload.disconnect.clientId !== participant.clientId)
     ) {
       throw new Error('Session event participant does not match caller');
     }
