@@ -188,11 +188,27 @@ export function useRecordingEngine(): RecordingEngine {
       }, 250);
       (window as unknown as { __recordingTimer: ReturnType<typeof setInterval> }).__recordingTimer = timer;
     } catch (err) {
+      const timer = (window as unknown as { __recordingTimer?: ReturnType<typeof setInterval> }).__recordingTimer;
+      if (timer) clearInterval(timer);
+      if (micRecorderRef.current?.state === 'recording') micRecorderRef.current.stop();
+      if (sounderRecorderRef.current?.state === 'recording') sounderRecorderRef.current.stop();
+      if (micStreamRef.current && ownsMicStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
+        await audioCtxRef.current.close();
+      }
+      micStreamRef.current = null;
+      micRecorderRef.current = null;
+      sounderRecorderRef.current = null;
+      audioCtxRef.current = null;
+      setSounderDestination(null);
       setState(prev => ({
         ...prev,
         isRecording: false,
         error: err instanceof Error ? err.message : 'Failed to start recording',
       }));
+      throw err;
     }
   }, [startVU, setSounderDestination]);
 
@@ -241,6 +257,7 @@ export function useRecordingEngine(): RecordingEngine {
     micRecorderRef.current = null;
     sounderRecorderRef.current = null;
     analyserRef.current = null;
+    audioCtxRef.current = null;
     micChunksRef.current = [];
     sounderChunksRef.current = [];
 

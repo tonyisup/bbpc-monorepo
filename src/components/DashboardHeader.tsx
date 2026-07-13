@@ -334,13 +334,10 @@ export function DashboardHeader() {
     await uploadTracks(tracks);
   }, [dispatchRecordingLeave, recording, state.recordingStart, uploadTracks]);
 
-  const handleRemoteStart = useCallback(async (startedAt: number) => {
+  const handleRemoteStart = useCallback((startedAt: number) => {
     console.log('[Recording] Remote host started recording at', startedAt);
     recordingStartRef.current = startedAt;
-    if (!isOwner) {
-      await joinActiveRecording(startedAt);
-    }
-  }, [isOwner, joinActiveRecording]);
+  }, []);
 
   const handleRemoteStop = useCallback(async (startedAt: number, durationMs: number) => {
     console.log('[Recording] Remote host stopped recording', { startedAt, durationMs });
@@ -352,6 +349,8 @@ export function DashboardHeader() {
 
   const { broadcastStart, broadcastStop } = useRecordingSync({
     sessionId,
+    clientId: participantClientId,
+    accessToken: participantAccessToken,
     participantRole,
     onRemoteStart: handleRemoteStart,
     onRemoteStop: handleRemoteStop,
@@ -388,7 +387,18 @@ export function DashboardHeader() {
     const now = Date.now();
     recordingStartRef.current = now;
 
-    // Start session recording (timeline for notes/cues/segments)
+    try {
+      // Start the local recorder before changing shared transport state.
+      await recording.startRecording({
+        mediaStream: micStream ?? undefined,
+        ownsMediaStream: !micStream,
+      });
+    } catch (err) {
+      recordingStartRef.current = 0;
+      console.error('[Recording] Failed to start recording:', err);
+      return;
+    }
+
     dispatch({
       type: 'START_RECORDING',
       startedAt: now,
@@ -398,12 +408,6 @@ export function DashboardHeader() {
         role: 'owner',
         joinedAt: now,
       },
-    });
-
-    // Start WebRTC audio recording (mic + sounders)
-    await recording.startRecording({
-      mediaStream: micStream ?? undefined,
-      ownsMediaStream: !micStream,
     });
 
     // Broadcast to guests

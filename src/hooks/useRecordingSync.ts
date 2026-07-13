@@ -7,6 +7,8 @@ import type { SessionRole } from '@/lib/sessions/types';
 
 interface RecordingSyncOptions {
   sessionId: string;
+  clientId: string;
+  accessToken: string;
   participantRole: SessionRole;
   onRemoteStart: (startedAt: number) => void;
   onRemoteStop: (startedAt: number, durationMs: number) => void;
@@ -17,6 +19,8 @@ interface RecordingSyncOptions {
  */
 export function useRecordingSync({
   sessionId,
+  clientId,
+  accessToken,
   participantRole,
   onRemoteStart,
   onRemoteStop,
@@ -43,7 +47,10 @@ export function useRecordingSync({
 
   const { sendEvent } = useSessionSync({
     sessionId,
-    onRemoteEvent: handleRemoteEvent,
+    clientId,
+    accessToken,
+    onRemoteEvent: () => {},
+    onLiveRemoteEvent: handleRemoteEvent,
   });
 
   const broadcastStart = useCallback((

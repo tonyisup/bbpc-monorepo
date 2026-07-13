@@ -11,6 +11,7 @@ export function createInitialState(
     date,
     hostName,
     recordingStart: null,
+    recordingEnd: null,
     isRecording: false,
     sounders,
     soundersUsed: [],
@@ -241,7 +242,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
   switch (action.type) {
     case 'START_RECORDING': {
       const startedAt = action.startedAt ?? Date.now();
-      const nextState = { ...state, isRecording: true, recordingStart: startedAt };
+      const nextState = { ...state, isRecording: true, recordingStart: startedAt, recordingEnd: null };
       if (!action.participant) return nextState;
 
       return upsertRecordingJoin(nextState, {
@@ -251,7 +252,11 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
 
     case 'STOP_RECORDING': {
-      const nextState = { ...state, isRecording: false };
+      const nextState = {
+        ...state,
+        isRecording: false,
+        recordingEnd: action.participant?.leftAt ?? Date.now(),
+      };
       return action.participant ? applyRecordingLeave(nextState, action.participant) : nextState;
     }
 
@@ -464,7 +469,6 @@ export function applySessionSyncEvents(
 export function sessionStateToManifest(
   state: SessionState,
   sessionId: string,
-  elapsedMs: number,
 ): Manifest {
   return {
     episode: state.episode,
@@ -472,7 +476,7 @@ export function sessionStateToManifest(
     hosts: [state.hostName],
     session_id: sessionId,
     recording_start: state.recordingStart,
-    recording_end: state.isRecording ? null : (state.recordingStart ?? 0) + elapsedMs,
+    recording_end: state.isRecording ? null : state.recordingEnd,
     manifest_version: '1.1',
     recording_participants: state.recordingParticipants,
     audio_participants: state.audioParticipants,

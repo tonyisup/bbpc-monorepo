@@ -117,10 +117,16 @@ export function SessionProvider({
 
   const { sendEvent } = useSessionSync({
     sessionId,
+    clientId: participantClientId,
+    accessToken: participantAccessToken,
     onRemoteEvent: handleRemoteEvent,
     onLiveRemoteEvent: handleLiveRemoteEvent,
   });
-  const lifecycle = useQuery(api.sessions.getSessionLifecycle, { publicId: sessionId });
+  const lifecycle = useQuery(api.sessions.getSessionLifecycle, {
+    publicId: sessionId,
+    clientId: participantClientId,
+    accessToken: participantAccessToken,
+  });
   const sessionStatus = lifecycle?.status ?? initialStatus;
   const endedAt = lifecycle?.endedAt ?? initialEndedAt;
 
@@ -134,8 +140,8 @@ export function SessionProvider({
   }, [rawDispatch, sendEvent, sessionStatus, state.hostName, state.recordingStart]);
 
   const toManifest = useCallback(
-    (): Manifest => sessionStateToManifest(state, sessionId, elapsedMs),
-    [state, elapsedMs, sessionId],
+    (): Manifest => sessionStateToManifest(state, sessionId),
+    [state, sessionId],
   );
 
   return (

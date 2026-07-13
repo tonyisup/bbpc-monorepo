@@ -1,7 +1,12 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
-
-const role = v.union(v.literal('owner'), v.literal('participant'));
+import {
+  participantForAccess,
+  requireAdminSecret,
+  requireOwner,
+  requireParticipant,
+} from './access';
+import { sessionEventPayload } from './sessionEvent';
 
 async function sessionByPublicId(ctx: QueryCtx | MutationCtx, publicId: string) {
   return await ctx.db
@@ -10,25 +15,9 @@ async function sessionByPublicId(ctx: QueryCtx | MutationCtx, publicId: string) 
     .unique();
 }
 
-async function participantForAccess(
-  ctx: QueryCtx | MutationCtx,
-  publicSessionId: string,
-  clientId: string,
-  accessToken: string,
-) {
-  return await ctx.db
-    .query('participants')
-    .withIndex('by_access', q => (
-      q
-        .eq('publicSessionId', publicSessionId)
-        .eq('clientId', clientId)
-        .eq('accessToken', accessToken)
-    ))
-    .unique();
-}
-
 export const createSession = mutation({
   args: {
+    adminSecret: v.string(),
     publicId: v.string(),
     inviteToken: v.string(),
     episode: v.string(),
@@ -37,11 +26,11 @@ export const createSession = mutation({
       clientId: v.string(),
       accessToken: v.string(),
       displayName: v.string(),
-      role,
       joinedAt: v.number(),
     }),
   },
   handler: async (ctx, args) => {
+    requireAdminSecret(args.adminSecret);
     const existing = await sessionByPublicId(ctx, args.publicId);
     if (existing) {
       throw new Error('Session publicId already exists');
@@ -65,6 +54,7 @@ export const createSession = mutation({
       sessionId,
       publicSessionId: args.publicId,
       ...args.participant,
+      role: 'owner',
     });
 
     return {
@@ -76,6 +66,7 @@ export const createSession = mutation({
       status: 'active' as const,
       participants: [{
         ...args.participant,
+        role: 'owner' as const,
         joinedAt: new Date(args.participant.joinedAt).toISOString(),
       }],
     };
@@ -85,8 +76,11 @@ export const createSession = mutation({
 export const getSession = query({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicId, args.clientId, args.accessToken);
     const session = await sessionByPublicId(ctx, args.publicId);
     if (!session) return null;
 
@@ -109,7 +103,6 @@ export const getSession = query({
       status: session.status,
       participants: participants.map(participant => ({
         clientId: participant.clientId,
-        accessToken: participant.accessToken,
         displayName: participant.displayName,
         role: participant.role,
         joinedAt: new Date(participant.joinedAt).toISOString(),
@@ -121,8 +114,11 @@ export const getSession = query({
 export const getSessionLifecycle = query({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicId, args.clientId, args.accessToken);
     const session = await sessionByPublicId(ctx, args.publicId);
     if (!session) return null;
 
@@ -143,7 +139,6 @@ export const joinSessionByInviteToken = mutation({
       clientId: v.string(),
       accessToken: v.string(),
       displayName: v.string(),
-      role,
       joinedAt: v.number(),
     }),
   },
@@ -162,6 +157,7 @@ export const joinSessionByInviteToken = mutation({
       sessionId: invite.sessionId,
       publicSessionId: invite.publicSessionId,
       ...args.participant,
+      role: 'participant',
     });
 
     const participants = await ctx.db
@@ -178,7 +174,6 @@ export const joinSessionByInviteToken = mutation({
       status: session.status,
       participants: participants.map(participant => ({
         clientId: participant.clientId,
-        accessToken: participant.accessToken,
         displayName: participant.displayName,
         role: participant.role,
         joinedAt: new Date(participant.joinedAt).toISOString(),
@@ -233,9 +228,12 @@ export const updateParticipantDisplayName = mutation({
 export const updateSessionEpisode = mutation({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
     episode: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.publicId, args.clientId, args.accessToken);
     const session = await sessionByPublicId(ctx, args.publicId);
     if (!session || session.status !== 'active') return null;
 
@@ -253,9 +251,12 @@ export const updateSessionEpisode = mutation({
 export const endSession = mutation({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
     endedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.publicId, args.clientId, args.accessToken);
     const session = await sessionByPublicId(ctx, args.publicId);
     if (!session) return null;
 
@@ -287,8 +288,11 @@ export const endSession = mutation({
 export const listParticipants = query({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicId, args.clientId, args.accessToken);
     const participants = await ctx.db
       .query('participants')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicId))
@@ -304,18 +308,46 @@ export const listParticipants = query({
 export const appendSessionEvent = mutation({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
     eventId: v.string(),
-    actorId: v.string(),
     createdAt: v.number(),
-    payload: v.any(),
+    payload: sessionEventPayload,
   },
   handler: async (ctx, args) => {
+    const participant = await requireParticipant(ctx, args.publicId, args.clientId, args.accessToken);
     const session = await sessionByPublicId(ctx, args.publicId);
-    const payload = args.payload as { kind?: unknown };
+    const payload = args.payload;
     const isTerminalRecordingEvent = (
       payload.kind === 'recording-left'
       || payload.kind === 'recording-stopped'
     );
+    const isOwnerEvent = (
+      payload.kind === 'recording-started'
+      || payload.kind === 'recording-stopped'
+      || payload.kind === 'episode-update'
+    );
+    if (isOwnerEvent && participant.role !== 'owner') {
+      throw new Error('Only the session owner can publish this event');
+    }
+    if (
+      (payload.kind === 'recording-started' && payload.participant?.clientId !== undefined
+        && payload.participant.clientId !== participant.clientId)
+      || (payload.kind === 'recording-stopped' && payload.participant?.clientId !== undefined
+        && payload.participant.clientId !== participant.clientId)
+      || (payload.kind === 'recording-joined' && payload.participant.clientId !== participant.clientId)
+      || (payload.kind === 'recording-left' && payload.participant.clientId !== participant.clientId)
+      || (payload.kind === 'audio-joined' && payload.participant.clientId !== participant.clientId)
+      || (payload.kind === 'audio-left' && payload.participant.clientId !== participant.clientId)
+    ) {
+      throw new Error('Session event participant does not match caller');
+    }
+    if (
+      (payload.kind === 'recording-joined' || payload.kind === 'audio-joined')
+      && payload.participant.role !== participant.role
+    ) {
+      throw new Error('Session event role does not match caller');
+    }
     if (!session || (session.status !== 'active' && !isTerminalRecordingEvent)) return null;
 
     const existing = await ctx.db
@@ -328,7 +360,7 @@ export const appendSessionEvent = mutation({
     return await ctx.db.insert('sessionEvents', {
       publicSessionId: args.publicId,
       eventId: args.eventId,
-      actorId: args.actorId,
+      actorId: participant.clientId,
       createdAt: args.createdAt,
       payload: args.payload,
     });
@@ -338,8 +370,11 @@ export const appendSessionEvent = mutation({
 export const listSessionEvents = query({
   args: {
     publicId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicId, args.clientId, args.accessToken);
     const events = await ctx.db
       .query('sessionEvents')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicId))
@@ -397,15 +432,17 @@ export const cleanupEndedSessions = mutation({
     olderThan: v.number(),
     limit: v.optional(v.number()),
     confirmation: v.literal('delete-ended-sessions'),
+    adminSecret: v.string(),
   },
   handler: async (ctx, args) => {
+    requireAdminSecret(args.adminSecret);
     const limit = Math.min(Math.max(args.limit ?? 10, 1), 100);
     const sessions = await ctx.db
       .query('sessions')
-      .withIndex('by_status_created_at', q => (
+      .withIndex('by_status_ended_at', q => (
         q
           .eq('status', 'ended')
-          .lt('createdAt', args.olderThan)
+          .lt('endedAt', args.olderThan)
       ))
       .take(limit);
 
@@ -443,8 +480,10 @@ export const deleteSessionData = mutation({
   args: {
     publicId: v.string(),
     confirmation: v.literal('delete-session-data'),
+    adminSecret: v.string(),
   },
   handler: async (ctx, args) => {
+    requireAdminSecret(args.adminSecret);
     const session = await sessionByPublicId(ctx, args.publicId);
     if (!session) return null;
 

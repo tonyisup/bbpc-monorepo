@@ -21,6 +21,10 @@ npm run seed:segment-templates
 npm run cleanup:ended-sessions -- --days=30 --limit=25
 ```
 
+Copy `.env.example` to `.env.local`, then configure the same
+`SESSION_ADMIN_SECRET` value in both the app runtime and the Convex deployment.
+For Convex, run `npx convex env set SESSION_ADMIN_SECRET '<generated-value>'`.
+
 ## Merge Bundle Workflow
 
 After a recording session, use the app's `Download Merge Bundle` button. The bundle includes the manifest, Audacity labels, uploaded recording URLs, participant join/leave intervals, and sounder asset URLs.

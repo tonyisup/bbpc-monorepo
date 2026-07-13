@@ -19,6 +19,8 @@ export async function GET(
 
   const recordings = await fetchQuery(api.recordings.listBySession, {
     publicSessionId: sessionId,
+    clientId: grant!.clientId,
+    accessToken: grant!.accessToken,
   });
 
   return NextResponse.json({ recordings });

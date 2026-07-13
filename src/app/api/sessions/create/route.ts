@@ -8,7 +8,7 @@ import {
   upsertSessionGrant,
 } from '@/lib/sessions/cookies';
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const { session, grant } = await createSession();
   const cookieStore = await cookies();
   const grants = upsertSessionGrant(

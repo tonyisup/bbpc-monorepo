@@ -1,9 +1,12 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { requireParticipant } from './access';
 
 export const save = mutation({
   args: {
     publicSessionId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
     episode: v.string(),
     date: v.string(),
     hosts: v.array(v.string()),
@@ -12,6 +15,7 @@ export const save = mutation({
     updatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicSessionId, args.clientId, args.accessToken);
     const existing = await ctx.db
       .query('sessionManifests')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicSessionId))
@@ -39,8 +43,11 @@ export const save = mutation({
 export const getBySession = query({
   args: {
     publicSessionId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicSessionId, args.clientId, args.accessToken);
     const saved = await ctx.db
       .query('sessionManifests')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicSessionId))
@@ -59,4 +66,3 @@ export const getBySession = query({
     };
   },
 });
-

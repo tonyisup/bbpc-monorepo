@@ -8,10 +8,10 @@ import {
 } from './ids';
 import type {
   CreateSessionResult,
+  AuthenticatedSessionParticipant,
   JoinSessionResult,
   RecordingSession,
   SessionAccessGrant,
-  SessionParticipant,
 } from './types';
 
 function sanitizeDisplayName(displayName: string | undefined, fallback: string): string {
@@ -24,6 +24,12 @@ function defaultEpisode(): string {
   return `EP-${new Date().toISOString().slice(0, 10)}`;
 }
 
+export function sessionAdminSecret(): string {
+  const secret = process.env.SESSION_ADMIN_SECRET;
+  if (!secret) throw new Error('SESSION_ADMIN_SECRET is not configured');
+  return secret;
+}
+
 export async function createSession(displayName?: string): Promise<CreateSessionResult> {
   const now = Date.now();
   const clientId = createClientId();
@@ -32,11 +38,11 @@ export async function createSession(displayName?: string): Promise<CreateSession
     clientId,
     accessToken,
     displayName: sanitizeDisplayName(displayName, 'Host'),
-    role: 'owner' as const,
     joinedAt: now,
   };
 
   const session = await fetchMutation(api.sessions.createSession, {
+    adminSecret: sessionAdminSecret(),
     publicId: createSessionId(),
     inviteToken: createInviteToken(),
     episode: defaultEpisode(),
@@ -54,8 +60,15 @@ export async function createSession(displayName?: string): Promise<CreateSession
   };
 }
 
-export async function getSession(sessionId: string): Promise<RecordingSession | null> {
-  return await fetchQuery(api.sessions.getSession, { publicId: sessionId });
+export async function getSession(
+  sessionId: string,
+  grant: SessionAccessGrant,
+): Promise<RecordingSession | null> {
+  return await fetchQuery(api.sessions.getSession, {
+    publicId: sessionId,
+    clientId: grant.clientId,
+    accessToken: grant.accessToken,
+  });
 }
 
 export async function joinSessionByInviteToken(
@@ -67,7 +80,6 @@ export async function joinSessionByInviteToken(
     clientId: createClientId(),
     accessToken: createAccessToken(),
     displayName: sanitizeDisplayName(displayName, 'Guest'),
-    role: 'participant' as const,
     joinedAt: now,
   };
 
@@ -82,6 +94,7 @@ export async function joinSessionByInviteToken(
     session,
     participant: {
       ...participant,
+      role: 'participant',
       joinedAt: new Date(participant.joinedAt).toISOString(),
     },
     grant: {
@@ -102,7 +115,7 @@ export async function hasSessionAccess(
 export async function getParticipantForGrant(
   sessionId: string,
   grant: SessionAccessGrant | undefined,
-): Promise<SessionParticipant | null> {
+): Promise<AuthenticatedSessionParticipant | null> {
   if (!grant || grant.sessionId !== sessionId) return null;
 
   return await fetchQuery(api.sessions.getParticipantForGrant, {
@@ -116,7 +129,7 @@ export async function updateParticipantDisplayName(
   sessionId: string,
   grant: SessionAccessGrant,
   displayName: string,
-): Promise<SessionParticipant | null> {
+): Promise<AuthenticatedSessionParticipant | null> {
   return await fetchMutation(api.sessions.updateParticipantDisplayName, {
     publicId: sessionId,
     clientId: grant.clientId,
@@ -130,11 +143,14 @@ export async function updateSessionEpisode(
   grant: SessionAccessGrant | undefined,
   episode: string,
 ): Promise<{ id: string; episode: string } | null> {
+  if (!grant) return null;
   const participant = await getParticipantForGrant(sessionId, grant);
   if (!participant || participant.role !== 'owner') return null;
 
   return await fetchMutation(api.sessions.updateSessionEpisode, {
     publicId: sessionId,
+    clientId: grant.clientId,
+    accessToken: grant.accessToken,
     episode: episode.trim().slice(0, 80),
   });
 }
@@ -143,11 +159,14 @@ export async function endSession(
   sessionId: string,
   grant: SessionAccessGrant | undefined,
 ): Promise<{ id: string; status: 'ended'; endedAt: string | null } | null> {
+  if (!grant) return null;
   const participant = await getParticipantForGrant(sessionId, grant);
   if (!participant || participant.role !== 'owner') return null;
 
   return await fetchMutation(api.sessions.endSession, {
     publicId: sessionId,
+    clientId: grant.clientId,
+    accessToken: grant.accessToken,
     endedAt: Date.now(),
   });
 }

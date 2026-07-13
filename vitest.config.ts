@@ -3,7 +3,8 @@ import path from 'path';
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'convex/**/*.test.ts'],
+    environment: 'edge-runtime',
   },
   resolve: {
     alias: {
