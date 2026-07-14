@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { fetchMutation, fetchQuery } from 'convex/nextjs';
 import { api } from '../../../../convex/_generated/api';
+import { sessionAdminSecret } from '@/lib/sessions/store';
 
 const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME_SOUNDERS || 'sounders';
 const CONN_STR = process.env.AZURE_STORAGE_ACCOUNT_CONNECTION_STRING;
@@ -82,12 +83,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const refresh = req.query.refresh === '1';
+    const refreshRequested = req.query.refresh === '1';
+    if (refreshRequested && req.headers['x-admin-secret'] !== sessionAdminSecret()) {
+      return res.status(403).json({ message: 'Administrative access required' });
+    }
+    const refresh = refreshRequested;
     let sounders = await fetchQuery(api.sounders.list, {});
 
     if (refresh || sounders.length === 0) {
       sounders = await discoverAzureSounders();
       await fetchMutation(api.sounders.replaceAll, {
+        adminSecret: sessionAdminSecret(),
         sounders,
         updatedAt: Date.now(),
       });

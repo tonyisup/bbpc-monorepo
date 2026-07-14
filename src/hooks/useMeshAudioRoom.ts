@@ -137,7 +137,7 @@ export function useMeshAudioRoom({
   const onDisconnectEndedRef = useRef(onDisconnectEnded);
 
   const listPresenceArgs = joined
-    ? { publicSessionId: sessionId }
+    ? { publicSessionId: sessionId, clientId, accessToken }
     : 'skip';
   const listSignalsArgs = joined
     ? { publicSessionId: sessionId, clientId, accessToken }

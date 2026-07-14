@@ -101,7 +101,11 @@ export function DashboardApp({
 }: DashboardAppProps) {
   return (
     <ConvexClientProvider>
-      <PresenceProvider sessionId={sessionId}>
+      <PresenceProvider
+        sessionId={sessionId}
+        clientId={participantClientId}
+        accessToken={participantAccessToken}
+      >
         <AudioProvider>
           <SessionProvider
             sessionId={sessionId}

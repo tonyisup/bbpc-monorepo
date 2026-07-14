@@ -3,7 +3,13 @@ import { BlobServiceClient } from '@azure/storage-blob';
 import { fetchMutation } from 'convex/nextjs';
 import { api } from '../../../../convex/_generated/api';
 import { readSessionGrantsFromRequest } from '@/lib/sessions/cookies';
-import { hasSessionAccess } from '@/lib/sessions/store';
+import { getParticipantForGrant } from '@/lib/sessions/store';
+import {
+  MAX_RECORDING_BYTES,
+  estimatedBase64Bytes,
+  parseRecordingUploadInput,
+  safeBlobSegment,
+} from '@/lib/recordings/upload';
 
 const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME_RECORDINGS || 'recordings';
 const CONN_STR = process.env.AZURE_STORAGE_ACCOUNT_CONNECTION_STRING;
@@ -20,39 +26,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { sessionId, episode, hostName, trackType, startedAt, audioBase64 } = req.body as {
-      sessionId?: string;
-      episode?: string;
-      hostName?: string;
-      trackType?: 'mic' | 'sounders';
-      startedAt?: number;
-      audioBase64?: string;
-    };
-
-    if (!episode || !hostName || !trackType || !startedAt) {
+    const upload = parseRecordingUploadInput(req.body);
+    if (!upload) {
       console.error('[Recording Upload] Missing fields:', {
-        hasEpisode: !!episode,
-        hasHostName: !!hostName,
-        hasTrackType: !!trackType,
-        hasStartedAt: !!startedAt,
-        hasAudioBase64: !!audioBase64,
+        bodyType: typeof req.body,
         bodyKeys: Object.keys(req.body || {}),
       });
       return res.status(400).json({ message: 'Missing required fields' });
     }
+    const { sessionId, episode, hostName, trackType, startedAt, audioBase64 } = upload;
 
-    if (!audioBase64 || audioBase64.length === 0) {
-      console.log('[Recording Upload] Empty audio, skipping:', { episode, hostName, trackType });
-      return res.status(200).json({ ok: true, skipped: true, reason: 'empty audio' });
+    if (estimatedBase64Bytes(audioBase64) > MAX_RECORDING_BYTES) {
+      return res.status(413).json({ message: 'Recording exceeds 100 MB upload limit' });
     }
 
-    if (sessionId) {
-      const grant = readSessionGrantsFromRequest(req).find(candidate => candidate.sessionId === sessionId);
-      const canAccess = await hasSessionAccess(sessionId, grant);
+    const grant = readSessionGrantsFromRequest(req).find(candidate => candidate.sessionId === sessionId);
+    const participant = await getParticipantForGrant(sessionId, grant);
 
-      if (!canAccess) {
-        return res.status(403).json({ message: 'Session access denied' });
-      }
+    if (!participant || !grant) {
+      return res.status(403).json({ message: 'Session access denied' });
+    }
+
+    if (audioBase64.length === 0) {
+      console.log('[Recording Upload] Empty audio, skipping:', { episode, hostName, trackType });
+      return res.status(200).json({ ok: true, skipped: true, reason: 'empty audio' });
     }
 
     const svc = getBlobServiceClient();
@@ -60,15 +57,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await containerClient.createIfNotExists({ access: 'blob' });
 
     const timestamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
-    const blobName = `${sessionId || episode}/${timestamp}/${hostName}-${trackType}.webm`;
+    const authoritativeHostName = participant.displayName;
+    const blobName = `${sessionId}/${timestamp}/${safeBlobSegment(authoritativeHostName)}-${participant.clientId}-${trackType}.webm`;
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
     const audioBuffer = Buffer.from(audioBase64, 'base64');
+    if (audioBuffer.length > MAX_RECORDING_BYTES) return res.status(413).json({ message: 'Recording exceeds 100 MB upload limit' });
     console.log('[Recording Upload] Uploading', {
       blobName,
       sizeBytes: audioBuffer.length,
       episode,
-      hostName,
+      hostName: authoritativeHostName,
       trackType,
     });
 
@@ -76,8 +75,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       blobHTTPHeaders: { blobContentType: RECORDING_CONTENT_TYPE },
       metadata: {
         episode,
-        sessionId: sessionId || '',
-        hostName,
+        sessionId,
+        hostName: authoritativeHostName,
         trackType,
         startedAt: String(startedAt),
       },
@@ -86,9 +85,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[Recording Upload] Success:', { blobName, size: audioBuffer.length });
 
     const recordingId = await fetchMutation(api.recordings.saveUpload, {
-      publicSessionId: sessionId || undefined,
+      publicSessionId: sessionId,
+      clientId: grant.clientId,
+      accessToken: grant.accessToken,
       episode,
-      hostName,
+      hostName: authoritativeHostName,
       trackType,
       startedAt,
       blobName,

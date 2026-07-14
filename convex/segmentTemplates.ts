@@ -1,5 +1,6 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { requireAdminSecret } from './access';
 
 const segmentType = v.union(
   v.literal('intro'),
@@ -40,10 +41,12 @@ export const list = query({
 
 export const upsertMany = mutation({
   args: {
+    adminSecret: v.string(),
     templates: v.array(segmentTemplateInput),
     updatedAt: v.number(),
   },
   handler: async (ctx, args) => {
+    requireAdminSecret(args.adminSecret);
     for (const [index, template] of args.templates.entries()) {
       const existing = await ctx.db
         .query('segmentTemplates')
@@ -70,4 +73,3 @@ export const upsertMany = mutation({
     return { count: args.templates.length };
   },
 });
-

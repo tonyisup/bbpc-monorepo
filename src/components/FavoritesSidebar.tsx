@@ -47,10 +47,20 @@ function writeStoredFavorites(favorites: SounderItem[]) {
 }
 
 export function FavoritesSidebar() {
-  const { dispatch, sessionId, sessionStatus } = useSession();
+  const {
+    dispatch,
+    sessionId,
+    participantClientId,
+    participantAccessToken,
+    sessionStatus,
+  } = useSession();
   const { play } = useAudio();
   const { members, connected, resetConnections } = usePresence();
-  const savedFavorites = useQuery(api.favorites.list, { publicSessionId: sessionId });
+  const savedFavorites = useQuery(api.favorites.list, {
+    publicSessionId: sessionId,
+    clientId: participantClientId,
+    accessToken: participantAccessToken,
+  });
   const replaceFavorites = useMutation(api.favorites.replaceAll);
   const [optimisticFavorites, setOptimisticFavorites] = useState<SounderItem[] | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -73,6 +83,8 @@ export function FavoritesSidebar() {
     saveSequenceRef.current = saveSequence;
     void replaceFavorites({
       publicSessionId: sessionId,
+      clientId: participantClientId,
+      accessToken: participantAccessToken,
       favorites: next,
       updatedAt: Date.now(),
     }).then(() => {
@@ -82,7 +94,7 @@ export function FavoritesSidebar() {
     }).catch(err => {
       console.error('[Favorites] Failed to save favorites:', err);
     });
-  }, [replaceFavorites, sessionId]);
+  }, [participantAccessToken, participantClientId, replaceFavorites, sessionId]);
 
   const updateFavorites = useCallback((updater: (current: SounderItem[]) => SounderItem[]) => {
     if (sessionEnded) return;

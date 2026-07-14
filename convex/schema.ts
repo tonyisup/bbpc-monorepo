@@ -10,7 +10,8 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
   })
     .index('by_public_id', ['publicId'])
-    .index('by_status_created_at', ['status', 'createdAt']),
+    .index('by_status_created_at', ['status', 'createdAt'])
+    .index('by_status_ended_at', ['status', 'endedAt']),
 
   sessionInvites: defineTable({
     token: v.string(),

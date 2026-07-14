@@ -1,5 +1,6 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
+import { participantForAccess, requireParticipant } from './access';
 
 const rtcSignalType = v.union(
   v.literal('offer'),
@@ -18,23 +19,6 @@ async function sessionByPublicId(ctx: QueryCtx | MutationCtx, publicId: string) 
   return await ctx.db
     .query('sessions')
     .withIndex('by_public_id', q => q.eq('publicId', publicId))
-    .unique();
-}
-
-async function participantForAccess(
-  ctx: QueryCtx | MutationCtx,
-  publicSessionId: string,
-  clientId: string,
-  accessToken: string,
-) {
-  return await ctx.db
-    .query('participants')
-    .withIndex('by_access', q => (
-      q
-        .eq('publicSessionId', publicSessionId)
-        .eq('clientId', clientId)
-        .eq('accessToken', accessToken)
-    ))
     .unique();
 }
 
@@ -157,8 +141,11 @@ export const heartbeatAudio = mutation({
 export const listAudioPresence = query({
   args: {
     publicSessionId: v.string(),
+    clientId: v.string(),
+    accessToken: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireParticipant(ctx, args.publicSessionId, args.clientId, args.accessToken);
     const rows = await ctx.db
       .query('rtcPresence')
       .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicSessionId))
@@ -191,6 +178,13 @@ export const sendSignal = mutation({
   handler: async (ctx, args) => {
     const participant = await participantForAccess(ctx, args.publicSessionId, args.clientId, args.accessToken);
     if (!participant) return null;
+
+    const recipient = await ctx.db
+      .query('participants')
+      .withIndex('by_public_session_id', q => q.eq('publicSessionId', args.publicSessionId))
+      .filter(q => q.eq(q.field('clientId'), args.toClientId))
+      .first();
+    if (!recipient) return null;
 
     const duplicate = await ctx.db
       .query('rtcSignals')
