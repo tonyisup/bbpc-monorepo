@@ -28,6 +28,12 @@ const DOMAIN_TABLES = {
     "migrationRawAssignmentPointLinks",
     "migrationRawSyllabusEntries",
   ],
+  reviews: [
+    "migrationRawRatings",
+    "migrationRawReviews",
+    "migrationRawAssignmentReviews",
+    "migrationRawExtraReviews",
+  ],
 };
 
 const TABLE_FIELDS = {
@@ -186,6 +192,47 @@ const TABLE_FIELDS = {
       "sourceRowHash",
     ],
     optional: ["assignmentLegacyId", "notes"],
+  },
+  migrationRawRatings: {
+    required: [
+      "runId",
+      "legacyId",
+      "name",
+      "value",
+      "sourceRowHash",
+    ],
+    optional: ["sound", "icon", "category"],
+  },
+  migrationRawReviews: {
+    required: ["runId", "legacyId", "sourceRowHash"],
+    optional: [
+      "userLegacyId",
+      "movieLegacyId",
+      "ratingLegacyId",
+      "reviewdOn",
+      "showLegacyId",
+      "reviewedOn",
+    ],
+  },
+  migrationRawAssignmentReviews: {
+    required: [
+      "runId",
+      "legacyId",
+      "assignmentLegacyId",
+      "reviewLegacyId",
+      "sourceRowHash",
+    ],
+    optional: [],
+  },
+  migrationRawExtraReviews: {
+    required: [
+      "runId",
+      "legacyId",
+      "reviewLegacyId",
+      "episodeLegacyId",
+      "sourceRowHash",
+    ],
+    optional: [],
   },
 };
 

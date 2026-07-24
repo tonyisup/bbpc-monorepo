@@ -342,7 +342,11 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_assignmentId", ["assignmentId"])
-    .index("by_reviewId", ["reviewId"]),
+    .index("by_reviewId", ["reviewId"])
+    .index("by_assignmentId_and_reviewId", [
+      "assignmentId",
+      "reviewId",
+    ]),
 
   extraReviews: defineTable({
     legacyId: v.optional(v.string()),
@@ -351,7 +355,11 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_episodeId", ["episodeId"])
-    .index("by_reviewId", ["reviewId"]),
+    .index("by_reviewId", ["reviewId"])
+    .index("by_reviewId_and_episodeId", [
+      "reviewId",
+      "episodeId",
+    ]),
 
   gameTypes: defineTable({
     legacyId: v.optional(v.number()),
@@ -746,6 +754,45 @@ export default defineSchema({
     createdAt: v.number(),
     assignmentLegacyId: v.optional(v.string()),
     notes: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawRatings: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    name: v.string(),
+    value: v.number(),
+    sound: v.optional(v.string()),
+    icon: v.optional(v.string()),
+    category: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawReviews: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    userLegacyId: v.optional(v.string()),
+    movieLegacyId: v.optional(v.string()),
+    ratingLegacyId: v.optional(v.string()),
+    reviewdOn: v.optional(v.number()),
+    showLegacyId: v.optional(v.string()),
+    reviewedOn: v.optional(v.number()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawAssignmentReviews: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    assignmentLegacyId: v.string(),
+    reviewLegacyId: v.string(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawExtraReviews: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    reviewLegacyId: v.string(),
+    episodeLegacyId: v.string(),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
 });

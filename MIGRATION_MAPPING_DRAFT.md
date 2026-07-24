@@ -89,10 +89,11 @@ aggregate counts and clock offsets only; it did not print or persist source-row 
 |---|---|---|
 | SQL timestamps | Server offset `0`; `GETDATE()` minus `GETUTCDATE()` is `0` minutes. Azure SQL Database follows UTC according to [Microsoft's `GETDATE` documentation](https://learn.microsoft.com/en-us/sql/t-sql/functions/getdate-transact-sql?view=sql-server-ver17). | Interpret `datetime`/`datetime2` values as UTC and convert directly to epoch milliseconds. |
 | Review timestamps | 989 rows: 341 both null, 120 `ReviewdOn` only, 0 `reviewedOn` only, 528 both equal, 0 conflicting. | `reviewedAt = reviewedOn ?? ReviewdOn`; preserve each source field in private reconciliation evidence, not in the canonical document. |
+| Review targets | 989 rows: 981 movie-only, 8 show-only, 0 without a target, 0 with both targets. | Require exactly one movie/show target during transformation and on future canonical writes. |
 | Archive linkage | 433 rows: 327 linked to an episode, 106 unlinked, 0 unresolved episode references. | Migrate every row and preserve a nullable episode relation; product visibility remains a product choice. |
 | Ranked-item targets | 19 rows: all 19 have exactly one of movie/show/episode; 0 have none or multiple. | Require exactly one target and validate it against the ranked-list type. |
 | Ordering | 0 duplicate `(rankedListId, rank)` groups and 0 duplicate `(userId, order)` syllabus groups. | Enforce both keys transactionally in Convex. |
-| Relationship joins | 0 duplicate user-role, assignment-review, or assignment-point relationship groups. | Preserve one canonical document per relationship and reject duplicates on future writes. |
+| Relationship joins | 0 duplicate user-role, assignment-review, extra-review, or assignment-point relationship groups. | Preserve one canonical document per relationship and reject duplicates on future writes. |
 | Normalized lookup keys | Every role (6), tag (7), game type (2), game-point type (14), and gambling type (8) remains distinct after SQL trim/lower normalization; no blanks. | Use the proposed Unicode-aware normalized key and fail transformation if it creates a collision. |
 | Identity candidates | All 19 users have nonblank email; all 19 remain distinct after SQL trim/lower normalization; 0 duplicate normalized groups. | Preserve display email, store a normalized candidate key, and still require a verified Clerk email before first-use linking. |
 | Legacy impersonation | 0 users have populated `impersonatedUserId`; 0 unresolved targets. | Do not copy the field; all future impersonation uses expiring audited sessions. |
@@ -119,8 +120,8 @@ Index names include every indexed field.
 | `syllabusEntries` | `by_userId_and_order`, `by_movieId`, `by_assignmentId` |
 | `ratings` | `by_value` |
 | `reviews` | `by_userId`, `by_movieId`, `by_showId`, `by_ratingId` |
-| `assignmentReviews` | `by_assignmentId`, `by_reviewId` |
-| `extraReviews` | `by_episodeId`, `by_reviewId` |
+| `assignmentReviews` | `by_assignmentId`, `by_reviewId`, `by_assignmentId_and_reviewId` |
+| `extraReviews` | `by_episodeId`, `by_reviewId`, `by_reviewId_and_episodeId` |
 | `gameTypes`, `gamePointTypes`, `gamblingTypes` | `by_normalizedLookupId`; child types also `by_gameTypeId` |
 | `seasons` | `by_gameTypeId`, `by_startedOn` |
 | `points` | `by_userId`, `by_seasonId`, `by_gamePointTypeId`, `by_userId_and_seasonId` |

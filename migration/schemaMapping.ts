@@ -393,8 +393,14 @@ export const requiredIndexesByTarget = {
     "by_legacyId",
     "by_assignmentId",
     "by_reviewId",
+    "by_assignmentId_and_reviewId",
   ],
-  extraReviews: ["by_legacyId", "by_episodeId", "by_reviewId"],
+  extraReviews: [
+    "by_legacyId",
+    "by_episodeId",
+    "by_reviewId",
+    "by_reviewId_and_episodeId",
+  ],
   gameTypes: ["by_legacyId", "by_normalizedLookupId"],
   gamePointTypes: [
     "by_legacyId",

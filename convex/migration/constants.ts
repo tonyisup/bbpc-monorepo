@@ -69,6 +69,23 @@ export const GAME_OPERATIONS = {
   points: "games.points",
 } as const;
 
+export const REVIEW_OPERATIONS = {
+  start: "reviews.start",
+  ratings: "reviews.ratings",
+  reviews: "reviews.reviews",
+  assignmentReviews: "reviews.assignmentReviews",
+  extraReviews: "reviews.extraReviews",
+  finish: "reviews.finish",
+} as const;
+
+export const REVIEW_RECONCILIATION_OPERATIONS = {
+  ratings: "reviews.reconcile.ratings",
+  reviews: "reviews.reconcile.reviews",
+  assignmentReviews: "reviews.reconcile.assignmentReviews",
+  extraReviews: "reviews.reconcile.extraReviews",
+  finish: "reviews.reconcile.finish",
+} as const;
+
 export const FOUNDATION_SCRUB_SCOPE = "foundation-v1";
 
 export const FOUNDATION_SCRUB_OPERATIONS = {

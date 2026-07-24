@@ -149,6 +149,24 @@ independent reconciliation pass re-resolves every parent and compares every scal
 without repairing drift. Its guarded extractor and immutable manifest support are
 implemented but have not been run against production-derived rows.
 
+## Review migration rehearsal
+
+The fifth checkpointed slice covers `Rating`, `Review`, `AssignmentReview`, and
+`ExtraReview`. It requires the assignment-core checkpoint rather than a finished
+assignments domain, allowing review relationships to exist before game points unblock
+assignment-point links.
+
+The guarded aggregate probe found 981 movie reviews and 8 show reviews, with no missing
+or dual targets and no duplicate assignment-review or extra-review relationships. The
+transformer enforces those invariants and preserves both `ReviewdOn` and `reviewedOn` in
+raw evidence. Canonical `reviewedAt` uses the pending recommended precedence only when
+the source values are equal or one is null; a conflicting pair fails the batch.
+
+Review reconciliation independently re-resolves every user, movie/show, rating,
+assignment, review, and episode parent. Its guarded extractor and local manifest support
+are implemented, but production-derived execution remains blocked on the timestamp and
+normalization approval gate.
+
 ## Foundation raw-staging scrub
 
 After identity, catalog, and episodes are each independently reconciled, an internal

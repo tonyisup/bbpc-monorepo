@@ -26,6 +26,8 @@ import type * as migration_episodes from "../migration/episodes.js";
 import type * as migration_identity from "../migration/identity.js";
 import type * as migration_identityReconciliation from "../migration/identityReconciliation.js";
 import type * as migration_normalize from "../migration/normalize.js";
+import type * as migration_reviewReconciliation from "../migration/reviewReconciliation.js";
+import type * as migration_reviews from "../migration/reviews.js";
 import type * as migration_runtime from "../migration/runtime.js";
 import type * as migration_scrub from "../migration/scrub.js";
 import type * as pipeline_status from "../pipeline/status.js";
@@ -58,6 +60,8 @@ declare const fullApi: ApiFromModules<{
   "migration/identity": typeof migration_identity;
   "migration/identityReconciliation": typeof migration_identityReconciliation;
   "migration/normalize": typeof migration_normalize;
+  "migration/reviewReconciliation": typeof migration_reviewReconciliation;
+  "migration/reviews": typeof migration_reviews;
   "migration/runtime": typeof migration_runtime;
   "migration/scrub": typeof migration_scrub;
   "pipeline/status": typeof pipeline_status;
