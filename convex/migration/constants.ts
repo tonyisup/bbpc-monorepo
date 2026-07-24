@@ -47,3 +47,14 @@ export const EPISODE_RECONCILIATION_OPERATIONS = {
   audioMessages: "episodes.reconcile.audioMessages",
   finish: "episodes.reconcile.finish",
 } as const;
+
+export const FOUNDATION_SCRUB_SCOPE = "foundation-v1";
+
+export const FOUNDATION_SCRUB_OPERATIONS = {
+  start: "scrub.foundation.start",
+  identity: "scrub.foundation.identityRaw",
+  catalog: "scrub.foundation.catalogRaw",
+  episodes: "scrub.foundation.episodeRaw",
+  checkpoints: "scrub.foundation.checkpoints",
+  finish: "scrub.foundation.finish",
+} as const;

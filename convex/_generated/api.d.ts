@@ -25,6 +25,7 @@ import type * as migration_identity from "../migration/identity.js";
 import type * as migration_identityReconciliation from "../migration/identityReconciliation.js";
 import type * as migration_normalize from "../migration/normalize.js";
 import type * as migration_runtime from "../migration/runtime.js";
+import type * as migration_scrub from "../migration/scrub.js";
 import type * as pipeline_status from "../pipeline/status.js";
 import type * as system_cutover from "../system/cutover.js";
 import type * as system_gate from "../system/gate.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   "migration/identityReconciliation": typeof migration_identityReconciliation;
   "migration/normalize": typeof migration_normalize;
   "migration/runtime": typeof migration_runtime;
+  "migration/scrub": typeof migration_scrub;
   "pipeline/status": typeof pipeline_status;
   "system/cutover": typeof system_cutover;
   "system/gate": typeof system_gate;

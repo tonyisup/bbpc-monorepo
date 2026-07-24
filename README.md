@@ -130,6 +130,18 @@ is hard-wired to the Convex `local` deployment and requires explicit acknowledge
 before replacing the allowlisted `migrationRaw*` tables. This makes interrupted staging
 repeatable without permitting an accidental cloud import.
 
+## Foundation raw-staging scrub
+
+After identity, catalog, and episodes are each independently reconciled, an internal
+`foundation-v1` scrub may remove their raw staging and migration checkpoints in bounded
+batches. It records per-scope deletion totals, refuses to finish while any raw row or
+checkpoint from any run remains, and retains canonical data, domain/run records, scrub
+state, and audit evidence.
+
+This is an intermediate data-minimization milestone, not the portable-backup gate.
+Later domains must be migrated and reconciled before the final scrub removes all
+migration/control metadata and a canonical backup may be approved.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:

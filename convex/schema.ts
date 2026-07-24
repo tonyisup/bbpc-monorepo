@@ -18,6 +18,10 @@ const migrationCheckpointStatus = v.union(
   v.literal("running"),
   v.literal("completed"),
 );
+const migrationScrubStatus = v.union(
+  v.literal("running"),
+  v.literal("completed"),
+);
 const auditValue = v.union(
   v.string(),
   v.number(),
@@ -574,6 +578,19 @@ export default defineSchema({
     reusedCount: v.number(),
     updatedAt: v.number(),
   }).index("by_runId_and_operation", ["runId", "operation"]),
+
+  migrationScrubRuns: defineTable({
+    runId: v.string(),
+    scope: v.string(),
+    status: migrationScrubStatus,
+    identityRawRowsDeleted: v.number(),
+    catalogRawRowsDeleted: v.number(),
+    episodeRawRowsDeleted: v.number(),
+    checkpointsDeleted: v.number(),
+    startedAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_runId_and_scope", ["runId", "scope"]),
 
   migrationRawUsers: defineTable({
     runId: v.string(),
