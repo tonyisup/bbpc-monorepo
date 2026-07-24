@@ -260,6 +260,144 @@ describe("catalog write API", () => {
     );
   });
 
+  test("hydrates bounded administrator movie and show detail reads", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const movieId = await seedMovie(t, "detail");
+    const showId = await seedShow(t, "detail");
+    const relationships = await t.run(async (ctx) => {
+      const ratingId = await ctx.db.insert("ratings", {
+        name: "Great",
+        value: 4,
+      });
+      const episodeId = await ctx.db.insert("episodes", {
+        number: 44,
+        title: "Detail Episode",
+        status: "published",
+        slug: "detail-episode",
+        normalizedSlug: "detail-episode",
+      });
+      const assignmentId = await ctx.db.insert("assignments", {
+        userId: memberId,
+        episodeId,
+        movieId,
+        type: "HOST",
+        playable: true,
+      });
+      const movieReviewId = await ctx.db.insert("reviews", {
+        userId: memberId,
+        movieId,
+        ratingId,
+        reviewedAt: 100,
+      });
+      await ctx.db.insert("assignmentReviews", {
+        assignmentId,
+        reviewId: movieReviewId,
+      });
+      const showReviewId = await ctx.db.insert("reviews", {
+        userId: memberId,
+        showId,
+        ratingId,
+        reviewedAt: 200,
+      });
+      await ctx.db.insert("extraReviews", {
+        episodeId,
+        reviewId: showReviewId,
+      });
+      const missingMovieId = await ctx.db.insert("movies", {
+        title: "Transient",
+        normalizedTitle: "transient",
+        year: 2000,
+        url: "https://catalog.example.test/transient",
+      });
+      await ctx.db.delete("movies", missingMovieId);
+      return { episodeId, missingMovieId };
+    });
+
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.catalog.admin.getMovieDetail,
+        { id: movieId },
+      ),
+      "FORBIDDEN",
+    );
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.catalog.admin.getMovieDetail,
+        { id: movieId },
+      ),
+    ).resolves.toMatchObject({
+      media: { id: movieId, title: "Movie detail" },
+      reviews: [
+        {
+          reviewedAt: 100,
+          movie: { id: movieId },
+          show: null,
+          assignmentReviews: [
+            {
+              assignment: {
+                episode: {
+                  id: relationships.episodeId,
+                  slug: "detail-episode",
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.catalog.admin.getShowDetail,
+        { id: showId },
+      ),
+    ).resolves.toMatchObject({
+      media: { id: showId, title: "Show detail" },
+      reviews: [
+        {
+          reviewedAt: 200,
+          movie: null,
+          show: { id: showId },
+          extraReviews: [
+            {
+              episode: { id: relationships.episodeId },
+            },
+          ],
+        },
+      ],
+    });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.catalog.admin.getMovieDetail,
+        { id: relationships.missingMovieId },
+      ),
+    ).resolves.toBeNull();
+  });
+
+  test("fails closed above the media detail review cap", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const movieId = await seedMovie(t, "oversized-detail");
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 101; index += 1) {
+        await ctx.db.insert("reviews", {
+          userId: memberId,
+          movieId,
+          reviewedAt: index,
+        });
+      }
+    });
+
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.catalog.admin.getMovieDetail,
+        { id: movieId },
+      ),
+      "CONFLICT",
+      { limit: 100 },
+    );
+  });
+
   test("creates and updates a movie by exact URL without clearing an omitted TMDB ID", async () => {
     const t = createTestBackend();
     await seedActors(t);
