@@ -284,6 +284,16 @@ domain cap. `updateMine` and `deleteMine` derive ownership from Clerk identity, 
 the same `NOT_FOUND` result for absent and non-owned rows, require S3 plus the pinned
 client API version, and write cutover-scoped audit evidence.
 
+Administrator episode operations provide exact ID/number reads, create/update
+lifecycle mutations, bounded native audio-message pagination, link add/remove, and
+administrator-authored audio metadata. Slugs use the legacy-compatible normalized
+algorithm with bounded collision allocation, optional metadata can be explicitly
+cleared, and transitions to `recording` or `published` transactionally lock pending
+gambling entries. All writes require administrator access, S3/S4 application writes,
+and the pinned client API version, and emit PII-free audit evidence. Hard episode
+deletion remains deferred until its relationship-cascade contract is verified; remote
+audio-file deletion remains deferred until it can use a durable external-effect intent.
+
 ## Public catalog read API
 
 The local catalog read slice exposes anonymous exact-ID reads, bounded full-text title

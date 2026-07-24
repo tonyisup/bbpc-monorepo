@@ -46,6 +46,19 @@ export const episodeAudioMessageValidator = v.object({
   notes: nullableStringValidator,
 });
 
+export const episodeAdminUserValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  image: nullableStringValidator,
+  status: v.union(v.literal("active"), v.literal("disabled")),
+});
+
+export const episodeAdminAudioMessageValidator =
+  episodeAudioMessageValidator.extend({
+    user: episodeAdminUserValidator,
+  });
+
 export const episodeDetailValidator = v.object({
   id: v.id("episodes"),
   number: v.number(),
@@ -59,3 +72,11 @@ export const episodeDetailValidator = v.object({
   extras: v.array(episodeExtraValidator),
   links: v.array(episodeLinkValidator),
 });
+
+export const episodeAdminDetailValidator =
+  episodeDetailValidator.extend({
+    notes: nullableStringValidator,
+    seoDescription: nullableStringValidator,
+    seoKeywords: nullableStringValidator,
+    seoTitle: nullableStringValidator,
+  });

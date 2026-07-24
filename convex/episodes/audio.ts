@@ -12,8 +12,8 @@ import {
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import { episodeAudioMessageValidator } from "./validators.js";
+import { MAX_AUDIO_MESSAGES_PER_USER_EPISODE } from "./limits.js";
 
-const MAX_AUDIO_MESSAGES_PER_EPISODE = 50;
 const MAX_FILE_KEY_LENGTH = 1024;
 const MAX_NOTES_LENGTH = 5000;
 
@@ -105,23 +105,24 @@ export const usageForEpisode = authenticatedQuery({
             .eq("userId", ctx.actor.user._id)
             .eq("episodeId", args.episodeId),
       )
-      .take(MAX_AUDIO_MESSAGES_PER_EPISODE + 1);
-    if (messages.length > MAX_AUDIO_MESSAGES_PER_EPISODE) {
+    .take(MAX_AUDIO_MESSAGES_PER_USER_EPISODE + 1);
+    if (messages.length > MAX_AUDIO_MESSAGES_PER_USER_EPISODE) {
       domainError(
         "CONFLICT",
         "Audio-message usage exceeds the supported per-episode limit.",
         {
           details: {
-            limit: MAX_AUDIO_MESSAGES_PER_EPISODE,
+            limit: MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
           },
         },
       );
     }
     return {
       count: messages.length,
-      limit: MAX_AUDIO_MESSAGES_PER_EPISODE,
+      limit: MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
       canUpload:
-        messages.length < MAX_AUDIO_MESSAGES_PER_EPISODE,
+        messages.length <
+        MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
     };
   },
 });

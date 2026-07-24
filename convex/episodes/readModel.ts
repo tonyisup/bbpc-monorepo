@@ -3,11 +3,16 @@ import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
-import type { episodeDetailValidator } from "./validators.js";
+import type {
+  episodeAdminDetailValidator,
+  episodeDetailValidator,
+} from "./validators.js";
+import { MAX_EPISODE_RELATIONSHIPS } from "./limits.js";
 
 type EpisodeDetail = Infer<typeof episodeDetailValidator>;
-
-const RELATION_LIMIT = 50;
+type EpisodeAdminDetail = Infer<
+  typeof episodeAdminDetailValidator
+>;
 
 function nullable<T>(value: T | undefined): T | null {
   return value ?? null;
@@ -17,14 +22,14 @@ function assertWithinRelationLimit<T>(
   rows: T[],
   relationship: string,
 ): asserts rows is T[] {
-  if (rows.length > RELATION_LIMIT) {
+  if (rows.length > MAX_EPISODE_RELATIONSHIPS) {
     domainError(
       "CONFLICT",
       `${relationship} exceeds the public episode read limit.`,
       {
         details: {
           relationship,
-          limit: RELATION_LIMIT,
+          limit: MAX_EPISODE_RELATIONSHIPS,
         },
       },
     );
@@ -89,7 +94,7 @@ async function hydrateAssignments(
     .withIndex("by_episodeId", (query) =>
       query.eq("episodeId", episodeId),
     )
-    .take(RELATION_LIMIT + 1);
+    .take(MAX_EPISODE_RELATIONSHIPS + 1);
   assertWithinRelationLimit(assignments, "assignments");
   return await Promise.all(
     assignments.map(async (assignment) => {
@@ -118,7 +123,7 @@ async function hydrateExtras(
     .withIndex("by_episodeId", (query) =>
       query.eq("episodeId", episodeId),
     )
-    .take(RELATION_LIMIT + 1);
+    .take(MAX_EPISODE_RELATIONSHIPS + 1);
   assertWithinRelationLimit(extras, "extras");
   return await Promise.all(
     extras.map(async (extra) => {
@@ -156,7 +161,7 @@ async function hydrateLinks(
     .withIndex("by_episodeId", (query) =>
       query.eq("episodeId", episodeId),
     )
-    .take(RELATION_LIMIT + 1);
+    .take(MAX_EPISODE_RELATIONSHIPS + 1);
   assertWithinRelationLimit(links, "links");
   return links.map((link) => ({
     id: link._id,
@@ -186,5 +191,19 @@ export async function hydrateEpisode(
     assignments,
     extras,
     links,
+  };
+}
+
+export async function hydrateAdminEpisode(
+  ctx: QueryCtx,
+  episode: Doc<"episodes">,
+): Promise<EpisodeAdminDetail> {
+  const detail = await hydrateEpisode(ctx, episode);
+  return {
+    ...detail,
+    notes: nullable(episode.notes),
+    seoDescription: nullable(episode.seoDescription),
+    seoKeywords: nullable(episode.seoKeywords),
+    seoTitle: nullable(episode.seoTitle),
   };
 }
