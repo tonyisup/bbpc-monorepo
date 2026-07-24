@@ -1,4 +1,5 @@
 import { domainError } from "../lib/errors.js";
+import { env } from "../_generated/server.js";
 
 const TMDB_API_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
@@ -146,7 +147,7 @@ function toTmdbTitle(
 }
 
 function tmdbApiKey(): string {
-  const apiKey = process.env.TMDB_API_KEY?.trim();
+  const apiKey = env.TMDB_API_KEY?.trim();
   if (apiKey === undefined || apiKey.length === 0) {
     domainError(
       "SERVICE_UNAVAILABLE",

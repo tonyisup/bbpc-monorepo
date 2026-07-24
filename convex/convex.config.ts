@@ -10,5 +10,6 @@ export default defineApp({
       v.literal("production"),
     ),
     BBPC_API_VERSION: v.string(),
+    TMDB_API_KEY: v.optional(v.string()),
   },
 });
