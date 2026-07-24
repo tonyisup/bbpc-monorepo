@@ -11,7 +11,7 @@ import {
   vi,
 } from "vitest";
 
-import { api } from "./_generated/api.js";
+import { api, internal } from "./_generated/api.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -154,6 +154,40 @@ describe("authenticated TMDB catalog actions", () => {
     ).resolves.toMatchObject({
       page: 1,
       results: [{ id: 1, title: "Movie 1" }],
+    });
+  });
+
+  test("supports an internal aggregate-only upstream smoke probe", async () => {
+    const t = createTestBackend();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({
+          page: 1,
+          results: [validMovie(1)],
+        }),
+      ),
+    );
+
+    await expect(
+      t.action(
+        internal.catalog.operations.tmdbMovieSearchSmoke,
+        { query: "movie" },
+      ),
+    ).resolves.toEqual({
+      page: 1,
+      resultCount: 1,
+      firstResultIdPresent: true,
+    });
+    await expect(
+      t.action(
+        internal.catalog.operations.tmdbMovieSearchSmoke,
+        { query: " ", page: 2 },
+      ),
+    ).resolves.toEqual({
+      page: 0,
+      resultCount: 0,
+      firstResultIdPresent: false,
     });
   });
 

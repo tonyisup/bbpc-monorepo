@@ -311,7 +311,9 @@ the upstream call for a blank query. Requests use an eight-second timeout and tr
 missing configuration, transport failures, rate limits, HTTP failures, invalid JSON,
 TMDB error envelopes, and malformed records into bounded domain errors without exposing
 the API key. Set `TMDB_API_KEY` as a Convex deployment environment variable; it is never
-committed or returned to clients.
+committed or returned to clients. An internal-only smoke action returns just page,
+result-count, and first-ID-presence evidence, allowing upstream validation without a
+linked Clerk subject or changes to preserved rehearsal data.
 
 Authenticated `catalog.write` mutations preserve the legacy ranked-list workflow:
 movie and show inputs are validated and upserted by an exact indexed URL match. Existing
