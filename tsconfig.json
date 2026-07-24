@@ -22,6 +22,7 @@
   "include": [
     "convex/**/*.ts",
     "contracts/**/*.ts",
+    "migration/**/*.ts",
     "eslint.config.mjs",
     "vitest.config.ts"
   ],
