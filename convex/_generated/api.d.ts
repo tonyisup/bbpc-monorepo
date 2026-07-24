@@ -8,8 +8,12 @@
  * @module
  */
 
+import type * as catalog_admin from "../catalog/admin.js";
 import type * as catalog_public from "../catalog/public.js";
+import type * as catalog_readModel from "../catalog/readModel.js";
 import type * as catalog_validators from "../catalog/validators.js";
+import type * as catalog_write from "../catalog/write.js";
+import type * as catalog_writeModel from "../catalog/writeModel.js";
 import type * as episodes_admin from "../episodes/admin.js";
 import type * as episodes_adminWriteModel from "../episodes/adminWriteModel.js";
 import type * as episodes_audio from "../episodes/audio.js";
@@ -67,8 +71,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "catalog/admin": typeof catalog_admin;
   "catalog/public": typeof catalog_public;
+  "catalog/readModel": typeof catalog_readModel;
   "catalog/validators": typeof catalog_validators;
+  "catalog/write": typeof catalog_write;
+  "catalog/writeModel": typeof catalog_writeModel;
   "episodes/admin": typeof episodes_admin;
   "episodes/adminWriteModel": typeof episodes_adminWriteModel;
   "episodes/audio": typeof episodes_audio;

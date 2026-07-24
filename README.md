@@ -303,8 +303,15 @@ no rows, and year/title matches are de-duplicated by canonical Convex ID without
 the intentionally preserved catalog duplicates.
 
 These functions read only the migrated local catalog. TMDB search/detail calls remain a
-separate bounded external-action contract, and catalog writes remain a separately
-authorized mutation slice.
+separate bounded external-action contract.
+
+Authenticated `catalog.write` mutations preserve the legacy ranked-list workflow:
+movie and show inputs are validated and upserted by an exact indexed URL match. Existing
+imported duplicate URLs remain separate; an upsert updates one deterministic match and
+never collapses rows. Administrator mutations can edit shows or delete unreferenced
+movies and shows. Deletes inspect every canonical assignment, syllabus, review, and
+ranked-list relationship through indexes and fail closed instead of orphaning data. All
+writes require S3/S4, the pinned API version, and emit catalog-value-free audit evidence.
 
 ## Administrator identity read API
 

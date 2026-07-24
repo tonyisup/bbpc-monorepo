@@ -14,31 +14,10 @@ import {
   catalogMovieValidator,
   catalogShowValidator,
 } from "./validators.js";
-
-function nullable<T>(value: T | undefined): T | null {
-  return value ?? null;
-}
-
-function toMovie(movie: Doc<"movies">) {
-  return {
-    id: movie._id,
-    title: movie.title,
-    year: movie.year,
-    poster: nullable(movie.poster),
-    url: movie.url,
-    tmdbId: nullable(movie.tmdbId),
-  };
-}
-
-function toShow(show: Doc<"shows">) {
-  return {
-    id: show._id,
-    title: show.title,
-    year: show.year,
-    poster: nullable(show.poster),
-    url: show.url,
-  };
-}
+import {
+  toCatalogMovie,
+  toCatalogShow,
+} from "./readModel.js";
 
 function compareMovies(
   left: Doc<"movies">,
@@ -56,7 +35,7 @@ export const getMovie = anonymousQuery({
   returns: v.union(catalogMovieValidator, v.null()),
   handler: async (ctx, args) => {
     const movie = await ctx.db.get("movies", args.id);
-    return movie === null ? null : toMovie(movie);
+    return movie === null ? null : toCatalogMovie(movie);
   },
 });
 
@@ -65,7 +44,7 @@ export const getShow = anonymousQuery({
   returns: v.union(catalogShowValidator, v.null()),
   handler: async (ctx, args) => {
     const show = await ctx.db.get("shows", args.id);
-    return show === null ? null : toShow(show);
+    return show === null ? null : toCatalogShow(show);
   },
 });
 
@@ -104,7 +83,7 @@ export const searchMovies = anonymousQuery({
     return [...byId.values()]
       .sort(compareMovies)
       .slice(0, limit)
-      .map(toMovie);
+      .map(toCatalogMovie);
   },
 });
 
@@ -124,7 +103,7 @@ export const searchShows = anonymousQuery({
           search.search("title", query),
         )
         .take(limit)
-    ).map(toShow);
+    ).map(toCatalogShow);
   },
 });
 
@@ -136,7 +115,7 @@ export const listMoviesPage = anonymousQuery({
       .query("movies")
       .withIndex("by_normalizedTitle_and_year")
       .paginate(args.paginationOpts);
-    return { ...result, page: result.page.map(toMovie) };
+    return { ...result, page: result.page.map(toCatalogMovie) };
   },
 });
 
@@ -148,6 +127,6 @@ export const listShowsPage = anonymousQuery({
       .query("shows")
       .withIndex("by_normalizedTitle_and_year")
       .paginate(args.paginationOpts);
-    return { ...result, page: result.page.map(toShow) };
+    return { ...result, page: result.page.map(toCatalogShow) };
   },
 });

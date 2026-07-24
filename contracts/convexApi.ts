@@ -1272,6 +1272,79 @@ export type PublicApiType = {
         }>
       >;
     };
+    admin: {
+      deleteMovie: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"movies"> },
+        { id: Id<"movies"> }
+      >;
+      deleteShow: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"shows"> },
+        { id: Id<"shows"> }
+      >;
+      updateShow: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          id: Id<"shows">;
+          poster?: string;
+          title: string;
+          url: string;
+          year: number;
+        },
+        {
+          id: Id<"shows">;
+          poster: string | null;
+          title: string;
+          url: string;
+          year: number;
+        }
+      >;
+    };
+    write: {
+      upsertMovieByUrl: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          poster: string;
+          title: string;
+          tmdbId?: number;
+          url: string;
+          year: number;
+        },
+        {
+          id: Id<"movies">;
+          poster: string | null;
+          title: string;
+          tmdbId: number | null;
+          url: string;
+          year: number;
+        }
+      >;
+      upsertShowByUrl: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          poster: string;
+          title: string;
+          url: string;
+          year: number;
+        },
+        {
+          id: Id<"shows">;
+          poster: string | null;
+          title: string;
+          url: string;
+          year: number;
+        }
+      >;
+    };
   };
 };
 export type InternalApiType = {};
