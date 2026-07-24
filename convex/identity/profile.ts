@@ -8,16 +8,11 @@ import {
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import { cutoverStageValidator } from "../lib/validators.js";
+import { identityProfileValidator } from "./validators.js";
 
 export const me = authenticatedQuery({
   args: {},
-  returns: v.object({
-    id: v.id("users"),
-    name: v.union(v.string(), v.null()),
-    email: v.union(v.string(), v.null()),
-    image: v.union(v.string(), v.null()),
-    isAdmin: v.boolean(),
-  }),
+  returns: identityProfileValidator,
   handler: async (ctx) => ({
     id: ctx.actor.user._id,
     name: ctx.actor.user.name ?? null,

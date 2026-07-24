@@ -354,6 +354,21 @@ export type PublicApiType = {
         }>
       >;
     };
+    linking: {
+      linkOrCreateMe: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string },
+        {
+          email: string | null;
+          id: Id<"users">;
+          image: string | null;
+          isAdmin: boolean;
+          linkMode: "alreadyLinked" | "existingUser" | "newUser";
+          name: string | null;
+        }
+      >;
+    };
   };
   pipeline: {
     status: {

@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-256 Convex tests with 96.61% statement and 90.41% branch coverage. Owner-scoped episode
+269 Convex tests with 96.44% statement and 90.15% branch coverage. Owner-scoped episode
 audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
@@ -243,6 +243,14 @@ confirmed one movie type, three owners/lists, and 19 movie items, with a configu
 observed maximum of 10 and no constraint violations. Owner/admin access, all three
 target kinds, ordering semantics, pagination, capacities, cascades, corruption, and
 value-free audits have synthetic coverage.
+
+Clerk bootstrap behavior is covered synthetically without changing the preserved S1
+dataset. Ordinary first-use linking is unavailable before S3/S4, requires a verified
+email, links exactly one active unclaimed migrated candidate or creates an ordinary user
+when no candidate exists, and rejects duplicate, disabled, reused-subject, or
+already-claimed state. S1/S2-only internal operations pre-provision exact smoke users and
+the bounded least-privilege pipeline principal. Both paths are idempotent and emit audit
+evidence without email, subject, or token values.
 
 ## Preserved gate
 

@@ -30,6 +30,23 @@ export const identityRoleSummaryValidator =
     userCountIsExact: v.boolean(),
   });
 
+export const identityProfileValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  image: nullableStringValidator,
+  isAdmin: v.boolean(),
+});
+
+export const identityLinkResultValidator =
+  identityProfileValidator.extend({
+    linkMode: v.union(
+      v.literal("alreadyLinked"),
+      v.literal("existingUser"),
+      v.literal("newUser"),
+    ),
+  });
+
 export const identityAdminUserValidator = v.object({
   id: v.id("users"),
   legacyId: nullableStringValidator,

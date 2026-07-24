@@ -350,6 +350,23 @@ active administrator are rejected. All identity mutations require administrator 
 S3/S4 application writes, and the pinned client API version, and emit PII-free audit
 evidence.
 
+## Clerk identity linking
+
+The first-use Clerk mutation is deliberately unavailable until S3/S4 application writes
+are enabled. A verified email can claim exactly one active, unlinked migrated user; zero
+matches creates a new ordinary canonical user. Unverified email, duplicate migrated
+candidates, disabled users, reused subjects, and already-claimed users fail closed.
+Repeated calls from the same Clerk identity are idempotent and refresh only the
+deployment-local last-seen evidence. Link audits contain the canonical user ID and link
+mode, never email, subject, or token values.
+
+Separate internal migration mutations pre-provision the approved member/admin smoke
+identities and least-privilege pipeline principal during S1/S2. User provisioning
+requires an exact migrated legacy ID plus matching normalized verified email. Pipeline
+permissions are bounded, normalized capability names. Both operations are run-scoped,
+idempotent, conflict-safe, and emit value-free audit evidence without enabling ordinary
+first-use linking before S3.
+
 ## Quotabunga API
 
 Authenticated members can read their current `next` or `recording` episode submission.

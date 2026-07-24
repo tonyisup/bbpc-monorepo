@@ -18,6 +18,7 @@ const approvedBuilders = new Set([
   "adminQuery",
   "pipelineQuery",
   "authenticatedMutation",
+  "identityLinkMutation",
   "adminMutation",
   "pipelineMutation",
   "authenticatedReadAction",

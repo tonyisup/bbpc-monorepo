@@ -21,6 +21,7 @@ import {
   requireServiceActor,
   requireUserActor,
 } from "./lib/actors.js";
+import { domainError } from "./lib/errors.js";
 import {
   requireApplicationWritesEnabled,
   requireMigrationWritesEnabled,
@@ -70,6 +71,34 @@ export const authenticatedMutation = customMutation(rawMutation, {
       ctx: {
         accessClass: "authenticated-owner" as const,
         actor,
+        systemState,
+      },
+      args: {},
+    };
+  },
+});
+
+export const identityLinkMutation = customMutation(rawMutation, {
+  args: { clientApiVersion: v.string() },
+  input: async (ctx, { clientApiVersion }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity === null) {
+      domainError(
+        "AUTHENTICATION_REQUIRED",
+        "Authentication is required.",
+      );
+    }
+    const systemState = await requireApplicationWritesEnabled(ctx, {
+      actor: {
+        kind: "internal",
+        label: "identity-link",
+      },
+      clientApiVersion,
+    });
+    return {
+      ctx: {
+        accessClass: "authenticated-owner" as const,
+        identity,
         systemState,
       },
       args: {},
