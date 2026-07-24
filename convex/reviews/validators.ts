@@ -68,3 +68,19 @@ export const reviewDetailValidator = reviewCoreValidator.extend({
     }),
   ),
 });
+
+export const yearMovieReviewValidator = v.object({
+  id: v.id("reviews"),
+  movie: catalogMovieValidator,
+  user: v.union(
+    v.object({
+      id: v.id("users"),
+      name: nullableStringValidator,
+      image: nullableStringValidator,
+    }),
+    v.null(),
+  ),
+  rating: v.union(ratingValidator, v.null()),
+  episode: v.union(reviewEpisodeValidator, v.null()),
+  reviewedAt: v.number(),
+});

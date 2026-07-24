@@ -2529,6 +2529,42 @@ export type PublicApiType = {
                 };
             }>;
         };
+        public: {
+            listMovieReviewsForYear: FunctionReference<"query", "public", {
+                year: number;
+            }, Array<{
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                } | null;
+                id: Id<"reviews">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                } | null;
+                reviewedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                } | null;
+            }>>;
+        };
     };
     games: {
         config: {

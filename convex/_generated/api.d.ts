@@ -112,6 +112,7 @@ import type * as ratings_writeModel from "../ratings/writeModel.js";
 import type * as reviews_admin from "../reviews/admin.js";
 import type * as reviews_limits from "../reviews/limits.js";
 import type * as reviews_mine from "../reviews/mine.js";
+import type * as reviews_public from "../reviews/public.js";
 import type * as reviews_readModel from "../reviews/readModel.js";
 import type * as reviews_validators from "../reviews/validators.js";
 import type * as reviews_writeModel from "../reviews/writeModel.js";
@@ -236,6 +237,7 @@ declare const fullApi: ApiFromModules<{
   "reviews/admin": typeof reviews_admin;
   "reviews/limits": typeof reviews_limits;
   "reviews/mine": typeof reviews_mine;
+  "reviews/public": typeof reviews_public;
   "reviews/readModel": typeof reviews_readModel;
   "reviews/validators": typeof reviews_validators;
   "reviews/writeModel": typeof reviews_writeModel;
