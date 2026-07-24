@@ -5150,6 +5150,9 @@ export type PublicApiType = {
                 multiplier: number;
                 title: string;
             } | null>;
+            hasWonForEpisode: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+            }, boolean>;
             listActiveTypes: FunctionReference<"query", "public", Record<string, never>, Array<{
                 createdAt: number;
                 description: string | null;

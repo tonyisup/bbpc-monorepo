@@ -5404,6 +5404,12 @@ export type PublicApiType = {
           title: string;
         } | null
       >;
+      hasWonForEpisode: FunctionReference<
+        "query",
+        "public",
+        { episodeId: Id<"episodes"> },
+        boolean
+      >;
       listActiveTypes: FunctionReference<
         "query",
         "public",

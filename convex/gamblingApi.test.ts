@@ -60,10 +60,7 @@ async function expectDomainError(
   throw new Error(`Expected domain error ${expectedCode}`);
 }
 
-function requirePresent<T>(
-  value: T | null | undefined,
-  label: string,
-): T {
+function requirePresent<T>(value: T | null | undefined, label: string): T {
   if (value === null || value === undefined) {
     throw new Error(`Expected ${label}`);
   }
@@ -280,10 +277,10 @@ async function seedRound(
       ratingId: input.ratingId,
       reviewedAt: 1,
     });
-    const assignmentReviewId = await ctx.db.insert(
-      "assignmentReviews",
-      { assignmentId, reviewId },
-    );
+    const assignmentReviewId = await ctx.db.insert("assignmentReviews", {
+      assignmentId,
+      reviewId,
+    });
     return {
       assignmentId,
       assignmentReviewId,
@@ -312,53 +309,103 @@ async function seedBalance(
 }
 
 describe("gambling API", () => {
+  test("derives the current user's episode-win banner", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId, hostId } = await seedActors(t);
+    const { ratingId, seasonId, defaultTypeId } = await seedFoundation(t);
+    const round = await seedRound(t, {
+      ownerId: hostId,
+      hostId,
+      ratingId,
+      suffix: "15",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("gamblingEntries", {
+        userId: memberId,
+        assignmentId: round.assignmentId,
+        points: 5,
+        createdAt: 1,
+        gamblingTypeId: defaultTypeId,
+        seasonId,
+        status: "won",
+      });
+      await ctx.db.insert("gamblingEntries", {
+        userId: otherId,
+        assignmentId: round.assignmentId,
+        points: 5,
+        createdAt: 2,
+        gamblingTypeId: defaultTypeId,
+        seasonId,
+        status: "lost",
+      });
+    });
+    const missingEpisodeId = await t.run(async (ctx) => {
+      const episodeId = await ctx.db.insert("episodes", {
+        number: 16,
+        title: "Deleted episode",
+      });
+      await ctx.db.delete("episodes", episodeId);
+      return episodeId;
+    });
+    await initializeS1(t);
+
+    await expect(
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.gambling.hasWonForEpisode, {
+          episodeId: round.episodeId,
+        }),
+    ).resolves.toBe(true);
+    await expect(
+      t
+        .withIdentity(OTHER_IDENTITY)
+        .query(api.games.gambling.hasWonForEpisode, {
+          episodeId: round.episodeId,
+        }),
+    ).resolves.toBe(false);
+    await expectDomainError(
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.gambling.hasWonForEpisode, {
+          episodeId: missingEpisodeId,
+        }),
+      "NOT_FOUND",
+    );
+  });
+
   test("keeps active types public and gates administrator type management", async () => {
     const t = createTestBackend();
     const { adminId } = await seedActors(t);
     const { inactiveTypeId } = await seedFoundation(t);
 
-    const publicTypes = await t.query(
-      api.games.gambling.listActiveTypes,
-      {},
-    );
+    const publicTypes = await t.query(api.games.gambling.listActiveTypes, {});
     expect(publicTypes).toHaveLength(3);
-    expect(
-      publicTypes.map((type) => type.createdAt),
-    ).toEqual([300, 200, 100]);
-    expect(
-      publicTypes.some((type) => type.id === inactiveTypeId),
-    ).toBe(false);
+    expect(publicTypes.map((type) => type.createdAt)).toEqual([300, 200, 100]);
+    expect(publicTypes.some((type) => type.id === inactiveTypeId)).toBe(false);
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).query(
-        api.games.gambling.listTypes,
-        {},
-      ),
+      t.withIdentity(MEMBER_IDENTITY).query(api.games.gambling.listTypes, {}),
       "FORBIDDEN",
     );
 
     await initializeS1(t);
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.createType,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          title: "New type",
-          lookupId: "new-type",
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.createType, {
+        clientApiVersion: BBPC_API_VERSION,
+        title: "New type",
+        lookupId: "new-type",
+      }),
       "WRITE_DISABLED",
     );
     await advanceFromS1ToS3(t);
-    const created = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.createType,
-      {
+    const created = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.createType, {
         clientApiVersion: BBPC_API_VERSION,
         title: " New type ",
         lookupId: " NEW-TYPE ",
         description: " Description ",
         createdAt: 500,
-      },
-    );
+      });
     expect(created).toMatchObject({
       title: "New type",
       lookupId: "NEW-TYPE",
@@ -368,31 +415,25 @@ describe("gambling API", () => {
       createdAt: 500,
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.createType,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          title: "Collision",
-          lookupId: "new-type",
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.createType, {
+        clientApiVersion: BBPC_API_VERSION,
+        title: "Collision",
+        lookupId: "new-type",
+      }),
       "CONFLICT",
     );
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.createType,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          title: "Invalid",
-          lookupId: "invalid",
-          multiplier: -1,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.createType, {
+        clientApiVersion: BBPC_API_VERSION,
+        title: "Invalid",
+        lookupId: "invalid",
+        multiplier: -1,
+      }),
       "VALIDATION_FAILED",
     );
-    const updated = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updateType,
-      {
+    const updated = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updateType, {
         clientApiVersion: BBPC_API_VERSION,
         id: created.id,
         title: "Renamed type",
@@ -400,8 +441,7 @@ describe("gambling API", () => {
         description: null,
         multiplier: 2.25,
         isActive: false,
-      },
-    );
+      });
     expect(updated).toMatchObject({
       title: "Renamed type",
       lookupId: "renamed-type",
@@ -410,13 +450,10 @@ describe("gambling API", () => {
       isActive: false,
     });
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.updateType,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: created.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.updateType, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: created.id,
+      }),
     ).resolves.toEqual(updated);
     const referenceId = await t.run(async (ctx) => {
       return await ctx.db.insert("gamblingEntries", {
@@ -428,40 +465,32 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.removeType,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: created.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.removeType, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: created.id,
+      }),
       "CONFLICT",
     );
     await t.run(async (ctx) => {
       await ctx.db.delete("gamblingEntries", referenceId);
     });
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.removeType,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: created.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.removeType, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: created.id,
+      }),
     ).resolves.toEqual({ id: created.id });
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.getTypeById,
-        { id: created.id },
-      ),
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.getTypeById, { id: created.id }),
     ).resolves.toBeNull();
   });
 
   test("derives member ownership and idempotently upserts the canonical wager key", async () => {
     const t = createTestBackend();
     const { adminId, memberId, hostId } = await seedActors(t);
-    const { seasonId, ratingId, defaultTypeId } =
-      await seedFoundation(t);
+    const { seasonId, ratingId, defaultTypeId } = await seedFoundation(t);
     const round = await seedRound(t, {
       ownerId: adminId,
       hostId,
@@ -475,16 +504,15 @@ describe("gambling API", () => {
     });
     await advanceToS3(t);
 
-    const created = await t.withIdentity(MEMBER_IDENTITY).mutation(
-      api.games.gambling.submit,
-      {
+    const created = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .mutation(api.games.gambling.submit, {
         clientApiVersion: BBPC_API_VERSION,
         points: 10,
         assignmentId: round.assignmentId,
         today: "2026-07-24",
         createdAt: 1000,
-      },
-    );
+      });
     expect(created).toMatchObject({
       points: 10,
       createdAt: 1000,
@@ -496,75 +524,67 @@ describe("gambling API", () => {
       season: { id: seasonId },
       awardPoint: null,
     });
-    const updated = await t.withIdentity(MEMBER_IDENTITY).mutation(
-      api.games.gambling.submit,
-      {
+    const updated = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .mutation(api.games.gambling.submit, {
         clientApiVersion: BBPC_API_VERSION,
         points: 20,
         assignmentId: round.assignmentId,
         today: "2026-07-24",
         createdAt: 9999,
-      },
-    );
+      });
     expect(updated).toMatchObject({
       id: created.id,
       points: 20,
       createdAt: 1000,
     });
     await expect(
-      t.withIdentity(OTHER_IDENTITY).query(
-        api.games.gambling.mineForAssignment,
-        { assignmentId: round.assignmentId },
-      ),
+      t
+        .withIdentity(OTHER_IDENTITY)
+        .query(api.games.gambling.mineForAssignment, {
+          assignmentId: round.assignmentId,
+        }),
     ).resolves.toEqual([]);
-    const mine = await t.withIdentity(MEMBER_IDENTITY).query(
-      api.games.gambling.mineForAssignment,
-      { assignmentId: round.assignmentId },
-    );
+    const mine = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.gambling.mineForAssignment, {
+        assignmentId: round.assignmentId,
+      });
     expect(mine).toMatchObject([{ id: created.id }]);
-    const grouped = await t.withIdentity(MEMBER_IDENTITY).query(
-      api.games.gambling.mineForAssignments,
-      { assignmentIds: [round.assignmentId] },
-    );
+    const grouped = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.gambling.mineForAssignments, {
+        assignmentIds: [round.assignmentId],
+      });
     expect(grouped).toMatchObject([
       {
         assignmentId: round.assignmentId,
         entries: [{ id: created.id }],
       },
     ]);
-    const byDefaultType =
-      await t.withIdentity(MEMBER_IDENTITY).query(
-        api.games.gambling.mineForType,
-        {},
-      );
+    const byDefaultType = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.gambling.mineForType, {});
     expect(byDefaultType).toMatchObject([{ id: created.id }]);
-    const active = await t.withIdentity(MEMBER_IDENTITY).query(
-      api.games.gambling.mineForActiveTypes,
-      {},
-    );
+    const active = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.gambling.mineForActiveTypes, {});
     expect(active).toMatchObject([{ id: created.id }]);
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).query(
-        api.games.gambling.mineForAssignments,
-        {
-          assignmentIds: [
-            round.assignmentId,
-            round.assignmentId,
-          ],
-        },
-      ),
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.gambling.mineForAssignments, {
+          assignmentIds: [round.assignmentId, round.assignmentId],
+        }),
       "VALIDATION_FAILED",
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          points: 31,
-          assignmentId: round.assignmentId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        points: 31,
+        assignmentId: round.assignmentId,
+        today: "2026-07-24",
+      }),
       "CONFLICT",
       { reason: "INSUFFICIENT_POINTS" },
     );
@@ -596,30 +616,21 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          points: 1,
-          assignmentId: round.assignmentId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        points: 1,
+        assignmentId: round.assignmentId,
+        today: "2026-07-24",
+      }),
       "CONFLICT",
     );
   });
 
   test("enforces active types, open rounds, target shape, and host eligibility", async () => {
     const t = createTestBackend();
-    const { adminId, memberId, otherId, hostId } =
-      await seedActors(t);
-    const {
-      seasonId,
-      ratingId,
-      defaultTypeId,
-      targetTypeId,
-      inactiveTypeId,
-    } = await seedFoundation(t);
+    const { adminId, memberId, otherId, hostId } = await seedActors(t);
+    const { seasonId, ratingId, defaultTypeId, targetTypeId, inactiveTypeId } =
+      await seedFoundation(t);
     const openRound = await seedRound(t, {
       ownerId: adminId,
       hostId,
@@ -641,101 +652,82 @@ describe("gambling API", () => {
     await advanceToS3(t);
 
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: inactiveTypeId,
-          points: 1,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: inactiveTypeId,
+        points: 1,
+        today: "2026-07-24",
+      }),
       "CONFLICT",
       { reason: "WAGER_TYPE_UNAVAILABLE" },
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: targetTypeId,
-          points: 1,
-          assignmentId: openRound.assignmentId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: targetTypeId,
+        points: 1,
+        assignmentId: openRound.assignmentId,
+        today: "2026-07-24",
+      }),
       "VALIDATION_FAILED",
       { reason: "INVALID_HOST" },
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: targetTypeId,
-          points: 1,
-          targetUserId: hostId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: targetTypeId,
+        points: 1,
+        targetUserId: hostId,
+        today: "2026-07-24",
+      }),
       "VALIDATION_FAILED",
       { reason: "INVALID_HOST" },
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: defaultTypeId,
-          points: 1,
-          assignmentId: openRound.assignmentId,
-          targetUserId: hostId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: defaultTypeId,
+        points: 1,
+        assignmentId: openRound.assignmentId,
+        targetUserId: hostId,
+        today: "2026-07-24",
+      }),
       "VALIDATION_FAILED",
       { reason: "INVALID_HOST" },
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: targetTypeId,
-          points: 1,
-          assignmentId: openRound.assignmentId,
-          targetUserId: otherId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: targetTypeId,
+        points: 1,
+        assignmentId: openRound.assignmentId,
+        targetUserId: otherId,
+        today: "2026-07-24",
+      }),
       "VALIDATION_FAILED",
       { reason: "INVALID_HOST" },
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: defaultTypeId,
-          points: 1,
-          assignmentId: lockedRound.assignmentId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: defaultTypeId,
+        points: 1,
+        assignmentId: lockedRound.assignmentId,
+        today: "2026-07-24",
+      }),
       "CONFLICT",
       { reason: "ROUND_LOCKED" },
     );
-    const targeted = await t.withIdentity(MEMBER_IDENTITY).mutation(
-      api.games.gambling.submit,
-      {
+    const targeted = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .mutation(api.games.gambling.submit, {
         clientApiVersion: BBPC_API_VERSION,
         gamblingTypeId: targetTypeId,
         points: 10,
         assignmentId: openRound.assignmentId,
         targetUserId: hostId,
         today: "2026-07-24",
-      },
-    );
+      });
     expect(targeted.targetUser?.id).toBe(hostId);
     await t.run(async (ctx) => {
       await ctx.db.patch("gamblingEntries", targeted.id, {
@@ -743,40 +735,31 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: targetTypeId,
-          points: 5,
-          assignmentId: openRound.assignmentId,
-          targetUserId: hostId,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: targetTypeId,
+        points: 5,
+        assignmentId: openRound.assignmentId,
+        targetUserId: hostId,
+        today: "2026-07-24",
+      }),
       "CONFLICT",
       { reason: "WAGER_LOCKED" },
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          points: -1,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        points: -1,
+        today: "2026-07-24",
+      }),
       "VALIDATION_FAILED",
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          points: 1,
-          today: "2027-01-01",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        points: 1,
+        today: "2027-01-01",
+      }),
       "NOT_FOUND",
     );
   });
@@ -794,24 +777,18 @@ describe("gambling API", () => {
     await advanceToS3(t);
 
     const results = await Promise.allSettled([
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: defaultTypeId,
-          points: 20,
-          today: "2026-07-24",
-        },
-      ),
-      t.withIdentity(MEMBER_IDENTITY).mutation(
-        api.games.gambling.submit,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          gamblingTypeId: alternateTypeId,
-          points: 20,
-          today: "2026-07-24",
-        },
-      ),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: defaultTypeId,
+        points: 20,
+        today: "2026-07-24",
+      }),
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        gamblingTypeId: alternateTypeId,
+        points: 20,
+        today: "2026-07-24",
+      }),
     ]);
     expect(
       results.filter((result) => result.status === "fulfilled"),
@@ -820,23 +797,18 @@ describe("gambling API", () => {
       results.filter((result) => result.status === "rejected"),
     ).toHaveLength(1);
     await expect(
-      t.withIdentity(MEMBER_IDENTITY).query(
-        api.games.member.myAvailablePoints,
-        {
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.member.myAvailablePoints, {
           season: { kind: "season", seasonId },
-        },
-      ),
+        }),
     ).resolves.toBe(10);
   });
 
   test("supports administrator creation, indexed reads, updates, and pending deletion", async () => {
     const t = createTestBackend();
     const { adminId, memberId, hostId } = await seedActors(t);
-    const {
-      seasonId,
-      ratingId,
-      defaultTypeId,
-    } = await seedFoundation(t);
+    const { seasonId, ratingId, defaultTypeId } = await seedFoundation(t);
     const round = await seedRound(t, {
       ownerId: adminId,
       hostId,
@@ -850,9 +822,9 @@ describe("gambling API", () => {
     });
     await advanceToS3(t);
 
-    const created = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.create,
-      {
+    const created = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.create, {
         clientApiVersion: BBPC_API_VERSION,
         userId: memberId,
         points: 10,
@@ -860,8 +832,7 @@ describe("gambling API", () => {
         assignmentId: round.assignmentId,
         notes: " Note ",
         createdAt: 100,
-      },
-    );
+      });
     expect(created).toMatchObject({
       user: { id: memberId },
       gamblingType: { id: defaultTypeId },
@@ -869,105 +840,88 @@ describe("gambling API", () => {
       points: 10,
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.create,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          userId: memberId,
-          points: 10,
-          season: { kind: "season", seasonId },
-          assignmentId: round.assignmentId,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.create, {
+        clientApiVersion: BBPC_API_VERSION,
+        userId: memberId,
+        points: 10,
+        season: { kind: "season", seasonId },
+        assignmentId: round.assignmentId,
+      }),
       "CONFLICT",
     );
     await expectDomainError(
-      t.withIdentity(MEMBER_IDENTITY).query(
-        api.games.gambling.getById,
-        { id: created.id },
-      ),
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.gambling.getById, { id: created.id }),
       "FORBIDDEN",
     );
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.getById,
-        { id: created.id },
-      ),
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.getById, { id: created.id }),
     ).resolves.toMatchObject({ id: created.id });
-    const assignmentEntries =
-      await t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.listForAssignment,
-        { assignmentId: round.assignmentId },
-      );
+    const assignmentEntries = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.gambling.listForAssignment, {
+        assignmentId: round.assignmentId,
+      });
     expect(assignmentEntries).toMatchObject([{ id: created.id }]);
-    const typePage = await t.withIdentity(ADMIN_IDENTITY).query(
-      api.games.gambling.listForTypePage,
-      {
+    const typePage = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.gambling.listForTypePage, {
         gamblingTypeId: defaultTypeId,
         paginationOpts: { numItems: 10, cursor: null },
-      },
-    );
+      });
     expect(typePage.page).toMatchObject([{ id: created.id }]);
-    const userPage = await t.withIdentity(ADMIN_IDENTITY).query(
-      api.games.gambling.listForUserPage,
-      {
+    const userPage = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.gambling.listForUserPage, {
         userId: memberId,
         season: { kind: "season", seasonId },
         paginationOpts: { numItems: 10, cursor: null },
-      },
-    );
+      });
     expect(userPage.page).toMatchObject([{ id: created.id }]);
-    const allPage = await t.withIdentity(ADMIN_IDENTITY).query(
-      api.games.gambling.listForUserPage,
-      {
+    const allPage = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.gambling.listForUserPage, {
         userId: memberId,
         season: { kind: "all" },
         paginationOpts: { numItems: 10, cursor: null },
-      },
-    );
+      });
     expect(allPage.page).toHaveLength(1);
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.listForUserPage,
-        {
-          userId: memberId,
-          season: { kind: "all" },
-          paginationOpts: { numItems: 0, cursor: null },
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).query(api.games.gambling.listForUserPage, {
+        userId: memberId,
+        season: { kind: "all" },
+        paginationOpts: { numItems: 0, cursor: null },
+      }),
       "VALIDATION_FAILED",
     );
-    const updated = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updatePoints,
-      {
+    const updated = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updatePoints, {
         clientApiVersion: BBPC_API_VERSION,
         id: created.id,
         points: 25,
-      },
-    );
+      });
     expect(updated.points).toBe(25);
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.remove,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: created.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.remove, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: created.id,
+      }),
     ).resolves.toEqual({ id: created.id });
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.getById,
-        { id: created.id },
-      ),
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.getById, { id: created.id }),
     ).resolves.toBeNull();
   });
 
   test("creates and recalculates win/loss awards across status transitions", async () => {
     const t = createTestBackend();
     const { adminId, memberId, hostId } = await seedActors(t);
-    const { seasonId, ratingId, alternateTypeId } =
-      await seedFoundation(t);
+    const { seasonId, ratingId, alternateTypeId } = await seedFoundation(t);
     const round = await seedRound(t, {
       ownerId: adminId,
       hostId,
@@ -980,25 +934,23 @@ describe("gambling API", () => {
       adjustment: 100,
     });
     await advanceToS3(t);
-    const entry = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.create,
-      {
+    const entry = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.create, {
         clientApiVersion: BBPC_API_VERSION,
         userId: memberId,
         points: 5,
         season: { kind: "season", seasonId },
         assignmentId: round.assignmentId,
-      },
-    );
+      });
 
-    const won = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.confirm,
-      {
+    const won = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.confirm, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         earnedAt: 200,
-      },
-    );
+      });
     expect(won).toMatchObject({
       status: "won",
       awardPoint: {
@@ -1007,40 +959,34 @@ describe("gambling API", () => {
         earnedAt: 200,
       },
     });
-    const firstAwardId = requirePresent(
-      won.awardPoint,
-      "win award",
-    ).id;
-    const sameWin = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.confirm,
-      {
+    const firstAwardId = requirePresent(won.awardPoint, "win award").id;
+    const sameWin = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.confirm, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
-      },
-    );
+      });
     expect(sameWin.awardPoint?.id).toBe(firstAwardId);
-    const resizedWin = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updatePoints,
-      {
+    const resizedWin = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updatePoints, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         points: 7,
-      },
-    );
+      });
     expect(resizedWin.awardPoint).toMatchObject({
       id: firstAwardId,
       adjustment: 10,
     });
 
-    const lost = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updateStatus,
-      {
+    const lost = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updateStatus, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         status: "lost",
         earnedAt: 300,
-      },
-    );
+      });
     expect(lost).toMatchObject({
       status: "lost",
       awardPoint: {
@@ -1049,35 +995,29 @@ describe("gambling API", () => {
         earnedAt: 300,
       },
     });
-    const lossAwardId = requirePresent(
-      lost.awardPoint,
-      "loss award",
-    ).id;
+    const lossAwardId = requirePresent(lost.awardPoint, "loss award").id;
     expect(lossAwardId).not.toBe(firstAwardId);
     await t.run(async (ctx) => {
       expect(await ctx.db.get("points", firstAwardId)).toBeNull();
     });
-    const resizedLoss =
-      await t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.updatePoints,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entry.id,
-          points: 8,
-        },
-      );
+    const resizedLoss = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updatePoints, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+        points: 8,
+      });
     expect(resizedLoss.awardPoint).toMatchObject({
       id: lossAwardId,
       adjustment: -8,
     });
-    const pending = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updateStatus,
-      {
+    const pending = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updateStatus, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         status: "pending",
-      },
-    );
+      });
     expect(pending).toMatchObject({
       status: "pending",
       awardPoint: null,
@@ -1085,61 +1025,48 @@ describe("gambling API", () => {
     await t.run(async (ctx) => {
       expect(await ctx.db.get("points", lossAwardId)).toBeNull();
     });
-    const rejected = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updateStatus,
-      {
+    const rejected = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updateStatus, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         status: "rejected",
-      },
-    );
+      });
     expect(rejected.status).toBe("rejected");
-    const alternateEntry =
-      await t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.create,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          userId: memberId,
-          gamblingTypeId: alternateTypeId,
-          points: 3,
-          season: { kind: "season", seasonId },
-          assignmentId: round.assignmentId,
-        },
-      );
-    const rejectedAsLoss =
-      await t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.reject,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: alternateEntry.id,
-        },
-      );
+    const alternateEntry = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.create, {
+        clientApiVersion: BBPC_API_VERSION,
+        userId: memberId,
+        gamblingTypeId: alternateTypeId,
+        points: 3,
+        season: { kind: "season", seasonId },
+        assignmentId: round.assignmentId,
+      });
+    const rejectedAsLoss = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.reject, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: alternateEntry.id,
+      });
     expect(rejectedAsLoss).toMatchObject({
       status: "lost",
       awardPoint: { adjustment: -3 },
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.remove,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entry.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.remove, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+      }),
       "CONFLICT",
     );
   });
 
   test("validates manual award links and fails closed on shared award deletion", async () => {
     const t = createTestBackend();
-    const { adminId, memberId, otherId, hostId } =
-      await seedActors(t);
-    const {
-      seasonId,
-      pastSeasonId,
-      ratingId,
-      alternateTypeId,
-    } = await seedFoundation(t);
+    const { adminId, memberId, otherId, hostId } = await seedActors(t);
+    const { seasonId, pastSeasonId, ratingId, alternateTypeId } =
+      await seedFoundation(t);
     const round = await seedRound(t, {
       ownerId: adminId,
       hostId,
@@ -1152,16 +1079,15 @@ describe("gambling API", () => {
       adjustment: 100,
     });
     await advanceToS3(t);
-    const entry = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.create,
-      {
+    const entry = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.create, {
         clientApiVersion: BBPC_API_VERSION,
         userId: memberId,
         points: 5,
         season: { kind: "season", seasonId },
         assignmentId: round.assignmentId,
-      },
-    );
+      });
     const wrongUserPoint = await seedBalance(t, {
       userId: otherId,
       seasonId,
@@ -1174,14 +1100,13 @@ describe("gambling API", () => {
     });
     for (const pointId of [wrongUserPoint, wrongSeasonPoint]) {
       await expectDomainError(
-        t.withIdentity(ADMIN_IDENTITY).mutation(
-          api.games.gambling.setAwardPoint,
-          {
+        t
+          .withIdentity(ADMIN_IDENTITY)
+          .mutation(api.games.gambling.setAwardPoint, {
             clientApiVersion: BBPC_API_VERSION,
             id: entry.id,
             pointId,
-          },
-        ),
+          }),
         "VALIDATION_FAILED",
       );
     }
@@ -1190,23 +1115,19 @@ describe("gambling API", () => {
       seasonId,
       adjustment: 1,
     });
-    const linked = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.setAwardPoint,
-      {
+    const linked = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.setAwardPoint, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         pointId: ownPoint,
-      },
-    );
+      });
     expect(linked.awardPoint?.id).toBe(ownPoint);
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.remove,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entry.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.remove, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+      }),
       "CONFLICT",
     );
     await t.run(async (ctx) => {
@@ -1221,33 +1142,26 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.updateStatus,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entry.id,
-          status: "won",
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.updateStatus, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+        status: "won",
+      }),
       "CONFLICT",
     );
-    const cleared = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.setAwardPoint,
-      {
+    const cleared = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.setAwardPoint, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         pointId: null,
-      },
-    );
+      });
     expect(cleared.awardPoint).toBeNull();
     await expect(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.remove,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entry.id,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.remove, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+      }),
     ).resolves.toEqual({ id: entry.id });
     await t.run(async (ctx) => {
       expect(await ctx.db.get("points", ownPoint)).not.toBeNull();
@@ -1269,34 +1183,27 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.updatePoints,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entryId,
-          points: 3,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.updatePoints, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entryId,
+        points: 3,
+      }),
       "VALIDATION_FAILED",
     );
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.confirm,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entryId,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.confirm, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entryId,
+      }),
       "VALIDATION_FAILED",
     );
-    const won = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.confirm,
-      {
+    const won = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.confirm, {
         clientApiVersion: BBPC_API_VERSION,
         id: entryId,
         season: { kind: "season", seasonId },
-      },
-    );
+      });
     expect(won).toMatchObject({
       status: "won",
       season: { id: seasonId },
@@ -1310,10 +1217,9 @@ describe("gambling API", () => {
       await ctx.db.delete("points", awardPointId);
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.getById,
-        { id: entryId },
-      ),
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.getById, { id: entryId }),
       "CONFLICT",
     );
     await t.run(async (ctx) => {
@@ -1322,24 +1228,20 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.updatePoints,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entryId,
-          points: 5,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.updatePoints, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entryId,
+        points: 5,
+      }),
       "CONFLICT",
     );
-    const repaired = await t.withIdentity(ADMIN_IDENTITY).mutation(
-      api.games.gambling.updateStatus,
-      {
+    const repaired = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.games.gambling.updateStatus, {
         clientApiVersion: BBPC_API_VERSION,
         id: entryId,
         status: "won",
-      },
-    );
+      });
     expect(repaired.awardPoint).toMatchObject({ adjustment: 6 });
     await t.run(async (ctx) => {
       await ctx.db.patch("gamblingEntries", entryId, {
@@ -1348,47 +1250,39 @@ describe("gambling API", () => {
       });
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.getById,
-        { id: entryId },
-      ),
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.getById, { id: entryId }),
       "CONFLICT",
     );
     await t.run(async (ctx) => {
       await ctx.db.delete("users", memberId);
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.getById,
-        { id: entryId },
-      ),
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.getById, { id: entryId }),
       "CONFLICT",
     );
     await t.run(async (ctx) => {
       await ctx.db.delete("gamblingEntries", entryId);
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).mutation(
-        api.games.gambling.updatePoints,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          id: entryId,
-          points: 1,
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.gambling.updatePoints, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entryId,
+        points: 1,
+      }),
       "NOT_FOUND",
     );
     await t.run(async (ctx) => {
       await ctx.db.delete("gamblingTypes", defaultTypeId);
     });
     await expectDomainError(
-      t.withIdentity(ADMIN_IDENTITY).query(
-        api.games.gambling.listForTypePage,
-        {
-          gamblingTypeId: defaultTypeId,
-          paginationOpts: { numItems: 10, cursor: null },
-        },
-      ),
+      t.withIdentity(ADMIN_IDENTITY).query(api.games.gambling.listForTypePage, {
+        gamblingTypeId: defaultTypeId,
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
       "NOT_FOUND",
     );
   });

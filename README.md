@@ -285,6 +285,10 @@ identity fields such as email. The results DTO similarly omits notes, emails, lo
 wagers, and incorrect guesses. Relationship fanout is bounded and missing canonical
 parents fail closed instead of returning a partial graph.
 
+`games.gambling.hasWonForEpisode` derives the member from Clerk and returns only the
+boolean needed by the primary home-page banner. It inspects at most 25 episode
+assignments and applies the existing 500-entry per-user/assignment gambling bound.
+
 Authenticated episode audio operations replace the primary app's owner-scoped Prisma
 routes. `episodes.audio.listMine` uses native pagination over a compound
 user/episode/created-at index, and `usageForEpisode` enforces the bounded 50-message

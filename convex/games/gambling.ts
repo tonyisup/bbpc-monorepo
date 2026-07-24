@@ -61,9 +61,7 @@ import {
   pointSeasonTargetValidator,
 } from "./validators.js";
 
-function validateAssignmentIds(
-  assignmentIds: Array<Id<"assignments">>,
-): void {
+function validateAssignmentIds(assignmentIds: Array<Id<"assignments">>): void {
   if (
     assignmentIds.length < 1 ||
     assignmentIds.length > MAX_ASSIGNMENTS_FOR_GAMBLING_READ ||
@@ -105,10 +103,7 @@ async function resolveReadType(
     )
     .unique();
   if (gamblingType === null) {
-    domainError(
-      "NOT_FOUND",
-      "The default gambling type is unavailable.",
-    );
+    domainError("NOT_FOUND", "The default gambling type is unavailable.");
   }
   return gamblingType;
 }
@@ -163,6 +158,45 @@ export const mineForAssignment = authenticatedQuery({
   },
 });
 
+export const hasWonForEpisode = authenticatedQuery({
+  args: { episodeId: v.id("episodes") },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const episode = await ctx.db.get("episodes", args.episodeId);
+    if (episode === null) {
+      domainError("NOT_FOUND", "The episode is unavailable.");
+    }
+    const assignments = await ctx.db
+      .query("assignments")
+      .withIndex("by_episodeId", (index) =>
+        index.eq("episodeId", args.episodeId),
+      )
+      .take(MAX_ASSIGNMENTS_FOR_GAMBLING_READ + 1);
+    if (assignments.length > MAX_ASSIGNMENTS_FOR_GAMBLING_READ) {
+      domainError(
+        "CONFLICT",
+        "Episode assignments exceed the supported gambling read limit.",
+        {
+          details: {
+            limit: MAX_ASSIGNMENTS_FOR_GAMBLING_READ,
+          },
+        },
+      );
+    }
+    for (const assignment of assignments) {
+      const entries = await readEntriesForAssignmentUser(
+        ctx,
+        assignment._id,
+        ctx.actor.user._id,
+      );
+      if (entries.some((entry) => entry.status === "won")) {
+        return true;
+      }
+    }
+    return false;
+  },
+});
+
 export const mineForAssignments = authenticatedQuery({
   args: { assignmentIds: v.array(v.id("assignments")) },
   returns: v.array(assignmentGamblingGroupValidator),
@@ -191,10 +225,7 @@ export const mineForType = authenticatedQuery({
   args: { gamblingTypeId: v.optional(v.id("gamblingTypes")) },
   returns: v.array(gamblingEntryValidator),
   handler: async (ctx, args) => {
-    const gamblingType = await resolveReadType(
-      ctx,
-      args.gamblingTypeId,
-    );
+    const gamblingType = await resolveReadType(ctx, args.gamblingTypeId);
     const entries = await ctx.db
       .query("gamblingEntries")
       .withIndex("by_userId_and_gamblingTypeId", (index) =>
@@ -214,17 +245,12 @@ export const mineForActiveTypes = authenticatedQuery({
   handler: async (ctx) => {
     const entries = await ctx.db
       .query("gamblingEntries")
-      .withIndex("by_userId", (index) =>
-        index.eq("userId", ctx.actor.user._id),
-      )
+      .withIndex("by_userId", (index) => index.eq("userId", ctx.actor.user._id))
       .take(MAX_GAMBLING_ENTRIES_PER_READ + 1);
     assertGamblingReadLimit(entries, "User gambling entries");
     const activeEntries: Array<Doc<"gamblingEntries">> = [];
     for (const entry of entries) {
-      const gamblingType = await requireGamblingType(
-        ctx,
-        entry.gamblingTypeId,
-      );
+      const gamblingType = await requireGamblingType(ctx, entry.gamblingTypeId);
       if (gamblingType.isActive) {
         activeEntries.push(entry);
       }
@@ -245,16 +271,13 @@ export const submit = authenticatedMutation({
   returns: gamblingEntryValidator,
   handler: async (ctx, args) => {
     const points = validateGamblingPoints(args.points);
-    const { season, gamblingType } = await validateGamblingParents(
-      ctx,
-      {
-        userId: ctx.actor.user._id,
-        season: { kind: "current", today: args.today },
-        gamblingTypeId: args.gamblingTypeId,
-        assignmentId: args.assignmentId,
-        targetUserId: args.targetUserId,
-      },
-    );
+    const { season, gamblingType } = await validateGamblingParents(ctx, {
+      userId: ctx.actor.user._id,
+      season: { kind: "current", today: args.today },
+      gamblingTypeId: args.gamblingTypeId,
+      assignmentId: args.assignmentId,
+      targetUserId: args.targetUserId,
+    });
     const existing = await findCanonicalGamblingEntry(ctx, {
       userId: ctx.actor.user._id,
       seasonId: season._id,
@@ -263,28 +286,22 @@ export const submit = authenticatedMutation({
       targetUserId: args.targetUserId,
     });
     if (existing !== null && existing.status !== "pending") {
-      domainError(
-        "CONFLICT",
-        "Only a pending wager can be updated.",
-        { details: { reason: "WAGER_LOCKED" } },
-      );
+      domainError("CONFLICT", "Only a pending wager can be updated.", {
+        details: { reason: "WAGER_LOCKED" },
+      });
     }
     await assertGamblingBudget(ctx, {
       userId: ctx.actor.user._id,
       seasonId: season._id,
       points,
-      ...(existing === null
-        ? {}
-        : { excludeEntryId: existing._id }),
+      ...(existing === null ? {} : { excludeEntryId: existing._id }),
     });
     let entry: Doc<"gamblingEntries">;
     if (existing === null) {
       const id = await ctx.db.insert("gamblingEntries", {
         userId: ctx.actor.user._id,
         points,
-        createdAt: validateGamblingCreatedAt(
-          args.createdAt ?? Date.now(),
-        ),
+        createdAt: validateGamblingCreatedAt(args.createdAt ?? Date.now()),
         seasonId: season._id,
         gamblingTypeId: gamblingType._id,
         status: "pending",
@@ -339,9 +356,7 @@ export const getTypeById = adminQuery({
   returns: v.union(gamblingTypeValidator, v.null()),
   handler: async (ctx, args) => {
     const gamblingType = await ctx.db.get("gamblingTypes", args.id);
-    return gamblingType === null
-      ? null
-      : toGamblingType(gamblingType);
+    return gamblingType === null ? null : toGamblingType(gamblingType);
   },
 });
 
@@ -361,20 +376,13 @@ export const createType = adminMutation({
       args.description === undefined
         ? undefined
         : validateGamblingDescription(args.description);
-    await assertUniqueGamblingTypeLookup(
-      ctx,
-      lookup.normalizedLookupId,
-    );
+    await assertUniqueGamblingTypeLookup(ctx, lookup.normalizedLookupId);
     const id = await ctx.db.insert("gamblingTypes", {
       title: validateGamblingTitle(args.title),
       ...lookup,
-      multiplier: validateGamblingMultiplier(
-        args.multiplier ?? 1.5,
-      ),
+      multiplier: validateGamblingMultiplier(args.multiplier ?? 1.5),
       isActive: args.isActive ?? true,
-      createdAt: validateGamblingCreatedAt(
-        args.createdAt ?? Date.now(),
-      ),
+      createdAt: validateGamblingCreatedAt(args.createdAt ?? Date.now()),
       ...(description === undefined ? {} : { description }),
     });
     await writeAuditEvent(ctx, {
@@ -421,14 +429,10 @@ export const updateType = adminMutation({
       Object.assign(patch, lookup);
     }
     if (args.description !== undefined) {
-      patch.description = validateGamblingDescription(
-        args.description,
-      );
+      patch.description = validateGamblingDescription(args.description);
     }
     if (args.multiplier !== undefined) {
-      patch.multiplier = validateGamblingMultiplier(
-        args.multiplier,
-      );
+      patch.multiplier = validateGamblingMultiplier(args.multiplier);
     }
     if (args.isActive !== undefined) {
       patch.isActive = args.isActive;
@@ -446,9 +450,7 @@ export const updateType = adminMutation({
       cutoverRunId: ctx.systemState.cutoverRunId,
       metadata: { fieldCount },
     });
-    return toGamblingType(
-      await requireGamblingType(ctx, gamblingType._id),
-    );
+    return toGamblingType(await requireGamblingType(ctx, gamblingType._id));
   },
 });
 
@@ -475,9 +477,7 @@ export const getById = adminQuery({
   returns: v.union(gamblingEntryValidator, v.null()),
   handler: async (ctx, args) => {
     const entry = await ctx.db.get("gamblingEntries", args.id);
-    return entry === null
-      ? null
-      : await hydrateGamblingEntry(ctx, entry);
+    return entry === null ? null : await hydrateGamblingEntry(ctx, entry);
   },
 });
 
@@ -491,10 +491,7 @@ export const listForUserPage = adminQuery({
   handler: async (ctx, args) => {
     validateGamblingPageSize(args.paginationOpts.numItems);
     await requirePointUser(ctx, args.userId);
-    const seasonId = await resolveSelectedSeasonId(
-      ctx,
-      args.season,
-    );
+    const seasonId = await resolveSelectedSeasonId(ctx, args.season);
     const result =
       seasonId === null
         ? await ctx.db
@@ -506,12 +503,8 @@ export const listForUserPage = adminQuery({
             .paginate(args.paginationOpts)
         : await ctx.db
             .query("gamblingEntries")
-            .withIndex(
-              "by_userId_and_seasonId_and_createdAt",
-              (index) =>
-                index
-                  .eq("userId", args.userId)
-                  .eq("seasonId", seasonId),
+            .withIndex("by_userId_and_seasonId_and_createdAt", (index) =>
+              index.eq("userId", args.userId).eq("seasonId", seasonId),
             )
             .order("desc")
             .paginate(args.paginationOpts);
@@ -576,14 +569,13 @@ export const create = adminMutation({
   returns: gamblingEntryValidator,
   handler: async (ctx, args) => {
     const points = validateGamblingPoints(args.points);
-    const { user, season, gamblingType } =
-      await validateGamblingParents(ctx, {
-        userId: args.userId,
-        season: args.season,
-        gamblingTypeId: args.gamblingTypeId,
-        assignmentId: args.assignmentId,
-        targetUserId: args.targetUserId,
-      });
+    const { user, season, gamblingType } = await validateGamblingParents(ctx, {
+      userId: args.userId,
+      season: args.season,
+      gamblingTypeId: args.gamblingTypeId,
+      assignmentId: args.assignmentId,
+      targetUserId: args.targetUserId,
+    });
     const existing = await findCanonicalGamblingEntry(ctx, {
       userId: user._id,
       seasonId: season._id,
@@ -592,10 +584,7 @@ export const create = adminMutation({
       targetUserId: args.targetUserId,
     });
     if (existing !== null) {
-      domainError(
-        "CONFLICT",
-        "The canonical wager already exists.",
-      );
+      domainError("CONFLICT", "The canonical wager already exists.");
     }
     await assertGamblingBudget(ctx, {
       userId: user._id,
@@ -603,15 +592,11 @@ export const create = adminMutation({
       points,
     });
     const notes =
-      args.notes === undefined
-        ? undefined
-        : validateGamblingNotes(args.notes);
+      args.notes === undefined ? undefined : validateGamblingNotes(args.notes);
     const id = await ctx.db.insert("gamblingEntries", {
       userId: user._id,
       points,
-      createdAt: validateGamblingCreatedAt(
-        args.createdAt ?? Date.now(),
-      ),
+      createdAt: validateGamblingCreatedAt(args.createdAt ?? Date.now()),
       seasonId: season._id,
       gamblingTypeId: gamblingType._id,
       status: "pending",
@@ -630,10 +615,7 @@ export const create = adminMutation({
       targetId: id,
       cutoverRunId: ctx.systemState.cutoverRunId,
     });
-    return await hydrateGamblingEntry(
-      ctx,
-      await requireGamblingEntry(ctx, id),
-    );
+    return await hydrateGamblingEntry(ctx, await requireGamblingEntry(ctx, id));
   },
 });
 
@@ -643,10 +625,7 @@ export const updatePoints = adminMutation({
   handler: async (ctx, args) => {
     const entry = await requireGamblingEntry(ctx, args.id);
     const points = validateGamblingPoints(args.points);
-    if (
-      entry.status === "pending" ||
-      entry.status === "locked"
-    ) {
+    if (entry.status === "pending" || entry.status === "locked") {
       if (entry.seasonId === undefined) {
         domainError(
           "VALIDATION_FAILED",
@@ -715,12 +694,7 @@ async function updateEntryStatus(
   },
   input: {
     id: Id<"gamblingEntries">;
-    status:
-      | "pending"
-      | "locked"
-      | "won"
-      | "lost"
-      | "rejected";
+    status: "pending" | "locked" | "won" | "lost" | "rejected";
     season?:
       | { kind: "current"; today: string }
       | { kind: "season"; seasonId: Id<"seasons"> };
@@ -730,9 +704,7 @@ async function updateEntryStatus(
   const entry = await transitionGamblingStatus(ctx, {
     entry: await requireGamblingEntry(ctx, input.id),
     status: input.status,
-    ...(input.season === undefined
-      ? {}
-      : { season: input.season }),
+    ...(input.season === undefined ? {} : { season: input.season }),
     earnedAt: input.earnedAt ?? Date.now(),
   });
   await writeAuditEvent(ctx, {
@@ -785,10 +757,7 @@ export const remove = adminMutation({
   handler: async (ctx, args) => {
     const entry = await requireGamblingEntry(ctx, args.id);
     if (entry.status !== "pending") {
-      domainError(
-        "CONFLICT",
-        "Only a pending gambling entry can be deleted.",
-      );
+      domainError("CONFLICT", "Only a pending gambling entry can be deleted.");
     }
     if (entry.awardPointId !== undefined) {
       domainError(
