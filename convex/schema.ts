@@ -179,6 +179,8 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_number", ["number"])
+    .index("by_status_and_number", ["status", "number"])
+    .index("by_status_and_date", ["status", "date"])
     .index("by_slug", ["slug"])
     .index("by_normalizedSlug", ["normalizedSlug"])
     .index("by_date_and_status", ["date", "status"]),

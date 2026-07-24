@@ -8,12 +8,16 @@
  * @module
  */
 
+import type * as episodes_public from "../episodes/public.js";
+import type * as episodes_readModel from "../episodes/readModel.js";
+import type * as episodes_validators from "../episodes/validators.js";
 import type * as functions from "../functions.js";
 import type * as identity_access from "../identity/access.js";
 import type * as identity_profile from "../identity/profile.js";
 import type * as lib_actors from "../lib/actors.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_errors from "../lib/errors.js";
+import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_writeGate from "../lib/writeGate.js";
 import type * as migration_archive from "../migration/archive.js";
@@ -50,12 +54,16 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "episodes/public": typeof episodes_public;
+  "episodes/readModel": typeof episodes_readModel;
+  "episodes/validators": typeof episodes_validators;
   functions: typeof functions;
   "identity/access": typeof identity_access;
   "identity/profile": typeof identity_profile;
   "lib/actors": typeof lib_actors;
   "lib/audit": typeof lib_audit;
   "lib/errors": typeof lib_errors;
+  "lib/normalize": typeof lib_normalize;
   "lib/validators": typeof lib_validators;
   "lib/writeGate": typeof lib_writeGate;
   "migration/archive": typeof migration_archive;

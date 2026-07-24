@@ -73,5 +73,248 @@ export type PublicApiType = {
             }>;
         };
     };
+    episodes: {
+        public: {
+            getBySlug: FunctionReference<"query", "public", {
+                slug: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            latestPublished: FunctionReference<"query", "public", {
+                onOrBefore: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignments: Array<{
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: string;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    }>;
+                    date: string | null;
+                    description: string | null;
+                    extras: Array<{
+                        id: Id<"extraReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
+                        };
+                    }>;
+                    id: Id<"episodes">;
+                    links: Array<{
+                        id: Id<"episodeLinks">;
+                        text: string;
+                        url: string;
+                    }>;
+                    number: number;
+                    recording: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            nextScheduled: FunctionReference<"query", "public", Record<string, never>, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+        };
+    };
 };
 export type InternalApiType = {};

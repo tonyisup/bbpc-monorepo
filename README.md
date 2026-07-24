@@ -149,8 +149,8 @@ can finally resolve both parents.
 Display slugs are preserved with a normalized uniqueness key. Syllabus owner/order and
 assignment/user/point relationship duplicates are rejected transactionally. The
 independent reconciliation pass re-resolves every parent and compares every scalar
-without repairing drift. Its guarded extractor and immutable manifest support are
-implemented but have not been run against production-derived rows.
+without repairing drift. The production-derived rehearsal reconciled all 709 assignment
+domain rows.
 
 ## Review migration rehearsal
 
@@ -166,8 +166,8 @@ raw evidence. Canonical `reviewedAt` uses the approved
 `reviewedOn ?? ReviewdOn` precedence; a conflicting pair fails the batch.
 
 Review reconciliation independently re-resolves every user, movie/show, rating,
-assignment, review, and episode parent. Its guarded extractor and local manifest support
-are approved for the production-derived local rehearsal.
+assignment, review, and episode parent. The production-derived rehearsal reconciled all
+1,958 review domain rows.
 
 ## Game migration rehearsal
 
@@ -186,8 +186,8 @@ tag-vote award UUIDs that no longer reference a point become explicit
 An independent pass re-resolves every relationship and compares every mapped scalar
 without repairing drift before the domain becomes reconciled. The guarded games
 extractor reads all nine source tables in one serializable transaction and emits one
-immutable local-only manifest. It is implemented and synthetically tested, but has not
-been run against production-derived rows.
+immutable local-only manifest. The production-derived rehearsal reconciled all 3,925
+game domain rows.
 
 ## Ranking migration rehearsal
 
@@ -255,6 +255,24 @@ resumes the final scrub, checks the portable ZIP allowlist/counts/hashes, and wr
 private manifest. Its companion restore command imports the unchanged ZIP into a
 second disposable local backend, requires exact table hashes, and reruns all migration
 and reconciliation operations with zero canonical inserts.
+
+## Public episode read API
+
+The first consumer-facing domain slice exposes anonymous, read-only episode functions:
+
+- `episodes.public.latestPublished` takes an explicit `YYYY-MM-DD` bound so cached
+  Convex queries never depend on the server wall clock, and explicitly supports the
+  preserved `published`/`Published` spellings that SQL compared case-insensitively;
+- `episodes.public.nextScheduled` chooses the highest-numbered `next` or `recording`
+  episode through a compound index;
+- `episodes.public.getBySlug` applies the approved trim/NFKC/lowercase lookup rule; and
+- `episodes.public.listPage` passes native Convex pagination options through unchanged.
+
+The shared episode DTO contains the episode display fields, assignments, public user
+name/image, movies, extras, shows, and links needed by the primary site. It deliberately
+limits users to public name/image fields; the prior broad Prisma include also returned
+identity fields such as email. Relationship fanout is bounded and missing canonical
+parents fail closed instead of returning a partial graph.
 
 ## Package consumers
 

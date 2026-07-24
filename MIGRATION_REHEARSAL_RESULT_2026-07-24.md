@@ -83,6 +83,21 @@ The full post-fix gate passed: typecheck, lint, query/access audits, 56 local
 extractor/staging/planner tests, 112 Convex tests, package contract, and 90.08% branch
 coverage.
 
+## Post-rehearsal public episode read smoke
+
+The first consumer-facing episode read slice was deployed only to the preserved local
+backend and exercised against the migrated dataset. An aggregate-only traversal
+completed all 13 pagination requests and hydrated exactly 634 episodes, 308 assignments,
+390 extra reviews, and 14 episode links. Those totals match the independently verified
+source manifests, and no missing parent or relationship-fanout guard fired.
+
+The smoke check found that all 633 completed episodes store status `published`, while
+the legacy Prisma call requested `Published`. SQL's case-insensitive comparison hid that
+difference; Convex index equality does not. `latestPublished` now checks both preserved
+legacy spellings, with regression coverage. Aggregate smoke checks then confirmed a
+latest episode, a next episode, and a normalized slug round-trip without emitting row
+values. The expanded gate passes 123 Convex tests with 90.18% branch coverage.
+
 ## Preserved gate
 
 Raw staging, checkpoints, migration records, and S1 control state remain intact. The
