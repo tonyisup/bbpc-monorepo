@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-201 Convex tests with 90.96% branch coverage. Owner-scoped episode audio metadata
+211 Convex tests with 90.55% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -137,6 +137,14 @@ pending-before-assigned syllabus order, all three insertion positions, complete-
 reordering, owner isolation, note normalization, exact assignment reuse and missing-slug
 repair, indexed/native pagination, concurrent owner additions, and the 100-entry
 capacity. The regenerated shared package contract and its fixture consumer type-check.
+Rating and review application workflows are also covered synthetically. Anonymous
+rating reads, administrator rating CRUD, SQL `TINYINT` validation, and indexed
+review/guess deletion guards are exercised. Review coverage verifies Clerk-derived
+self-service actors, exact movie/show target shape, assignment-derived movies,
+rating/user compound-index filters, native relationship pagination, explicit rating
+clear, bounded atomic review/assignment/extra/guess deletion semantics, relationship
+fanout failures, and concurrent extra submissions. Guess scoring and gambling remain
+outside this checkpoint as game-domain work.
 
 ## Preserved gate
 

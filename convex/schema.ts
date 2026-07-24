@@ -354,7 +354,18 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_movieId", ["movieId"])
     .index("by_showId", ["showId"])
-    .index("by_ratingId", ["ratingId"]),
+    .index("by_ratingId", ["ratingId"])
+    .index("by_reviewedAt", ["reviewedAt"])
+    .index("by_userId_and_reviewedAt", ["userId", "reviewedAt"])
+    .index("by_ratingId_and_reviewedAt", [
+      "ratingId",
+      "reviewedAt",
+    ])
+    .index("by_ratingId_and_userId_and_reviewedAt", [
+      "ratingId",
+      "userId",
+      "reviewedAt",
+    ]),
 
   assignmentReviews: defineTable({
     legacyId: v.optional(v.string()),
@@ -442,6 +453,7 @@ export default defineSchema({
     pointId: v.optional(v.id("points")),
   })
     .index("by_legacyId", ["legacyId"])
+    .index("by_ratingId", ["ratingId"])
     .index("by_userId", ["userId"])
     .index("by_assignmentReviewId", ["assignmentReviewId"])
     .index("by_seasonId", ["seasonId"])
