@@ -19,6 +19,12 @@ export interface CheckpointSummary {
   reusedCount: number;
 }
 
+export interface ReconciliationCheckpointSummary {
+  operation: string;
+  status: "running" | "completed";
+  checkedCount: number;
+}
+
 export function requireMigrationOperation(
   actual: string,
   expected: string,
@@ -241,6 +247,43 @@ export async function requireTransformedDomain(
   return domainRun;
 }
 
+export async function getReconciliationDomainRun(
+  ctx: DatabaseContext,
+  input: { runId: string; domain: string },
+): Promise<ActiveDomainRun> {
+  const run = await ctx.db
+    .query("migrationRuns")
+    .withIndex("by_runId", (query) =>
+      query.eq("runId", input.runId),
+    )
+    .unique();
+  if (
+    run?.sourceSchemaFingerprint !== SOURCE_SCHEMA_FINGERPRINT ||
+    run.status !== "running"
+  ) {
+    domainError(
+      "CONFLICT",
+      "The global migration run is not available for reconciliation.",
+    );
+  }
+  const domainRun = await ctx.db
+    .query("migrationDomainRuns")
+    .withIndex("by_runId_and_domain", (query) =>
+      query.eq("runId", input.runId).eq("domain", input.domain),
+    )
+    .unique();
+  if (
+    domainRun?.status !== "transformed" &&
+    domainRun?.status !== "reconciled"
+  ) {
+    domainError(
+      "CONFLICT",
+      "The migration domain is not ready for reconciliation.",
+    );
+  }
+  return { run, domainRun };
+}
+
 export async function getMigrationCheckpoint(
   ctx: DatabaseContext,
   runId: string,
@@ -308,6 +351,16 @@ export function migrationCheckpointResult(
   };
 }
 
+export function reconciliationCheckpointResult(
+  checkpoint: CheckpointSummary,
+): ReconciliationCheckpointSummary {
+  return {
+    operation: checkpoint.operation,
+    status: checkpoint.status,
+    checkedCount: checkpoint.reusedCount,
+  };
+}
+
 export async function writeMigrationBatchAudit(
   ctx: Parameters<typeof writeAuditEvent>[0],
   input: {
@@ -335,6 +388,34 @@ export async function writeMigrationBatchAudit(
       processed: input.processedThisBatch,
       inserted: input.insertedThisBatch,
       reused: input.reusedThisBatch,
+      completed: input.completed,
+    },
+  });
+}
+
+export async function writeReconciliationBatchAudit(
+  ctx: Parameters<typeof writeAuditEvent>[0],
+  input: {
+    runId: string;
+    domain: string;
+    operation: string;
+    checkedThisBatch: number;
+    completed: boolean;
+  },
+): Promise<void> {
+  await writeAuditEvent(ctx, {
+    actor: {
+      kind: "internal",
+      label: `migration:${input.operation}`,
+    },
+    action: "migration.domain.reconciliationBatch",
+    targetType: "migrationRun",
+    targetId: input.runId,
+    cutoverRunId: input.runId,
+    metadata: {
+      domain: input.domain,
+      operation: input.operation,
+      checked: input.checkedThisBatch,
       completed: input.completed,
     },
   });

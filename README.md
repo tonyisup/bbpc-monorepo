@@ -92,6 +92,11 @@ the catalog slice marks only its domain transformed while the shared migration r
 remains open. Synthetic tests cover duplicate preservation, retries, rollback,
 conflicts, corrupt state, and count reconciliation.
 
+After transformation, a separate read/compare pass rescans every raw catalog row and
+checks every canonical scalar and normalized key without repairing data. Its own
+resumable checkpoints and expected counts must complete before the catalog domain moves
+from `transformed` to `reconciled`; detected drift rolls back the verification batch.
+
 ## Episode migration rehearsal
 
 The third checkpointed slice covers `Episode`, `Link`, `Banger`, and

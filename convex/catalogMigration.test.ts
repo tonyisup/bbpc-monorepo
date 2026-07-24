@@ -8,6 +8,7 @@ import { BBPC_API_VERSION } from "../contracts/index.js";
 import { internal } from "./_generated/api.js";
 import {
   CATALOG_OPERATIONS,
+  CATALOG_RECONCILIATION_OPERATIONS,
   SOURCE_SCHEMA_FINGERPRINT,
 } from "./migration/constants.js";
 import schema from "./schema.js";
@@ -98,6 +99,36 @@ async function transformAll(
     {
       cutoverRunId: CUTOVER_RUN_ID,
       operationId: CATALOG_OPERATIONS.tags,
+      batchSize,
+    },
+  );
+}
+
+async function reconcileAll(
+  t: TestBackend,
+  batchSize = 100,
+): Promise<void> {
+  await t.mutation(
+    internal.migration.catalogReconciliation.reconcileMoviesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: CATALOG_RECONCILIATION_OPERATIONS.movies,
+      batchSize,
+    },
+  );
+  await t.mutation(
+    internal.migration.catalogReconciliation.reconcileShowsBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: CATALOG_RECONCILIATION_OPERATIONS.shows,
+      batchSize,
+    },
+  );
+  await t.mutation(
+    internal.migration.catalogReconciliation.reconcileTagsBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: CATALOG_RECONCILIATION_OPERATIONS.tags,
       batchSize,
     },
   );
@@ -961,5 +992,346 @@ describe("catalog migration slice", () => {
       created: true,
       runId: CUTOVER_RUN_ID,
     });
+  });
+
+  test("independently reconciles transformed catalog documents", async () => {
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationRawMovies", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: MOVIE_ID_A,
+        title: "Movie",
+        year: 2020,
+        poster: "https://example.test/movie.jpg",
+        url: "https://example.test/movie",
+        tmdbId: 42,
+        sourceRowHash: "sha256:movie",
+      });
+      await ctx.db.insert("migrationRawShows", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: SHOW_ID,
+        title: "Show",
+        year: 2021,
+        poster: "https://example.test/show.jpg",
+        url: "https://example.test/show",
+        sourceRowHash: "sha256:show",
+      });
+      await ctx.db.insert("migrationRawTags", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: TAG_ID,
+        name: "Tag",
+        description: "Description",
+        createdAt: 123,
+        sourceRowHash: "sha256:tag",
+      });
+    });
+    await startRun(t, { movies: 1, shows: 1, tags: 1 });
+    await transformAll(t);
+    await t.mutation(
+      internal.migration.catalog.finishCatalogRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: CATALOG_OPERATIONS.finish,
+      },
+    );
+
+    await reconcileAll(t);
+    const completedMovieCheck = await t.mutation(
+      internal.migration.catalogReconciliation.reconcileMoviesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: CATALOG_RECONCILIATION_OPERATIONS.movies,
+        batchSize: 10,
+      },
+    );
+    expect(completedMovieCheck).toEqual({
+      operation: CATALOG_RECONCILIATION_OPERATIONS.movies,
+      status: "completed",
+      checkedCount: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileShowsBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.shows,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.catalogReconciliation.reconcileTagsBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.tags,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    const result = await t.mutation(
+      internal.migration.catalogReconciliation
+        .finishCatalogReconciliation,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: CATALOG_RECONCILIATION_OPERATIONS.finish,
+      },
+    );
+    expect(result).toEqual({
+      runId: CUTOVER_RUN_ID,
+      status: "reconciled",
+      movies: 1,
+      shows: 1,
+      tags: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .finishCatalogReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+    ).resolves.toEqual(result);
+  });
+
+  test("rolls back reconciliation when canonical data drifted", async () => {
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationRawMovies", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: MOVIE_ID_A,
+        title: "Movie",
+        year: 2020,
+        url: "https://example.test/movie",
+        sourceRowHash: "sha256:movie",
+      });
+      await ctx.db.insert("migrationRawShows", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: SHOW_ID,
+        title: "Show",
+        year: 2021,
+        url: "https://example.test/show",
+        sourceRowHash: "sha256:show",
+      });
+      await ctx.db.insert("migrationRawTags", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: TAG_ID,
+        name: "Tag",
+        createdAt: 123,
+        sourceRowHash: "sha256:tag",
+      });
+    });
+    await startRun(t, { movies: 1, shows: 1, tags: 1 });
+    await transformAll(t);
+    await t.mutation(
+      internal.migration.catalog.finishCatalogRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: CATALOG_OPERATIONS.finish,
+      },
+    );
+    await t.run(async (ctx) => {
+      const movie = await ctx.db
+        .query("movies")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", MOVIE_ID_A),
+        )
+        .unique();
+      if (!movie) {
+        throw new Error("Movie missing");
+      }
+      await ctx.db.patch("movies", movie._id, {
+        title: "Drifted",
+      });
+      const show = await ctx.db
+        .query("shows")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", SHOW_ID),
+        )
+        .unique();
+      const tag = await ctx.db
+        .query("tags")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", TAG_ID),
+        )
+        .unique();
+      if (!show || !tag) {
+        throw new Error("Catalog reconciliation fixture missing");
+      }
+      await ctx.db.patch("shows", show._id, {
+        title: "Drifted",
+      });
+      await ctx.db.patch("tags", tag._id, {
+        name: "Drifted",
+      });
+    });
+
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileMoviesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.movies,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileShowsBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.shows,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation.reconcileTagsBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.tags,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    const checkpoint = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("migrationCheckpoints")
+        .withIndex("by_runId_and_operation", (query) =>
+          query
+            .eq("runId", CUTOVER_RUN_ID)
+            .eq(
+              "operation",
+              CATALOG_RECONCILIATION_OPERATIONS.movies,
+            ),
+        )
+        .unique();
+    });
+    expect(checkpoint).toBeNull();
+  });
+
+  test("guards reconciliation state, operation, batch, and counts", async () => {
+    const missing = createTestBackend();
+    await initializeAtS1(missing);
+    await expectDomainError(
+      missing.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileMoviesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.movies,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await startRun(t, { movies: 0, shows: 0, tags: 0 });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileMoviesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.movies,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await transformAll(t);
+    await t.mutation(
+      internal.migration.catalog.finishCatalogRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: CATALOG_OPERATIONS.finish,
+      },
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileMoviesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.shows,
+          batchSize: 10,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .reconcileMoviesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.movies,
+          batchSize: 0,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .finishCatalogReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+      "CONFLICT",
+    );
+    await reconcileAll(t);
+    await t.run(async (ctx) => {
+      const checkpoint = await ctx.db
+        .query("migrationCheckpoints")
+        .withIndex("by_runId_and_operation", (query) =>
+          query
+            .eq("runId", CUTOVER_RUN_ID)
+            .eq(
+              "operation",
+              CATALOG_RECONCILIATION_OPERATIONS.movies,
+            ),
+        )
+        .unique();
+      if (!checkpoint) {
+        throw new Error("Movie reconciliation checkpoint missing");
+      }
+      await ctx.db.patch("migrationCheckpoints", checkpoint._id, {
+        reusedCount: 1,
+      });
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.catalogReconciliation
+          .finishCatalogReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: CATALOG_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+      "CONFLICT",
+    );
   });
 });

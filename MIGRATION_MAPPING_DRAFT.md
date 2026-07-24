@@ -13,8 +13,9 @@ The identity, catalog, and episode mappings are implemented as synthetic-only,
 checkpointed rehearsal slices. Their guarded local extractors exist but have not been
 run against the production-derived `dev` clone. Catalog rehearsal tests prove that
 duplicate movie/show normalized keys remain distinct while tag collisions fail
-transactionally. Episode tests cover normalized slug uniqueness, nullable
-relationships, calendar dates, and external audio metadata.
+transactionally. A separate catalog pass independently reconciles every transformed
+field before marking that domain reconciled. Episode tests cover normalized slug
+uniqueness, nullable relationships, calendar dates, and external audio metadata.
 
 ## Global conversion rules
 

@@ -17,6 +17,7 @@ import type * as lib_errors from "../lib/errors.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_writeGate from "../lib/writeGate.js";
 import type * as migration_catalog from "../migration/catalog.js";
+import type * as migration_catalogReconciliation from "../migration/catalogReconciliation.js";
 import type * as migration_constants from "../migration/constants.js";
 import type * as migration_episodes from "../migration/episodes.js";
 import type * as migration_identity from "../migration/identity.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/validators": typeof lib_validators;
   "lib/writeGate": typeof lib_writeGate;
   "migration/catalog": typeof migration_catalog;
+  "migration/catalogReconciliation": typeof migration_catalogReconciliation;
   "migration/constants": typeof migration_constants;
   "migration/episodes": typeof migration_episodes;
   "migration/identity": typeof migration_identity;

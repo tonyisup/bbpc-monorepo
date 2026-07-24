@@ -17,6 +17,13 @@ export const CATALOG_OPERATIONS = {
   finish: "catalog.finish",
 } as const;
 
+export const CATALOG_RECONCILIATION_OPERATIONS = {
+  movies: "catalog.reconcile.movies",
+  shows: "catalog.reconcile.shows",
+  tags: "catalog.reconcile.tags",
+  finish: "catalog.reconcile.finish",
+} as const;
+
 export const EPISODE_OPERATIONS = {
   start: "episodes.start",
   episodes: "episodes.episodes",
