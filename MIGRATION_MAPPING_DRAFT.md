@@ -14,8 +14,10 @@ checkpointed rehearsal slices. Their guarded local extractors exist but have not
 run against the production-derived `dev` clone. Catalog rehearsal tests prove that
 duplicate movie/show normalized keys remain distinct while tag collisions fail
 transactionally. A separate catalog pass independently reconciles every transformed
-field before marking that domain reconciled. Episode tests cover normalized slug
-uniqueness, nullable relationships, calendar dates, and external audio metadata.
+field before marking that domain reconciled. Identity independently rechecks profiles,
+normalized keys, derived permissions, and user-role relationships. Episode tests cover
+normalized slug uniqueness, nullable relationships, calendar dates, and external audio
+metadata.
 
 ## Global conversion rules
 

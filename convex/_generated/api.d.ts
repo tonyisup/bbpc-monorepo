@@ -21,6 +21,7 @@ import type * as migration_catalogReconciliation from "../migration/catalogRecon
 import type * as migration_constants from "../migration/constants.js";
 import type * as migration_episodes from "../migration/episodes.js";
 import type * as migration_identity from "../migration/identity.js";
+import type * as migration_identityReconciliation from "../migration/identityReconciliation.js";
 import type * as migration_normalize from "../migration/normalize.js";
 import type * as migration_runtime from "../migration/runtime.js";
 import type * as pipeline_status from "../pipeline/status.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   "migration/constants": typeof migration_constants;
   "migration/episodes": typeof migration_episodes;
   "migration/identity": typeof migration_identity;
+  "migration/identityReconciliation": typeof migration_identityReconciliation;
   "migration/normalize": typeof migration_normalize;
   "migration/runtime": typeof migration_runtime;
   "pipeline/status": typeof pipeline_status;

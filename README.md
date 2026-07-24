@@ -78,6 +78,11 @@ checkpoints. Completing the identity domain therefore does not incorrectly mark 
 full migration transformed; later catalog, episode, review, game, and ranking domains
 join the same cutover run.
 
+Identity also has an independent post-transform reconciliation pass. It re-normalizes
+emails and role keys, re-derives administrator permissions, resolves both user-role
+parents again, and compares canonical documents without repairing them. Only exact
+field, relationship, and source-count agreement marks the identity domain reconciled.
+
 ## Catalog migration rehearsal
 
 The second checkpointed slice covers `Movie`, `Show`, and `Tag`. It preserves every

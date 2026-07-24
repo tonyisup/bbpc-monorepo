@@ -9,6 +9,13 @@ export const IDENTITY_OPERATIONS = {
   finish: "identity.finish",
 } as const;
 
+export const IDENTITY_RECONCILIATION_OPERATIONS = {
+  users: "identity.reconcile.users",
+  roles: "identity.reconcile.roles",
+  userRoles: "identity.reconcile.userRoles",
+  finish: "identity.reconcile.finish",
+} as const;
+
 export const CATALOG_OPERATIONS = {
   start: "catalog.start",
   movies: "catalog.movies",

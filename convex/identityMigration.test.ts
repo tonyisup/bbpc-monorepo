@@ -9,6 +9,7 @@ import { internal } from "./_generated/api.js";
 import schema from "./schema.js";
 import {
   IDENTITY_OPERATIONS,
+  IDENTITY_RECONCILIATION_OPERATIONS,
   SOURCE_SCHEMA_FINGERPRINT,
 } from "./migration/constants.js";
 
@@ -69,6 +70,70 @@ async function startRun(
       expectedUsers: counts.users,
       expectedRoles: counts.roles,
       expectedUserRoles: counts.userRoles,
+    },
+  );
+}
+
+async function reconcileAll(t: TestBackend): Promise<void> {
+  await t.mutation(
+    internal.migration.identityReconciliation.reconcileUsersBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_RECONCILIATION_OPERATIONS.users,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.identityReconciliation.reconcileRolesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_RECONCILIATION_OPERATIONS.roles,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.identityReconciliation
+      .reconcileUserRolesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_RECONCILIATION_OPERATIONS.userRoles,
+      batchSize: 100,
+    },
+  );
+}
+
+async function transformAndFinishIdentity(
+  t: TestBackend,
+): Promise<void> {
+  await t.mutation(
+    internal.migration.identity.transformRolesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_OPERATIONS.roles,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.identity.transformUsersBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_OPERATIONS.users,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.identity.transformUserRolesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_OPERATIONS.userRoles,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.identity.finishIdentityRun,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: IDENTITY_OPERATIONS.finish,
     },
   );
 }
@@ -1170,6 +1235,424 @@ describe("identity migration slice", () => {
           cutoverRunId: CUTOVER_RUN_ID,
           operationId: IDENTITY_OPERATIONS.userRoles,
           batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("independently reconciles transformed identity documents", async () => {
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationRawUsers", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: "reconcile-user",
+        name: "Synthetic User",
+        email: " USER@EXAMPLE.TEST ",
+        emailVerifiedAt: 123,
+        image: "https://example.test/user.jpg",
+        sourceRowHash: "sha256:user",
+      });
+      await ctx.db.insert("migrationRawRoles", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: 1,
+        name: "Administrator",
+        description: "Synthetic administrator",
+        admin: true,
+        sourceRowHash: "sha256:role",
+      });
+      await ctx.db.insert("migrationRawUserRoles", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: "00000000-0000-0000-0000-000000000201",
+        userLegacyId: "reconcile-user",
+        roleLegacyId: 1,
+        sourceRowHash: "sha256:link",
+      });
+    });
+    await startRun(t, { users: 1, roles: 1, userRoles: 1 });
+    await t.mutation(
+      internal.migration.identity.transformRolesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.roles,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.transformUsersBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.users,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.transformUserRolesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.userRoles,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.finishIdentityRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.finish,
+      },
+    );
+
+    await reconcileAll(t);
+    await expect(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.users,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileRolesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.roles,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUserRolesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            IDENTITY_RECONCILIATION_OPERATIONS.userRoles,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    const result = await t.mutation(
+      internal.migration.identityReconciliation
+        .finishIdentityReconciliation,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_RECONCILIATION_OPERATIONS.finish,
+      },
+    );
+    expect(result).toEqual({
+      runId: CUTOVER_RUN_ID,
+      status: "reconciled",
+      users: 1,
+      roles: 1,
+      userRoles: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .finishIdentityReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+    ).resolves.toEqual(result);
+  });
+
+  test("rolls back identity reconciliation on canonical drift", async () => {
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationRawUsers", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: "drift-user",
+        sourceRowHash: "sha256:user",
+      });
+      await ctx.db.insert("migrationRawRoles", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: 1,
+        name: "Member",
+        description: "Member",
+        admin: false,
+        sourceRowHash: "sha256:role",
+      });
+      await ctx.db.insert("migrationRawUserRoles", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: "00000000-0000-0000-0000-000000000202",
+        userLegacyId: "drift-user",
+        roleLegacyId: 1,
+        sourceRowHash: "sha256:link",
+      });
+    });
+    await startRun(t, { users: 1, roles: 1, userRoles: 1 });
+    await t.mutation(
+      internal.migration.identity.transformRolesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.roles,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.transformUsersBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.users,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.transformUserRolesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.userRoles,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.finishIdentityRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.finish,
+      },
+    );
+    await t.run(async (ctx) => {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", "drift-user"),
+        )
+        .unique();
+      const role = await ctx.db
+        .query("roles")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", 1),
+        )
+        .unique();
+      const link = await ctx.db
+        .query("userRoles")
+        .withIndex("by_legacyId", (query) =>
+          query.eq(
+            "legacyId",
+            "00000000-0000-0000-0000-000000000202",
+          ),
+        )
+        .unique();
+      if (!user || !role || !link) {
+        throw new Error("Identity reconciliation fixture missing");
+      }
+      const otherUserId = await ctx.db.insert("users", {
+        legacyId: "other-user",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.patch("users", user._id, {
+        status: "disabled",
+      });
+      await ctx.db.patch("roles", role._id, {
+        description: "Drifted",
+      });
+      await ctx.db.patch("userRoles", link._id, {
+        userId: otherUserId,
+      });
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.users,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileRolesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.roles,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUserRolesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            IDENTITY_RECONCILIATION_OPERATIONS.userRoles,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("guards identity reconciliation state, cursor, and counts", async () => {
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await startRun(t, { users: 0, roles: 0, userRoles: 0 });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.users,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await t.mutation(
+      internal.migration.identity.transformRolesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.roles,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.transformUsersBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.users,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.transformUserRolesBatch,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.userRoles,
+        batchSize: 10,
+      },
+    );
+    await t.mutation(
+      internal.migration.identity.finishIdentityRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: IDENTITY_OPERATIONS.finish,
+      },
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.roles,
+          batchSize: 10,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.users,
+          batchSize: 0,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .finishIdentityReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+      "CONFLICT",
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationCheckpoints", {
+        runId: CUTOVER_RUN_ID,
+        operation: IDENTITY_RECONCILIATION_OPERATIONS.roles,
+        status: "running",
+        lastLegacyKey: "invalid",
+        processedCount: 0,
+        insertedCount: 0,
+        reusedCount: 0,
+        updatedAt: 1,
+      });
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.identityReconciliation
+          .reconcileRolesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.roles,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+
+    const countMismatch = createTestBackend();
+    await initializeAtS1(countMismatch);
+    await startRun(countMismatch, {
+      users: 0,
+      roles: 0,
+      userRoles: 0,
+    });
+    await transformAndFinishIdentity(countMismatch);
+    await reconcileAll(countMismatch);
+    await countMismatch.run(async (ctx) => {
+      const checkpoint = await ctx.db
+        .query("migrationCheckpoints")
+        .withIndex("by_runId_and_operation", (query) =>
+          query
+            .eq("runId", CUTOVER_RUN_ID)
+            .eq(
+              "operation",
+              IDENTITY_RECONCILIATION_OPERATIONS.users,
+            ),
+        )
+        .unique();
+      if (!checkpoint) {
+        throw new Error("User reconciliation checkpoint missing");
+      }
+      await ctx.db.patch("migrationCheckpoints", checkpoint._id, {
+        reusedCount: 1,
+      });
+    });
+    await expectDomainError(
+      countMismatch.mutation(
+        internal.migration.identityReconciliation
+          .finishIdentityReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_RECONCILIATION_OPERATIONS.finish,
         },
       ),
       "CONFLICT",
