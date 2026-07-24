@@ -1,0 +1,72 @@
+{
+  "name": "@tonyisup/bbpc-convex-api",
+  "version": "0.1.0",
+  "description": "Shared Convex backend and generated API contract for BBPC",
+  "license": "UNLICENSED",
+  "private": false,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonyisup/bbpc-convex.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "files": [
+    "contracts/index.d.ts",
+    "contracts/index.js",
+    "contracts/generated/convexApi.d.ts",
+    "contracts/generated/convexApi.js",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./contracts/generated/convexApi.d.ts",
+      "import": "./contracts/generated/convexApi.js"
+    },
+    "./contracts": {
+      "types": "./contracts/index.d.ts",
+      "import": "./contracts/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "dev:local": "convex dev --local",
+    "codegen": "convex codegen",
+    "contract:build": "tsc --project tsconfig.contract.json",
+    "contract:generate": "convex-helpers ts-api-spec --output-file contracts/convexApi.ts",
+    "release:check": "node scripts/check-release-version.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:queries": "node scripts/check-convex-queries.mjs",
+    "lint:access": "node scripts/check-access-classification.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run test:coverage",
+    "package:check": "npm run contract:build && node scripts/check-package.mjs"
+  },
+  "dependencies": {
+    "convex": "1.42.3",
+    "convex-helpers": "0.1.120"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "5.0.0",
+    "@eslint/js": "9.39.5",
+    "@types/node": "22.19.11",
+    "@vitest/coverage-v8": "4.1.10",
+    "convex-test": "0.0.54",
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.65.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  },
+  "allowScripts": {
+    "esbuild@0.27.0": true,
+    "fsevents": false
+  }
+}

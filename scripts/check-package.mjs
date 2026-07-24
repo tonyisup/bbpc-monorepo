@@ -1,0 +1,150 @@
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import process from "node:process";
+
+const root = path.resolve(import.meta.dirname, "..");
+const temporaryRoot = fs.mkdtempSync(
+  path.join(os.tmpdir(), "bbpc-convex-package-"),
+);
+
+function run(command, args, options = {}) {
+  return execFileSync(command, args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    ...options,
+  });
+}
+
+try {
+  const packJson = run("npm", [
+    "pack",
+    "--dry-run",
+    "--json",
+    "--offline",
+    "--cache",
+    path.join(temporaryRoot, "npm-cache"),
+  ]);
+  const packResults = JSON.parse(packJson);
+  const normalizedPackResults = Array.isArray(packResults)
+    ? packResults
+    : Object.values(packResults);
+  if (normalizedPackResults.length !== 1) {
+    throw new Error("npm pack returned an unexpected result");
+  }
+  const [packResult] = normalizedPackResults;
+  const packedFiles = new Set(
+    packResult.files.map((file) => file.path),
+  );
+  const requiredFiles = [
+    "contracts/index.d.ts",
+    "contracts/index.js",
+    "contracts/generated/convexApi.d.ts",
+    "contracts/generated/convexApi.js",
+  ];
+  const missingFiles = requiredFiles.filter(
+    (file) => !packedFiles.has(file),
+  );
+  if (missingFiles.length > 0) {
+    throw new Error(
+      `Package is missing required files: ${missingFiles.join(", ")}`,
+    );
+  }
+
+  const forbiddenFiles = [...packedFiles].filter(
+    (file) =>
+      file.includes(".env") ||
+      file.endsWith(".test.ts") ||
+      file.includes("/_generated/") ||
+      file.startsWith("convex/") ||
+      file === "contracts/convexApi.ts",
+  );
+  if (forbiddenFiles.length > 0) {
+    throw new Error(
+      `Package contains forbidden files: ${forbiddenFiles.join(", ")}`,
+    );
+  }
+
+  const consumerRoot = path.join(temporaryRoot, "consumer");
+  const packageScope = path.join(
+    consumerRoot,
+    "node_modules",
+    "@tonyisup",
+  );
+  fs.mkdirSync(packageScope, { recursive: true });
+  fs.symlinkSync(
+    root,
+    path.join(packageScope, "bbpc-convex-api"),
+    "dir",
+  );
+  for (const dependency of ["convex", "convex-helpers"]) {
+    fs.symlinkSync(
+      path.join(root, "node_modules", dependency),
+      path.join(consumerRoot, "node_modules", dependency),
+      "dir",
+    );
+  }
+  fs.writeFileSync(
+    path.join(consumerRoot, "package.json"),
+    JSON.stringify({ private: true, type: "module" }),
+  );
+  fs.writeFileSync(
+    path.join(consumerRoot, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        strict: true,
+        noEmit: true,
+        skipLibCheck: false,
+      },
+      include: ["consumer.ts"],
+    }),
+  );
+  fs.writeFileSync(
+    path.join(consumerRoot, "consumer.ts"),
+    [
+      'import { api } from "@tonyisup/bbpc-convex-api";',
+      "import {",
+      "  BBPC_API_VERSION,",
+      "  type DomainErrorData,",
+      '} from "@tonyisup/bbpc-convex-api/contracts";',
+      'import type { FunctionArgs } from "convex/server";',
+      "",
+      "type UpdateNameArgs = FunctionArgs<",
+      "  typeof api.identity.profile.updateMyName",
+      ">;",
+      "const updateNameArgs: UpdateNameArgs = {",
+      "  clientApiVersion: BBPC_API_VERSION,",
+      '  name: "Package Consumer",',
+      "};",
+      "const error: DomainErrorData = {",
+      '  code: "WRITE_DISABLED",',
+      '  message: "read only",',
+      "  retryable: true,",
+      "};",
+      "void updateNameArgs;",
+      "void error;",
+      "",
+    ].join("\n"),
+  );
+
+  run(
+    process.execPath,
+    [
+      path.join(root, "node_modules", "typescript", "bin", "tsc"),
+      "--project",
+      consumerRoot,
+    ],
+    { cwd: consumerRoot },
+  );
+
+  process.stdout.write(
+    `Package contract passed. files=${packedFiles.size} consumerTypecheck=passed\n`,
+  );
+} finally {
+  fs.rmSync(temporaryRoot, { recursive: true, force: true });
+}
