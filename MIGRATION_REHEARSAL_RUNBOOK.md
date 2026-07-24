@@ -1,7 +1,6 @@
 # Local Production-Derived Migration Rehearsal
 
-Status: **blocked until the mapping approval items in
-`MIGRATION_MAPPING_DRAFT.md` are signed.**
+Status: **mapping gate approved 2026-07-24; local rehearsal authorized**
 
 This runbook exercises the full offline data milestone on an approved encrypted
 development machine. It never writes SQL, never targets cloud staging or production,
@@ -9,7 +8,7 @@ and deliberately stops before the one-way portable scrub.
 
 ## Preconditions
 
-1. Approve all mapping and anomaly dispositions.
+1. Confirm the approval record in `MIGRATION_MAPPING_DRAFT.md`.
 2. Regenerate the guarded census against the SQL database named exactly `dev`.
 3. Create all eight immutable extracts with one safe run ID, following
    `local-tools/sql/README.md`.

@@ -1,17 +1,19 @@
 # SQL-to-Convex Mapping Draft
 
-Status: **review required before production-derived transformation**
+Status: **approved for the production-derived local rehearsal on 2026-07-24**
 
 Source: the read-only `dev` clone census with schema fingerprint
 `5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a`.
 The census declares `containsRowValues: false`; no production row values are copied here.
 All 31 migrated targets and their minimum indexes are now defined in the Convex schema
-and verified against the typed mapping. This does not approve or run the
-production-derived transform.
+and verified against the typed mapping. The four mapping decisions below are approved
+for the guarded local transform; this approval does not authorize SQL writes, cloud
+staging, the portable scrub, backup promotion, or production cutover.
 
 The identity, catalog, episode, assignment, review, game, ranking, and archive mappings
-are implemented as synthetic-only, checkpointed rehearsal slices. Their guarded local
-extractors exist but have not been run against the production-derived `dev` clone. The
+are implemented as checkpointed rehearsal slices. Their guarded local extractors are
+approved to run against the production-derived `dev` clone on the encrypted local
+development machine. The
 nine game tables and three ranking tables are each extracted atomically in a
 serializable transaction; the archive table is captured as its own atomic slice.
 Catalog rehearsal tests prove that
@@ -30,9 +32,9 @@ dates, and external audio metadata before their domain is reconciled.
 | String primary key | `legacyId: string`, indexed | Preserve exactly; identity lookup never trusts email alone. |
 | Integer identity | `legacyId: number`, indexed | Validate the original tinyint/smallint/int range. |
 | `date` | `YYYY-MM-DD` string | Preserve calendar meaning without timezone conversion. |
-| `datetime` / `datetime2` | UTC epoch milliseconds | Recommended: interpret the legacy wall-clock value as UTC, without adding a local-time offset. |
+| `datetime` / `datetime2` | UTC epoch milliseconds | Approved: interpret the legacy wall-clock value as UTC, without adding a local-time offset. |
 | Nullable scalar | optional field or explicit `null` | Decide per field; preserve SQL `NULL` distinctly from zero/empty text. |
-| Case-insensitive key | display value plus `normalized*` field | Proposed: trim, Unicode NFKC, locale-independent lowercase. |
+| Case-insensitive key | display value plus `normalized*` field | Approved: trim, Unicode NFKC, locale-independent lowercase; fail on collisions. |
 | SQL foreign key | Convex `Id<target>` | Resolve through the target table’s `legacyId` index. |
 | SQL filtered/composite unique | lookup index plus mutation check | Enforce inside the same Convex transaction as the write. |
 
@@ -48,7 +50,7 @@ tables exactly once and records the required index set for every migrated target
 
 | Domain | Source | Target/disposition | Special rule |
 |---|---|---|---|
-| archive | `Archive.Posts` | `archivePosts` | Preserve 433 rows; product visibility is pending. |
+| archive | `Archive.Posts` | `archivePosts` | Preserve 433 rows as backup-only canonical data with no product-facing query. |
 | identity | `dbo.Account` | retire | Do not extract provider credentials or tokens. |
 | identity | `dbo.Session` | retire | Do not migrate session tokens; force Clerk sign-in. |
 | identity | `dbo.VerificationToken` | retire | Do not migrate verification tokens. |
@@ -67,7 +69,7 @@ tables exactly once and records the required index set for every migrated target
 | assignments | `dbo.AssignmentPoints` | `assignmentPointLinks` | Preserve all three explicit relationships. |
 | assignments | `dbo.Syllabus` | `syllabusEntries` | Preserve owner-scoped ordering. |
 | reviews | `dbo.Rating` | `ratings` | Validate tinyint value and presentation metadata. |
-| reviews | `dbo.Review` | `reviews` | Preserve both legacy timestamp fields pending precedence approval. |
+| reviews | `dbo.Review` | `reviews` | Set `reviewedAt = reviewedOn ?? ReviewdOn`; retain both source fields only in private reconciliation evidence. |
 | reviews | `dbo.AssignmentReview` | `assignmentReviews` | Preserve the join document. |
 | reviews | `dbo.ExtraReview` | `extraReviews` | Preserve the join document. |
 | games | `dbo.GameType` | `gameTypes` | Normalized lookup ID is unique. |
@@ -97,7 +99,7 @@ aggregate counts and clock offsets only; it did not print or persist source-row 
 | Guess awards | 1,208 rows: 948 pending without a point, 260 awarded with a valid FK-backed point. | Preserve pending guesses with no point and resolve awarded guesses to canonical points. |
 | Gambling links | 74 rows: 0 without assignment, 36 without award point, 0 without season, 46 without target user. | Preserve every nullable relationship exactly; required source relationships remain required canonically. |
 | Point adjustments | 418 rows: 2 null, 325 zero, 91 nonzero. | Preserve SQL `NULL` separately from zero and validate the live SQL `INT` range. |
-| Archive linkage | 433 rows: 327 linked to an episode, 106 unlinked, 0 unresolved episode references. | Migrate every row and preserve a nullable episode relation; product visibility remains a product choice. |
+| Archive linkage | 433 rows: 327 linked to an episode, 106 unlinked, 0 unresolved episode references. | Migrate every row, preserve a nullable episode relation, and retain the canonical table as backup-only data without a product-facing query. |
 | Ranked-item targets | 19 rows: all 19 have exactly one of movie/show/episode; 0 have none or multiple. | Require exactly one target and validate it against the ranked-list type. |
 | Ranked-list constraints | 1 type, 3 lists, and 19 items: 0 invalid target types, max-item limits, statuses, target/type combinations, or rank bounds; 0 lists exceed capacity. | Accept only `MOVIE`/`SHOW`/`EPISODE`, `DRAFT`/`PUBLISHED`, ranks `1..maxItems`, and a target matching the owning list type. |
 | Ordering | 0 duplicate `(rankedListId, rank)` groups and 0 duplicate `(userId, order)` syllabus groups. | Enforce both keys transactionally in Convex. |
@@ -162,8 +164,8 @@ barriers instead of requiring every broad domain to finish as one block.
 6. Complete guesses, gambling entries, tag votes, and quote submissions, then reconcile
    games.
 7. Rankings can run independently after identity, catalog, and episodes are reconciled.
-8. Transform and reconcile the archive after episodes; retain canonical rows without
-   adding a product-facing query until the visibility policy is approved.
+8. Transform and reconcile the archive after episodes; retain canonical rows as
+   backup-only data without adding a product-facing query.
 
 The assignments domain deliberately remains `running` between steps 2 and 5. Reviews
 must gate on `assignments.assignments`, not on the whole assignments-domain status.
@@ -175,14 +177,19 @@ explicit per-domain scrub result, deletes every raw table and migration/control 
 in bounded batches, retains canonical data plus auth/audit evidence, and deletes the
 deployment-local `systemState` last. A schema-wide allowlist test fails if a future table
 is not explicitly classified as retained or scrubbed. The scrub has synthetic coverage
-only and remains blocked with the production-derived transform.
+only and remains a separate approval gate after the production-derived local rehearsal.
 
-## Approval items
+## Approval record
 
-1. Approve interpreting SQL `datetime`/`datetime2` as UTC.
-2. Approve `reviewedAt = reviewedOn ?? ReviewdOn`.
-3. Approve trim + Unicode NFKC + locale-independent lowercase, with collision detection.
-4. Decide whether `Archive.Posts` remains queryable or backup-only after cutover.
+Domain-owner approval was recorded in the migration task on 2026-07-24:
 
-The production-derived transformer remains blocked until these items and the Phase 0
-anomaly/operation dispositions receive domain-owner sign-off.
+1. SQL `datetime`/`datetime2` values are interpreted as UTC.
+2. `reviewedAt = reviewedOn ?? ReviewdOn`.
+3. Keys use trim + Unicode NFKC + locale-independent lowercase, and transformation
+   fails on collisions.
+4. `Archive.Posts` is retained as backup-only data after cutover.
+
+The Phase 0 anomaly and operation dispositions in
+`../CONVEX_MIGRATION_PHASE_0_DECISIONS.md` are accepted with these rules. The
+production-derived local extractor and rehearsal are authorized; the portable scrub,
+backup promotion, consumer cutover, and production changes remain separate gates.

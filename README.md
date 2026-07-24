@@ -160,13 +160,12 @@ assignment-point links.
 The guarded aggregate probe found 981 movie reviews and 8 show reviews, with no missing
 or dual targets and no duplicate assignment-review or extra-review relationships. The
 transformer enforces those invariants and preserves both `ReviewdOn` and `reviewedOn` in
-raw evidence. Canonical `reviewedAt` uses the pending recommended precedence only when
-the source values are equal or one is null; a conflicting pair fails the batch.
+raw evidence. Canonical `reviewedAt` uses the approved
+`reviewedOn ?? ReviewdOn` precedence; a conflicting pair fails the batch.
 
 Review reconciliation independently re-resolves every user, movie/show, rating,
 assignment, review, and episode parent. Its guarded extractor and local manifest support
-are implemented, but production-derived execution remains blocked on the timestamp and
-normalization approval gate.
+are approved for the production-derived local rehearsal.
 
 ## Game migration rehearsal
 

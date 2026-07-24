@@ -33,7 +33,7 @@ export const sourceTableMappings = [
     target: "archivePosts",
     legacyIdShape: "integer",
     decision:
-      "Preserve all archive rows and nullable episode linkage; the probe found no unresolved episode references, while product visibility remains pending approval.",
+      "Preserve all archive rows and nullable episode linkage as backup-only canonical data; expose no product-facing archive query.",
   },
   {
     source: "dbo.Account",
