@@ -329,6 +329,13 @@ export type PublicApiType = {
                 name: string | null;
             }>;
         };
+        public: {
+            listHosts: FunctionReference<"query", "public", Record<string, never>, Array<{
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+            }>>;
+        };
     };
     pipeline: {
         status: {

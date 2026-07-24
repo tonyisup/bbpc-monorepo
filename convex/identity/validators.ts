@@ -38,6 +38,12 @@ export const identityProfileValidator = v.object({
   isAdmin: v.boolean(),
 });
 
+export const identityPublicHostValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  image: nullableStringValidator,
+});
+
 export const identityLinkResultValidator =
   identityProfileValidator.extend({
     linkMode: v.union(

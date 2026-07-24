@@ -63,6 +63,7 @@ import type * as identity_linkingWriteModel from "../identity/linkingWriteModel.
 import type * as identity_profile from "../identity/profile.js";
 import type * as identity_provisioning from "../identity/provisioning.js";
 import type * as identity_provisioningWriteModel from "../identity/provisioningWriteModel.js";
+import type * as identity_public from "../identity/public.js";
 import type * as identity_readModel from "../identity/readModel.js";
 import type * as identity_roles from "../identity/roles.js";
 import type * as identity_validators from "../identity/validators.js";
@@ -186,6 +187,7 @@ declare const fullApi: ApiFromModules<{
   "identity/profile": typeof identity_profile;
   "identity/provisioning": typeof identity_provisioning;
   "identity/provisioningWriteModel": typeof identity_provisioningWriteModel;
+  "identity/public": typeof identity_public;
   "identity/readModel": typeof identity_readModel;
   "identity/roles": typeof identity_roles;
   "identity/validators": typeof identity_validators;
