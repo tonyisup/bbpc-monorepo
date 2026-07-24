@@ -7,6 +7,10 @@ import { v } from "convex/values";
 import { anonymousQuery } from "../functions.js";
 import { domainError } from "../lib/errors.js";
 import { normalizeLookupKey } from "../lib/normalize.js";
+import {
+  preparePublicSearchQuery,
+  requirePublicSearchLimit,
+} from "../lib/publicSearch.js";
 import { hydrateEpisode } from "./readModel.js";
 import { episodeDetailValidator } from "./validators.js";
 
@@ -120,6 +124,93 @@ export const getBySlug = anonymousQuery({
     return episode === null
       ? null
       : await hydrateEpisode(ctx, episode);
+  },
+});
+
+export const getByLegacyId = anonymousQuery({
+  args: { legacyId: v.string() },
+  returns: v.union(episodeDetailValidator, v.null()),
+  handler: async (ctx, args) => {
+    const legacyId = normalizeLookupKey(
+      args.legacyId,
+      "Episode legacy ID",
+    );
+    const episode = await ctx.db
+      .query("episodes")
+      .withIndex("by_legacyId", (query) =>
+        query.eq("legacyId", legacyId),
+      )
+      .unique();
+    return episode === null
+      ? null
+      : await hydrateEpisode(ctx, episode);
+  },
+});
+
+export const search = anonymousQuery({
+  args: { query: v.string(), limit: v.number() },
+  returns: v.array(episodeDetailValidator),
+  handler: async (ctx, args) => {
+    const limit = requirePublicSearchLimit(args.limit);
+    const searchQuery = preparePublicSearchQuery(args.query);
+    if (searchQuery === null) {
+      return [];
+    }
+    const [titleMatches, movieMatches] = await Promise.all([
+      ctx.db
+        .query("episodes")
+        .withSearchIndex("search_title", (search) =>
+          search.search("title", searchQuery),
+        )
+        .take(limit),
+      ctx.db
+        .query("movies")
+        .withSearchIndex("search_title", (search) =>
+          search.search("title", searchQuery),
+        )
+        .take(limit),
+    ]);
+    const episodesById = new Map(
+      titleMatches.map((episode) => [episode._id, episode]),
+    );
+    for (const movie of movieMatches) {
+      const assignments = await ctx.db
+        .query("assignments")
+        .withIndex("by_movieId", (index) =>
+          index.eq("movieId", movie._id),
+        )
+        .take(limit);
+      for (const assignment of assignments) {
+        const episode = await ctx.db.get(
+          "episodes",
+          assignment.episodeId,
+        );
+        if (episode === null) {
+          domainError(
+            "CONFLICT",
+            "Episode search found an assignment with a missing episode.",
+            {
+              details: {
+                assignmentId: assignment._id,
+                episodeId: assignment.episodeId,
+              },
+            },
+          );
+        }
+        episodesById.set(episode._id, episode);
+      }
+    }
+    const episodes = [...episodesById.values()]
+      .sort(
+        (left, right) =>
+          (right.date ?? "").localeCompare(left.date ?? "") ||
+          right.number - left.number ||
+          right._creationTime - left._creationTime,
+      )
+      .slice(0, limit);
+    return await Promise.all(
+      episodes.map((episode) => hydrateEpisode(ctx, episode)),
+    );
   },
 });
 

@@ -183,7 +183,8 @@ export default defineSchema({
     .index("by_status_and_date", ["status", "date"])
     .index("by_slug", ["slug"])
     .index("by_normalizedSlug", ["normalizedSlug"])
-    .index("by_date_and_status", ["date", "status"]),
+    .index("by_date_and_status", ["date", "status"])
+    .searchIndex("search_title", { searchField: "title" }),
 
   episodeLinks: defineTable({
     legacyId: v.optional(v.string()),

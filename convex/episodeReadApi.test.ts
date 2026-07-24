@@ -41,6 +41,7 @@ async function seedEpisode(
     date?: string;
     status?: string;
     slug?: string;
+    legacyId?: string;
     withGraph?: boolean;
   },
 ): Promise<Id<"episodes">> {
@@ -61,6 +62,9 @@ async function seedEpisode(
               .normalize("NFKC")
               .toLowerCase(),
           }),
+      ...(options.legacyId === undefined
+        ? {}
+        : { legacyId: options.legacyId }),
       ...(options.withGraph === true
         ? {
             recording: "https://audio.example/episode.mp3",
@@ -326,6 +330,132 @@ describe("public episode read API", () => {
     await expectDomainError(
       t.query(api.episodes.public.getBySlug, { slug: "  " }),
       "VALIDATION_FAILED",
+    );
+  });
+
+  test("normalizes transitional legacy-ID lookups", async () => {
+    const t = createTestBackend();
+    const episodeId = await seedEpisode(t, {
+      number: 2,
+      legacyId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    });
+
+    await expect(
+      t.query(api.episodes.public.getByLegacyId, {
+        legacyId: "  AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE  ",
+      }),
+    ).resolves.toMatchObject({ id: episodeId });
+    await expect(
+      t.query(api.episodes.public.getByLegacyId, {
+        legacyId: "ffffffff-bbbb-cccc-dddd-eeeeeeeeeeee",
+      }),
+    ).resolves.toBeNull();
+    await expectDomainError(
+      t.query(api.episodes.public.getByLegacyId, {
+        legacyId: "   ",
+      }),
+      "VALIDATION_FAILED",
+    );
+  });
+
+  test("searches episode and assigned-movie titles without duplicates", async () => {
+    const t = createTestBackend();
+    const directId = await seedEpisode(t, {
+      number: 1,
+      title: "Matrix Discussion",
+      date: "2026-01-01",
+    });
+    const assignmentId = await seedEpisode(t, {
+      number: 2,
+      title: "Episode Two",
+      date: "2026-02-01",
+    });
+    await seedEpisode(t, {
+      number: 3,
+      title: "Arrival Discussion",
+      date: "2026-03-01",
+    });
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const movieId = await ctx.db.insert("movies", {
+        title: "The Matrix",
+        normalizedTitle: "the matrix",
+        year: 1999,
+        url: "https://movies.example/the-matrix",
+      });
+      for (const episodeId of [directId, assignmentId]) {
+        await ctx.db.insert("assignments", {
+          episodeId,
+          userId,
+          movieId,
+          type: "HOMEWORK",
+          playable: true,
+        });
+      }
+    });
+
+    const result = await t.query(
+      api.episodes.public.search,
+      { query: "  ＭＡＴＲＩＸ  ", limit: 10 },
+    );
+
+    expect(result.map((episode) => episode.id)).toEqual([
+      assignmentId,
+      directId,
+    ]);
+    await expect(
+      t.query(api.episodes.public.search, {
+        query: "   ",
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
+    await expectDomainError(
+      t.query(api.episodes.public.search, {
+        query: "matrix",
+        limit: 0,
+      }),
+      "VALIDATION_FAILED",
+    );
+  });
+
+  test("fails closed when search finds an orphaned assignment", async () => {
+    const t = createTestBackend();
+    const episodeId = await seedEpisode(t, {
+      number: 1,
+      title: "Episode One",
+    });
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const movieId = await ctx.db.insert("movies", {
+        title: "Orphan Search Movie",
+        normalizedTitle: "orphan search movie",
+        year: 2026,
+        url: "https://movies.example/orphan",
+      });
+      await ctx.db.insert("assignments", {
+        episodeId,
+        userId,
+        movieId,
+        type: "HOMEWORK",
+        playable: true,
+      });
+      await ctx.db.delete("episodes", episodeId);
+    });
+
+    await expectDomainError(
+      t.query(api.episodes.public.search, {
+        query: "orphan",
+        limit: 10,
+      }),
+      "CONFLICT",
     );
   });
 

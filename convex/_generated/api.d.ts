@@ -20,6 +20,7 @@ import type * as lib_actors from "../lib/actors.js";
 import type * as lib_audit from "../lib/audit.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_normalize from "../lib/normalize.js";
+import type * as lib_publicSearch from "../lib/publicSearch.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as lib_writeGate from "../lib/writeGate.js";
 import type * as migration_archive from "../migration/archive.js";
@@ -68,6 +69,7 @@ declare const fullApi: ApiFromModules<{
   "lib/audit": typeof lib_audit;
   "lib/errors": typeof lib_errors;
   "lib/normalize": typeof lib_normalize;
+  "lib/publicSearch": typeof lib_publicSearch;
   "lib/validators": typeof lib_validators;
   "lib/writeGate": typeof lib_writeGate;
   "migration/archive": typeof migration_archive;

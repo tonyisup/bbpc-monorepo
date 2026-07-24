@@ -266,6 +266,9 @@ The first consumer-facing domain slice exposes anonymous, read-only episode func
 - `episodes.public.nextScheduled` chooses the highest-numbered `next` or `recording`
   episode through a compound index;
 - `episodes.public.getBySlug` applies the approved trim/NFKC/lowercase lookup rule; and
+- `episodes.public.getByLegacyId` supports the temporary SQL-UUID adapter path;
+- `episodes.public.search` performs bounded full-text matching across episode and
+  assigned-movie titles, de-duplicates canonical IDs, and preserves date-desc order; and
 - `episodes.public.listPage` passes native Convex pagination options through unchanged.
 
 The shared episode DTO contains the episode display fields, assignments, public user

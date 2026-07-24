@@ -6,13 +6,14 @@ import { v } from "convex/values";
 
 import type { Doc } from "../_generated/dataModel.js";
 import { anonymousQuery } from "../functions.js";
-import { domainError } from "../lib/errors.js";
+import {
+  preparePublicSearchQuery,
+  requirePublicSearchLimit,
+} from "../lib/publicSearch.js";
 import {
   catalogMovieValidator,
   catalogShowValidator,
 } from "./validators.js";
-
-const MAX_SEARCH_RESULTS = 20;
 
 function nullable<T>(value: T | undefined): T | null {
   return value ?? null;
@@ -37,25 +38,6 @@ function toShow(show: Doc<"shows">) {
     poster: nullable(show.poster),
     url: show.url,
   };
-}
-
-function requireSearchLimit(limit: number): number {
-  if (
-    !Number.isSafeInteger(limit) ||
-    limit < 1 ||
-    limit > MAX_SEARCH_RESULTS
-  ) {
-    domainError(
-      "VALIDATION_FAILED",
-      `Search limit must be an integer from 1 through ${String(MAX_SEARCH_RESULTS)}.`,
-    );
-  }
-  return limit;
-}
-
-function prepareSearchQuery(query: string): string | null {
-  const prepared = query.trim().normalize("NFKC");
-  return prepared.length === 0 ? null : prepared;
 }
 
 function compareMovies(
@@ -91,8 +73,8 @@ export const searchMovies = anonymousQuery({
   args: { query: v.string(), limit: v.number() },
   returns: v.array(catalogMovieValidator),
   handler: async (ctx, args) => {
-    const limit = requireSearchLimit(args.limit);
-    const query = prepareSearchQuery(args.query);
+    const limit = requirePublicSearchLimit(args.limit);
+    const query = preparePublicSearchQuery(args.query);
     if (query === null) {
       return [];
     }
@@ -130,8 +112,8 @@ export const searchShows = anonymousQuery({
   args: { query: v.string(), limit: v.number() },
   returns: v.array(catalogShowValidator),
   handler: async (ctx, args) => {
-    const limit = requireSearchLimit(args.limit);
-    const query = prepareSearchQuery(args.query);
+    const limit = requirePublicSearchLimit(args.limit);
+    const query = preparePublicSearchQuery(args.query);
     if (query === null) {
       return [];
     }
