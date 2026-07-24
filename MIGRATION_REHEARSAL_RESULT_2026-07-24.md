@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-230 Convex tests with 90.05% branch coverage. Owner-scoped episode audio metadata
+238 Convex tests with 90.14% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -180,7 +180,31 @@ the accounting event, while assignment/user cleanup removes award points only af
 their final guess reference disappears. Point user/season mismatches, locked rounds,
 invalid hosts, duplicate rows and batch inputs, missing canonical relationships,
 value-free audit records, shared awards, and orphan cleanup all have regression
-coverage. Gambling, tag, quote, and ranking workflows remain in T10.
+coverage.
+Gambling workflows are covered synthetically as the fourth game checkpoint. Public
+queries return active types only. Authenticated submissions derive the user from Clerk,
+resolve the season from an explicit date, require non-negative SQL `INT` points, enforce
+the same playable/`next` assignment rule as guesses, validate `-1x` targets through an
+assignment review, and upsert one user/season/type/assignment/target key. Available
+points and pending/locked wagers are evaluated in the same Convex transaction, including
+the concurrent-write regression that permits only one of two collectively
+over-budget wagers.
+
+Administrator functions cover normalized, dependency-safe type CRUD; exact and
+native-paginated entry reads; balance-aware creation and point changes; manual award
+links; pending-only deletion; typed statuses; and win/loss settlement. Win awards use
+`floor(points * multiplier)`, losses use `-points`, resolved point changes recalculate
+their award, and status replacement refuses to delete a point shared by another
+relationship. Aggregate-only inspection of the private 74-row rehearsal set found zero
+duplicate canonical keys, negative values, missing seasons, unsupported statuses,
+target-shape violations, or targets without assignments. It also documented preserved
+legacy state rather than rewriting it: 27 lost entries have no linked award and 13 won
+awards have adjustments stale relative to their current wager. Same-status settlement
+can repair a missing resolved award, and an explicit point update repairs stale award
+arithmetic. Authorization/write gates, round/target/type failures, owner isolation,
+serial budgets, pagination, malformed relationships, PII-free audits, and award
+ownership all have regression coverage. Tag, quote, and ranking workflows remain in
+T10.
 
 ## Preserved gate
 

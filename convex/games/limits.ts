@@ -16,6 +16,10 @@ export const MAX_GUESS_PAGE_SIZE = 100;
 export const MAX_GUESSES_PER_ASSIGNMENT = 500;
 export const MAX_ASSIGNMENTS_FOR_GUESS_READ = 25;
 export const MAX_HOST_GUESSES_PER_BATCH = 25;
+export const MAX_GAMBLING_TYPES = 100;
+export const MAX_GAMBLING_PAGE_SIZE = 100;
+export const MAX_GAMBLING_ENTRIES_PER_READ = 500;
+export const MAX_ASSIGNMENTS_FOR_GAMBLING_READ = 25;
 
 export function validateSeasonPageSize(numItems: number): void {
   if (
@@ -52,6 +56,19 @@ export function validateGuessPageSize(numItems: number): void {
     domainError(
       "VALIDATION_FAILED",
       `Guess page size must be an integer from 1 through ${String(MAX_GUESS_PAGE_SIZE)}.`,
+    );
+  }
+}
+
+export function validateGamblingPageSize(numItems: number): void {
+  if (
+    !Number.isSafeInteger(numItems) ||
+    numItems < 1 ||
+    numItems > MAX_GAMBLING_PAGE_SIZE
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      `Gambling page size must be an integer from 1 through ${String(MAX_GAMBLING_PAGE_SIZE)}.`,
     );
   }
 }

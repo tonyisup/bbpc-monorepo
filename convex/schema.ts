@@ -498,6 +498,11 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_legacyId", ["legacyId"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_isActive_and_createdAt", [
+      "isActive",
+      "createdAt",
+    ])
     .index("by_normalizedLookupId", ["normalizedLookupId"]),
 
   gamblingEntries: defineTable({
@@ -515,10 +520,48 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
+    .index("by_userId_and_createdAt", ["userId", "createdAt"])
+    .index("by_userId_and_assignmentId", [
+      "userId",
+      "assignmentId",
+    ])
+    .index("by_userId_and_gamblingTypeId", [
+      "userId",
+      "gamblingTypeId",
+    ])
+    .index("by_userId_and_seasonId_and_createdAt", [
+      "userId",
+      "seasonId",
+      "createdAt",
+    ])
+    .index("by_userId_and_seasonId_and_status", [
+      "userId",
+      "seasonId",
+      "status",
+    ])
+    .index("by_canonicalWagerKey", [
+      "userId",
+      "seasonId",
+      "gamblingTypeId",
+      "assignmentId",
+      "targetUserId",
+    ])
     .index("by_assignmentId", ["assignmentId"])
+    .index("by_assignmentId_and_createdAt", [
+      "assignmentId",
+      "createdAt",
+    ])
+    .index("by_assignmentId_and_status", [
+      "assignmentId",
+      "status",
+    ])
     .index("by_awardPointId", ["awardPointId"])
     .index("by_seasonId", ["seasonId"])
     .index("by_gamblingTypeId", ["gamblingTypeId"])
+    .index("by_gamblingTypeId_and_createdAt", [
+      "gamblingTypeId",
+      "createdAt",
+    ])
     .index("by_targetUserId", ["targetUserId"])
     .index("by_userId_and_seasonId", ["userId", "seasonId"]),
 

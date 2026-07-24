@@ -617,7 +617,7 @@ describe("administrator episode API", () => {
       await seedGamblingEntry(gamblingOverflow, {
         userId: gamblingAdminId,
         ...setup,
-        status: "locked",
+        status: "pending",
         sequence: index,
       });
     }

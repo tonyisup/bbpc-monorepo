@@ -4971,6 +4971,1778 @@ export type PublicApiType = {
         }>
       >;
     };
+    gambling: {
+      confirm: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          earnedAt?: number;
+          id: Id<"gamblingEntries">;
+          season?:
+            | { kind: "current"; today: string }
+            | { kind: "season"; seasonId: Id<"seasons"> };
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      create: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentId?: Id<"assignments">;
+          clientApiVersion: string;
+          createdAt?: number;
+          gamblingTypeId?: Id<"gamblingTypes">;
+          notes?: string;
+          points: number;
+          season:
+            | { kind: "current"; today: string }
+            | { kind: "season"; seasonId: Id<"seasons"> };
+          targetUserId?: Id<"users">;
+          userId: Id<"users">;
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      createType: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          createdAt?: number;
+          description?: string;
+          isActive?: boolean;
+          lookupId: string;
+          multiplier?: number;
+          title: string;
+        },
+        {
+          createdAt: number;
+          description: string | null;
+          id: Id<"gamblingTypes">;
+          isActive: boolean;
+          lookupId: string;
+          multiplier: number;
+          title: string;
+        }
+      >;
+      getById: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"gamblingEntries"> },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        } | null
+      >;
+      getTypeById: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"gamblingTypes"> },
+        {
+          createdAt: number;
+          description: string | null;
+          id: Id<"gamblingTypes">;
+          isActive: boolean;
+          lookupId: string;
+          multiplier: number;
+          title: string;
+        } | null
+      >;
+      listActiveTypes: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          createdAt: number;
+          description: string | null;
+          id: Id<"gamblingTypes">;
+          isActive: boolean;
+          lookupId: string;
+          multiplier: number;
+          title: string;
+        }>
+      >;
+      listForAssignment: FunctionReference<
+        "query",
+        "public",
+        { assignmentId: Id<"assignments"> },
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      listForTypePage: FunctionReference<
+        "query",
+        "public",
+        {
+          gamblingTypeId: Id<"gamblingTypes">;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              };
+              playable: boolean;
+              slug: string | null;
+              type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              };
+            } | null;
+            awardPoint: {
+              adjustment: number | null;
+              earnedAt: number;
+              gamePointType: {
+                description: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+              } | null;
+              id: Id<"points">;
+              reason: string | null;
+              season: {
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+              };
+              total: number;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+              };
+            } | null;
+            createdAt: number;
+            gamblingType: {
+              createdAt: number;
+              description: string | null;
+              id: Id<"gamblingTypes">;
+              isActive: boolean;
+              lookupId: string;
+              multiplier: number;
+              title: string;
+            };
+            id: Id<"gamblingEntries">;
+            notes: string | null;
+            points: number;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            } | null;
+            status: "pending" | "locked" | "won" | "lost" | "rejected";
+            targetUser: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            } | null;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      listForUserPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          season:
+            | { kind: "all" }
+            | { kind: "current"; today: string }
+            | { kind: "season"; seasonId: Id<"seasons"> };
+          userId: Id<"users">;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              };
+              playable: boolean;
+              slug: string | null;
+              type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              };
+            } | null;
+            awardPoint: {
+              adjustment: number | null;
+              earnedAt: number;
+              gamePointType: {
+                description: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+              } | null;
+              id: Id<"points">;
+              reason: string | null;
+              season: {
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+              };
+              total: number;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+              };
+            } | null;
+            createdAt: number;
+            gamblingType: {
+              createdAt: number;
+              description: string | null;
+              id: Id<"gamblingTypes">;
+              isActive: boolean;
+              lookupId: string;
+              multiplier: number;
+              title: string;
+            };
+            id: Id<"gamblingEntries">;
+            notes: string | null;
+            points: number;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            } | null;
+            status: "pending" | "locked" | "won" | "lost" | "rejected";
+            targetUser: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            } | null;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      listTypes: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          createdAt: number;
+          description: string | null;
+          id: Id<"gamblingTypes">;
+          isActive: boolean;
+          lookupId: string;
+          multiplier: number;
+          title: string;
+        }>
+      >;
+      mineForActiveTypes: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      mineForAssignment: FunctionReference<
+        "query",
+        "public",
+        { assignmentId: Id<"assignments"> },
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      mineForAssignments: FunctionReference<
+        "query",
+        "public",
+        { assignmentIds: Array<Id<"assignments">> },
+        Array<{
+          assignmentId: Id<"assignments">;
+          entries: Array<{
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              };
+              playable: boolean;
+              slug: string | null;
+              type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              };
+            } | null;
+            awardPoint: {
+              adjustment: number | null;
+              earnedAt: number;
+              gamePointType: {
+                description: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+              } | null;
+              id: Id<"points">;
+              reason: string | null;
+              season: {
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+              };
+              total: number;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+              };
+            } | null;
+            createdAt: number;
+            gamblingType: {
+              createdAt: number;
+              description: string | null;
+              id: Id<"gamblingTypes">;
+              isActive: boolean;
+              lookupId: string;
+              multiplier: number;
+              title: string;
+            };
+            id: Id<"gamblingEntries">;
+            notes: string | null;
+            points: number;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            } | null;
+            status: "pending" | "locked" | "won" | "lost" | "rejected";
+            targetUser: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            } | null;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+        }>
+      >;
+      mineForType: FunctionReference<
+        "query",
+        "public",
+        { gamblingTypeId?: Id<"gamblingTypes"> },
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      reject: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          earnedAt?: number;
+          id: Id<"gamblingEntries">;
+          season?:
+            | { kind: "current"; today: string }
+            | { kind: "season"; seasonId: Id<"seasons"> };
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      remove: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"gamblingEntries"> },
+        { id: Id<"gamblingEntries"> }
+      >;
+      removeType: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"gamblingTypes"> },
+        { id: Id<"gamblingTypes"> }
+      >;
+      setAwardPoint: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          id: Id<"gamblingEntries">;
+          pointId: Id<"points"> | null;
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      submit: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentId?: Id<"assignments">;
+          clientApiVersion: string;
+          createdAt?: number;
+          gamblingTypeId?: Id<"gamblingTypes">;
+          points: number;
+          targetUserId?: Id<"users">;
+          today: string;
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      updatePoints: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"gamblingEntries">; points: number },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      updateStatus: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          earnedAt?: number;
+          id: Id<"gamblingEntries">;
+          season?:
+            | { kind: "current"; today: string }
+            | { kind: "season"; seasonId: Id<"seasons"> };
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      updateType: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          description?: string | null;
+          id: Id<"gamblingTypes">;
+          isActive?: boolean;
+          lookupId?: string;
+          multiplier?: number;
+          title?: string;
+        },
+        {
+          createdAt: number;
+          description: string | null;
+          id: Id<"gamblingTypes">;
+          isActive: boolean;
+          lookupId: string;
+          multiplier: number;
+          title: string;
+        }
+      >;
+    };
   };
 };
 export type InternalApiType = {};

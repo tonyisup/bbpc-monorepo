@@ -156,3 +156,40 @@ export const assignmentGuessGroupValidator = v.object({
   assignmentId: v.id("assignments"),
   guesses: v.array(guessValidator),
 });
+
+export const gamblingStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("locked"),
+  v.literal("won"),
+  v.literal("lost"),
+  v.literal("rejected"),
+);
+
+export const gamblingTypeValidator = v.object({
+  id: v.id("gamblingTypes"),
+  lookupId: v.string(),
+  title: v.string(),
+  description: nullableStringValidator,
+  multiplier: v.number(),
+  isActive: v.boolean(),
+  createdAt: v.number(),
+});
+
+export const gamblingEntryValidator = v.object({
+  id: v.id("gamblingEntries"),
+  points: v.number(),
+  createdAt: v.number(),
+  notes: nullableStringValidator,
+  status: gamblingStatusValidator,
+  user: pointUserValidator,
+  assignment: v.union(assignmentDetailValidator, v.null()),
+  gamblingType: gamblingTypeValidator,
+  targetUser: v.union(pointUserValidator, v.null()),
+  season: v.union(seasonValidator, v.null()),
+  awardPoint: v.union(pointCoreValidator, v.null()),
+});
+
+export const assignmentGamblingGroupValidator = v.object({
+  assignmentId: v.id("assignments"),
+  entries: v.array(gamblingEntryValidator),
+});

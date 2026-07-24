@@ -307,8 +307,10 @@ export async function lockPendingGamblingForEpisode(
       MAX_GAMBLING_ENTRIES_PER_EPISODE_UPDATE - inspectedCount;
     const entries = await ctx.db
       .query("gamblingEntries")
-      .withIndex("by_assignmentId", (index) =>
-        index.eq("assignmentId", assignment._id),
+      .withIndex("by_assignmentId_and_status", (index) =>
+        index
+          .eq("assignmentId", assignment._id)
+          .eq("status", "pending"),
       )
       .take(remaining + 1);
     if (entries.length > remaining) {
@@ -324,12 +326,10 @@ export async function lockPendingGamblingForEpisode(
     }
     inspectedCount += entries.length;
     for (const entry of entries) {
-      if (entry.status === "pending") {
-        await ctx.db.patch("gamblingEntries", entry._id, {
-          status: "locked",
-        });
-        lockedCount += 1;
-      }
+      await ctx.db.patch("gamblingEntries", entry._id, {
+        status: "locked",
+      });
+      lockedCount += 1;
     }
   }
   return lockedCount;
