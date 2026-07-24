@@ -28,6 +28,79 @@ export type PublicApiType = {
             }>;
         };
         admin: {
+            assignRole: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                roleId: Id<"roles">;
+                userId: Id<"users">;
+            }, {
+                assignedAt: number | null;
+                assignedBy: Id<"users"> | null;
+                id: Id<"userRoles">;
+                role: {
+                    admin: boolean;
+                    description: string;
+                    id: Id<"roles">;
+                    legacyId: number | null;
+                    name: string;
+                    permissions: Array<string>;
+                };
+            }>;
+            createRole: FunctionReference<"mutation", "public", {
+                admin: boolean;
+                clientApiVersion: string;
+                description: string;
+                name: string;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+            }>;
+            createUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                email: string;
+                name: string;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+            deleteRole: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"roles">;
+            }, {
+                id: Id<"roles">;
+            }>;
             getRole: FunctionReference<"query", "public", {
                 id: Id<"roles">;
             }, {
@@ -132,6 +205,101 @@ export type PublicApiType = {
                 }>;
                 pageStatus?: "SplitRecommended" | "SplitRequired" | null;
                 splitCursor?: string | null;
+            }>;
+            removeRoleMembership: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"userRoles">;
+            }, {
+                id: Id<"userRoles">;
+            }>;
+            setUserStatus: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"users">;
+                status: "active" | "disabled";
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+            updateRole: FunctionReference<"mutation", "public", {
+                admin: boolean;
+                clientApiVersion: string;
+                description: string;
+                id: Id<"roles">;
+                name: string;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+            }>;
+            updateUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                email: string;
+                id: Id<"users">;
+                name: string;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
             }>;
         };
         roles: {

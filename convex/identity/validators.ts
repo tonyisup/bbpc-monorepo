@@ -3,6 +3,11 @@ import { v } from "convex/values";
 const nullableStringValidator = v.union(v.string(), v.null());
 const nullableNumberValidator = v.union(v.number(), v.null());
 
+export const identityUserStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("disabled"),
+);
+
 export const identityRoleValidator = v.object({
   id: v.id("roles"),
   legacyId: nullableNumberValidator,
@@ -31,7 +36,7 @@ export const identityAdminUserValidator = v.object({
   name: nullableStringValidator,
   email: nullableStringValidator,
   image: nullableStringValidator,
-  status: v.union(v.literal("active"), v.literal("disabled")),
+  status: identityUserStatusValidator,
   createdAt: v.number(),
   updatedAt: v.number(),
   isAdmin: v.boolean(),

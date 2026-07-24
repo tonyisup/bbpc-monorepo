@@ -7,14 +7,15 @@ import type {
   identityAdminUserValidator,
   identityRoleMembershipValidator,
 } from "./validators.js";
+import {
+  MAX_ROLES_PER_USER,
+  MAX_SYLLABUS_ENTRIES_PER_USER,
+} from "./limits.js";
 
 type AdminUser = Infer<typeof identityAdminUserValidator>;
 type RoleMembership = Infer<
   typeof identityRoleMembershipValidator
 >;
-
-const MAX_ROLES_PER_USER = 50;
-const MAX_SYLLABUS_ENTRIES_PER_USER = 100;
 
 export function toIdentityRole(role: Doc<"roles">) {
   return {

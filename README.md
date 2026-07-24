@@ -309,7 +309,16 @@ Role membership hydration is limited to 50 entries per user and syllabus hydrati
 100 entries per user; missing referenced roles or movies fail closed. Role summaries
 inspect at most 101 memberships and return a capped `userCount` plus
 `userCountIsExact`, so consumers never mistake a bounded count for an exact total.
-Identity writes remain a separately authorized mutation slice.
+
+Administrator mutations create and update normalized user profiles, switch users
+between `active` and `disabled`, create/update/delete unassigned roles, and assign or
+remove role memberships. The legacy hard user delete maps to `setUserStatus("disabled")`
+so authentication stops without orphaning domain history, Clerk links, or immutable
+audit evidence. Normalized email and role-name collisions fail transactionally, role
+permissions are derived from the admin flag, and changes that would remove the final
+active administrator are rejected. All identity mutations require administrator access,
+S3/S4 application writes, and the pinned client API version, and emit PII-free audit
+evidence.
 
 ## Package consumers
 

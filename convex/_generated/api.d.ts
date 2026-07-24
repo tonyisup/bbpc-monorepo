@@ -17,6 +17,8 @@ import type * as episodes_validators from "../episodes/validators.js";
 import type * as functions from "../functions.js";
 import type * as identity_access from "../identity/access.js";
 import type * as identity_admin from "../identity/admin.js";
+import type * as identity_adminWriteModel from "../identity/adminWriteModel.js";
+import type * as identity_limits from "../identity/limits.js";
 import type * as identity_profile from "../identity/profile.js";
 import type * as identity_readModel from "../identity/readModel.js";
 import type * as identity_roles from "../identity/roles.js";
@@ -71,6 +73,8 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   "identity/access": typeof identity_access;
   "identity/admin": typeof identity_admin;
+  "identity/adminWriteModel": typeof identity_adminWriteModel;
+  "identity/limits": typeof identity_limits;
   "identity/profile": typeof identity_profile;
   "identity/readModel": typeof identity_readModel;
   "identity/roles": typeof identity_roles;
