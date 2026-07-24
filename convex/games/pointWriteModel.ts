@@ -253,3 +253,50 @@ export async function assertPointRelationshipCapacity(
   }
   return relationships;
 }
+
+export async function deletePointAndClearRelationships(
+  ctx: PointWriteContext,
+  point: Doc<"points">,
+): Promise<{
+  assignmentLinkCount: number;
+  guessCount: number;
+  gamblingEntryCount: number;
+  tagVoteCount: number;
+  quoteSubmissionCount: number;
+}> {
+  const relationships = await assertPointRelationshipCapacity(
+    ctx,
+    point._id,
+  );
+  for (const link of relationships.assignmentLinks) {
+    await ctx.db.delete("assignmentPointLinks", link._id);
+  }
+  for (const guess of relationships.guesses) {
+    await ctx.db.patch("guesses", guess._id, {
+      pointId: undefined,
+    });
+  }
+  for (const entry of relationships.gamblingEntries) {
+    await ctx.db.patch("gamblingEntries", entry._id, {
+      awardPointId: undefined,
+    });
+  }
+  for (const vote of relationships.tagVotes) {
+    await ctx.db.patch("tagVotes", vote._id, {
+      award: { kind: "unawarded" },
+    });
+  }
+  for (const submission of relationships.quoteSubmissions) {
+    await ctx.db.patch("quoteSubmissions", submission._id, {
+      pointId: undefined,
+    });
+  }
+  await ctx.db.delete("points", point._id);
+  return {
+    assignmentLinkCount: relationships.assignmentLinks.length,
+    guessCount: relationships.guesses.length,
+    gamblingEntryCount: relationships.gamblingEntries.length,
+    tagVoteCount: relationships.tagVotes.length,
+    quoteSubmissionCount: relationships.quoteSubmissions.length,
+  };
+}

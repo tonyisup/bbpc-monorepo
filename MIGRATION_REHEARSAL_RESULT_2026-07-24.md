@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-224 Convex tests with 90.07% branch coverage. Owner-scoped episode audio metadata
+230 Convex tests with 90.05% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -143,8 +143,8 @@ review/guess deletion guards are exercised. Review coverage verifies Clerk-deriv
 self-service actors, exact movie/show target shape, assignment-derived movies,
 rating/user compound-index filters, native relationship pagination, explicit rating
 clear, bounded atomic review/assignment/extra/guess deletion semantics, relationship
-fanout failures, and concurrent extra submissions. Guess scoring and gambling remain
-outside this checkpoint as game-domain work.
+fanout failures, and concurrent extra submissions. Guess submission and award workflows
+are covered by the game-domain checkpoints below; gambling remains pending.
 The first game-application checkpoint is also covered synthetically. Anonymous
 current-season reads accept an explicit plain date instead of reading wall-clock time
 inside a query, choose the newest overlapping active season, ignore undated legacy
@@ -167,8 +167,20 @@ dedicated indexes and bounded fanout. Authenticated availability subtracts only 
 and locked wagers for the selected season, while anonymous current performance returns
 bounded chronological points and descending public-user totals. Broken relationships,
 budget inputs, access/write gates, aggregate arithmetic, overlapping season selection,
-and the full deletion cascade have regression coverage. The remaining guess, gambling,
-tag, quote, and ranking workflows remain in T10.
+and the full deletion cascade have regression coverage.
+Guess workflows are covered synthetically as the third game checkpoint. Authenticated
+submissions derive the user from Clerk, require a playable assignment whose episode is
+`next`, validate the nominated host through the assignment-review relationship, resolve
+the season from an explicit date, and idempotently update the one user/host-review row.
+Owner reads support one or a bounded distinct assignment set without cross-user
+disclosure. Administrator functions provide exact and native-paginated reads, direct
+and host-batched upserts, rating updates, validated point attachment, default or
+explicit point awards, and two intentional deletion modes: single-row deletion keeps
+the accounting event, while assignment/user cleanup removes award points only after
+their final guess reference disappears. Point user/season mismatches, locked rounds,
+invalid hosts, duplicate rows and batch inputs, missing canonical relationships,
+value-free audit records, shared awards, and orphan cleanup all have regression
+coverage. Gambling, tag, quote, and ranking workflows remain in T10.
 
 ## Preserved gate
 

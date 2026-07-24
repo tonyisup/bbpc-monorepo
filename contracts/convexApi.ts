@@ -3599,6 +3599,1378 @@ export type PublicApiType = {
         number
       >;
     };
+    guesses: {
+      awardPoint: FunctionReference<
+        "mutation",
+        "public",
+        {
+          adjustment: number;
+          clientApiVersion: string;
+          earnedAt?: number;
+          gamePointTypeId?: Id<"gamePointTypes">;
+          id: Id<"guesses">;
+          reason: string;
+        },
+        {
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      create: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentReviewId: Id<"assignmentReviews">;
+          clientApiVersion: string;
+          createdAt?: number;
+          ratingId: Id<"ratings">;
+          seasonId: Id<"seasons">;
+          userId: Id<"users">;
+        },
+        {
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      getById: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"guesses"> },
+        {
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        } | null
+      >;
+      listForAssignment: FunctionReference<
+        "query",
+        "public",
+        { assignmentId: Id<"assignments"> },
+        Array<{
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      listForUserPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          season:
+            | { kind: "all" }
+            | { kind: "current"; today: string }
+            | { kind: "season"; seasonId: Id<"seasons"> };
+          userId: Id<"users">;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assignmentReview: {
+              assignment: {
+                episode: {
+                  id: Id<"episodes">;
+                  number: number;
+                  slug: string | null;
+                  status: string | null;
+                  title: string;
+                };
+                id: Id<"assignments">;
+                playable: boolean;
+                type: string;
+              };
+              id: Id<"assignmentReviews">;
+              review: {
+                id: Id<"reviews">;
+                movie: {
+                  id: Id<"movies">;
+                  poster: string | null;
+                  title: string;
+                  tmdbId: number | null;
+                  url: string;
+                  year: number;
+                } | null;
+                rating: {
+                  category: string | null;
+                  icon: string | null;
+                  id: Id<"ratings">;
+                  name: string;
+                  sound: string | null;
+                  value: number;
+                } | null;
+                reviewedAt: number | null;
+                show: {
+                  id: Id<"shows">;
+                  poster: string | null;
+                  title: string;
+                  url: string;
+                  year: number;
+                } | null;
+                user: {
+                  id: Id<"users">;
+                  image: string | null;
+                  name: string | null;
+                  status: "active" | "disabled";
+                } | null;
+              };
+            };
+            createdAt: number;
+            id: Id<"guesses">;
+            point: {
+              adjustment: number | null;
+              earnedAt: number;
+              gamePointType: {
+                description: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+              } | null;
+              id: Id<"points">;
+              reason: string | null;
+              season: {
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+              };
+              total: number;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+              };
+            } | null;
+            rating: {
+              category: string | null;
+              icon: string | null;
+              id: Id<"ratings">;
+              name: string;
+              sound: string | null;
+              value: number;
+            };
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      mineForAssignment: FunctionReference<
+        "query",
+        "public",
+        { assignmentId: Id<"assignments"> },
+        Array<{
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      mineForAssignments: FunctionReference<
+        "query",
+        "public",
+        { assignmentIds: Array<Id<"assignments">> },
+        Array<{
+          assignmentId: Id<"assignments">;
+          guesses: Array<{
+            assignmentReview: {
+              assignment: {
+                episode: {
+                  id: Id<"episodes">;
+                  number: number;
+                  slug: string | null;
+                  status: string | null;
+                  title: string;
+                };
+                id: Id<"assignments">;
+                playable: boolean;
+                type: string;
+              };
+              id: Id<"assignmentReviews">;
+              review: {
+                id: Id<"reviews">;
+                movie: {
+                  id: Id<"movies">;
+                  poster: string | null;
+                  title: string;
+                  tmdbId: number | null;
+                  url: string;
+                  year: number;
+                } | null;
+                rating: {
+                  category: string | null;
+                  icon: string | null;
+                  id: Id<"ratings">;
+                  name: string;
+                  sound: string | null;
+                  value: number;
+                } | null;
+                reviewedAt: number | null;
+                show: {
+                  id: Id<"shows">;
+                  poster: string | null;
+                  title: string;
+                  url: string;
+                  year: number;
+                } | null;
+                user: {
+                  id: Id<"users">;
+                  image: string | null;
+                  name: string | null;
+                  status: "active" | "disabled";
+                } | null;
+              };
+            };
+            createdAt: number;
+            id: Id<"guesses">;
+            point: {
+              adjustment: number | null;
+              earnedAt: number;
+              gamePointType: {
+                description: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+              } | null;
+              id: Id<"points">;
+              reason: string | null;
+              season: {
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                  description: string | null;
+                  id: Id<"gameTypes">;
+                  lookupId: string;
+                  title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+              };
+              total: number;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+              };
+            } | null;
+            rating: {
+              category: string | null;
+              icon: string | null;
+              id: Id<"ratings">;
+              name: string;
+              sound: string | null;
+              value: number;
+            };
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+        }>
+      >;
+      remove: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"guesses"> },
+        { id: Id<"guesses"> }
+      >;
+      removeForAssignmentUser: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentId: Id<"assignments">;
+          clientApiVersion: string;
+          userId: Id<"users">;
+        },
+        { deletedGuesses: number; deletedPoints: number }
+      >;
+      setPoint: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          id: Id<"guesses">;
+          pointId: Id<"points"> | null;
+        },
+        {
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      submit: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentId: Id<"assignments">;
+          clientApiVersion: string;
+          createdAt?: number;
+          hostId: Id<"users">;
+          ratingId: Id<"ratings">;
+          today: string;
+        },
+        {
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      updateRating: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          id: Id<"guesses">;
+          ratingId: Id<"ratings">;
+        },
+        {
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }
+      >;
+      upsertForUser: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentId: Id<"assignments">;
+          clientApiVersion: string;
+          createdAt?: number;
+          guesses: Array<{ hostId: Id<"users">; ratingId: Id<"ratings"> }>;
+          today: string;
+          userId: Id<"users">;
+        },
+        Array<{
+          assignmentReview: {
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              type: string;
+            };
+            id: Id<"assignmentReviews">;
+            review: {
+              id: Id<"reviews">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              } | null;
+              rating: {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+              } | null;
+              reviewedAt: number | null;
+              show: {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+              } | null;
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              } | null;
+            };
+          };
+          createdAt: number;
+          id: Id<"guesses">;
+          point: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          rating: {
+            category: string | null;
+            icon: string | null;
+            id: Id<"ratings">;
+            name: string;
+            sound: string | null;
+            value: number;
+          };
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+    };
   };
 };
 export type InternalApiType = {};

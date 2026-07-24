@@ -356,6 +356,7 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
+    .index("by_userId_and_movieId", ["userId", "movieId"])
     .index("by_movieId", ["movieId"])
     .index("by_showId", ["showId"])
     .index("by_ratingId", ["ratingId"])
@@ -469,8 +470,17 @@ export default defineSchema({
     .index("by_legacyId", ["legacyId"])
     .index("by_ratingId", ["ratingId"])
     .index("by_userId", ["userId"])
+    .index("by_userId_and_seasonId_and_createdAt", [
+      "userId",
+      "seasonId",
+      "createdAt",
+    ])
     .index("by_assignmentReviewId", ["assignmentReviewId"])
     .index("by_seasonId", ["seasonId"])
+    .index("by_seasonId_and_createdAt", [
+      "seasonId",
+      "createdAt",
+    ])
     .index("by_pointId", ["pointId"])
     .index("by_userId_and_assignmentReviewId", [
       "userId",

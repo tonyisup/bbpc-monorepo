@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 
 import { assignmentDetailValidator } from "../assignments/validators.js";
+import { ratingValidator } from "../ratings/validators.js";
+import { assignmentReviewDetailValidator } from "../reviews/validators.js";
 
 const nullableStringValidator = v.union(v.string(), v.null());
 const nullableNumberValidator = v.union(v.number(), v.null());
@@ -138,4 +140,19 @@ export const currentPerformanceValidator = v.object({
   season: seasonValidator,
   userSummary: v.array(performanceUserValidator),
   points: v.array(performancePointValidator),
+});
+
+export const guessValidator = v.object({
+  id: v.id("guesses"),
+  createdAt: v.number(),
+  user: pointUserValidator,
+  rating: ratingValidator,
+  assignmentReview: assignmentReviewDetailValidator,
+  season: seasonValidator,
+  point: v.union(pointCoreValidator, v.null()),
+});
+
+export const assignmentGuessGroupValidator = v.object({
+  assignmentId: v.id("assignments"),
+  guesses: v.array(guessValidator),
 });

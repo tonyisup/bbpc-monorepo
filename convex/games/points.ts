@@ -24,7 +24,7 @@ import {
   pointValue,
 } from "./pointReadModel.js";
 import {
-  assertPointRelationshipCapacity,
+  deletePointAndClearRelationships,
   insertPoint,
   requireOptionalGamePointType,
   requirePoint,
@@ -615,50 +615,14 @@ export const remove = adminMutation({
   returns: v.object({ id: v.id("points") }),
   handler: async (ctx, args) => {
     const point = await requirePoint(ctx, args.id);
-    const relationships = await assertPointRelationshipCapacity(
-      ctx,
-      point._id,
-    );
-    for (const link of relationships.assignmentLinks) {
-      await ctx.db.delete("assignmentPointLinks", link._id);
-    }
-    for (const guess of relationships.guesses) {
-      await ctx.db.patch("guesses", guess._id, {
-        pointId: undefined,
-      });
-    }
-    for (const entry of relationships.gamblingEntries) {
-      await ctx.db.patch("gamblingEntries", entry._id, {
-        awardPointId: undefined,
-      });
-    }
-    for (const vote of relationships.tagVotes) {
-      await ctx.db.patch("tagVotes", vote._id, {
-        award: { kind: "unawarded" },
-      });
-    }
-    for (const submission of relationships.quoteSubmissions) {
-      await ctx.db.patch("quoteSubmissions", submission._id, {
-        pointId: undefined,
-      });
-    }
-    await ctx.db.delete("points", point._id);
+    const counts = await deletePointAndClearRelationships(ctx, point);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
       action: "games.admin.pointDeleted",
       targetType: "point",
       targetId: point._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
-      metadata: {
-        assignmentLinkCount:
-          relationships.assignmentLinks.length,
-        guessCount: relationships.guesses.length,
-        gamblingEntryCount:
-          relationships.gamblingEntries.length,
-        tagVoteCount: relationships.tagVotes.length,
-        quoteSubmissionCount:
-          relationships.quoteSubmissions.length,
-      },
+      metadata: counts,
     });
     return { id: point._id };
   },

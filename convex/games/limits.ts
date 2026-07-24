@@ -12,6 +12,10 @@ export const MAX_POINT_RELATIONSHIPS = 100;
 export const MAX_ASSIGNMENT_POINT_LINKS_FOR_TOTALS = 1000;
 export const MAX_ASSIGNMENTS_FOR_POINT_TOTALS = 25;
 export const MAX_USERS_FOR_POINT_TOTALS = 100;
+export const MAX_GUESS_PAGE_SIZE = 100;
+export const MAX_GUESSES_PER_ASSIGNMENT = 500;
+export const MAX_ASSIGNMENTS_FOR_GUESS_READ = 25;
+export const MAX_HOST_GUESSES_PER_BATCH = 25;
 
 export function validateSeasonPageSize(numItems: number): void {
   if (
@@ -35,6 +39,19 @@ export function validatePointPageSize(numItems: number): void {
     domainError(
       "VALIDATION_FAILED",
       `Point page size must be an integer from 1 through ${String(MAX_POINT_PAGE_SIZE)}.`,
+    );
+  }
+}
+
+export function validateGuessPageSize(numItems: number): void {
+  if (
+    !Number.isSafeInteger(numItems) ||
+    numItems < 1 ||
+    numItems > MAX_GUESS_PAGE_SIZE
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      `Guess page size must be an integer from 1 through ${String(MAX_GUESS_PAGE_SIZE)}.`,
     );
   }
 }
