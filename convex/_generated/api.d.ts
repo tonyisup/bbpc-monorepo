@@ -8,6 +8,11 @@
  * @module
  */
 
+import type * as assignments_admin from "../assignments/admin.js";
+import type * as assignments_limits from "../assignments/limits.js";
+import type * as assignments_readModel from "../assignments/readModel.js";
+import type * as assignments_validators from "../assignments/validators.js";
+import type * as assignments_writeModel from "../assignments/writeModel.js";
 import type * as catalog_admin from "../catalog/admin.js";
 import type * as catalog_external from "../catalog/external.js";
 import type * as catalog_operations from "../catalog/operations.js";
@@ -63,6 +68,12 @@ import type * as migration_reviews from "../migration/reviews.js";
 import type * as migration_runtime from "../migration/runtime.js";
 import type * as migration_scrub from "../migration/scrub.js";
 import type * as pipeline_status from "../pipeline/status.js";
+import type * as syllabus_admin from "../syllabus/admin.js";
+import type * as syllabus_limits from "../syllabus/limits.js";
+import type * as syllabus_mine from "../syllabus/mine.js";
+import type * as syllabus_readModel from "../syllabus/readModel.js";
+import type * as syllabus_validators from "../syllabus/validators.js";
+import type * as syllabus_writeModel from "../syllabus/writeModel.js";
 import type * as system_cutover from "../system/cutover.js";
 import type * as system_gate from "../system/gate.js";
 import type * as system_health from "../system/health.js";
@@ -74,6 +85,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "assignments/admin": typeof assignments_admin;
+  "assignments/limits": typeof assignments_limits;
+  "assignments/readModel": typeof assignments_readModel;
+  "assignments/validators": typeof assignments_validators;
+  "assignments/writeModel": typeof assignments_writeModel;
   "catalog/admin": typeof catalog_admin;
   "catalog/external": typeof catalog_external;
   "catalog/operations": typeof catalog_operations;
@@ -129,6 +145,12 @@ declare const fullApi: ApiFromModules<{
   "migration/runtime": typeof migration_runtime;
   "migration/scrub": typeof migration_scrub;
   "pipeline/status": typeof pipeline_status;
+  "syllabus/admin": typeof syllabus_admin;
+  "syllabus/limits": typeof syllabus_limits;
+  "syllabus/mine": typeof syllabus_mine;
+  "syllabus/readModel": typeof syllabus_readModel;
+  "syllabus/validators": typeof syllabus_validators;
+  "syllabus/writeModel": typeof syllabus_writeModel;
   "system/cutover": typeof system_cutover;
   "system/gate": typeof system_gate;
   "system/health": typeof system_health;

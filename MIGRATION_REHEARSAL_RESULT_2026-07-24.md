@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-192 Convex tests with 91.56% branch coverage. Owner-scoped episode audio metadata
+201 Convex tests with 90.96% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -129,6 +129,14 @@ without a write-state dependency, bounded search/page/result limits, typed movie
 mapping, timeouts, HTTP and rate-limit translation, missing configuration, invalid JSON,
 TMDB error envelopes, and malformed records. A real smoke call remains pending secret
 configuration.
+Assignment and syllabus application workflows are covered synthetically without
+changing the preserved S1 dataset. The suite verifies administrator and owner access
+classification, S3/API-version gates, legacy-compatible slug allocation and explicit
+slug updates, strict assignment types, indexed dependency-safe deletion, canonical
+pending-before-assigned syllabus order, all three insertion positions, complete-set
+reordering, owner isolation, note normalization, exact assignment reuse and missing-slug
+repair, indexed/native pagination, concurrent owner additions, and the 100-entry
+capacity. The regenerated shared package contract and its fixture consumer type-check.
 
 ## Preserved gate
 

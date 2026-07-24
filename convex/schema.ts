@@ -278,6 +278,11 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
+    .index("by_userId_and_movieId_and_episodeId", [
+      "userId",
+      "movieId",
+      "episodeId",
+    ])
     .index("by_episodeId", ["episodeId"])
     .index("by_movieId", ["movieId"])
     .index("by_slug", ["slug"])
@@ -322,6 +327,7 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId_and_order", ["userId", "order"])
+    .index("by_createdAt", ["createdAt"])
     .index("by_movieId", ["movieId"])
     .index("by_assignmentId", ["assignmentId"]),
 

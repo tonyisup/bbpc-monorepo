@@ -1434,5 +1434,569 @@ export type PublicApiType = {
       >;
     };
   };
+  assignments: {
+    admin: {
+      create: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          episodeId: Id<"episodes">;
+          movieId: Id<"movies">;
+          type: string;
+          userId: Id<"users">;
+        },
+        {
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            slug: string | null;
+            status: string | null;
+            title: string;
+          };
+          id: Id<"assignments">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          playable: boolean;
+          slug: string | null;
+          type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }
+      >;
+      getById: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"assignments"> },
+        {
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            slug: string | null;
+            status: string | null;
+            title: string;
+          };
+          id: Id<"assignments">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          playable: boolean;
+          slug: string | null;
+          type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        } | null
+      >;
+      listForEpisode: FunctionReference<
+        "query",
+        "public",
+        { episodeId: Id<"episodes"> },
+        Array<{
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            slug: string | null;
+            status: string | null;
+            title: string;
+          };
+          id: Id<"assignments">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          playable: boolean;
+          slug: string | null;
+          type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }>
+      >;
+      listPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      removeIfUnreferenced: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"assignments"> },
+        { id: Id<"assignments"> }
+      >;
+      setType: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"assignments">; type: string },
+        {
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            slug: string | null;
+            status: string | null;
+            title: string;
+          };
+          id: Id<"assignments">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          playable: boolean;
+          slug: string | null;
+          type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }
+      >;
+      updateSlug: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"assignments">; slug?: string },
+        {
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            slug: string | null;
+            status: string | null;
+            title: string;
+          };
+          id: Id<"assignments">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          playable: boolean;
+          slug: string | null;
+          type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }
+      >;
+    };
+  };
+  syllabus: {
+    admin: {
+      assignEpisode: FunctionReference<
+        "mutation",
+        "public",
+        {
+          assignmentType: string;
+          clientApiVersion: string;
+          episodeNumber: number;
+          syllabusId: Id<"syllabusEntries">;
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+          user: {
+            email: string | null;
+            id: Id<"users">;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }
+      >;
+      getById: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"syllabusEntries"> },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+          user: {
+            email: string | null;
+            id: Id<"users">;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        } | null
+      >;
+      listForUser: FunctionReference<
+        "query",
+        "public",
+        { userId: Id<"users"> },
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+          user: {
+            email: string | null;
+            id: Id<"users">;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }>
+      >;
+      listPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              playable: boolean;
+              slug: string | null;
+              type: string;
+            } | null;
+            createdAt: number;
+            id: Id<"syllabusEntries">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            notes: string | null;
+            order: number;
+            user: {
+              email: string | null;
+              id: Id<"users">;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      removeEntry: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"syllabusEntries"> },
+        { id: Id<"syllabusEntries"> }
+      >;
+      unlinkEpisode: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; syllabusId: Id<"syllabusEntries"> },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+          user: {
+            email: string | null;
+            id: Id<"users">;
+            name: string | null;
+            status: "active" | "disabled";
+          };
+        }
+      >;
+    };
+    mine: {
+      add: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          movieId: Id<"movies">;
+          position?: "TOP" | "AFTER_NEXT" | "END";
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+        }
+      >;
+      list: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+        }>
+      >;
+      remove: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"syllabusEntries"> },
+        { id: Id<"syllabusEntries"> }
+      >;
+      reorderPending: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          orderedPendingIds: Array<Id<"syllabusEntries">>;
+        },
+        { success: true }
+      >;
+      updateNotes: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          id: Id<"syllabusEntries">;
+          notes: string | null;
+        },
+        {
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            playable: boolean;
+            slug: string | null;
+            type: string;
+          } | null;
+          createdAt: number;
+          id: Id<"syllabusEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          notes: string | null;
+          order: number;
+        }
+      >;
+    };
+  };
 };
 export type InternalApiType = {};
