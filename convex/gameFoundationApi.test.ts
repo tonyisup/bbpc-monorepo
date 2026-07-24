@@ -618,19 +618,13 @@ describe("game foundation API", () => {
     ).resolves.toBeNull();
   });
 
-  test("returns authenticated prediction scoring for the WTFIR configuration", async () => {
+  test("returns public prediction scoring for the WTFIR configuration", async () => {
     const t = createTestBackend();
     await seedActors(t);
     await advanceToS3(t);
 
-    await expectDomainError(
-      t.query(api.games.public.predictionScoring, {}),
-      "AUTHENTICATION_REQUIRED",
-    );
     await expect(
-      t
-        .withIdentity(MEMBER_IDENTITY)
-        .query(api.games.public.predictionScoring, {}),
+      t.query(api.games.public.predictionScoring, {}),
     ).resolves.toEqual({
       correctHost: null,
       allCorrectBonus: null,
@@ -659,9 +653,7 @@ describe("game foundation API", () => {
     }
 
     await expect(
-      t
-        .withIdentity(MEMBER_IDENTITY)
-        .query(api.games.public.predictionScoring, {}),
+      t.query(api.games.public.predictionScoring, {}),
     ).resolves.toEqual({
       correctHost: 3,
       allCorrectBonus: 5,

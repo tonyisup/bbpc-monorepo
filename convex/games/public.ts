@@ -1,10 +1,7 @@
 import { v } from "convex/values";
 
 import type { Doc, Id } from "../_generated/dataModel.js";
-import {
-  anonymousQuery,
-  authenticatedQuery,
-} from "../functions.js";
+import { anonymousQuery } from "../functions.js";
 import {
   findCurrentSeason,
   hydrateSeason,
@@ -40,7 +37,7 @@ export const hasActiveSeason = anonymousQuery({
   },
 });
 
-export const predictionScoring = authenticatedQuery({
+export const predictionScoring = anonymousQuery({
   args: {},
   returns: predictionScoringValidator,
   handler: async (ctx) => {
