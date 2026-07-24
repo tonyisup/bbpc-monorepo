@@ -73,10 +73,33 @@ export const episodeDetailValidator = v.object({
   links: v.array(episodeLinkValidator),
 });
 
-export const episodeAdminDetailValidator =
-  episodeDetailValidator.extend({
-    notes: nullableStringValidator,
-    seoDescription: nullableStringValidator,
-    seoKeywords: nullableStringValidator,
-    seoTitle: nullableStringValidator,
-  });
+export const episodeAdminDetailValidator = episodeDetailValidator.extend({
+  notes: nullableStringValidator,
+  seoDescription: nullableStringValidator,
+  seoKeywords: nullableStringValidator,
+  seoTitle: nullableStringValidator,
+});
+
+export const episodeResultsValidator = v.object({
+  gamblingWinners: v.array(
+    v.object({
+      id: v.id("gamblingEntries"),
+      user: episodeUserValidator,
+      points: v.number(),
+      gamblingType: v.object({
+        title: v.string(),
+        multiplier: v.number(),
+      }),
+      movie: catalogMovieValidator,
+    }),
+  ),
+  guessWinners: v.array(
+    v.object({
+      id: v.id("guesses"),
+      user: episodeUserValidator,
+      host: episodeUserValidator,
+      actualRating: v.number(),
+      movie: catalogMovieValidator,
+    }),
+  ),
+});

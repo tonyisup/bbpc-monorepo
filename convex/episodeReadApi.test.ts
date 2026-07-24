@@ -50,21 +50,14 @@ async function seedEpisode(
       number: options.number,
       title: options.title ?? `Episode ${String(options.number)}`,
       ...(options.date === undefined ? {} : { date: options.date }),
-      ...(options.status === undefined
-        ? {}
-        : { status: options.status }),
+      ...(options.status === undefined ? {} : { status: options.status }),
       ...(options.slug === undefined
         ? {}
         : {
             slug: options.slug,
-            normalizedSlug: options.slug
-              .trim()
-              .normalize("NFKC")
-              .toLowerCase(),
+            normalizedSlug: options.slug.trim().normalize("NFKC").toLowerCase(),
           }),
-      ...(options.legacyId === undefined
-        ? {}
-        : { legacyId: options.legacyId }),
+      ...(options.legacyId === undefined ? {} : { legacyId: options.legacyId }),
       ...(options.withGraph === true
         ? {
             recording: "https://audio.example/episode.mp3",
@@ -120,11 +113,7 @@ async function seedEpisode(
       showId,
     });
     const emptyReviewId = await ctx.db.insert("reviews", {});
-    for (const reviewId of [
-      movieReviewId,
-      showReviewId,
-      emptyReviewId,
-    ]) {
+    for (const reviewId of [movieReviewId, showReviewId, emptyReviewId]) {
       await ctx.db.insert("extraReviews", {
         episodeId,
         reviewId,
@@ -155,10 +144,9 @@ describe("public episode read API", () => {
       status: "Published",
     });
 
-    const result = await t.query(
-      api.episodes.public.latestPublished,
-      { onOrBefore: "2026-12-31" },
-    );
+    const result = await t.query(api.episodes.public.latestPublished, {
+      onOrBefore: "2026-12-31",
+    });
 
     expect(result).toMatchObject({
       id: expectedId,
@@ -281,10 +269,7 @@ describe("public episode read API", () => {
       status: "recording",
     });
     await expect(
-      recordingOnly.query(
-        api.episodes.public.nextScheduled,
-        {},
-      ),
+      recordingOnly.query(api.episodes.public.nextScheduled, {}),
     ).resolves.toMatchObject({ id: recordingId });
 
     const nextOnly = createTestBackend();
@@ -398,10 +383,10 @@ describe("public episode read API", () => {
       }
     });
 
-    const result = await t.query(
-      api.episodes.public.search,
-      { query: "  ＭＡＴＲＩＸ  ", limit: 10 },
-    );
+    const result = await t.query(api.episodes.public.search, {
+      query: "  ＭＡＴＲＩＸ  ",
+      limit: 10,
+    });
 
     expect(result.map((episode) => episode.id)).toEqual([
       assignmentId,
@@ -470,26 +455,18 @@ describe("public episode read API", () => {
       date: "2026-02-01",
     });
 
-    const firstPage = await t.query(
-      api.episodes.public.listPage,
-      {
-        paginationOpts: { cursor: null, numItems: 1 },
-      },
-    );
-    expect(firstPage.page).toEqual([
-      expect.objectContaining({ id: newestId }),
-    ]);
+    const firstPage = await t.query(api.episodes.public.listPage, {
+      paginationOpts: { cursor: null, numItems: 1 },
+    });
+    expect(firstPage.page).toEqual([expect.objectContaining({ id: newestId })]);
     expect(firstPage.isDone).toBe(false);
 
-    const secondPage = await t.query(
-      api.episodes.public.listPage,
-      {
-        paginationOpts: {
-          cursor: firstPage.continueCursor,
-          numItems: 1,
-        },
+    const secondPage = await t.query(api.episodes.public.listPage, {
+      paginationOpts: {
+        cursor: firstPage.continueCursor,
+        numItems: 1,
       },
-    );
+    });
     expect(secondPage.page).toHaveLength(1);
     expect(secondPage.page[0]?.number).toBe(1);
   });
@@ -504,9 +481,7 @@ describe("public episode read API", () => {
     await t.run(async (ctx) => {
       const assignment = await ctx.db
         .query("assignments")
-        .withIndex("by_episodeId", (query) =>
-          query.eq("episodeId", episodeId),
-        )
+        .withIndex("by_episodeId", (query) => query.eq("episodeId", episodeId))
         .unique();
       if (assignment === null) {
         throw new Error("Synthetic assignment missing");
@@ -541,6 +516,266 @@ describe("public episode read API", () => {
     await expectDomainError(
       t.query(api.episodes.public.getBySlug, {
         slug: "too-many-links",
+      }),
+      "CONFLICT",
+    );
+  });
+
+  test("returns only bounded public episode winners", async () => {
+    const t = createTestBackend();
+    const episodeId = await seedEpisode(t, {
+      number: 12,
+      slug: "episode-results",
+    });
+    const expected = await t.run(async (ctx) => {
+      const hostId = await ctx.db.insert("users", {
+        name: "Host",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const winnerId = await ctx.db.insert("users", {
+        name: "Winner",
+        email: "winner@example.test",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const movieId = await ctx.db.insert("movies", {
+        title: "Results Movie",
+        normalizedTitle: "results movie",
+        year: 2026,
+        url: "https://movies.example/results",
+      });
+      const assignmentId = await ctx.db.insert("assignments", {
+        episodeId,
+        userId: hostId,
+        movieId,
+        type: "HOMEWORK",
+        playable: true,
+      });
+      const correctRatingId = await ctx.db.insert("ratings", {
+        name: "Correct",
+        value: 4,
+      });
+      const wrongRatingId = await ctx.db.insert("ratings", {
+        name: "Wrong",
+        value: 2,
+      });
+      const reviewId = await ctx.db.insert("reviews", {
+        userId: hostId,
+        movieId,
+        ratingId: correctRatingId,
+      });
+      const assignmentReviewId = await ctx.db.insert("assignmentReviews", {
+        assignmentId,
+        reviewId,
+      });
+      const gameTypeId = await ctx.db.insert("gameTypes", {
+        title: "Predictions",
+        description: "Synthetic",
+        lookupId: "predictions",
+        normalizedLookupId: "predictions",
+      });
+      const seasonId = await ctx.db.insert("seasons", {
+        title: "Season",
+        gameTypeId,
+      });
+      const winningGuessId = await ctx.db.insert("guesses", {
+        ratingId: correctRatingId,
+        createdAt: 1,
+        userId: winnerId,
+        assignmentReviewId,
+        seasonId,
+      });
+      await ctx.db.insert("guesses", {
+        ratingId: wrongRatingId,
+        createdAt: 2,
+        userId: winnerId,
+        assignmentReviewId,
+        seasonId,
+      });
+      const gamblingTypeId = await ctx.db.insert("gamblingTypes", {
+        lookupId: "default",
+        normalizedLookupId: "default",
+        title: "Default",
+        multiplier: 2,
+        isActive: true,
+        createdAt: 1,
+      });
+      const gamblingWinnerId = await ctx.db.insert("gamblingEntries", {
+        userId: winnerId,
+        assignmentId,
+        points: 5,
+        createdAt: 1,
+        gamblingTypeId,
+        status: "won",
+      });
+      await ctx.db.insert("gamblingEntries", {
+        userId: winnerId,
+        assignmentId,
+        points: 7,
+        createdAt: 2,
+        gamblingTypeId,
+        status: "lost",
+      });
+      return {
+        gamblingWinnerId,
+        hostId,
+        movieId,
+        winnerId,
+        winningGuessId,
+      };
+    });
+
+    const result = await t.query(api.episodes.public.results, { episodeId });
+
+    expect(result).toEqual({
+      gamblingWinners: [
+        {
+          id: expected.gamblingWinnerId,
+          user: {
+            id: expected.winnerId,
+            name: "Winner",
+            image: null,
+          },
+          points: 5,
+          gamblingType: {
+            title: "Default",
+            multiplier: 2,
+          },
+          movie: {
+            id: expected.movieId,
+            title: "Results Movie",
+            year: 2026,
+            poster: null,
+            url: "https://movies.example/results",
+            tmdbId: null,
+          },
+        },
+      ],
+      guessWinners: [
+        {
+          id: expected.winningGuessId,
+          user: {
+            id: expected.winnerId,
+            name: "Winner",
+            image: null,
+          },
+          host: {
+            id: expected.hostId,
+            name: "Host",
+            image: null,
+          },
+          actualRating: 4,
+          movie: {
+            id: expected.movieId,
+            title: "Results Movie",
+            year: 2026,
+            poster: null,
+            url: "https://movies.example/results",
+            tmdbId: null,
+          },
+        },
+      ],
+    });
+    expect(Object.keys(result.gamblingWinners[0]?.user ?? {})).not.toContain(
+      "email",
+    );
+  });
+
+  test("fails closed when public episode results are corrupt or oversized", async () => {
+    const missingUser = createTestBackend();
+    const missingUserEpisodeId = await seedEpisode(missingUser, { number: 13 });
+    await missingUser.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const movieId = await ctx.db.insert("movies", {
+        title: "Missing User Movie",
+        normalizedTitle: "missing user movie",
+        year: 2026,
+        url: "https://movies.example/missing-user",
+      });
+      const assignmentId = await ctx.db.insert("assignments", {
+        episodeId: missingUserEpisodeId,
+        userId,
+        movieId,
+        type: "HOMEWORK",
+        playable: true,
+      });
+      const gamblingTypeId = await ctx.db.insert("gamblingTypes", {
+        lookupId: "default",
+        normalizedLookupId: "default",
+        title: "Default",
+        multiplier: 2,
+        isActive: true,
+        createdAt: 1,
+      });
+      await ctx.db.insert("gamblingEntries", {
+        userId,
+        assignmentId,
+        points: 1,
+        createdAt: 1,
+        gamblingTypeId,
+        status: "won",
+      });
+      await ctx.db.delete("users", userId);
+    });
+    await expectDomainError(
+      missingUser.query(api.episodes.public.results, {
+        episodeId: missingUserEpisodeId,
+      }),
+      "CONFLICT",
+    );
+
+    const oversized = createTestBackend();
+    const oversizedEpisodeId = await seedEpisode(oversized, {
+      number: 14,
+    });
+    await oversized.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const movieId = await ctx.db.insert("movies", {
+        title: "Oversized Movie",
+        normalizedTitle: "oversized movie",
+        year: 2026,
+        url: "https://movies.example/oversized",
+      });
+      const assignmentId = await ctx.db.insert("assignments", {
+        episodeId: oversizedEpisodeId,
+        userId,
+        movieId,
+        type: "HOMEWORK",
+        playable: true,
+      });
+      const gamblingTypeId = await ctx.db.insert("gamblingTypes", {
+        lookupId: "default",
+        normalizedLookupId: "default",
+        title: "Default",
+        multiplier: 2,
+        isActive: true,
+        createdAt: 1,
+      });
+      for (let index = 0; index < 51; index += 1) {
+        await ctx.db.insert("gamblingEntries", {
+          userId,
+          assignmentId,
+          points: index,
+          createdAt: index,
+          gamblingTypeId,
+          status: "won",
+        });
+      }
+    });
+    await expectDomainError(
+      oversized.query(api.episodes.public.results, {
+        episodeId: oversizedEpisodeId,
       }),
       "CONFLICT",
     );

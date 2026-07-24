@@ -272,12 +272,17 @@ The first consumer-facing domain slice exposes anonymous, read-only episode func
 - `episodes.public.getByLegacyId` supports the temporary SQL-UUID adapter path;
 - `episodes.public.search` performs bounded full-text matching across episode and
   assigned-movie titles, de-duplicates canonical IDs, and preserves date-desc order; and
-- `episodes.public.listPage` passes native Convex pagination options through unchanged.
+- `episodes.public.listPage` passes native Convex pagination options through unchanged;
+  and
+- `episodes.public.results` returns only the public winning-gamble and correct-guess
+  fields needed by an episode page, with independent 50-row assignment, review, guess,
+  and winner limits.
 
 The shared episode DTO contains the episode display fields, assignments, public user
 name/image, movies, extras, shows, and links needed by the primary site. It deliberately
 limits users to public name/image fields; the prior broad Prisma include also returned
-identity fields such as email. Relationship fanout is bounded and missing canonical
+identity fields such as email. The results DTO similarly omits notes, emails, losing
+wagers, and incorrect guesses. Relationship fanout is bounded and missing canonical
 parents fail closed instead of returning a partial graph.
 
 Authenticated episode audio operations replace the primary app's owner-scoped Prisma

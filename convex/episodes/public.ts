@@ -11,15 +11,16 @@ import {
   preparePublicSearchQuery,
   requirePublicSearchLimit,
 } from "../lib/publicSearch.js";
+import { readEpisodeResults } from "./publicResults.js";
 import { hydrateEpisode } from "./readModel.js";
-import { episodeDetailValidator } from "./validators.js";
+import {
+  episodeDetailValidator,
+  episodeResultsValidator,
+} from "./validators.js";
 
 function requirePlainDate(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
-    domainError(
-      "VALIDATION_FAILED",
-      "onOrBefore must use YYYY-MM-DD format.",
-    );
+    domainError("VALIDATION_FAILED", "onOrBefore must use YYYY-MM-DD format.");
   }
   const parsed = new Date(`${value}T00:00:00.000Z`);
   if (
@@ -39,38 +40,30 @@ export const latestPublished = anonymousQuery({
   returns: v.union(episodeDetailValidator, v.null()),
   handler: async (ctx, args) => {
     const onOrBefore = requirePlainDate(args.onOrBefore);
-    const [lowercasePublished, titleCasePublished] =
-      await Promise.all([
-        ctx.db
-          .query("episodes")
-          .withIndex("by_status_and_date", (query) =>
-            query
-              .eq("status", "published")
-              .lte("date", onOrBefore),
-          )
-          .order("desc")
-          .first(),
-        ctx.db
-          .query("episodes")
-          .withIndex("by_status_and_date", (query) =>
-            query
-              .eq("status", "Published")
-              .lte("date", onOrBefore),
-          )
-          .order("desc")
-          .first(),
-      ]);
+    const [lowercasePublished, titleCasePublished] = await Promise.all([
+      ctx.db
+        .query("episodes")
+        .withIndex("by_status_and_date", (query) =>
+          query.eq("status", "published").lte("date", onOrBefore),
+        )
+        .order("desc")
+        .first(),
+      ctx.db
+        .query("episodes")
+        .withIndex("by_status_and_date", (query) =>
+          query.eq("status", "Published").lte("date", onOrBefore),
+        )
+        .order("desc")
+        .first(),
+    ]);
     const episode =
       lowercasePublished === null
         ? titleCasePublished
         : titleCasePublished === null ||
-            (lowercasePublished.date ?? "") >=
-              (titleCasePublished.date ?? "")
+            (lowercasePublished.date ?? "") >= (titleCasePublished.date ?? "")
           ? lowercasePublished
           : titleCasePublished;
-    return episode === null
-      ? null
-      : await hydrateEpisode(ctx, episode);
+    return episode === null ? null : await hydrateEpisode(ctx, episode);
   },
 });
 
@@ -101,9 +94,7 @@ export const nextScheduled = anonymousQuery({
             nextEpisode.number >= recordingEpisode.number
           ? nextEpisode
           : recordingEpisode;
-    return episode === null
-      ? null
-      : await hydrateEpisode(ctx, episode);
+    return episode === null ? null : await hydrateEpisode(ctx, episode);
   },
 });
 
@@ -111,19 +102,14 @@ export const getBySlug = anonymousQuery({
   args: { slug: v.string() },
   returns: v.union(episodeDetailValidator, v.null()),
   handler: async (ctx, args) => {
-    const normalizedSlug = normalizeLookupKey(
-      args.slug,
-      "Episode slug",
-    );
+    const normalizedSlug = normalizeLookupKey(args.slug, "Episode slug");
     const episode = await ctx.db
       .query("episodes")
       .withIndex("by_normalizedSlug", (query) =>
         query.eq("normalizedSlug", normalizedSlug),
       )
       .unique();
-    return episode === null
-      ? null
-      : await hydrateEpisode(ctx, episode);
+    return episode === null ? null : await hydrateEpisode(ctx, episode);
   },
 });
 
@@ -131,20 +117,19 @@ export const getByLegacyId = anonymousQuery({
   args: { legacyId: v.string() },
   returns: v.union(episodeDetailValidator, v.null()),
   handler: async (ctx, args) => {
-    const legacyId = normalizeLookupKey(
-      args.legacyId,
-      "Episode legacy ID",
-    );
+    const legacyId = normalizeLookupKey(args.legacyId, "Episode legacy ID");
     const episode = await ctx.db
       .query("episodes")
-      .withIndex("by_legacyId", (query) =>
-        query.eq("legacyId", legacyId),
-      )
+      .withIndex("by_legacyId", (query) => query.eq("legacyId", legacyId))
       .unique();
-    return episode === null
-      ? null
-      : await hydrateEpisode(ctx, episode);
+    return episode === null ? null : await hydrateEpisode(ctx, episode);
   },
+});
+
+export const results = anonymousQuery({
+  args: { episodeId: v.id("episodes") },
+  returns: episodeResultsValidator,
+  handler: async (ctx, args) => await readEpisodeResults(ctx, args.episodeId),
 });
 
 export const search = anonymousQuery({
@@ -176,15 +161,10 @@ export const search = anonymousQuery({
     for (const movie of movieMatches) {
       const assignments = await ctx.db
         .query("assignments")
-        .withIndex("by_movieId", (index) =>
-          index.eq("movieId", movie._id),
-        )
+        .withIndex("by_movieId", (index) => index.eq("movieId", movie._id))
         .take(limit);
       for (const assignment of assignments) {
-        const episode = await ctx.db.get(
-          "episodes",
-          assignment.episodeId,
-        );
+        const episode = await ctx.db.get("episodes", assignment.episodeId);
         if (episode === null) {
           domainError(
             "CONFLICT",
@@ -226,9 +206,7 @@ export const listPage = anonymousQuery({
     return {
       ...result,
       page: await Promise.all(
-        result.page.map((episode) =>
-          hydrateEpisode(ctx, episode),
-        ),
+        result.page.map((episode) => hydrateEpisode(ctx, episode)),
       ),
     };
   },

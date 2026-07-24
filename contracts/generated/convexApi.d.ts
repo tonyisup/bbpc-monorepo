@@ -673,6 +673,53 @@ export type PublicApiType = {
                 status: string | null;
                 title: string;
             } | null>;
+            results: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+            }, {
+                gamblingWinners: Array<{
+                    gamblingType: {
+                        multiplier: number;
+                        title: string;
+                    };
+                    id: Id<"gamblingEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    points: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                guessWinners: Array<{
+                    actualRating: number;
+                    host: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                    id: Id<"guesses">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+            }>;
             search: FunctionReference<"query", "public", {
                 limit: number;
                 query: string;
