@@ -218,7 +218,12 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_episodeId", ["episodeId"])
-    .index("by_userId", ["userId"]),
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_episodeId_and_createdAt", [
+      "userId",
+      "episodeId",
+      "createdAt",
+    ]),
 
   movies: defineTable({
     legacyId: v.optional(v.string()),

@@ -10,6 +10,7 @@
 
 import type * as catalog_public from "../catalog/public.js";
 import type * as catalog_validators from "../catalog/validators.js";
+import type * as episodes_audio from "../episodes/audio.js";
 import type * as episodes_public from "../episodes/public.js";
 import type * as episodes_readModel from "../episodes/readModel.js";
 import type * as episodes_validators from "../episodes/validators.js";
@@ -59,6 +60,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "catalog/public": typeof catalog_public;
   "catalog/validators": typeof catalog_validators;
+  "episodes/audio": typeof episodes_audio;
   "episodes/public": typeof episodes_public;
   "episodes/readModel": typeof episodes_readModel;
   "episodes/validators": typeof episodes_validators;

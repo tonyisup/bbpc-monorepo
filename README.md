@@ -277,6 +277,13 @@ limits users to public name/image fields; the prior broad Prisma include also re
 identity fields such as email. Relationship fanout is bounded and missing canonical
 parents fail closed instead of returning a partial graph.
 
+Authenticated episode audio operations replace the primary app's owner-scoped Prisma
+routes. `episodes.audio.listMine` uses native pagination over a compound
+user/episode/created-at index, and `usageForEpisode` enforces the bounded 50-message
+domain cap. `updateMine` and `deleteMine` derive ownership from Clerk identity, return
+the same `NOT_FOUND` result for absent and non-owned rows, require S3 plus the pinned
+client API version, and write cutover-scoped audit evidence.
+
 ## Public catalog read API
 
 The local catalog read slice exposes anonymous exact-ID reads, bounded full-text title

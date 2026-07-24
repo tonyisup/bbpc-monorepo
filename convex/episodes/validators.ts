@@ -37,6 +37,15 @@ export const episodeLinkValidator = v.object({
   text: v.string(),
 });
 
+export const episodeAudioMessageValidator = v.object({
+  id: v.id("episodeAudioMessages"),
+  url: v.string(),
+  createdAt: v.number(),
+  fileKey: nullableStringValidator,
+  episodeId: v.union(v.id("episodes"), v.null()),
+  notes: nullableStringValidator,
+});
+
 export const episodeDetailValidator = v.object({
   id: v.id("episodes"),
   number: v.number(),

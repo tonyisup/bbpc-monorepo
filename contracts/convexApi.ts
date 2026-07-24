@@ -448,6 +448,68 @@ export type PublicApiType = {
         }>
       >;
     };
+    audio: {
+      deleteMine: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"episodeAudioMessages"> },
+        { id: Id<"episodeAudioMessages"> }
+      >;
+      listMine: FunctionReference<
+        "query",
+        "public",
+        {
+          episodeId: Id<"episodes">;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            createdAt: number;
+            episodeId: Id<"episodes"> | null;
+            fileKey: string | null;
+            id: Id<"episodeAudioMessages">;
+            notes: string | null;
+            url: string;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      updateMine: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          episodeId: Id<"episodes">;
+          fileKey: string;
+          id: Id<"episodeAudioMessages">;
+          notes?: string;
+        },
+        {
+          createdAt: number;
+          episodeId: Id<"episodes"> | null;
+          fileKey: string | null;
+          id: Id<"episodeAudioMessages">;
+          notes: string | null;
+          url: string;
+        }
+      >;
+      usageForEpisode: FunctionReference<
+        "query",
+        "public",
+        { episodeId: Id<"episodes"> },
+        { canUpload: boolean; count: number; limit: number }
+      >;
+    };
   };
   catalog: {
     public: {

@@ -103,7 +103,9 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-134 Convex tests with 90.23% branch coverage.
+142 Convex tests with 90.24% branch coverage. Owner-scoped episode audio metadata
+operations are covered synthetically because the preserved S1 rehearsal intentionally
+keeps application mutations disabled and contains no linked Clerk identities.
 
 ## Preserved gate
 
