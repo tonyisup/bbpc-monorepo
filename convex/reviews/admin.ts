@@ -317,7 +317,16 @@ export const setRating = adminMutation({
 });
 
 export const remove = adminMutation({
-  args: { id: v.id("reviews") },
+  args: {
+    id: v.id("reviews"),
+    expectedImpact: v.optional(
+      v.object({
+        assignmentReviewCount: v.number(),
+        extraReviewCount: v.number(),
+        guessCount: v.number(),
+      }),
+    ),
+  },
   returns: v.object({
     id: v.id("reviews"),
     assignmentReviewCount: v.number(),
@@ -326,6 +335,22 @@ export const remove = adminMutation({
   }),
   handler: async (ctx, args) => {
     const review = await requireReview(ctx, args.id);
+    if (args.expectedImpact !== undefined) {
+      const actualImpact = await readReviewCascadeImpact(ctx, review);
+      if (
+        actualImpact.assignmentReviewCount !==
+          args.expectedImpact.assignmentReviewCount ||
+        actualImpact.extraReviewCount !==
+          args.expectedImpact.extraReviewCount ||
+        actualImpact.guessCount !== args.expectedImpact.guessCount
+      ) {
+        domainError(
+          "CONFLICT",
+          "The review deletion impact changed after confirmation.",
+          { details: { ...actualImpact } },
+        );
+      }
+    }
     const counts = await deleteReviewCascade(ctx, review);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,

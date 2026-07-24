@@ -888,12 +888,37 @@ describe("rating and review API", () => {
       extraReviewCount: 1,
       guessCount: 1,
     });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.reviews.admin.remove,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: reviewId,
+          expectedImpact: {
+            assignmentReviewCount: 1,
+            extraReviewCount: 1,
+            guessCount: 0,
+          },
+        },
+      ),
+      "CONFLICT",
+      {
+        assignmentReviewCount: 1,
+        extraReviewCount: 1,
+        guessCount: 1,
+      },
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.reviews.admin.remove,
         {
           clientApiVersion: BBPC_API_VERSION,
           id: reviewId,
+          expectedImpact: {
+            assignmentReviewCount: 1,
+            extraReviewCount: 1,
+            guessCount: 1,
+          },
         },
       ),
     ).resolves.toEqual({
