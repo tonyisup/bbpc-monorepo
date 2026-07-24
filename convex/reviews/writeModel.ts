@@ -1,5 +1,5 @@
 import type { Doc, Id } from "../_generated/dataModel.js";
-import type { MutationCtx } from "../_generated/server.js";
+import type { MutationCtx, QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
 import {
   MAX_GUESSES_PER_REVIEW_DELETE,
@@ -7,9 +7,78 @@ import {
 } from "./limits.js";
 
 type ReviewWriteContext = Pick<MutationCtx, "db">;
+type ReviewReadContext = Pick<QueryCtx, "db">;
+
+interface ReviewCascadeImpact {
+  assignmentReviewCount: number;
+  extraReviewCount: number;
+  guessCount: number;
+}
+
+async function loadReviewCascade(
+  ctx: ReviewReadContext,
+  review: Doc<"reviews">,
+) {
+  const [assignmentReviews, extraReviews] = await Promise.all([
+    ctx.db
+      .query("assignmentReviews")
+      .withIndex("by_reviewId", (index) =>
+        index.eq("reviewId", review._id),
+      )
+      .take(MAX_REVIEW_RELATIONSHIPS + 1),
+    ctx.db
+      .query("extraReviews")
+      .withIndex("by_reviewId", (index) =>
+        index.eq("reviewId", review._id),
+      )
+      .take(MAX_REVIEW_RELATIONSHIPS + 1),
+  ]);
+  if (
+    assignmentReviews.length > MAX_REVIEW_RELATIONSHIPS ||
+    extraReviews.length > MAX_REVIEW_RELATIONSHIPS
+  ) {
+    domainError(
+      "CONFLICT",
+      "Review relationships exceed the bounded deletion limit.",
+      { details: { limit: MAX_REVIEW_RELATIONSHIPS } },
+    );
+  }
+  const guesses: Array<Doc<"guesses">> = [];
+  for (const link of assignmentReviews) {
+    const remaining = MAX_GUESSES_PER_REVIEW_DELETE - guesses.length;
+    const linkGuesses = await ctx.db
+      .query("guesses")
+      .withIndex("by_assignmentReviewId", (index) =>
+        index.eq("assignmentReviewId", link._id),
+      )
+      .take(remaining + 1);
+    if (linkGuesses.length > remaining) {
+      domainError(
+        "CONFLICT",
+        "Review guesses exceed the bounded deletion limit.",
+        { details: { limit: MAX_GUESSES_PER_REVIEW_DELETE } },
+      );
+    }
+    guesses.push(...linkGuesses);
+  }
+  return { assignmentReviews, extraReviews, guesses };
+}
+
+export async function readReviewCascadeImpact(
+  ctx: ReviewReadContext,
+  review: Doc<"reviews">,
+): Promise<ReviewCascadeImpact> {
+  const { assignmentReviews, extraReviews, guesses } =
+    await loadReviewCascade(ctx, review);
+  return {
+    assignmentReviewCount: assignmentReviews.length,
+    extraReviewCount: extraReviews.length,
+    guessCount: guesses.length,
+  };
+}
 
 export async function requireReview(
-  ctx: ReviewWriteContext,
+  ctx: ReviewReadContext,
   id: Id<"reviews">,
 ): Promise<Doc<"reviews">> {
   const review = await ctx.db.get("reviews", id);
@@ -112,48 +181,8 @@ export async function deleteReviewCascade(
   extraReviewCount: number;
   guessCount: number;
 }> {
-  const [assignmentReviews, extraReviews] = await Promise.all([
-    ctx.db
-      .query("assignmentReviews")
-      .withIndex("by_reviewId", (index) =>
-        index.eq("reviewId", review._id),
-      )
-      .take(MAX_REVIEW_RELATIONSHIPS + 1),
-    ctx.db
-      .query("extraReviews")
-      .withIndex("by_reviewId", (index) =>
-        index.eq("reviewId", review._id),
-      )
-      .take(MAX_REVIEW_RELATIONSHIPS + 1),
-  ]);
-  if (
-    assignmentReviews.length > MAX_REVIEW_RELATIONSHIPS ||
-    extraReviews.length > MAX_REVIEW_RELATIONSHIPS
-  ) {
-    domainError(
-      "CONFLICT",
-      "Review relationships exceed the bounded deletion limit.",
-      { details: { limit: MAX_REVIEW_RELATIONSHIPS } },
-    );
-  }
-  const guesses: Array<Doc<"guesses">> = [];
-  for (const link of assignmentReviews) {
-    const remaining = MAX_GUESSES_PER_REVIEW_DELETE - guesses.length;
-    const linkGuesses = await ctx.db
-      .query("guesses")
-      .withIndex("by_assignmentReviewId", (index) =>
-        index.eq("assignmentReviewId", link._id),
-      )
-      .take(remaining + 1);
-    if (linkGuesses.length > remaining) {
-      domainError(
-        "CONFLICT",
-        "Review guesses exceed the bounded deletion limit.",
-        { details: { limit: MAX_GUESSES_PER_REVIEW_DELETE } },
-      );
-    }
-    guesses.push(...linkGuesses);
-  }
+  const { assignmentReviews, extraReviews, guesses } =
+    await loadReviewCascade(ctx, review);
   for (const guess of guesses) {
     await ctx.db.delete("guesses", guess._id);
   }

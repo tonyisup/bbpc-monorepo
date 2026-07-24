@@ -22,6 +22,7 @@ import {
 import {
   createReview,
   deleteReviewCascade,
+  readReviewCascadeImpact,
   requireAssignment,
   requireAssignmentReview,
   requireEpisode,
@@ -43,13 +44,41 @@ export const listPage = adminQuery({
   args: {
     paginationOpts: paginationOptsValidator,
     ratingId: v.optional(v.id("ratings")),
+    unrated: v.optional(v.boolean()),
     userId: v.optional(v.id("users")),
   },
   returns: paginationResultValidator(reviewDetailValidator),
   handler: async (ctx, args) => {
     validateReviewPageSize(args.paginationOpts.numItems);
+    if (args.unrated === true && args.ratingId !== undefined) {
+      domainError(
+        "VALIDATION_FAILED",
+        "A review page cannot filter by both a rating and unrated status.",
+      );
+    }
     const result =
-      args.ratingId !== undefined && args.userId !== undefined
+      args.unrated === true && args.userId !== undefined
+        ? await ctx.db
+            .query("reviews")
+            .withIndex(
+              "by_ratingId_and_userId_and_reviewedAt",
+              (index) =>
+                index
+                  .eq("ratingId", undefined)
+                  .eq("userId", args.userId),
+            )
+            .order("desc")
+            .paginate(args.paginationOpts)
+        : args.unrated === true
+          ? await ctx.db
+              .query("reviews")
+              .withIndex(
+                "by_ratingId_and_reviewedAt",
+                (index) => index.eq("ratingId", undefined),
+              )
+              .order("desc")
+              .paginate(args.paginationOpts)
+          : args.ratingId !== undefined && args.userId !== undefined
         ? await ctx.db
             .query("reviews")
             .withIndex(
@@ -93,6 +122,23 @@ export const listPage = adminQuery({
           hydrateReviewDetail(ctx, review),
         ),
       ),
+    };
+  },
+});
+
+export const getDeleteImpact = adminQuery({
+  args: { id: v.id("reviews") },
+  returns: v.object({
+    id: v.id("reviews"),
+    assignmentReviewCount: v.number(),
+    extraReviewCount: v.number(),
+    guessCount: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const review = await requireReview(ctx, args.id);
+    return {
+      id: review._id,
+      ...(await readReviewCascadeImpact(ctx, review)),
     };
   },
 });

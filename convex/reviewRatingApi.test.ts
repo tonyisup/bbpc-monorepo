@@ -726,6 +726,15 @@ describe("rating and review API", () => {
         ratingId: ratingA,
       },
     );
+    await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.reviews.admin.createExtra,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        userId: memberId,
+        movieId,
+        episodeId,
+      },
+    );
 
     const paginationOpts = { numItems: 10, cursor: null };
     const all = await t.withIdentity(ADMIN_IDENTITY).query(
@@ -748,10 +757,20 @@ describe("rating and review API", () => {
         userId: memberId,
       },
     );
-    expect(all.page).toHaveLength(3);
+    const unrated = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.reviews.admin.listPage,
+      { paginationOpts, unrated: true },
+    );
+    const unratedByUser = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.reviews.admin.listPage,
+      { paginationOpts, unrated: true, userId: memberId },
+    );
+    expect(all.page).toHaveLength(4);
     expect(byRating.page).toHaveLength(2);
-    expect(byUser.page).toHaveLength(2);
+    expect(byUser.page).toHaveLength(3);
     expect(byBoth.page).toHaveLength(2);
+    expect(unrated.page).toHaveLength(1);
+    expect(unratedByUser.page).toHaveLength(1);
 
     await expect(
       t.withIdentity(ADMIN_IDENTITY).query(
@@ -776,6 +795,17 @@ describe("rating and review API", () => {
         api.reviews.admin.listPage,
         {
           paginationOpts: { numItems: 101, cursor: null },
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.reviews.admin.listPage,
+        {
+          paginationOpts,
+          ratingId: ratingA,
+          unrated: true,
         },
       ),
       "VALIDATION_FAILED",
@@ -847,6 +877,17 @@ describe("rating and review API", () => {
       ),
       "CONFLICT",
     );
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.reviews.admin.getDeleteImpact,
+        { id: reviewId },
+      ),
+    ).resolves.toEqual({
+      id: reviewId,
+      assignmentReviewCount: 1,
+      extraReviewCount: 1,
+      guessCount: 1,
+    });
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.reviews.admin.remove,
@@ -925,6 +966,14 @@ describe("rating and review API", () => {
       ),
       "CONFLICT",
       { relationship: "extra relationships", limit: 50 },
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.reviews.admin.getDeleteImpact,
+        { id: reviewId },
+      ),
+      "CONFLICT",
+      { limit: 50 },
     );
     await expectDomainError(
       t.withIdentity(ADMIN_IDENTITY).mutation(
