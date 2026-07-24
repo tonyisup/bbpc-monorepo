@@ -49,6 +49,17 @@ test("executes a bounded resumable portable scrub", async () => {
       }
       if (
         functionName.endsWith(
+          ":scrubFinalTagAwardArchiveBatch",
+        )
+      ) {
+        return {
+          done: true,
+          deletedThisBatch: 2,
+          totalDeleted: 2,
+        };
+      }
+      if (
+        functionName.endsWith(
           ":scrubFinalRawDomainBatch",
         )
       ) {
@@ -88,6 +99,7 @@ test("executes a bounded resumable portable scrub", async () => {
     },
   });
   assert.equal(result.systemStateDeleted, true);
+  assert.equal(result.tagAwardArchiveIdsRemoved, 2);
   assert.equal(
     calls.filter((call) =>
       call.functionName.endsWith(

@@ -6743,6 +6743,344 @@ export type PublicApiType = {
         }
       >;
     };
+    tags: {
+      applyVotePoints: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          earnedAt?: number;
+          id: Id<"tagVotes">;
+          today: string;
+        },
+        {
+          award:
+            | { kind: "unawarded" }
+            | {
+                kind: "point";
+                point: {
+                  adjustment: number | null;
+                  earnedAt: number;
+                  gamePointType: {
+                    description: string | null;
+                    gameType: {
+                      description: string | null;
+                      id: Id<"gameTypes">;
+                      lookupId: string;
+                      title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                  } | null;
+                  id: Id<"points">;
+                  reason: string | null;
+                  season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                      description: string | null;
+                      id: Id<"gameTypes">;
+                      lookupId: string;
+                      title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                  };
+                  total: number;
+                  user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                  };
+                };
+              }
+            | { kind: "legacyAwardTombstone" };
+          createdAt: number;
+          id: Id<"tagVotes">;
+          isTag: boolean | null;
+          tag: string;
+          tmdbId: number;
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+        }
+      >;
+      createCatalogTag: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          createdAt?: number;
+          description?: string;
+          name: string;
+        },
+        {
+          createdAt: number;
+          description: string | null;
+          id: Id<"tags">;
+          name: string;
+        }
+      >;
+      deleteCatalogTag: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"tags"> },
+        { id: Id<"tags"> }
+      >;
+      deleteVote: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"tagVotes"> },
+        { id: Id<"tagVotes"> }
+      >;
+      getVoteById: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"tagVotes"> },
+        {
+          award:
+            | { kind: "unawarded" }
+            | {
+                kind: "point";
+                point: {
+                  adjustment: number | null;
+                  earnedAt: number;
+                  gamePointType: {
+                    description: string | null;
+                    gameType: {
+                      description: string | null;
+                      id: Id<"gameTypes">;
+                      lookupId: string;
+                      title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                  } | null;
+                  id: Id<"points">;
+                  reason: string | null;
+                  season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                      description: string | null;
+                      id: Id<"gameTypes">;
+                      lookupId: string;
+                      title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                  };
+                  total: number;
+                  user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                  };
+                };
+              }
+            | { kind: "legacyAwardTombstone" };
+          createdAt: number;
+          id: Id<"tagVotes">;
+          isTag: boolean | null;
+          tag: string;
+          tmdbId: number;
+          user: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+        } | null
+      >;
+      listCatalog: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          createdAt: number;
+          description: string | null;
+          id: Id<"tags">;
+          name: string;
+        }>
+      >;
+      listVotesForUserPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          userId: Id<"users">;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            award:
+              | { kind: "unawarded" }
+              | {
+                  kind: "point";
+                  point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                      description: string | null;
+                      gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                      };
+                      id: Id<"gamePointTypes">;
+                      lookupId: string;
+                      points: number;
+                      title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                      description: string | null;
+                      endedOn: string | null;
+                      gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                      };
+                      id: Id<"seasons">;
+                      startedOn: string | null;
+                      title: string;
+                    };
+                    total: number;
+                    user: {
+                      id: Id<"users">;
+                      image: string | null;
+                      name: string | null;
+                    };
+                  };
+                }
+              | { kind: "legacyAwardTombstone" };
+            createdAt: number;
+            id: Id<"tagVotes">;
+            isTag: boolean | null;
+            tag: string;
+            tmdbId: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            } | null;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      listVotesPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          tmdbId?: number;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            award:
+              | { kind: "unawarded" }
+              | {
+                  kind: "point";
+                  point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                      description: string | null;
+                      gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                      };
+                      id: Id<"gamePointTypes">;
+                      lookupId: string;
+                      points: number;
+                      title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                      description: string | null;
+                      endedOn: string | null;
+                      gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                      };
+                      id: Id<"seasons">;
+                      startedOn: string | null;
+                      title: string;
+                    };
+                    total: number;
+                    user: {
+                      id: Id<"users">;
+                      image: string | null;
+                      name: string | null;
+                    };
+                  };
+                }
+              | { kind: "legacyAwardTombstone" };
+            createdAt: number;
+            id: Id<"tagVotes">;
+            isTag: boolean | null;
+            tag: string;
+            tmdbId: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            } | null;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      updateCatalogTag: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          description?: string | null;
+          id: Id<"tags">;
+          name?: string;
+        },
+        {
+          createdAt: number;
+          description: string | null;
+          id: Id<"tags">;
+          name: string;
+        }
+      >;
+    };
   };
 };
 export type InternalApiType = {};

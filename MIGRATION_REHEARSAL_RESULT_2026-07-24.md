@@ -103,7 +103,8 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-238 Convex tests with 90.14% branch coverage. Owner-scoped episode audio metadata
+242 Convex tests with 96.46% statement and 90.00% branch coverage. Owner-scoped episode
+audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -203,8 +204,20 @@ awards have adjustments stale relative to their current wager. Same-status settl
 can repair a missing resolved award, and an explicit point update repairs stale award
 arithmetic. Authorization/write gates, round/target/type failures, owner isolation,
 serial budgets, pagination, malformed relationships, PII-free audits, and award
-ownership all have regression coverage. Tag, quote, and ranking workflows remain in
-T10.
+ownership all have regression coverage.
+
+Tag administration is the fifth game checkpoint. The public/member tag experience was
+deliberately retired from `bbpc` and remains archive-only. Administrator functions
+provide normalized catalog CRUD, exact and native-paginated vote reads, user/TMDB
+filters, bounded hydration, safe vote deletion that preserves accounting events, and
+current-season `tag-vote` point application for genuinely unawarded rows. Archived
+award markers cannot be rewarded again, and their source UUIDs never appear in the
+application contract. Aggregate-only inspection confirmed 2,194 rows, 2 unawarded,
+2,192 historical markers, no invalid TMDB IDs, and no duplicate canonical vote keys.
+The portable scrub now removes the 2,192 dangling UUID values from canonical documents
+after raw archive deletion while retaining the non-rewardable marker; restored
+reconciliation explicitly accepts that scrubbed state. Quote and ranking workflows
+remain in T10.
 
 ## Preserved gate
 

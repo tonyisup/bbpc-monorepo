@@ -199,6 +199,22 @@ export async function executePortableScrub({
     rawRowsDeleted[domain] = result.totalDeleted;
   }
 
+  const tagAwardArchive = await runUntilDone({
+    label: "Archive and scrub tag-award identifiers",
+    maxAttempts: 1000,
+    invoke: async () =>
+      await invoke(
+        "migration/scrub:scrubFinalTagAwardArchiveBatch",
+        {
+          cutoverRunId: runId,
+          operationId:
+            FINAL_SCRUB_OPERATIONS.tagAwardArchive,
+          batchSize,
+        },
+      ),
+    onProgress,
+  });
+
   const metadata = await runUntilDone({
     label: "Scrub migration metadata",
     maxAttempts: 1000,
@@ -253,6 +269,8 @@ export async function executePortableScrub({
   }
   return {
     ...completed,
+    tagAwardArchiveIdsRemoved:
+      tagAwardArchive.totalDeleted,
     metadataDeleted: metadata.totalDeleted,
     deploymentControlDeleted: control.totalDeleted,
   };

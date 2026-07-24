@@ -181,7 +181,9 @@ Completing `games.points` deliberately leaves the games domain `running`. That
 checkpoint unlocks `AssignmentPoints`; the remaining five game checkpoints then
 resolve assignment-review, point, season, episode, and user relationships. Historical
 tag-vote award UUIDs that no longer reference a point become explicit
-`legacyAwardTombstone` values.
+`legacyAwardTombstone` values during transform and reconciliation. The private source
+archive retains the original UUIDs. The final portable scrub removes the UUID values
+from canonical documents while retaining the non-rewardable tombstone marker.
 
 An independent pass re-resolves every relationship and compares every mapped scalar
 without repairing drift before the domain becomes reconciled. The guarded games
@@ -227,7 +229,8 @@ state, and audit evidence.
 This is an intermediate data-minimization milestone, not the portable-backup gate.
 The final `portable-v1` scrub requires all eight domains reconciled. It records a
 zero-or-greater deletion result for every domain, removes all 31 raw staging tables
-across every run, then removes checkpoints, migration/domain/scrub records,
+across every run, strips archive-only legacy tag-award UUIDs while retaining their
+non-rewardable marker, then removes checkpoints, migration/domain/scrub records,
 impersonation sessions, and service principals in bounded batches. Its final atomic
 step writes audit evidence, removes its own scrub record, and deletes the local
 `systemState`, restoring the backend's default-deny state before backup.

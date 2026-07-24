@@ -437,8 +437,13 @@ export const requiredIndexesByTarget = {
   tagVotes: [
     "by_legacyId",
     "by_userId",
+    "by_createdAt",
+    "by_userId_and_createdAt",
+    "by_tmdbId_and_createdAt",
+    "by_legacyAwardPointId",
     "by_normalizedTag_and_userId",
     "by_tmdbId_and_normalizedTag",
+    "by_userId_and_tmdbId_and_normalizedTag",
   ],
   quoteSubmissions: [
     "by_legacyId",

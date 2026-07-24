@@ -20,6 +20,8 @@ export const MAX_GAMBLING_TYPES = 100;
 export const MAX_GAMBLING_PAGE_SIZE = 100;
 export const MAX_GAMBLING_ENTRIES_PER_READ = 500;
 export const MAX_ASSIGNMENTS_FOR_GAMBLING_READ = 25;
+export const MAX_TAG_CATALOG_SIZE = 100;
+export const MAX_TAG_VOTE_PAGE_SIZE = 100;
 
 export function validateSeasonPageSize(numItems: number): void {
   if (
@@ -69,6 +71,19 @@ export function validateGamblingPageSize(numItems: number): void {
     domainError(
       "VALIDATION_FAILED",
       `Gambling page size must be an integer from 1 through ${String(MAX_GAMBLING_PAGE_SIZE)}.`,
+    );
+  }
+}
+
+export function validateTagVotePageSize(numItems: number): void {
+  if (
+    !Number.isSafeInteger(numItems) ||
+    numItems < 1 ||
+    numItems > MAX_TAG_VOTE_PAGE_SIZE
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      `Tag-vote page size must be an integer from 1 through ${String(MAX_TAG_VOTE_PAGE_SIZE)}.`,
     );
   }
 }

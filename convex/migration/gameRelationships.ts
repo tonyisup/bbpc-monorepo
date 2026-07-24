@@ -274,7 +274,11 @@ function awardsMatch(left: TagVoteAward, right: TagVoteAward): boolean {
     left.kind === "legacyAwardTombstone" &&
     right.kind === "legacyAwardTombstone"
   ) {
-    return left.legacyPointId === right.legacyPointId;
+    return (
+      left.legacyPointId === undefined ||
+      right.legacyPointId === undefined ||
+      left.legacyPointId === right.legacyPointId
+    );
   }
   return true;
 }

@@ -582,18 +582,27 @@ export default defineSchema({
       }),
       v.object({
         kind: v.literal("legacyAwardTombstone"),
-        legacyPointId: v.string(),
+        legacyPointId: v.optional(v.string()),
       }),
     ),
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_userId_and_createdAt", ["userId", "createdAt"])
+    .index("by_tmdbId_and_createdAt", ["tmdbId", "createdAt"])
+    .index("by_legacyAwardPointId", ["award.legacyPointId"])
     .index("by_awardKind_and_awardPointId", [
       "award.kind",
       "award.pointId",
     ])
     .index("by_normalizedTag_and_userId", ["normalizedTag", "userId"])
-    .index("by_tmdbId_and_normalizedTag", ["tmdbId", "normalizedTag"]),
+    .index("by_tmdbId_and_normalizedTag", ["tmdbId", "normalizedTag"])
+    .index("by_userId_and_tmdbId_and_normalizedTag", [
+      "userId",
+      "tmdbId",
+      "normalizedTag",
+    ]),
 
   quoteSubmissions: defineTable({
     legacyId: v.optional(v.string()),
@@ -716,6 +725,7 @@ export default defineSchema({
     priorScrubRunsDeleted: v.optional(v.number()),
     impersonationSessionsDeleted: v.optional(v.number()),
     servicePrincipalsDeleted: v.optional(v.number()),
+    tagAwardArchiveIdsRemoved: v.optional(v.number()),
     startedAt: v.number(),
     updatedAt: v.number(),
     completedAt: v.optional(v.number()),

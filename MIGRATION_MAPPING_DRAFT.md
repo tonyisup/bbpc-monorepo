@@ -79,7 +79,7 @@ tables exactly once and records the required index set for every migrated target
 | games | `dbo.Guess` | `guesses` | Correct the field spelling to `assignmentReviewId`. |
 | games | `dbo.GamblingType` | `gamblingTypes` | Multiplier must be finite. |
 | games | `dbo.GamblingPoints` | `gamblingEntries` | Preserve pending/resolved state and optional award links. |
-| games | `dbo.TagVote` | `tagVotes` | Unresolved point UUID becomes `legacyAwardTombstone`. |
+| games | `dbo.TagVote` | `tagVotes` | Unresolved point UUID becomes a non-rewardable `legacyAwardTombstone`; the UUID itself is archive-only after portable scrub. |
 | games | `dbo.QuoteSubmission` | `quoteSubmissions` | Preserve checks and transactional uniqueness rules. |
 | rankings | `dbo.RankedListType` | `rankedListTypes` | `maxItems` and `targetType` drive validation. |
 | rankings | `dbo.RankedList` | `rankedLists` | Preserve owner/type/status/title/timestamps. |
@@ -95,7 +95,7 @@ aggregate counts and clock offsets only; it did not print or persist source-row 
 | SQL timestamps | Server offset `0`; `GETDATE()` minus `GETUTCDATE()` is `0` minutes. Azure SQL Database follows UTC according to [Microsoft's `GETDATE` documentation](https://learn.microsoft.com/en-us/sql/t-sql/functions/getdate-transact-sql?view=sql-server-ver17). | Interpret `datetime`/`datetime2` values as UTC and convert directly to epoch milliseconds. |
 | Review timestamps | 989 rows: 341 both null, 120 `ReviewdOn` only, 0 `reviewedOn` only, 528 both equal, 0 conflicting. | `reviewedAt = reviewedOn ?? ReviewdOn`; preserve each source field in private reconciliation evidence, not in the canonical document. |
 | Review targets | 989 rows: 981 movie-only, 8 show-only, 0 without a target, 0 with both targets. | Require exactly one movie/show target during transformation and on future canonical writes. |
-| Tag-vote awards | 2,194 rows: 2 unawarded, 0 point IDs resolve, 2,192 point IDs are historical dangling UUIDs. | Preserve every non-null unresolved UUID as `legacyAwardTombstone`; do not fabricate `Point` documents. |
+| Tag-vote awards | 2,194 rows: 2 unawarded, 0 point IDs resolve, 2,192 point IDs are historical dangling UUIDs. All rows have users and `isTag`, no TMDB ID is invalid, and no `(user, tmdbId, normalizedTag)` key is duplicated. | Keep a non-rewardable `legacyAwardTombstone` marker in canonical data and the original UUID in the private source archive only. The one-way portable scrub removes those UUIDs from canonical documents before backup; never fabricate `Point` documents. |
 | Guess awards | 1,208 rows: 948 pending without a point, 260 awarded with a valid FK-backed point. | Preserve pending guesses with no point and resolve awarded guesses to canonical points. |
 | Gambling links and awards | 74 rows: 0 duplicate canonical wager keys, 0 negative values, 0 without assignment, 36 without award point, 0 without season, 46 without target user, 0 unsupported statuses, and 0 invalid target shapes. Of the 36 rows without an award, 27 are historical losses; 13 linked win awards have adjustments stale relative to the current wager amount. | Preserve every nullable relationship and historical award value exactly during migration. Enforce the canonical key and target rules on new writes; provide explicit administrator settlement/update operations to repair missing or stale awards without bulk rewriting imported history. |
 | Point adjustments | 418 rows: 2 null, 325 zero, 91 nonzero. | Preserve SQL `NULL` separately from zero and validate the live SQL `INT` range. |
@@ -137,7 +137,7 @@ Index names include every indexed field.
 | `points` | `by_userId`, `by_seasonId`, `by_gamePointTypeId`, `by_userId_and_seasonId` |
 | `guesses` | `by_userId`, `by_assignmentReviewId`, `by_seasonId`, `by_pointId`, `by_userId_and_assignmentReviewId` |
 | `gamblingEntries` | one index for each relation plus `by_userId_and_seasonId` |
-| `tagVotes` | `by_userId`, `by_normalizedTag_and_userId`, `by_tmdbId_and_normalizedTag` |
+| `tagVotes` | `by_createdAt`, `by_userId_and_createdAt`, `by_tmdbId_and_createdAt`, `by_userId_and_tmdbId_and_normalizedTag`, award-link indexes, and the migration-only legacy-award scrub index |
 | `quoteSubmissions` | `by_episodeId_and_status`, `by_episodeId_and_userId`, `by_seasonId`, `by_userId`, `by_pointId` |
 | `rankedLists` | `by_userId`, `by_rankedListTypeId`, `by_userId_and_rankedListTypeId` |
 | `rankedItems` | `by_rankedListId_and_rank`, plus one index for each nullable target |

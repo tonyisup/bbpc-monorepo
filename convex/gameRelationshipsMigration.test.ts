@@ -699,6 +699,20 @@ describe("game relationship migration slice", () => {
       placement: 1,
     });
 
+    await t.run(async (ctx) => {
+      const archivedVote = await ctx.db
+        .query("tagVotes")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", TAG_VOTE_ID_C),
+        )
+        .unique();
+      if (archivedVote === null) {
+        throw new Error("Expected archived tag vote");
+      }
+      await ctx.db.patch("tagVotes", archivedVote._id, {
+        award: { kind: "legacyAwardTombstone" },
+      });
+    });
     await deleteRelationshipCheckpoints(t);
     await transformRelationships(t);
     const rerunCheckpoints = await t.run(async (ctx) => {

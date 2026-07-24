@@ -152,6 +152,34 @@ export const guessValidator = v.object({
   point: v.union(pointCoreValidator, v.null()),
 });
 
+export const tagValidator = v.object({
+  id: v.id("tags"),
+  name: v.string(),
+  description: nullableStringValidator,
+  createdAt: v.number(),
+});
+
+export const tagVoteAwardValidator = v.union(
+  v.object({ kind: v.literal("unawarded") }),
+  v.object({
+    kind: v.literal("point"),
+    point: pointCoreValidator,
+  }),
+  v.object({
+    kind: v.literal("legacyAwardTombstone"),
+  }),
+);
+
+export const tagVoteValidator = v.object({
+  id: v.id("tagVotes"),
+  tag: v.string(),
+  tmdbId: v.number(),
+  isTag: v.union(v.boolean(), v.null()),
+  createdAt: v.number(),
+  user: v.union(pointUserValidator, v.null()),
+  award: tagVoteAwardValidator,
+});
+
 export const assignmentGuessGroupValidator = v.object({
   assignmentId: v.id("assignments"),
   guesses: v.array(guessValidator),

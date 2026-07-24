@@ -765,6 +765,18 @@ async function hasAnyMigrationRawRows(
   return false;
 }
 
+async function hasLegacyTagAwardIds(
+  ctx: DatabaseContext,
+): Promise<boolean> {
+  const vote = await ctx.db
+    .query("tagVotes")
+    .withIndex("by_legacyAwardPointId", (query) =>
+      query.gt("award.legacyPointId", ""),
+    )
+    .first();
+  return vote !== null;
+}
+
 function hasAllRawScrubEvidence(
   scrubRun: Doc<"migrationScrubRuns">,
 ): boolean {
@@ -869,6 +881,7 @@ export const startFinalScrub = internalMigrationMutation({
       priorScrubRunsDeleted: 0,
       impersonationSessionsDeleted: 0,
       servicePrincipalsDeleted: 0,
+      tagAwardArchiveIdsRemoved: 0,
       startedAt: now,
       updatedAt: now,
     });
@@ -932,6 +945,59 @@ export const scrubFinalRawDomainBatch = internalMigrationMutation({
   },
 });
 
+export const scrubFinalTagAwardArchiveBatch =
+  internalMigrationMutation({
+    args: { batchSize: v.number() },
+    returns: finalScrubBatchResultValidator,
+    handler: async (ctx, args) => {
+      requireMigrationOperation(
+        ctx.migrationOperationId,
+        FINAL_SCRUB_OPERATIONS.tagAwardArchive,
+      );
+      requireMigrationBatchSize(args.batchSize);
+      const runId = ctx.systemState.cutoverRunId;
+      const scrubRun = await getFinalScrubRun(ctx, runId);
+      if (
+        (await hasAnyMigrationRawRows(ctx)) ||
+        !hasAllRawScrubEvidence(scrubRun)
+      ) {
+        domainError(
+          "CONFLICT",
+          "Every raw domain must be archived and scrubbed before tag-award identifiers.",
+        );
+      }
+      const votes = await ctx.db
+        .query("tagVotes")
+        .withIndex("by_legacyAwardPointId", (query) =>
+          query.gt("award.legacyPointId", ""),
+        )
+        .take(args.batchSize);
+      for (const vote of votes) {
+        if (vote.award.kind !== "legacyAwardTombstone") {
+          domainError(
+            "CONFLICT",
+            "A tag-award archive identifier has an invalid award state.",
+          );
+        }
+        await ctx.db.patch("tagVotes", vote._id, {
+          award: { kind: "legacyAwardTombstone" },
+        });
+      }
+      const totalDeleted =
+        (scrubRun.tagAwardArchiveIdsRemoved ?? 0) +
+        votes.length;
+      await ctx.db.patch("migrationScrubRuns", scrubRun._id, {
+        tagAwardArchiveIdsRemoved: totalDeleted,
+        updatedAt: Date.now(),
+      });
+      return {
+        deletedThisBatch: votes.length,
+        totalDeleted,
+        done: !(await hasLegacyTagAwardIds(ctx)),
+      };
+    },
+  });
+
 export const scrubFinalMigrationMetadataBatch =
   internalMigrationMutation({
     args: { batchSize: v.number() },
@@ -946,7 +1012,8 @@ export const scrubFinalMigrationMetadataBatch =
       const scrubRun = await getFinalScrubRun(ctx, runId);
       if (
         (await hasAnyMigrationRawRows(ctx)) ||
-        !hasAllRawScrubEvidence(scrubRun)
+        !hasAllRawScrubEvidence(scrubRun) ||
+        (await hasLegacyTagAwardIds(ctx))
       ) {
         domainError(
           "CONFLICT",
@@ -1065,6 +1132,7 @@ export const scrubFinalDeploymentControlBatch =
       if (
         (await hasAnyMigrationRawRows(ctx)) ||
         !hasAllRawScrubEvidence(scrubRun) ||
+        (await hasLegacyTagAwardIds(ctx)) ||
         (await hasMigrationMetadataExcept(ctx, scrubRun._id))
       ) {
         domainError(
@@ -1126,6 +1194,7 @@ export const finishFinalScrub = internalMigrationMutation({
     priorScrubRunsDeleted: v.number(),
     impersonationSessionsDeleted: v.number(),
     servicePrincipalsDeleted: v.number(),
+    tagAwardArchiveIdsRemoved: v.number(),
     systemStateDeleted: v.literal(true),
   }),
   handler: async (ctx) => {
@@ -1138,6 +1207,7 @@ export const finishFinalScrub = internalMigrationMutation({
     if (
       (await hasAnyMigrationRawRows(ctx)) ||
       !hasAllRawScrubEvidence(scrubRun) ||
+      (await hasLegacyTagAwardIds(ctx)) ||
       (await hasMigrationMetadataExcept(ctx, scrubRun._id)) ||
       (await hasDeploymentControlRows(ctx))
     ) {
@@ -1155,6 +1225,8 @@ export const finishFinalScrub = internalMigrationMutation({
       scrubRun.impersonationSessionsDeleted ?? 0;
     const servicePrincipalsDeleted =
       scrubRun.servicePrincipalsDeleted ?? 0;
+    const tagAwardArchiveIdsRemoved =
+      scrubRun.tagAwardArchiveIdsRemoved ?? 0;
     const rawAuditCounts = Object.fromEntries(
       Object.entries(rawRowsDeleted).map(([domain, count]) => [
         `${domain}RawRowsDeleted`,
@@ -1176,6 +1248,7 @@ export const finishFinalScrub = internalMigrationMutation({
         priorScrubRunsDeleted,
         impersonationSessionsDeleted,
         servicePrincipalsDeleted,
+        tagAwardArchiveIdsRemoved,
         systemStateDeleted: true,
       },
     });
@@ -1192,6 +1265,7 @@ export const finishFinalScrub = internalMigrationMutation({
       priorScrubRunsDeleted,
       impersonationSessionsDeleted,
       servicePrincipalsDeleted,
+      tagAwardArchiveIdsRemoved,
       systemStateDeleted: true as const,
     };
   },

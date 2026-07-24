@@ -127,6 +127,19 @@ async function seedPortableFixture(t: TestBackend): Promise<void> {
       linkedAt: 1,
       lastSeenAt: 1,
     });
+    await ctx.db.insert("tagVotes", {
+      legacyId: UUIDS.two,
+      tag: "Synthetic archive marker",
+      normalizedTag: "synthetic archive marker",
+      tmdbId: 123,
+      isTag: true,
+      createdAt: 1,
+      userId,
+      award: {
+        kind: "legacyAwardTombstone",
+        legacyPointId: UUIDS.three,
+      },
+    });
     await ctx.db.insert("movies", {
       legacyId: UUIDS.one,
       title: "Canonical survives",
@@ -546,6 +559,32 @@ describe("final portable scrub", () => {
 
     await expectDomainError(
       t.mutation(
+        internal.migration.scrub.scrubFinalMigrationMetadataBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            FINAL_SCRUB_OPERATIONS.migrationMetadata,
+          batchSize: 2,
+        },
+      ),
+      "CONFLICT",
+    );
+    const tagAwardArchive = await scrubUntilDone(() =>
+      t.mutation(
+        internal.migration.scrub
+          .scrubFinalTagAwardArchiveBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            FINAL_SCRUB_OPERATIONS.tagAwardArchive,
+          batchSize: 1,
+        },
+      ),
+    );
+    expect(tagAwardArchive.totalDeleted).toBe(1);
+
+    await expectDomainError(
+      t.mutation(
         internal.migration.scrub.scrubFinalDeploymentControlBatch,
         {
           cutoverRunId: CUTOVER_RUN_ID,
@@ -599,6 +638,7 @@ describe("final portable scrub", () => {
       priorScrubRunsDeleted: 1,
       impersonationSessionsDeleted: 1,
       servicePrincipalsDeleted: 1,
+      tagAwardArchiveIdsRemoved: 1,
       systemStateDeleted: true,
     });
 
@@ -621,6 +661,10 @@ describe("final portable scrub", () => {
           query.eq("cutoverRunId", CUTOVER_RUN_ID),
         )
         .take(20);
+      const tagVotes = await ctx.db
+        .query("tagVotes")
+        .withIndex("by_legacyId")
+        .take(10);
       const systemState = await ctx.db
         .query("systemState")
         .withIndex("by_singletonKey", (query) =>
@@ -659,6 +703,7 @@ describe("final portable scrub", () => {
         users,
         authIdentities,
         movies,
+        tagVotes,
         auditEvents,
         systemState,
         migrationRun,
@@ -673,6 +718,14 @@ describe("final portable scrub", () => {
     expect(retained.users).toHaveLength(2);
     expect(retained.authIdentities).toHaveLength(1);
     expect(retained.movies).toHaveLength(1);
+    expect(retained.tagVotes).toMatchObject([
+      {
+        award: { kind: "legacyAwardTombstone" },
+      },
+    ]);
+    expect(
+      JSON.stringify(retained.tagVotes),
+    ).not.toContain(UUIDS.three);
     expect(
       retained.auditEvents.some(
         (event) =>

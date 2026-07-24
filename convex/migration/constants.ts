@@ -160,6 +160,7 @@ export const FINAL_SCRUB_OPERATIONS = {
     rankings: "scrub.portable.raw.rankings",
     archive: "scrub.portable.raw.archive",
   },
+  tagAwardArchive: "scrub.portable.tagAwardArchive",
   migrationMetadata: "scrub.portable.migrationMetadata",
   deploymentControl: "scrub.portable.deploymentControl",
   finish: "scrub.portable.finish",
