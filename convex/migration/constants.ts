@@ -79,6 +79,19 @@ export const GAME_OPERATIONS = {
   finish: "games.finish",
 } as const;
 
+export const GAME_RECONCILIATION_OPERATIONS = {
+  gameTypes: "games.reconcile.gameTypes",
+  gamePointTypes: "games.reconcile.gamePointTypes",
+  seasons: "games.reconcile.seasons",
+  points: "games.reconcile.points",
+  guesses: "games.reconcile.guesses",
+  gamblingTypes: "games.reconcile.gamblingTypes",
+  gamblingEntries: "games.reconcile.gamblingEntries",
+  tagVotes: "games.reconcile.tagVotes",
+  quoteSubmissions: "games.reconcile.quoteSubmissions",
+  finish: "games.reconcile.finish",
+} as const;
+
 export const REVIEW_OPERATIONS = {
   start: "reviews.start",
   ratings: "reviews.ratings",

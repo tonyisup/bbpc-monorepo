@@ -9,9 +9,10 @@ All 31 migrated targets and their minimum indexes are now defined in the Convex 
 and verified against the typed mapping. This does not approve or run the
 production-derived transform.
 
-The identity, catalog, and episode mappings are implemented as synthetic-only,
-checkpointed rehearsal slices. Their guarded local extractors exist but have not been
-run against the production-derived `dev` clone. Catalog rehearsal tests prove that
+The identity, catalog, episode, assignment, review, and game mappings are implemented
+as synthetic-only, checkpointed rehearsal slices. Their guarded local extractors exist
+but have not been run against the production-derived `dev` clone. The nine game tables
+are extracted atomically in one serializable transaction. Catalog rehearsal tests prove that
 duplicate movie/show normalized keys remain distinct while tag collisions fail
 transactionally. A separate catalog pass independently reconciles every transformed
 field before marking that domain reconciled. Identity independently rechecks profiles,
@@ -90,6 +91,10 @@ aggregate counts and clock offsets only; it did not print or persist source-row 
 | SQL timestamps | Server offset `0`; `GETDATE()` minus `GETUTCDATE()` is `0` minutes. Azure SQL Database follows UTC according to [Microsoft's `GETDATE` documentation](https://learn.microsoft.com/en-us/sql/t-sql/functions/getdate-transact-sql?view=sql-server-ver17). | Interpret `datetime`/`datetime2` values as UTC and convert directly to epoch milliseconds. |
 | Review timestamps | 989 rows: 341 both null, 120 `ReviewdOn` only, 0 `reviewedOn` only, 528 both equal, 0 conflicting. | `reviewedAt = reviewedOn ?? ReviewdOn`; preserve each source field in private reconciliation evidence, not in the canonical document. |
 | Review targets | 989 rows: 981 movie-only, 8 show-only, 0 without a target, 0 with both targets. | Require exactly one movie/show target during transformation and on future canonical writes. |
+| Tag-vote awards | 2,194 rows: 2 unawarded, 0 point IDs resolve, 2,192 point IDs are historical dangling UUIDs. | Preserve every non-null unresolved UUID as `legacyAwardTombstone`; do not fabricate `Point` documents. |
+| Guess awards | 1,208 rows: 948 pending without a point, 260 awarded with a valid FK-backed point. | Preserve pending guesses with no point and resolve awarded guesses to canonical points. |
+| Gambling links | 74 rows: 0 without assignment, 36 without award point, 0 without season, 46 without target user. | Preserve every nullable relationship exactly; required source relationships remain required canonically. |
+| Point adjustments | 418 rows: 2 null, 325 zero, 91 nonzero. | Preserve SQL `NULL` separately from zero and validate the live SQL `INT` range. |
 | Archive linkage | 433 rows: 327 linked to an episode, 106 unlinked, 0 unresolved episode references. | Migrate every row and preserve a nullable episode relation; product visibility remains a product choice. |
 | Ranked-item targets | 19 rows: all 19 have exactly one of movie/show/episode; 0 have none or multiple. | Require exactly one target and validate it against the ranked-list type. |
 | Ordering | 0 duplicate `(rankedListId, rank)` groups and 0 duplicate `(userId, order)` syllabus groups. | Enforce both keys transactionally in Convex. |

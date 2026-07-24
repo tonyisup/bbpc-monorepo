@@ -11,7 +11,11 @@ legacy impersonation state. The catalog extractor selects only `Movie`, `Show`, 
 `Tag`; it preserves distinct rows even when movie or show titles normalize to the same
 value. The episode extractor selects only `Episode`, `Link`, `Banger`, and
 `AudioEpisodeMessage`; it preserves calendar dates separately from UTC audio-message
-timestamps and never downloads media bytes.
+timestamps and never downloads media bytes. The assignment and review extractors
+preserve the checkpoint dependency boundary. The game extractor reads all nine game
+tables in one serializable transaction so points and every relationship are from one
+source snapshot; dangling historical `TagVote.pointId` UUIDs remain source evidence
+for the explicit tombstone mapping.
 
 Before an approved rehearsal:
 
@@ -32,6 +36,18 @@ Before an approved rehearsal:
    npm run migration:extract:episodes -- \
      --run-id <cutover-run-id> \
      --ack-production-derived-local-only
+
+   npm run migration:extract:assignments -- \
+     --run-id <cutover-run-id> \
+     --ack-production-derived-local-only
+
+   npm run migration:extract:reviews -- \
+     --run-id <cutover-run-id> \
+     --ack-production-derived-local-only
+
+   npm run migration:extract:games -- \
+     --run-id <cutover-run-id> \
+     --ack-production-derived-local-only
    ```
 
 The extractor requires a census less than 15 minutes old, verifies that the configured
@@ -39,9 +55,7 @@ SQL server matches the census fingerprint, opens the connection with read-only i
 and UTC date handling, verifies `DB_NAME()` again inside a serializable read-only
 transaction, and refuses count drift or output overwrite. It writes private JSONL files
 plus a checksummed manifest with filesystem mode `0600`. Domain outputs are immutable
-siblings under `.local-migration/<run-id>/identity` and
-`.local-migration/<run-id>/catalog`, with episode output in the adjacent
-`.local-migration/<run-id>/episodes` directory.
+siblings under `.local-migration/<run-id>/<domain>`.
 
 Do not run a production-derived extraction until the mapping approval gate is signed.
 Synthetic extractor tests are safe at any time:
@@ -57,7 +71,7 @@ After the approval gate and extraction, stage one verified domain at a time:
 ```sh
 npm run migration:stage:local -- \
   --run-id <cutover-run-id> \
-  --domain <identity|catalog|episodes> \
+  --domain <identity|catalog|episodes|assignments|reviews|games> \
   --ack-production-derived-local-only \
   --ack-replace-local-raw-staging
 ```

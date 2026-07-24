@@ -144,6 +144,17 @@ test("verifies a private immutable domain manifest", () => {
       "migrationRawAssignmentReviews",
       "migrationRawExtraReviews",
     ]);
+    assert.deepEqual(tablesForDomain("games"), [
+      "migrationRawGameTypes",
+      "migrationRawGamePointTypes",
+      "migrationRawSeasons",
+      "migrationRawPoints",
+      "migrationRawGuesses",
+      "migrationRawGamblingTypes",
+      "migrationRawGamblingEntries",
+      "migrationRawTagVotes",
+      "migrationRawQuoteSubmissions",
+    ]);
   } finally {
     fixture.cleanup();
   }
