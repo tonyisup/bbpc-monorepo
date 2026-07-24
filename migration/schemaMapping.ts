@@ -1,5 +1,4 @@
-export const SOURCE_SCHEMA_FINGERPRINT =
-  "5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a";
+export { SOURCE_SCHEMA_FINGERPRINT } from "../convex/migration/constants.js";
 
 export type DomainOwner =
   | "archive"
@@ -34,7 +33,7 @@ export const sourceTableMappings = [
     target: "archivePosts",
     legacyIdShape: "integer",
     decision:
-      "Preserve all archive rows and optional episode linkage; product visibility remains pending approval.",
+      "Preserve all archive rows and nullable episode linkage; the probe found no unresolved episode references, while product visibility remains pending approval.",
   },
   {
     source: "dbo.Account",
@@ -200,7 +199,7 @@ export const sourceTableMappings = [
     target: "rankedItems",
     legacyIdShape: "uuid",
     decision:
-      "Preserve nullable movie/show/episode targets; target-shape validation is explicit.",
+      "Require exactly one movie/show/episode target and validate it against the ranked-list type; all probed source rows satisfy the one-target invariant.",
   },
   {
     source: "dbo.RankedList",
@@ -233,7 +232,7 @@ export const sourceTableMappings = [
     target: "reviews",
     legacyIdShape: "uuid",
     decision:
-      "Preserve both legacy timestamp columns until reviewedAt precedence is approved.",
+      "Recommend reviewedAt = reviewedOn ?? ReviewdOn; the probe found no conflicting non-null values.",
   },
   {
     source: "dbo.Role",
@@ -304,7 +303,7 @@ export const sourceTableMappings = [
     target: "users",
     legacyIdShape: "string",
     decision:
-      "Preserve canonical profiles; retire active impersonation state and link Clerk only through audited identity flows.",
+      "Preserve canonical profiles and legacy email verification time; all 19 normalized email candidates are unique. Retire active impersonation state and link Clerk only through audited identity flows.",
   },
   {
     source: "dbo.UserRole",
@@ -329,24 +328,39 @@ export const pendingDomainDecisions = [
   {
     id: "sql-datetime-timezone",
     scope: "All SQL datetime/datetime2 columns",
+    recommendation:
+      "Interpret legacy wall-clock values as UTC and convert directly to epoch milliseconds.",
+    evidence:
+      "The guarded dev clone reported zero server and GETDATE-to-GETUTCDATE offsets; Azure SQL Database is documented to follow UTC.",
     question:
-      "Confirm the source timezone used to interpret legacy wall-clock timestamps before converting to UTC epoch milliseconds.",
+      "Approve UTC as the source timezone for legacy wall-clock timestamps.",
   },
   {
     id: "review-timestamp-precedence",
     scope: "dbo.Review.ReviewdOn and dbo.Review.reviewedOn",
+    recommendation: "Set reviewedAt to reviewedOn ?? ReviewdOn.",
+    evidence:
+      "Of 989 rows, 528 values match, 120 have only ReviewdOn, 341 have neither, and none conflict or have only reviewedOn.",
     question:
-      "Approve the canonical reviewedAt precedence rule while retaining both source values in migration evidence.",
+      "Approve the canonical reviewedAt precedence rule while retaining both source values only in private reconciliation evidence.",
   },
   {
     id: "normalized-text-rule",
     scope: "Case-insensitive unique and lookup text",
+    recommendation:
+      "Trim, normalize with Unicode NFKC, then lowercase without locale-specific rules; fail on any collision.",
+    evidence:
+      "SQL trim/lower normalization preserved distinct cardinality and found no blanks in all five probed lookup tables.",
     question:
       "Approve trim plus Unicode NFKC plus locale-independent lowercasing as the Convex normalized-key rule.",
   },
   {
     id: "archive-posts-visibility",
     scope: "Archive.Posts",
+    recommendation:
+      "Migrate all rows, preserve nullable episode linkage, and keep reads disabled unless the product explicitly needs them.",
+    evidence:
+      "All 433 rows are structurally migratable: 327 link to episodes, 106 are intentionally unlinked, and none have unresolved episode references.",
     question:
       "Confirm whether archive posts remain queryable product data or backup-only retained records after cutover.",
   },

@@ -102,5 +102,12 @@ describe("SQL-to-Convex source table mapping", () => {
       "normalized-text-rule",
       "archive-posts-visibility",
     ]);
+    expect(
+      pendingDomainDecisions.every(
+        (decision) =>
+          decision.recommendation.length > 0 &&
+          decision.evidence.length > 0,
+      ),
+    ).toBe(true);
   });
 });

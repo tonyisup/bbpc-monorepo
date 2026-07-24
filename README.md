@@ -53,6 +53,28 @@ npm run contract:build
 internal functions. The package compiles that generated spec to ordinary JavaScript and
 declarations; backend source and schema are not shipped.
 
+## Identity migration rehearsal
+
+The first checkpointed migration slice covers `User`, `Role`, and `UserRole` with
+synthetic fixtures:
+
+1. initialize the backend and enter S1;
+2. create a fingerprinted identity migration run;
+3. import raw users and roles into the deployment-local staging tables;
+4. transform roles and users in bounded, resumable batches;
+5. transform user-role links only after both parent checkpoints complete;
+6. verify expected counts and mark the slice transformed.
+
+Every transform function is internal-only and accepts writes only in S1/S2 for the
+matching cutover run. Legacy IDs and normalized keys make retries idempotent; a mismatch,
+duplicate normalized key, missing parent, stale checkpoint, or source-fingerprint drift
+rolls back the entire batch. The raw `impersonatedUserId` may exist in local staging for
+reconciliation but is never copied into the canonical user. Auth.js accounts, sessions,
+verification tokens, and provider tokens are not staged at all.
+
+Production-derived staging is local-only and must be removed before the portable
+canonical backup. Cloud staging continues to use synthetic fixtures only.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:

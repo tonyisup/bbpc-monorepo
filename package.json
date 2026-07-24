@@ -35,7 +35,7 @@
   },
   "scripts": {
     "dev": "convex dev",
-    "dev:local": "convex dev --local",
+    "dev:local": "convex dev",
     "codegen": "convex codegen",
     "contract:build": "tsc --project tsconfig.contract.json",
     "contract:generate": "convex-helpers ts-api-spec --output-file contracts/convexApi.ts",

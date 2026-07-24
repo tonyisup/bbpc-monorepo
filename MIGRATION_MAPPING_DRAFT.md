@@ -14,7 +14,7 @@ The census declares `containsRowValues: false`; no production row values are cop
 | String primary key | `legacyId: string`, indexed | Preserve exactly; identity lookup never trusts email alone. |
 | Integer identity | `legacyId: number`, indexed | Validate the original tinyint/smallint/int range. |
 | `date` | `YYYY-MM-DD` string | Preserve calendar meaning without timezone conversion. |
-| `datetime` / `datetime2` | UTC epoch milliseconds | Block transformation until the source timezone decision is approved. |
+| `datetime` / `datetime2` | UTC epoch milliseconds | Recommended: interpret the legacy wall-clock value as UTC, without adding a local-time offset. |
 | Nullable scalar | optional field or explicit `null` | Decide per field; preserve SQL `NULL` distinctly from zero/empty text. |
 | Case-insensitive key | display value plus `normalized*` field | Proposed: trim, Unicode NFKC, locale-independent lowercase. |
 | SQL foreign key | Convex `Id<target>` | Resolve through the target table’s `legacyId` index. |
@@ -36,7 +36,7 @@ tables exactly once.
 | identity | `dbo.Account` | retire | Do not extract provider credentials or tokens. |
 | identity | `dbo.Session` | retire | Do not migrate session tokens; force Clerk sign-in. |
 | identity | `dbo.VerificationToken` | retire | Do not migrate verification tokens. |
-| identity | `dbo.User` | `users` | Preserve profile/legacy ID; active impersonation state is retired. |
+| identity | `dbo.User` | `users` | Preserve profile, verified-at timestamp, and legacy ID; active impersonation state is retired. |
 | identity | `dbo.Role` | `roles` | Add normalized name and canonical permissions. |
 | identity | `dbo.UserRole` | `userRoles` | Reject duplicate canonical user/role links. |
 | episodes | `dbo.Episode` | `episodes` | Calendar date stays a string; nullable slug remains unique when present. |
@@ -66,6 +66,23 @@ tables exactly once.
 | rankings | `dbo.RankedListType` | `rankedListTypes` | `maxItems` and `targetType` drive validation. |
 | rankings | `dbo.RankedList` | `rankedLists` | Preserve owner/type/status/title/timestamps. |
 | rankings | `dbo.RankedItem` | `rankedItems` | Validate the approved target shape and list ordering. |
+
+## Read-only mapping-probe evidence
+
+The local-only probe ran against the guarded database named exactly `dev`. It retained
+aggregate counts and clock offsets only; it did not print or persist source-row values.
+
+| Decision area | Aggregate evidence | Recommended mapping |
+|---|---|---|
+| SQL timestamps | Server offset `0`; `GETDATE()` minus `GETUTCDATE()` is `0` minutes. Azure SQL Database follows UTC according to [Microsoft's `GETDATE` documentation](https://learn.microsoft.com/en-us/sql/t-sql/functions/getdate-transact-sql?view=sql-server-ver17). | Interpret `datetime`/`datetime2` values as UTC and convert directly to epoch milliseconds. |
+| Review timestamps | 989 rows: 341 both null, 120 `ReviewdOn` only, 0 `reviewedOn` only, 528 both equal, 0 conflicting. | `reviewedAt = reviewedOn ?? ReviewdOn`; preserve each source field in private reconciliation evidence, not in the canonical document. |
+| Archive linkage | 433 rows: 327 linked to an episode, 106 unlinked, 0 unresolved episode references. | Migrate every row and preserve a nullable episode relation; product visibility remains a product choice. |
+| Ranked-item targets | 19 rows: all 19 have exactly one of movie/show/episode; 0 have none or multiple. | Require exactly one target and validate it against the ranked-list type. |
+| Ordering | 0 duplicate `(rankedListId, rank)` groups and 0 duplicate `(userId, order)` syllabus groups. | Enforce both keys transactionally in Convex. |
+| Relationship joins | 0 duplicate user-role, assignment-review, or assignment-point relationship groups. | Preserve one canonical document per relationship and reject duplicates on future writes. |
+| Normalized lookup keys | Every role (6), tag (7), game type (2), game-point type (14), and gambling type (8) remains distinct after SQL trim/lower normalization; no blanks. | Use the proposed Unicode-aware normalized key and fail transformation if it creates a collision. |
+| Identity candidates | All 19 users have nonblank email; all 19 remain distinct after SQL trim/lower normalization; 0 duplicate normalized groups. | Preserve display email, store a normalized candidate key, and still require a verified Clerk email before first-use linking. |
+| Legacy impersonation | 0 users have populated `impersonatedUserId`; 0 unresolved targets. | Do not copy the field; all future impersonation uses expiring audited sessions. |
 
 ## Initial index contract
 
@@ -107,9 +124,9 @@ with an unbounded scan.
 
 ## Approval items
 
-1. Confirm the source timezone for SQL `datetime`/`datetime2`.
-2. Approve the `ReviewdOn` versus `reviewedOn` precedence rule.
-3. Approve the normalized-text algorithm.
+1. Approve interpreting SQL `datetime`/`datetime2` as UTC.
+2. Approve `reviewedAt = reviewedOn ?? ReviewdOn`.
+3. Approve trim + Unicode NFKC + locale-independent lowercase, with collision detection.
 4. Decide whether `Archive.Posts` remains queryable or backup-only after cutover.
 
 The production-derived transformer remains blocked until these items and the Phase 0

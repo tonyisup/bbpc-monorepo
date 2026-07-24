@@ -74,6 +74,7 @@ async function seedUser(
       const roleId = await ctx.db.insert("roles", {
         name: "Administrator",
         normalizedName: "administrator",
+        description: "Synthetic administrator role",
         admin: true,
         permissions: ["admin"],
         createdAt: now,
