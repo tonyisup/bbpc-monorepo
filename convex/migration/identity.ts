@@ -42,6 +42,10 @@ interface CheckpointSummary {
   insertedCount: number;
   reusedCount: number;
 }
+interface IdentityRun {
+  run: Doc<"migrationRuns">;
+  domainRun: Doc<"migrationDomainRuns">;
+}
 
 function requireOperation(
   actual: string,
@@ -86,7 +90,7 @@ function requireBatchSize(value: number): void {
 async function getRun(
   ctx: DatabaseContext,
   runId: string,
-): Promise<Doc<"migrationRuns">> {
+): Promise<IdentityRun> {
   const run = await ctx.db
     .query("migrationRuns")
     .withIndex("by_runId", (query) => query.eq("runId", runId))
@@ -110,7 +114,26 @@ async function getRun(
       { details: { runStatus: run.status } },
     );
   }
-  return run;
+  const domainRun = await ctx.db
+    .query("migrationDomainRuns")
+    .withIndex("by_runId_and_domain", (query) =>
+      query.eq("runId", runId).eq("domain", "identity"),
+    )
+    .unique();
+  if (!domainRun) {
+    domainError(
+      "CONFLICT",
+      "The identity domain migration has not been started.",
+    );
+  }
+  if (domainRun.status !== "running") {
+    domainError(
+      "CONFLICT",
+      "The identity domain is not accepting transform batches.",
+      { details: { domainStatus: domainRun.status } },
+    );
+  }
+  return { run, domainRun };
 }
 
 async function getCheckpoint(
@@ -242,17 +265,35 @@ export const startIdentityRun = internalMigrationMutation({
     }
 
     const runId = ctx.systemState.cutoverRunId;
-    const existing = await ctx.db
+    const existingRun = await ctx.db
       .query("migrationRuns")
       .withIndex("by_runId", (query) => query.eq("runId", runId))
       .unique();
-    if (existing) {
+    if (
+      existingRun &&
+      (existingRun.sourceSchemaFingerprint !==
+        args.sourceSchemaFingerprint ||
+        existingRun.status !== "running")
+    ) {
+      domainError(
+        "CONFLICT",
+        "The existing migration run is not compatible with the identity source.",
+      );
+    }
+    const existingDomainRun = await ctx.db
+      .query("migrationDomainRuns")
+      .withIndex("by_runId_and_domain", (query) =>
+        query.eq("runId", runId).eq("domain", "identity"),
+      )
+      .unique();
+    if (existingDomainRun) {
       const sameConfiguration =
-        existing.sourceSchemaFingerprint ===
-          args.sourceSchemaFingerprint &&
-        existing.expectedUsers === args.expectedUsers &&
-        existing.expectedRoles === args.expectedRoles &&
-        existing.expectedUserRoles === args.expectedUserRoles;
+        existingDomainRun.expectedCounts.users ===
+          args.expectedUsers &&
+        existingDomainRun.expectedCounts.roles ===
+          args.expectedRoles &&
+        existingDomainRun.expectedCounts.userRoles ===
+          args.expectedUserRoles;
       if (!sameConfiguration) {
         domainError(
           "CONFLICT",
@@ -261,19 +302,30 @@ export const startIdentityRun = internalMigrationMutation({
       }
       return {
         runId,
-        status: existing.status,
+        status: existingDomainRun.status,
         created: false,
       };
     }
 
     const now = Date.now();
-    await ctx.db.insert("migrationRuns", {
+    if (!existingRun) {
+      await ctx.db.insert("migrationRuns", {
+        runId,
+        sourceSchemaFingerprint: args.sourceSchemaFingerprint,
+        status: "running",
+        startedAt: now,
+        updatedAt: now,
+      });
+    }
+    await ctx.db.insert("migrationDomainRuns", {
       runId,
-      sourceSchemaFingerprint: args.sourceSchemaFingerprint,
+      domain: "identity",
       status: "running",
-      expectedUsers: args.expectedUsers,
-      expectedRoles: args.expectedRoles,
-      expectedUserRoles: args.expectedUserRoles,
+      expectedCounts: {
+        users: args.expectedUsers,
+        roles: args.expectedRoles,
+        userRoles: args.expectedUserRoles,
+      },
       startedAt: now,
       updatedAt: now,
     });
@@ -303,7 +355,7 @@ export const transformRolesBatch = internalMigrationMutation({
     );
     requireBatchSize(args.batchSize);
     const runId = ctx.systemState.cutoverRunId;
-    const run = await getRun(ctx, runId);
+    const { run } = await getRun(ctx, runId);
     const previous = await getCheckpoint(
       ctx,
       runId,
@@ -447,7 +499,7 @@ export const transformUsersBatch = internalMigrationMutation({
     );
     requireBatchSize(args.batchSize);
     const runId = ctx.systemState.cutoverRunId;
-    const run = await getRun(ctx, runId);
+    const { run } = await getRun(ctx, runId);
     const previous = await getCheckpoint(
       ctx,
       runId,
@@ -714,7 +766,7 @@ export const finishIdentityRun = internalMigrationMutation({
       IDENTITY_OPERATIONS.finish,
     );
     const runId = ctx.systemState.cutoverRunId;
-    const run = await getRun(ctx, runId);
+    const { domainRun } = await getRun(ctx, runId);
     const users = await getCheckpoint(
       ctx,
       runId,
@@ -741,9 +793,10 @@ export const finishIdentityRun = internalMigrationMutation({
       );
     }
     if (
-      users.processedCount !== run.expectedUsers ||
-      roles.processedCount !== run.expectedRoles ||
-      userRoles.processedCount !== run.expectedUserRoles
+      users.processedCount !== domainRun.expectedCounts.users ||
+      roles.processedCount !== domainRun.expectedCounts.roles ||
+      userRoles.processedCount !==
+        domainRun.expectedCounts.userRoles
     ) {
       domainError(
         "CONFLICT",
@@ -758,7 +811,7 @@ export const finishIdentityRun = internalMigrationMutation({
       );
     }
 
-    await ctx.db.patch("migrationRuns", run._id, {
+    await ctx.db.patch("migrationDomainRuns", domainRun._id, {
       status: "transformed",
       updatedAt: Date.now(),
     });

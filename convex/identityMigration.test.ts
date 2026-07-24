@@ -808,9 +808,14 @@ describe("identity migration slice", () => {
         runId: CUTOVER_RUN_ID,
         sourceSchemaFingerprint: SOURCE_SCHEMA_FINGERPRINT,
         status: "running",
-        expectedUsers: 0,
-        expectedRoles: 0,
-        expectedUserRoles: 0,
+        startedAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("migrationDomainRuns", {
+        runId: CUTOVER_RUN_ID,
+        domain: "identity",
+        status: "running",
+        expectedCounts: { users: 0, roles: 0, userRoles: 0 },
         startedAt: now,
         updatedAt: now,
       });
@@ -889,13 +894,18 @@ describe("identity migration slice", () => {
         runId: CUTOVER_RUN_ID,
         sourceSchemaFingerprint: "sha256:corrupt",
         status: "running",
-        expectedUsers: 0,
-        expectedRoles: 0,
-        expectedUserRoles: 0,
         startedAt: now,
         updatedAt: now,
       });
     });
+    await expectDomainError(
+      startRun(corruptRun, {
+        users: 0,
+        roles: 0,
+        userRoles: 0,
+      }),
+      "CONFLICT",
+    );
     await expectDomainError(
       corruptRun.mutation(
         internal.migration.identity.transformUsersBatch,
@@ -907,6 +917,61 @@ describe("identity migration slice", () => {
       ),
       "CONFLICT",
     );
+
+    const stoppedRun = createTestBackend();
+    await initializeAtS1(stoppedRun);
+    await stoppedRun.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.insert("migrationRuns", {
+        runId: CUTOVER_RUN_ID,
+        sourceSchemaFingerprint: SOURCE_SCHEMA_FINGERPRINT,
+        status: "transformed",
+        startedAt: now,
+        updatedAt: now,
+      });
+    });
+    await expectDomainError(
+      stoppedRun.mutation(
+        internal.migration.identity.transformUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_OPERATIONS.users,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+
+    const missingDomain = createTestBackend();
+    await initializeAtS1(missingDomain);
+    await missingDomain.run(async (ctx) => {
+      const now = Date.now();
+      await ctx.db.insert("migrationRuns", {
+        runId: CUTOVER_RUN_ID,
+        sourceSchemaFingerprint: SOURCE_SCHEMA_FINGERPRINT,
+        status: "running",
+        startedAt: now,
+        updatedAt: now,
+      });
+    });
+    await expectDomainError(
+      missingDomain.mutation(
+        internal.migration.identity.transformUsersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: IDENTITY_OPERATIONS.users,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expect(
+      startRun(missingDomain, {
+        users: 0,
+        roles: 0,
+        userRoles: 0,
+      }),
+    ).resolves.toMatchObject({ created: true, status: "running" });
 
     const permissionConflict = createTestBackend();
     await initializeAtS1(permissionConflict);

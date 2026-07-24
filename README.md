@@ -73,6 +73,11 @@ rolls back the entire batch. Legacy `impersonatedUserId` is checked only by the
 aggregate probe and is never extracted or staged. Auth.js accounts, sessions,
 verification tokens, and provider tokens are not staged at all.
 
+One fingerprinted global migration run owns independent per-domain run records and
+checkpoints. Completing the identity domain therefore does not incorrectly mark the
+full migration transformed; later catalog, episode, review, game, and ranking domains
+join the same cutover run.
+
 Production-derived staging is local-only and must be removed before the portable
 canonical backup. Cloud staging continues to use synthetic fixtures only.
 

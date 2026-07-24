@@ -549,12 +549,18 @@ export default defineSchema({
     runId: v.string(),
     sourceSchemaFingerprint: v.string(),
     status: migrationRunStatus,
-    expectedUsers: v.number(),
-    expectedRoles: v.number(),
-    expectedUserRoles: v.number(),
     startedAt: v.number(),
     updatedAt: v.number(),
   }).index("by_runId", ["runId"]),
+
+  migrationDomainRuns: defineTable({
+    runId: v.string(),
+    domain: v.string(),
+    status: migrationRunStatus,
+    expectedCounts: v.record(v.string(), v.number()),
+    startedAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_runId_and_domain", ["runId", "domain"]),
 
   migrationCheckpoints: defineTable({
     runId: v.string(),
