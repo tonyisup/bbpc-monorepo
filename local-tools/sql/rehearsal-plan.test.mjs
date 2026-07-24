@@ -11,6 +11,7 @@ import {
   executeRehearsalPlan,
   isRehearsalStepComplete,
   REHEARSAL_DOMAINS,
+  shouldStageForResume,
 } from "./rehearsal-plan.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -295,5 +296,35 @@ test("rejects invalid checkpoints and retry exhaustion", async () => {
       invoke: async () => ({ status: "completed" }),
     }),
     /batch size/u,
+  );
+});
+
+test("replaces staging only before migration progress exists", () => {
+  assert.equal(
+    shouldStageForResume({
+      domainStatuses: {},
+      checkpointStatuses: {},
+    }),
+    true,
+  );
+  assert.equal(
+    shouldStageForResume({
+      domainStatuses: { identity: "running" },
+      checkpointStatuses: {},
+    }),
+    false,
+  );
+  assert.equal(
+    shouldStageForResume({
+      domainStatuses: {},
+      checkpointStatuses: {
+        "identity.users": "running",
+      },
+    }),
+    false,
+  );
+  assert.throws(
+    () => shouldStageForResume({}),
+    /Invalid local rehearsal progress/u,
   );
 });

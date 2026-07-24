@@ -238,7 +238,10 @@ export async function requireTransformedDomain(
       query.eq("runId", input.runId).eq("domain", input.domain),
     )
     .unique();
-  if (domainRun?.status !== "transformed") {
+  if (
+    domainRun?.status !== "transformed" &&
+    domainRun?.status !== "reconciled"
+  ) {
     domainError(
       "CONFLICT",
       `The ${input.domain} migration domain must be transformed first.`,

@@ -919,3 +919,20 @@ export function isRehearsalStepComplete(step, progress) {
     `Unknown completion rule for ${String(step.label)}`,
   );
 }
+
+export function shouldStageForResume(progress) {
+  if (
+    typeof progress !== "object" ||
+    progress === null ||
+    typeof progress.domainStatuses !== "object" ||
+    progress.domainStatuses === null ||
+    typeof progress.checkpointStatuses !== "object" ||
+    progress.checkpointStatuses === null
+  ) {
+    throw new Error("Invalid local rehearsal progress");
+  }
+  return (
+    Object.keys(progress.domainStatuses).length === 0 &&
+    Object.keys(progress.checkpointStatuses).length === 0
+  );
+}

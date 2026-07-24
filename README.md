@@ -240,8 +240,9 @@ until the runbook's production-derived rehearsal and backup gate are approved.
 The guarded local rehearsal is specified in
 [`MIGRATION_REHEARSAL_RUNBOOK.md`](./MIGRATION_REHEARSAL_RUNBOOK.md). Its manifest-derived
 86-step plan is checked against real function exports, initializes S1 before staging so
-interruptions remain resumable, and uses persisted domain/checkpoint progress to skip
-completed work. It stops with all eight domains reconciled and raw evidence intact.
+interruptions remain resumable, preserves raw document IDs after checkpoints begin, and
+uses persisted domain/checkpoint progress to skip completed work. It stops with all
+eight domains reconciled and raw evidence intact.
 
 ## Package consumers
 

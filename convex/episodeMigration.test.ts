@@ -60,6 +60,7 @@ async function initializeAtS1(t: TestBackend): Promise<void> {
 
 async function seedIdentityPrerequisite(
   t: TestBackend,
+  status: "reconciled" | "transformed" = "transformed",
 ): Promise<void> {
   await t.run(async (ctx) => {
     await ctx.db.insert("migrationRuns", {
@@ -72,7 +73,7 @@ async function seedIdentityPrerequisite(
     await ctx.db.insert("migrationDomainRuns", {
       runId: CUTOVER_RUN_ID,
       domain: "identity",
-      status: "transformed",
+      status,
       expectedCounts: { users: 0, roles: 0, userRoles: 0 },
       startedAt: 1,
       updatedAt: 1,
@@ -671,6 +672,24 @@ describe("episode migration slice", () => {
       }),
       "CONFLICT",
     );
+
+    const reconciledIdentity = createTestBackend();
+    await initializeAtS1(reconciledIdentity);
+    await seedIdentityPrerequisite(
+      reconciledIdentity,
+      "reconciled",
+    );
+    await expect(
+      startRun(reconciledIdentity, {
+        episodes: 0,
+        links: 0,
+        bangers: 0,
+        audioMessages: 0,
+      }),
+    ).resolves.toMatchObject({
+      status: "running",
+      created: true,
+    });
 
     const t = createTestBackend();
     await initializeReady(t);

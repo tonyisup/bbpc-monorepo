@@ -74,9 +74,11 @@ npm run migration:rehearse:local -- \
 ```
 
 Resume mode refuses a different run ID, API version, source fingerprint, failed domain,
-or stage outside S0/S1. It re-verifies and safely replaces raw staging from the same
-immutable manifests, reads domain/checkpoint progress, skips completed work, and
-continues bounded batches.
+or stage outside S0/S1. It re-verifies the same immutable manifests. If no migration
+progress exists, it safely replaces all raw staging to recover from a staging
+interruption. Once any domain/checkpoint progress exists, it preserves raw staging so
+stored checkpoint cursors remain valid, skips completed work, and continues bounded
+batches.
 
 Do not delete, edit, or regenerate an extract under the same run ID. If source data or
 the census changes, use a fresh run ID and empty local deployment.

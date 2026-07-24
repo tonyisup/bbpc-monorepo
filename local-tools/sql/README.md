@@ -115,7 +115,8 @@ npm run migration:rehearse:local -- \
 ```
 
 If any staging or Convex step is interrupted, rerun with `--resume` and
-`--ack-resume-local-rehearsal`. Resume mode reimports the same immutable manifests and
-uses persisted domain/checkpoint state to skip completed work. The command stops after
-all eight domains reconcile and never invokes either scrub. See
+`--ack-resume-local-rehearsal`. Resume mode reimports the same immutable manifests only
+when no migration progress exists; after checkpoints begin it preserves raw document
+IDs so persisted cursors remain valid. It uses domain/checkpoint state to skip completed
+work. The command stops after all eight domains reconcile and never invokes either scrub. See
 `MIGRATION_REHEARSAL_RUNBOOK.md` for the dry run, resume command, and exit gate.

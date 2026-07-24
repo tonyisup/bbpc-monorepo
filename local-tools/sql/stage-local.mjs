@@ -1,9 +1,12 @@
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { verifyDomainManifest } from "./manifest.mjs";
+import { buildLocalImportSpec } from "./stage-import.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(toolDirectory, "../..");
@@ -86,39 +89,65 @@ process.stdout.write(
   ].join("\n"),
 );
 
-for (const file of verified.files) {
-  const command = process.platform === "win32" ? "npx.cmd" : "npx";
-  const result = spawnSync(
-    command,
-    [
-      "convex",
-      "import",
-      "--deployment",
-      "local",
-      "--table",
-      file.table,
-      "--format",
-      "jsonLines",
-      "--replace",
-      "--yes",
-      file.filePath,
-    ],
-    {
-      cwd: projectRoot,
-      encoding: "utf8",
-      stdio: "inherit",
-    },
-  );
-  if (result.error) {
-    throw new Error(
-      `Unable to execute local import for ${file.table}`,
+const temporaryDirectory = fs.mkdtempSync(
+  path.join(os.tmpdir(), "bbpc-convex-empty-import-"),
+);
+fs.chmodSync(temporaryDirectory, 0o700);
+const emptyJsonArrayPath = path.join(
+  temporaryDirectory,
+  "empty.json",
+);
+fs.writeFileSync(emptyJsonArrayPath, "[]\n", {
+  encoding: "utf8",
+  flag: "wx",
+  mode: 0o600,
+});
+
+try {
+  for (const file of verified.files) {
+    const command =
+      process.platform === "win32" ? "npx.cmd" : "npx";
+    const importSpec = buildLocalImportSpec(
+      file,
+      emptyJsonArrayPath,
     );
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `Local import failed for ${file.table}; rerun after resolving the reported error`,
+    const result = spawnSync(
+      command,
+      [
+        "convex",
+        "import",
+        "--deployment",
+        "local",
+        "--table",
+        file.table,
+        "--format",
+        importSpec.format,
+        "--replace",
+        "--yes",
+        importSpec.filePath,
+      ],
+      {
+        cwd: projectRoot,
+        encoding: "utf8",
+        stdio: "inherit",
+      },
     );
+    if (result.error) {
+      throw new Error(
+        `Unable to execute local import for ${file.table}`,
+      );
+    }
+    if (result.status !== 0) {
+      throw new Error(
+        `Local import failed for ${file.table}; rerun after resolving the reported error`,
+      );
+    }
   }
+} finally {
+  fs.rmSync(temporaryDirectory, {
+    recursive: true,
+    force: true,
+  });
 }
 
 process.stdout.write(

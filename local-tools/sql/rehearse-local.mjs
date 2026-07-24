@@ -14,6 +14,7 @@ import {
   executeRehearsalPlan,
   isRehearsalStepComplete,
   REHEARSAL_DOMAINS,
+  shouldStageForResume,
 } from "./rehearsal-plan.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -232,19 +233,31 @@ if (initialProgress.cutoverStage === "S0") {
   });
 }
 
-for (const domain of REHEARSAL_DOMAINS) {
-  runCommand(
-    process.execPath,
+const stageRawTables =
+  !resume || shouldStageForResume(initialProgress);
+if (stageRawTables) {
+  for (const domain of REHEARSAL_DOMAINS) {
+    runCommand(
+      process.execPath,
+      [
+        path.join(toolDirectory, "stage-local.mjs"),
+        "--run-id",
+        runId,
+        "--domain",
+        domain,
+        REQUIRED_SOURCE_ACK,
+        REQUIRED_REPLACE_ACK,
+      ],
+      `Local ${domain} staging`,
+    );
+  }
+} else {
+  process.stdout.write(
     [
-      path.join(toolDirectory, "stage-local.mjs"),
-      "--run-id",
-      runId,
-      "--domain",
-      domain,
-      REQUIRED_SOURCE_ACK,
-      REQUIRED_REPLACE_ACK,
-    ],
-    `Local ${domain} staging`,
+      "Preserving existing raw staging because migration progress exists.",
+      "Replacing raw rows now would invalidate persisted checkpoint cursors.",
+      "",
+    ].join("\n"),
   );
 }
 
