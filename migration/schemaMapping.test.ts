@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest";
 
 import {
   pendingDomainDecisions,
+  requiredIndexesByTarget,
   sourceTableMappings,
 } from "./schemaMapping.js";
+import schema from "../convex/schema.js";
 
 const expectedSourceTables = [
   "Archive.Posts",
@@ -42,6 +44,13 @@ const expectedSourceTables = [
   "dbo.VerificationToken",
 ].sort();
 
+interface ExportedSchema {
+  tables: Array<{
+    tableName: string;
+    indexes: Array<{ indexDescriptor: string }>;
+  }>;
+}
+
 describe("SQL-to-Convex source table mapping", () => {
   test("covers every census table exactly once", () => {
     const actual = sourceTableMappings
@@ -73,6 +82,50 @@ describe("SQL-to-Convex source table mapping", () => {
       "dbo.Session",
       "dbo.VerificationToken",
     ]);
+  });
+
+  test("defines every migrated target with its required indexes", () => {
+    const targets = sourceTableMappings.flatMap((mapping) =>
+      mapping.disposition === "migrate"
+        ? [mapping.target]
+        : [],
+    );
+
+    expect(Object.keys(requiredIndexesByTarget).sort()).toEqual(
+      [...targets].sort(),
+    );
+    const exportableSchema = schema as unknown as {
+      export(): string;
+    };
+    const exportedSchema = JSON.parse(
+      exportableSchema.export(),
+    ) as unknown as ExportedSchema;
+    const tablesByName = new Map(
+      exportedSchema.tables.map((table) => [
+        table.tableName,
+        table,
+      ]),
+    );
+    for (const target of targets) {
+      const table = tablesByName.get(target);
+      expect(table, `missing schema table ${target}`).toBeDefined();
+      if (!table) {
+        continue;
+      }
+      const actualIndexes = table.indexes.map(
+        (index) => index.indexDescriptor,
+      );
+      expect(
+        actualIndexes,
+        `missing required index on ${target}`,
+      ).toEqual(
+        expect.arrayContaining(
+          [
+            ...requiredIndexesByTarget[target],
+          ],
+        ),
+      );
+    }
   });
 
   test("records the approved production drift decisions", () => {

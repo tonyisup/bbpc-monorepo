@@ -5,6 +5,9 @@ Status: **review required before production-derived transformation**
 Source: the read-only `dev` clone census with schema fingerprint
 `5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a`.
 The census declares `containsRowValues: false`; no production row values are copied here.
+All 31 migrated targets and their minimum indexes are now defined in the Convex schema
+and verified against the typed mapping. This does not approve or run the
+production-derived transform.
 
 ## Global conversion rules
 
@@ -28,7 +31,7 @@ behavior.
 
 The typed source of truth is
 [`migration/schemaMapping.ts`](./migration/schemaMapping.ts). It covers all 34 census
-tables exactly once.
+tables exactly once and records the required index set for every migrated target.
 
 | Domain | Source | Target/disposition | Special rule |
 |---|---|---|---|
@@ -113,7 +116,7 @@ Index names include every indexed field.
 | `points` | `by_userId`, `by_seasonId`, `by_gamePointTypeId`, `by_userId_and_seasonId` |
 | `guesses` | `by_userId`, `by_assignmentReviewId`, `by_seasonId`, `by_pointId`, `by_userId_and_assignmentReviewId` |
 | `gamblingEntries` | one index for each relation plus `by_userId_and_seasonId` |
-| `tagVotes` | `by_userId`, `by_tag_and_userId`, `by_tmdbId_and_tag` |
+| `tagVotes` | `by_userId`, `by_normalizedTag_and_userId`, `by_tmdbId_and_normalizedTag` |
 | `quoteSubmissions` | `by_episodeId_and_status`, `by_episodeId_and_userId`, `by_seasonId`, `by_userId`, `by_pointId` |
 | `rankedLists` | `by_userId`, `by_rankedListTypeId`, `by_userId_and_rankedListTypeId` |
 | `rankedItems` | `by_rankedListId_and_rank`, plus one index for each nullable target |
