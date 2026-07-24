@@ -29,6 +29,8 @@ import type * as migration_gameRelationships from "../migration/gameRelationship
 import type * as migration_identity from "../migration/identity.js";
 import type * as migration_identityReconciliation from "../migration/identityReconciliation.js";
 import type * as migration_normalize from "../migration/normalize.js";
+import type * as migration_rankingReconciliation from "../migration/rankingReconciliation.js";
+import type * as migration_rankings from "../migration/rankings.js";
 import type * as migration_reviewReconciliation from "../migration/reviewReconciliation.js";
 import type * as migration_reviews from "../migration/reviews.js";
 import type * as migration_runtime from "../migration/runtime.js";
@@ -66,6 +68,8 @@ declare const fullApi: ApiFromModules<{
   "migration/identity": typeof migration_identity;
   "migration/identityReconciliation": typeof migration_identityReconciliation;
   "migration/normalize": typeof migration_normalize;
+  "migration/rankingReconciliation": typeof migration_rankingReconciliation;
+  "migration/rankings": typeof migration_rankings;
   "migration/reviewReconciliation": typeof migration_reviewReconciliation;
   "migration/reviews": typeof migration_reviews;
   "migration/runtime": typeof migration_runtime;

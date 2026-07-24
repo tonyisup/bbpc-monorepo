@@ -92,6 +92,21 @@ export const GAME_RECONCILIATION_OPERATIONS = {
   finish: "games.reconcile.finish",
 } as const;
 
+export const RANKING_OPERATIONS = {
+  start: "rankings.start",
+  listTypes: "rankings.listTypes",
+  lists: "rankings.lists",
+  items: "rankings.items",
+  finish: "rankings.finish",
+} as const;
+
+export const RANKING_RECONCILIATION_OPERATIONS = {
+  listTypes: "rankings.reconcile.listTypes",
+  lists: "rankings.reconcile.lists",
+  items: "rankings.reconcile.items",
+  finish: "rankings.reconcile.finish",
+} as const;
+
 export const REVIEW_OPERATIONS = {
   start: "reviews.start",
   ratings: "reviews.ratings",

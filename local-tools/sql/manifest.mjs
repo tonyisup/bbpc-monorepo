@@ -45,6 +45,11 @@ const DOMAIN_TABLES = {
     "migrationRawTagVotes",
     "migrationRawQuoteSubmissions",
   ],
+  rankings: [
+    "migrationRawRankedListTypes",
+    "migrationRawRankedLists",
+    "migrationRawRankedItems",
+  ],
 };
 
 const TABLE_FIELDS = {
@@ -373,6 +378,49 @@ const TABLE_FIELDS = {
       "placement",
       "adminNotes",
       "pointLegacyId",
+    ],
+  },
+  migrationRawRankedListTypes: {
+    required: [
+      "runId",
+      "legacyId",
+      "name",
+      "maxItems",
+      "targetType",
+      "createdAt",
+      "updatedAt",
+      "sourceRowHash",
+    ],
+    optional: ["description"],
+  },
+  migrationRawRankedLists: {
+    required: [
+      "runId",
+      "legacyId",
+      "userLegacyId",
+      "rankedListTypeLegacyId",
+      "status",
+      "createdAt",
+      "updatedAt",
+      "sourceRowHash",
+    ],
+    optional: ["title"],
+  },
+  migrationRawRankedItems: {
+    required: [
+      "runId",
+      "legacyId",
+      "rankedListLegacyId",
+      "rank",
+      "createdAt",
+      "updatedAt",
+      "sourceRowHash",
+    ],
+    optional: [
+      "movieLegacyId",
+      "showLegacyId",
+      "episodeLegacyId",
+      "comment",
     ],
   },
 };

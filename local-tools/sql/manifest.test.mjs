@@ -155,6 +155,11 @@ test("verifies a private immutable domain manifest", () => {
       "migrationRawTagVotes",
       "migrationRawQuoteSubmissions",
     ]);
+    assert.deepEqual(tablesForDomain("rankings"), [
+      "migrationRawRankedListTypes",
+      "migrationRawRankedLists",
+      "migrationRawRankedItems",
+    ]);
   } finally {
     fixture.cleanup();
   }

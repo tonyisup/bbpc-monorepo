@@ -187,6 +187,19 @@ extractor reads all nine source tables in one serializable transaction and emits
 immutable local-only manifest. It is implemented and synthetically tested, but has not
 been run against production-derived rows.
 
+## Ranking migration rehearsal
+
+The ranking slice transforms `RankedListType`, `RankedList`, and `RankedItem` after
+identity, catalog, and episodes reconcile. It accepts only the existing
+`MOVIE`/`SHOW`/`EPISODE` type contract and `DRAFT`/`PUBLISHED` statuses, requires every
+item to have exactly one target matching its owning list type, and enforces unique
+list/rank slots within `1..maxItems`.
+
+Independent reconciliation re-resolves every user, type, list, movie, show, and episode
+relationship and detects scalar or ordering drift without repair. The guarded ranking
+extractor captures all three tables in one serializable local-only snapshot and has
+synthetic coverage only; it has not read production-derived rows.
+
 ## Foundation raw-staging scrub
 
 After identity, catalog, and episodes are each independently reconciled, an internal

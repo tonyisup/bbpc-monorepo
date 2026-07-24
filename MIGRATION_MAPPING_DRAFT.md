@@ -9,10 +9,11 @@ All 31 migrated targets and their minimum indexes are now defined in the Convex 
 and verified against the typed mapping. This does not approve or run the
 production-derived transform.
 
-The identity, catalog, episode, assignment, review, and game mappings are implemented
-as synthetic-only, checkpointed rehearsal slices. Their guarded local extractors exist
-but have not been run against the production-derived `dev` clone. The nine game tables
-are extracted atomically in one serializable transaction. Catalog rehearsal tests prove that
+The identity, catalog, episode, assignment, review, game, and ranking mappings are
+implemented as synthetic-only, checkpointed rehearsal slices. Their guarded local
+extractors exist but have not been run against the production-derived `dev` clone. The
+nine game tables and three ranking tables are each extracted atomically in a
+serializable transaction. Catalog rehearsal tests prove that
 duplicate movie/show normalized keys remain distinct while tag collisions fail
 transactionally. A separate catalog pass independently reconciles every transformed
 field before marking that domain reconciled. Identity independently rechecks profiles,
@@ -97,6 +98,7 @@ aggregate counts and clock offsets only; it did not print or persist source-row 
 | Point adjustments | 418 rows: 2 null, 325 zero, 91 nonzero. | Preserve SQL `NULL` separately from zero and validate the live SQL `INT` range. |
 | Archive linkage | 433 rows: 327 linked to an episode, 106 unlinked, 0 unresolved episode references. | Migrate every row and preserve a nullable episode relation; product visibility remains a product choice. |
 | Ranked-item targets | 19 rows: all 19 have exactly one of movie/show/episode; 0 have none or multiple. | Require exactly one target and validate it against the ranked-list type. |
+| Ranked-list constraints | 1 type, 3 lists, and 19 items: 0 invalid target types, max-item limits, statuses, target/type combinations, or rank bounds; 0 lists exceed capacity. | Accept only `MOVIE`/`SHOW`/`EPISODE`, `DRAFT`/`PUBLISHED`, ranks `1..maxItems`, and a target matching the owning list type. |
 | Ordering | 0 duplicate `(rankedListId, rank)` groups and 0 duplicate `(userId, order)` syllabus groups. | Enforce both keys transactionally in Convex. |
 | Relationship joins | 0 duplicate user-role, assignment-review, extra-review, or assignment-point relationship groups. | Preserve one canonical document per relationship and reject duplicates on future writes. |
 | Normalized lookup keys | Every role (6), tag (7), game type (2), game-point type (14), and gambling type (8) remains distinct after SQL trim/lower normalization; no blanks. | Use the proposed Unicode-aware normalized key and fail transformation if it creates a collision. |
