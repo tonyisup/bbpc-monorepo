@@ -98,3 +98,24 @@ run are deliberately removed.
 Never change this command to `--prod`, a cloud deployment name, or `--append`.
 Production-derived raw rows must not enter cloud staging, CI, or the eventual production
 deployment.
+
+## Full local rehearsal
+
+After all mapping approvals and all eight extracts exist, the guarded rehearsal command
+verifies every manifest, requires a completely empty local deployment, initializes S1,
+stages all domains, and executes the tested 86-step transform/reconciliation DAG:
+
+```sh
+npm run migration:rehearse:local -- \
+  --run-id <cutover-run-id> \
+  --batch-size 50 \
+  --ack-production-derived-local-only \
+  --ack-initialize-empty-local-deployment \
+  --ack-replace-local-raw-staging
+```
+
+If any staging or Convex step is interrupted, rerun with `--resume` and
+`--ack-resume-local-rehearsal`. Resume mode reimports the same immutable manifests and
+uses persisted domain/checkpoint state to skip completed work. The command stops after
+all eight domains reconcile and never invokes either scrub. See
+`MIGRATION_REHEARSAL_RUNBOOK.md` for the dry run, resume command, and exit gate.

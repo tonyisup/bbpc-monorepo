@@ -46,6 +46,7 @@ npm run dev
 npm run check
 npm run package:check
 npm run migration:test:extractor
+npm run migration:rehearse:local -- --help
 npm run contract:generate
 npm run contract:build
 ```
@@ -236,6 +237,12 @@ identities, and audit evidence are retained. Every other current table is explic
 classified for deletion, and adding an unclassified table fails tests. The portable
 scrub is intentionally one-way once `systemState` is removed and must not be executed
 until the runbook's production-derived rehearsal and backup gate are approved.
+
+The guarded local rehearsal is specified in
+[`MIGRATION_REHEARSAL_RUNBOOK.md`](./MIGRATION_REHEARSAL_RUNBOOK.md). Its manifest-derived
+86-step plan is checked against real function exports, initializes S1 before staging so
+interruptions remain resumable, and uses persisted domain/checkpoint progress to skip
+completed work. It stops with all eight domains reconciled and raw evidence intact.
 
 ## Package consumers
 

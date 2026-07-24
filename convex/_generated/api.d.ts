@@ -33,6 +33,7 @@ import type * as migration_identityReconciliation from "../migration/identityRec
 import type * as migration_normalize from "../migration/normalize.js";
 import type * as migration_rankingReconciliation from "../migration/rankingReconciliation.js";
 import type * as migration_rankings from "../migration/rankings.js";
+import type * as migration_rehearsal from "../migration/rehearsal.js";
 import type * as migration_reviewReconciliation from "../migration/reviewReconciliation.js";
 import type * as migration_reviews from "../migration/reviews.js";
 import type * as migration_runtime from "../migration/runtime.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   "migration/normalize": typeof migration_normalize;
   "migration/rankingReconciliation": typeof migration_rankingReconciliation;
   "migration/rankings": typeof migration_rankings;
+  "migration/rehearsal": typeof migration_rehearsal;
   "migration/reviewReconciliation": typeof migration_reviewReconciliation;
   "migration/reviews": typeof migration_reviews;
   "migration/runtime": typeof migration_runtime;
