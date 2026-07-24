@@ -10,6 +10,7 @@ import {
   preparePublicSearchQuery,
   requirePublicSearchLimit,
 } from "../lib/publicSearch.js";
+import { validateCatalogPageSize } from "./limits.js";
 import {
   catalogMovieValidator,
   catalogShowValidator,
@@ -111,6 +112,7 @@ export const listMoviesPage = anonymousQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(catalogMovieValidator),
   handler: async (ctx, args) => {
+    validateCatalogPageSize(args.paginationOpts.numItems);
     const result = await ctx.db
       .query("movies")
       .withIndex("by_normalizedTitle_and_year")
@@ -123,6 +125,7 @@ export const listShowsPage = anonymousQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(catalogShowValidator),
   handler: async (ctx, args) => {
+    validateCatalogPageSize(args.paginationOpts.numItems);
     const result = await ctx.db
       .query("shows")
       .withIndex("by_normalizedTitle_and_year")

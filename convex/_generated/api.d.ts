@@ -19,6 +19,7 @@ import type * as assignments_validators from "../assignments/validators.js";
 import type * as assignments_writeModel from "../assignments/writeModel.js";
 import type * as catalog_admin from "../catalog/admin.js";
 import type * as catalog_external from "../catalog/external.js";
+import type * as catalog_limits from "../catalog/limits.js";
 import type * as catalog_operations from "../catalog/operations.js";
 import type * as catalog_public from "../catalog/public.js";
 import type * as catalog_readModel from "../catalog/readModel.js";
@@ -148,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   "assignments/writeModel": typeof assignments_writeModel;
   "catalog/admin": typeof catalog_admin;
   "catalog/external": typeof catalog_external;
+  "catalog/limits": typeof catalog_limits;
   "catalog/operations": typeof catalog_operations;
   "catalog/public": typeof catalog_public;
   "catalog/readModel": typeof catalog_readModel;

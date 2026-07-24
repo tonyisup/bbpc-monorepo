@@ -243,4 +243,20 @@ describe("public catalog read API", () => {
     expect(moviePage.isDone).toBe(false);
     expect(showPage.isDone).toBe(false);
   });
+
+  test.each([
+    ["movies", api.catalog.public.listMoviesPage],
+    ["shows", api.catalog.public.listShowsPage],
+  ] as const)(
+    "rejects an unsafe %s page size",
+    async (_catalog, listPage) => {
+      const t = createTestBackend();
+      await expectDomainError(
+        t.query(listPage, {
+          paginationOpts: { cursor: null, numItems: 51 },
+        }),
+        "VALIDATION_FAILED",
+      );
+    },
+  );
 });
