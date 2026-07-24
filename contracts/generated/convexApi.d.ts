@@ -6787,6 +6787,328 @@ export type PublicApiType = {
                 name: string;
             }>;
         };
+        quotes: {
+            awardPlacements: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                earnedAt?: number;
+                episodeId: Id<"episodes">;
+                now?: number;
+                placements: Array<{
+                    placement: number;
+                    submissionId: Id<"quoteSubmissions">;
+                }>;
+            }, {
+                awarded: number;
+                cleared: number;
+            }>;
+            createForUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                clipStartSeconds?: number | null;
+                clipUrl?: string | null;
+                episodeId: Id<"episodes">;
+                listenerNotes?: string | null;
+                now?: number;
+                quoteText: string;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                today: string;
+                userId: Id<"users">;
+            }, {
+                adminNotes: string | null;
+                bracketOrder: number | null;
+                clipStartSeconds: number | null;
+                clipUrl: string | null;
+                createdAt: number;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                };
+                episodeId: Id<"episodes">;
+                id: Id<"quoteSubmissions">;
+                listenerNotes: string | null;
+                placement: number | null;
+                point: {
+                    adjustment: number | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                } | null;
+                quoteText: string;
+                scored: boolean;
+                season: {
+                    id: Id<"seasons">;
+                    title: string;
+                };
+                seasonId: Id<"seasons">;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                updatedAt: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            currentForMe: FunctionReference<"query", "public", Record<string, never>, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                isOpen: boolean;
+                submission: {
+                    bracketOrder: number | null;
+                    clipStartSeconds: number | null;
+                    clipUrl: string | null;
+                    createdAt: number;
+                    id: Id<"quoteSubmissions">;
+                    listenerNotes: string | null;
+                    placement: number | null;
+                    quoteText: string;
+                    scored: boolean;
+                    sourceTitle: string;
+                    sourceType: "MOVIE" | "TV" | "OTHER";
+                    status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                    updatedAt: number;
+                } | null;
+            }>;
+            getAdminById: FunctionReference<"query", "public", {
+                id: Id<"quoteSubmissions">;
+            }, {
+                adminNotes: string | null;
+                bracketOrder: number | null;
+                clipStartSeconds: number | null;
+                clipUrl: string | null;
+                createdAt: number;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                };
+                episodeId: Id<"episodes">;
+                id: Id<"quoteSubmissions">;
+                listenerNotes: string | null;
+                placement: number | null;
+                point: {
+                    adjustment: number | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                } | null;
+                quoteText: string;
+                scored: boolean;
+                season: {
+                    id: Id<"seasons">;
+                    title: string;
+                };
+                seasonId: Id<"seasons">;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                updatedAt: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            } | null>;
+            listAdminEpisodes: FunctionReference<"query", "public", Record<string, never>, Array<{
+                id: Id<"episodes">;
+                number: number;
+                status: string | null;
+                submissionCount: number;
+                title: string;
+            }>>;
+            listAdminForEpisode: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+            }, Array<{
+                adminNotes: string | null;
+                bracketOrder: number | null;
+                clipStartSeconds: number | null;
+                clipUrl: string | null;
+                createdAt: number;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                };
+                episodeId: Id<"episodes">;
+                id: Id<"quoteSubmissions">;
+                listenerNotes: string | null;
+                placement: number | null;
+                point: {
+                    adjustment: number | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                } | null;
+                quoteText: string;
+                scored: boolean;
+                season: {
+                    id: Id<"seasons">;
+                    title: string;
+                };
+                seasonId: Id<"seasons">;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                updatedAt: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>>;
+            randomizeIncluded: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                episodeId: Id<"episodes">;
+                now?: number;
+                seed: string;
+            }, {
+                count: number;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"quoteSubmissions">;
+            }, {
+                id: Id<"quoteSubmissions">;
+            }>;
+            setStatus: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"quoteSubmissions">;
+                now?: number;
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+            }, {
+                adminNotes: string | null;
+                bracketOrder: number | null;
+                clipStartSeconds: number | null;
+                clipUrl: string | null;
+                createdAt: number;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                };
+                episodeId: Id<"episodes">;
+                id: Id<"quoteSubmissions">;
+                listenerNotes: string | null;
+                placement: number | null;
+                point: {
+                    adjustment: number | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                } | null;
+                quoteText: string;
+                scored: boolean;
+                season: {
+                    id: Id<"seasons">;
+                    title: string;
+                };
+                seasonId: Id<"seasons">;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                updatedAt: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            submitMine: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                clipStartSeconds?: number | null;
+                clipUrl?: string | null;
+                listenerNotes?: string | null;
+                now?: number;
+                quoteText: string;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                today: string;
+            }, {
+                bracketOrder: number | null;
+                clipStartSeconds: number | null;
+                clipUrl: string | null;
+                createdAt: number;
+                id: Id<"quoteSubmissions">;
+                listenerNotes: string | null;
+                placement: number | null;
+                quoteText: string;
+                scored: boolean;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                updatedAt: number;
+            }>;
+            updateContent: FunctionReference<"mutation", "public", {
+                adminNotes?: string | null;
+                clientApiVersion: string;
+                clipStartSeconds?: number | null;
+                clipUrl?: string | null;
+                id: Id<"quoteSubmissions">;
+                listenerNotes?: string | null;
+                now?: number;
+                quoteText: string;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+            }, {
+                adminNotes: string | null;
+                bracketOrder: number | null;
+                clipStartSeconds: number | null;
+                clipUrl: string | null;
+                createdAt: number;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                };
+                episodeId: Id<"episodes">;
+                id: Id<"quoteSubmissions">;
+                listenerNotes: string | null;
+                placement: number | null;
+                point: {
+                    adjustment: number | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                } | null;
+                quoteText: string;
+                scored: boolean;
+                season: {
+                    id: Id<"seasons">;
+                    title: string;
+                };
+                seasonId: Id<"seasons">;
+                sourceTitle: string;
+                sourceType: "MOVIE" | "TV" | "OTHER";
+                status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+                updatedAt: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            withdrawMine: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, {
+                id: Id<"quoteSubmissions">;
+            }>;
+        };
     };
 };
 export type InternalApiType = {};

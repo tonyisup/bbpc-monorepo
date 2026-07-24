@@ -350,6 +350,29 @@ active administrator are rejected. All identity mutations require administrator 
 S3/S4 application writes, and the pinned client API version, and emit PII-free audit
 evidence.
 
+## Quotabunga API
+
+Authenticated members can read their current `next` or `recording` episode submission.
+Only a `next` episode accepts writes, ownership is always derived from the linked Clerk
+identity, and the mutation upserts at most one submission per user and episode. Scored
+submissions cannot be edited or withdrawn. Member responses expose the public quote
+fields and score state but never administrator notes.
+
+Administrator operations provide bounded episode selectors, exact and per-episode reads,
+submission creation and correction, moderation, seeded bracket ordering, placement
+awards, and deletion. Only `INCLUDED` submissions can be randomized or awarded.
+Randomization is deterministic for a caller-supplied normalized seed; placements are
+unique and map to 40, 20, and 10 point events. Award creation, recalculation, clearing,
+and quote updates happen atomically, and a quote refuses to alter or delete a point
+shared by another relationship or owned by a different user or season.
+
+Aggregate-only rehearsal inspection found two source submissions. Both are
+`SUBMITTED`/`MOVIE` rows with clip metadata and listener notes, neither has a point, and
+there are no duplicate user/episode or bracket/placement keys and no invalid placement
+or clip-start values. Synthetic tests cover access/write gates, open-round ownership,
+normalization, deterministic brackets, award recalculation and cleanup, relationship
+corruption, audit privacy, and bounded reads.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:

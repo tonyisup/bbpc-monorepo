@@ -22,6 +22,10 @@ export const MAX_GAMBLING_ENTRIES_PER_READ = 500;
 export const MAX_ASSIGNMENTS_FOR_GAMBLING_READ = 25;
 export const MAX_TAG_CATALOG_SIZE = 100;
 export const MAX_TAG_VOTE_PAGE_SIZE = 100;
+export const MAX_QUOTE_EPISODE_SELECTOR_SIZE = 100;
+export const MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR = 2000;
+export const MAX_QUOTE_SUBMISSIONS_PER_EPISODE = 500;
+export const MAX_QUOTE_RANDOM_SEED_LENGTH = 100;
 
 export function validateSeasonPageSize(numItems: number): void {
   if (

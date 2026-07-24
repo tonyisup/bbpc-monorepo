@@ -180,6 +180,84 @@ export const tagVoteValidator = v.object({
   award: tagVoteAwardValidator,
 });
 
+export const quoteSourceTypeValidator = v.union(
+  v.literal("MOVIE"),
+  v.literal("TV"),
+  v.literal("OTHER"),
+);
+
+export const quoteStatusValidator = v.union(
+  v.literal("SUBMITTED"),
+  v.literal("INCLUDED"),
+  v.literal("REJECTED"),
+);
+
+export const quoteEpisodeValidator = v.object({
+  id: v.id("episodes"),
+  number: v.number(),
+  title: v.string(),
+  status: nullableStringValidator,
+});
+
+export const quoteAdminEpisodeValidator =
+  quoteEpisodeValidator.extend({
+    submissionCount: v.number(),
+  });
+
+export const quoteMemberSubmissionValidator = v.object({
+  id: v.id("quoteSubmissions"),
+  quoteText: v.string(),
+  sourceTitle: v.string(),
+  sourceType: quoteSourceTypeValidator,
+  clipUrl: nullableStringValidator,
+  clipStartSeconds: nullableNumberValidator,
+  listenerNotes: nullableStringValidator,
+  status: quoteStatusValidator,
+  bracketOrder: nullableNumberValidator,
+  placement: nullableNumberValidator,
+  scored: v.boolean(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+});
+
+export const currentQuoteSubmissionValidator = v.object({
+  episode: v.union(quoteEpisodeValidator, v.null()),
+  isOpen: v.boolean(),
+  submission: v.union(
+    quoteMemberSubmissionValidator,
+    v.null(),
+  ),
+});
+
+export const quoteAdminUserValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  image: nullableStringValidator,
+});
+
+export const quoteAdminSubmissionValidator =
+  quoteMemberSubmissionValidator.extend({
+    userId: v.id("users"),
+    episodeId: v.id("episodes"),
+    seasonId: v.id("seasons"),
+    adminNotes: nullableStringValidator,
+    user: quoteAdminUserValidator,
+    episode: quoteEpisodeValidator,
+    season: v.object({
+      id: v.id("seasons"),
+      title: v.string(),
+    }),
+    point: v.union(
+      v.object({
+        id: v.id("points"),
+        adjustment: nullableNumberValidator,
+        reason: nullableStringValidator,
+      }),
+      v.null(),
+    ),
+  });
+
 export const assignmentGuessGroupValidator = v.object({
   assignmentId: v.id("assignments"),
   guesses: v.array(guessValidator),

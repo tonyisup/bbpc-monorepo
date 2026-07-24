@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-242 Convex tests with 96.46% statement and 90.00% branch coverage. Owner-scoped episode
+249 Convex tests with 96.49% statement and 90.10% branch coverage. Owner-scoped episode
 audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
@@ -216,8 +216,19 @@ application contract. Aggregate-only inspection confirmed 2,194 rows, 2 unawarde
 2,192 historical markers, no invalid TMDB IDs, and no duplicate canonical vote keys.
 The portable scrub now removes the 2,192 dangling UUID values from canonical documents
 after raw archive deletion while retaining the non-rewardable marker; restored
-reconciliation explicitly accepts that scrubbed state. Quote and ranking workflows
-remain in T10.
+reconciliation explicitly accepts that scrubbed state.
+
+Quotabunga is covered synthetically as the sixth game checkpoint. Member operations
+derive ownership from Clerk, expose the newest `next`/`recording` submission without
+administrator notes, and permit one upsert or withdrawal only while the episode is
+`next`; scored rows are immutable through that surface. Administrator operations cover
+bounded reads and corrections, moderation, deterministic caller-seeded bracket order,
+and atomic unique 40/20/10 placement awards. Re-awarding recalculates owned points and
+clears omitted prior awards, while missing, shared, cross-user, and cross-season point
+relationships fail closed. Aggregate-only inspection of the private source found two
+clean `SUBMITTED`/`MOVIE` rows with clip metadata and listener notes, neither scored,
+and no duplicate user/episode, point, bracket, or placement keys or invalid
+placement/clip-start values. Ranking workflows remain in T10.
 
 ## Preserved gate
 

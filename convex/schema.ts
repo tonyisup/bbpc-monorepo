@@ -611,11 +611,19 @@ export default defineSchema({
     seasonId: v.id("seasons"),
     quoteText: v.string(),
     sourceTitle: v.string(),
-    sourceType: v.string(),
+    sourceType: v.union(
+      v.literal("MOVIE"),
+      v.literal("TV"),
+      v.literal("OTHER"),
+    ),
     clipUrl: v.optional(v.string()),
     clipStartSeconds: v.optional(v.number()),
     listenerNotes: v.optional(v.string()),
-    status: v.string(),
+    status: v.union(
+      v.literal("SUBMITTED"),
+      v.literal("INCLUDED"),
+      v.literal("REJECTED"),
+    ),
     bracketOrder: v.optional(v.number()),
     placement: v.optional(v.number()),
     adminNotes: v.optional(v.string()),
@@ -624,10 +632,18 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_legacyId", ["legacyId"])
+    .index("by_episodeId", ["episodeId"])
     .index("by_episodeId_and_status", ["episodeId", "status"])
     .index("by_episodeId_and_userId", ["episodeId", "userId"])
+    .index("by_episodeId_and_createdAt", ["episodeId", "createdAt"])
+    .index("by_episodeId_and_bracketOrder_and_createdAt", [
+      "episodeId",
+      "bracketOrder",
+      "createdAt",
+    ])
     .index("by_seasonId", ["seasonId"])
     .index("by_userId", ["userId"])
+    .index("by_userId_and_createdAt", ["userId", "createdAt"])
     .index("by_pointId", ["pointId"]),
 
   rankedListTypes: defineTable({

@@ -138,7 +138,7 @@ Index names include every indexed field.
 | `guesses` | `by_userId`, `by_assignmentReviewId`, `by_seasonId`, `by_pointId`, `by_userId_and_assignmentReviewId` |
 | `gamblingEntries` | one index for each relation plus `by_userId_and_seasonId` |
 | `tagVotes` | `by_createdAt`, `by_userId_and_createdAt`, `by_tmdbId_and_createdAt`, `by_userId_and_tmdbId_and_normalizedTag`, award-link indexes, and the migration-only legacy-award scrub index |
-| `quoteSubmissions` | `by_episodeId_and_status`, `by_episodeId_and_userId`, `by_seasonId`, `by_userId`, `by_pointId` |
+| `quoteSubmissions` | `by_episodeId`, `by_episodeId_and_status`, `by_episodeId_and_userId`, `by_episodeId_and_createdAt`, `by_episodeId_and_bracketOrder_and_createdAt`, `by_seasonId`, `by_userId`, `by_userId_and_createdAt`, `by_pointId` |
 | `rankedLists` | `by_userId`, `by_rankedListTypeId`, `by_userId_and_rankedListTypeId` |
 | `rankedItems` | `by_rankedListId_and_rank`, plus one index for each nullable target |
 

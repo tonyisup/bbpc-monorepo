@@ -554,13 +554,23 @@ async function upsertQuoteSubmission(
     row.legacyId,
     "Quote submission legacy ID",
   );
-  if (!["MOVIE", "TV", "OTHER"].includes(row.sourceType)) {
+  const sourceType = row.sourceType;
+  if (
+    sourceType !== "MOVIE" &&
+    sourceType !== "TV" &&
+    sourceType !== "OTHER"
+  ) {
     domainError(
       "VALIDATION_FAILED",
       "Quote source type is outside the SQL check constraint.",
     );
   }
-  if (!["SUBMITTED", "INCLUDED", "REJECTED"].includes(row.status)) {
+  const status = row.status;
+  if (
+    status !== "SUBMITTED" &&
+    status !== "INCLUDED" &&
+    status !== "REJECTED"
+  ) {
     domainError(
       "VALIDATION_FAILED",
       "Quote status is outside the SQL check constraint.",
@@ -674,7 +684,7 @@ async function upsertQuoteSubmission(
     seasonId,
     quoteText: row.quoteText,
     sourceTitle: row.sourceTitle,
-    sourceType: row.sourceType,
+    sourceType,
     ...(row.clipUrl === undefined ? {} : { clipUrl: row.clipUrl }),
     ...(row.clipStartSeconds === undefined
       ? {}
@@ -682,7 +692,7 @@ async function upsertQuoteSubmission(
     ...(row.listenerNotes === undefined
       ? {}
       : { listenerNotes: row.listenerNotes }),
-    status: row.status,
+    status,
     ...(row.bracketOrder === undefined
       ? {}
       : { bracketOrder: row.bracketOrder }),
