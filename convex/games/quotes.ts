@@ -64,6 +64,18 @@ const quoteContentArgs = {
   listenerNotes: v.optional(v.union(v.string(), v.null())),
 };
 
+const quoteAwardSnapshotValidator = v.object({
+  submissionId: v.id("quoteSubmissions"),
+  pointId: v.union(v.id("points"), v.null()),
+  placement: v.union(v.number(), v.null()),
+});
+
+interface QuoteAwardSnapshot {
+  submissionId: Id<"quoteSubmissions">;
+  pointId: Id<"points"> | null;
+  placement: number | null;
+}
+
 function contentPatch(args: {
   quoteText: string;
   sourceTitle: string;
@@ -130,6 +142,84 @@ function deterministicShuffle<T>(values: T[], seed: string): T[] {
     })
     .sort((left, right) => left.order - right.order)
     .map(({ value }) => value);
+}
+
+function currentQuoteAwardSnapshots(
+  submissions: Array<Doc<"quoteSubmissions">>,
+): QuoteAwardSnapshot[] {
+  return submissions
+    // convex-query-audit: allow-filter bounded per-episode in-memory rows
+    .filter(
+      (submission) =>
+        submission.pointId !== undefined ||
+        submission.placement !== undefined,
+    )
+    .map((submission) => ({
+      submissionId: submission._id,
+      pointId: submission.pointId ?? null,
+      placement: submission.placement ?? null,
+    }))
+    .sort((left, right) =>
+      String(left.submissionId).localeCompare(
+        String(right.submissionId),
+      ),
+    );
+}
+
+function validateExpectedQuoteAwards(
+  expected: QuoteAwardSnapshot[],
+): QuoteAwardSnapshot[] {
+  const submissionIds = new Set<string>();
+  return expected
+    .map((snapshot) => {
+      const submissionId = String(snapshot.submissionId);
+      if (submissionIds.has(submissionId)) {
+        domainError(
+          "VALIDATION_FAILED",
+          "Each expected quote award must reference a unique submission.",
+        );
+      }
+      submissionIds.add(submissionId);
+      return {
+        ...snapshot,
+        placement:
+          snapshot.placement === null
+            ? null
+            : validatePlacement(snapshot.placement),
+      };
+    })
+    .sort((left, right) =>
+      String(left.submissionId).localeCompare(
+        String(right.submissionId),
+      ),
+    );
+}
+
+function quoteAwardSnapshotsMatch(
+  actual: QuoteAwardSnapshot[],
+  expected: QuoteAwardSnapshot[],
+): boolean {
+  if (actual.length !== expected.length) {
+    return false;
+  }
+  const expectedBySubmissionId = new Map(
+    expected.map((snapshot) => [
+      snapshot.submissionId,
+      snapshot,
+    ]),
+  );
+  return actual.every((snapshot) => {
+    const expectedSnapshot = expectedBySubmissionId.get(
+      snapshot.submissionId,
+    );
+    if (expectedSnapshot === undefined) {
+      return false;
+    }
+    return (
+      snapshot.pointId === expectedSnapshot.pointId &&
+      snapshot.placement === expectedSnapshot.placement
+    );
+  });
 }
 
 export const currentForMe = authenticatedQuery({
@@ -564,6 +654,9 @@ export const awardPlacements = adminMutation({
         placement: v.number(),
       }),
     ),
+    expectedAwards: v.optional(
+      v.array(quoteAwardSnapshotValidator),
+    ),
     earnedAt: v.optional(v.number()),
     now: v.optional(v.number()),
   },
@@ -605,6 +698,18 @@ export const awardPlacements = adminMutation({
       ctx,
       episode._id,
     );
+    if (args.expectedAwards !== undefined) {
+      const expectedAwards = validateExpectedQuoteAwards(
+        args.expectedAwards,
+      );
+      const actualAwards = currentQuoteAwardSnapshots(submissions);
+      if (!quoteAwardSnapshotsMatch(actualAwards, expectedAwards)) {
+        domainError(
+          "CONFLICT",
+          "Quote awards changed after they were inspected.",
+        );
+      }
+    }
     const byId = new Map(
       submissions.map((submission) => [
         submission._id,
@@ -698,10 +803,30 @@ export const awardPlacements = adminMutation({
 });
 
 export const remove = adminMutation({
-  args: { id: v.id("quoteSubmissions") },
+  args: {
+    id: v.id("quoteSubmissions"),
+    expectedAward: v.optional(
+      v.object({
+        pointId: v.union(v.id("points"), v.null()),
+        placement: v.union(v.number(), v.null()),
+      }),
+    ),
+  },
   returns: v.object({ id: v.id("quoteSubmissions") }),
   handler: async (ctx, args) => {
     const submission = await requireQuoteSubmission(ctx, args.id);
+    if (
+      args.expectedAward !== undefined &&
+      (args.expectedAward.pointId !==
+        (submission.pointId ?? null) ||
+        args.expectedAward.placement !==
+          (submission.placement ?? null))
+    ) {
+      domainError(
+        "CONFLICT",
+        "The quote award changed after it was inspected.",
+      );
+    }
     await deleteOwnedQuotePoint(ctx, submission);
     await ctx.db.delete("quoteSubmissions", submission._id);
     await writeAuditEvent(ctx, {

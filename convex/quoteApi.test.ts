@@ -991,6 +991,24 @@ describe("Quotabunga workflows", () => {
     ) {
       throw new Error("Expected quote award points");
     }
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.quotes.awardPlacements,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          episodeId: foundation.nextEpisodeId,
+          placements: [{ submissionId: firstId, placement: 2 }],
+          expectedAwards: [
+            {
+              submissionId: firstId,
+              pointId: firstPointId,
+              placement: 2,
+            },
+          ],
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.quotes.awardPlacements,
@@ -998,6 +1016,23 @@ describe("Quotabunga workflows", () => {
           clientApiVersion: BBPC_API_VERSION,
           episodeId: foundation.nextEpisodeId,
           placements: [{ submissionId: firstId, placement: 2 }],
+          expectedAwards: [
+            {
+              submissionId: firstId,
+              pointId: firstPointId,
+              placement: 1,
+            },
+            {
+              submissionId: secondId,
+              pointId: secondPointId,
+              placement: 2,
+            },
+            {
+              submissionId: thirdId,
+              pointId: thirdPointId,
+              placement: 3,
+            },
+          ],
           earnedAt: 200,
           now: 200,
         },
@@ -1043,12 +1078,30 @@ describe("Quotabunga workflows", () => {
         pointId: undefined,
       });
     });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.quotes.remove,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: firstId,
+          expectedAward: {
+            pointId: null,
+            placement: null,
+          },
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.quotes.remove,
         {
           clientApiVersion: BBPC_API_VERSION,
           id: firstId,
+          expectedAward: {
+            pointId: firstPointId,
+            placement: 2,
+          },
         },
       ),
     ).resolves.toEqual({ id: firstId });
@@ -1062,6 +1115,10 @@ describe("Quotabunga workflows", () => {
         {
           clientApiVersion: BBPC_API_VERSION,
           id: otherEpisodeId,
+          expectedAward: {
+            pointId: null,
+            placement: null,
+          },
         },
       ),
     ).resolves.toEqual({ id: otherEpisodeId });
