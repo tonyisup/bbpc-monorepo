@@ -17,6 +17,12 @@ export const assignmentUserValidator = v.object({
   status: v.union(v.literal("active"), v.literal("disabled")),
 });
 
+export const publicAssignmentUserValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  image: nullableStringValidator,
+});
+
 export const assignmentEpisodeValidator = v.object({
   id: v.id("episodes"),
   number: v.number(),
@@ -31,6 +37,16 @@ export const assignmentDetailValidator = v.object({
   playable: v.boolean(),
   slug: nullableStringValidator,
   user: assignmentUserValidator,
+  movie: catalogMovieValidator,
+  episode: assignmentEpisodeValidator,
+});
+
+export const publicAssignmentDetailValidator = v.object({
+  id: v.id("assignments"),
+  type: assignmentTypeValidator,
+  playable: v.boolean(),
+  slug: nullableStringValidator,
+  user: publicAssignmentUserValidator,
   movie: catalogMovieValidator,
   episode: assignmentEpisodeValidator,
 });

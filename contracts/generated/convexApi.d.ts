@@ -1597,6 +1597,64 @@ export type PublicApiType = {
                 };
             }>;
         };
+        public: {
+            getByLegacyId: FunctionReference<"query", "public", {
+                legacyId: string;
+            }, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"assignments">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                playable: boolean;
+                slug: string | null;
+                type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            } | null>;
+            getBySlug: FunctionReference<"query", "public", {
+                slug: string;
+            }, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"assignments">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                playable: boolean;
+                slug: string | null;
+                type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            } | null>;
+        };
     };
     syllabus: {
         admin: {

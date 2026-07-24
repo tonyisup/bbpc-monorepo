@@ -10,6 +10,7 @@
 
 import type * as assignments_admin from "../assignments/admin.js";
 import type * as assignments_limits from "../assignments/limits.js";
+import type * as assignments_public from "../assignments/public.js";
 import type * as assignments_readModel from "../assignments/readModel.js";
 import type * as assignments_validators from "../assignments/validators.js";
 import type * as assignments_writeModel from "../assignments/writeModel.js";
@@ -135,6 +136,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "assignments/admin": typeof assignments_admin;
   "assignments/limits": typeof assignments_limits;
+  "assignments/public": typeof assignments_public;
   "assignments/readModel": typeof assignments_readModel;
   "assignments/validators": typeof assignments_validators;
   "assignments/writeModel": typeof assignments_writeModel;
