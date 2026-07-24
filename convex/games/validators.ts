@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 
+import { assignmentDetailValidator } from "../assignments/validators.js";
+
 const nullableStringValidator = v.union(v.string(), v.null());
+const nullableNumberValidator = v.union(v.number(), v.null());
 
 export const gameTypeValidator = v.object({
   id: v.id("gameTypes"),
@@ -45,4 +48,94 @@ export const predictionScoringValidator = v.object({
   correctHost: v.union(v.number(), v.null()),
   allCorrectBonus: v.union(v.number(), v.null()),
   allIncorrect: v.union(v.number(), v.null()),
+});
+
+export const pointUserValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  image: nullableStringValidator,
+});
+
+export const pointCoreValidator = v.object({
+  id: v.id("points"),
+  user: pointUserValidator,
+  season: seasonValidator,
+  reason: nullableStringValidator,
+  earnedAt: v.number(),
+  adjustment: nullableNumberValidator,
+  gamePointType: v.union(gamePointTypeValidator, v.null()),
+  total: v.number(),
+});
+
+export const assignmentPointLinkValidator = v.object({
+  id: v.id("assignmentPointLinks"),
+  assignment: assignmentDetailValidator,
+});
+
+export const pointDetailValidator = pointCoreValidator.extend({
+  assignmentLinks: v.array(assignmentPointLinkValidator),
+  guesses: v.array(
+    v.object({
+      id: v.id("guesses"),
+      assignmentReviewId: v.id("assignmentReviews"),
+    }),
+  ),
+  gamblingEntries: v.array(
+    v.object({ id: v.id("gamblingEntries") }),
+  ),
+  tagVotes: v.array(
+    v.object({
+      id: v.id("tagVotes"),
+      tag: v.string(),
+    }),
+  ),
+  quoteSubmissions: v.array(
+    v.object({ id: v.id("quoteSubmissions") }),
+  ),
+});
+
+export const pointSeasonSelectorValidator = v.union(
+  v.object({ kind: v.literal("all") }),
+  v.object({
+    kind: v.literal("current"),
+    today: v.string(),
+  }),
+  v.object({
+    kind: v.literal("season"),
+    seasonId: v.id("seasons"),
+  }),
+);
+
+export const pointSeasonTargetValidator = v.union(
+  v.object({
+    kind: v.literal("current"),
+    today: v.string(),
+  }),
+  v.object({
+    kind: v.literal("season"),
+    seasonId: v.id("seasons"),
+  }),
+);
+
+export const assignmentPointTotalValidator = v.object({
+  userId: v.id("users"),
+  assignmentId: v.id("assignments"),
+  total: v.number(),
+});
+
+export const performancePointValidator = v.object({
+  userId: v.id("users"),
+  earnedAt: v.number(),
+  pointValue: v.number(),
+});
+
+export const performanceUserValidator = v.object({
+  user: pointUserValidator,
+  total: v.number(),
+});
+
+export const currentPerformanceValidator = v.object({
+  season: seasonValidator,
+  userSummary: v.array(performanceUserValidator),
+  points: v.array(performancePointValidator),
 });

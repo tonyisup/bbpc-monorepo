@@ -2565,6 +2565,36 @@ export type PublicApiType = {
             }>;
         };
         public: {
+            currentPerformance: FunctionReference<"query", "public", {
+                today: string;
+            }, {
+                points: Array<{
+                    earnedAt: number;
+                    pointValue: number;
+                    userId: Id<"users">;
+                }>;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                userSummary: Array<{
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+            } | null>;
             currentSeason: FunctionReference<"query", "public", {
                 today: string;
             }, {
@@ -2752,6 +2782,577 @@ export type PublicApiType = {
                 startedOn: string | null;
                 title: string;
             }>;
+        };
+        points: {
+            create: FunctionReference<"mutation", "public", {
+                adjustment: number | null;
+                clientApiVersion: string;
+                earnedAt?: number;
+                gamePointTypeId?: Id<"gamePointTypes">;
+                reason?: string;
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                adjustment: number | null;
+                earnedAt: number;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                id: Id<"points">;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            createByLookup: FunctionReference<"mutation", "public", {
+                adjustment?: number;
+                clientApiVersion: string;
+                earnedAt?: number;
+                gamePointLookupId: string;
+                reason: string;
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                adjustment: number | null;
+                earnedAt: number;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                id: Id<"points">;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            createForAssignmentByLookup: FunctionReference<"mutation", "public", {
+                adjustment?: number;
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                earnedAt?: number;
+                gamePointLookupId: string;
+                reason: string;
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                adjustment: number | null;
+                assignmentLinks: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        };
+                    };
+                    id: Id<"assignmentPointLinks">;
+                }>;
+                earnedAt: number;
+                gamblingEntries: Array<{
+                    id: Id<"gamblingEntries">;
+                }>;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                guesses: Array<{
+                    assignmentReviewId: Id<"assignmentReviews">;
+                    id: Id<"guesses">;
+                }>;
+                id: Id<"points">;
+                quoteSubmissions: Array<{
+                    id: Id<"quoteSubmissions">;
+                }>;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                tagVotes: Array<{
+                    id: Id<"tagVotes">;
+                    tag: string;
+                }>;
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"points">;
+            }, {
+                adjustment: number | null;
+                assignmentLinks: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        };
+                    };
+                    id: Id<"assignmentPointLinks">;
+                }>;
+                earnedAt: number;
+                gamblingEntries: Array<{
+                    id: Id<"gamblingEntries">;
+                }>;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                guesses: Array<{
+                    assignmentReviewId: Id<"assignmentReviews">;
+                    id: Id<"guesses">;
+                }>;
+                id: Id<"points">;
+                quoteSubmissions: Array<{
+                    id: Id<"quoteSubmissions">;
+                }>;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                tagVotes: Array<{
+                    id: Id<"tagVotes">;
+                    tag: string;
+                }>;
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            } | null>;
+            linkAssignment: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                pointId: Id<"points">;
+            }, {
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    };
+                };
+                id: Id<"assignmentPointLinks">;
+            }>;
+            listForAssignmentAndUser: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+                userId: Id<"users">;
+            }, Array<{
+                id: Id<"assignmentPointLinks">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                };
+            }>>;
+            listForSeasonPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                seasonId: Id<"seasons">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listForUserPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                season: {
+                    kind: "all";
+                } | {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"points">;
+            }, {
+                id: Id<"points">;
+            }>;
+            totalForUser: FunctionReference<"query", "public", {
+                season: {
+                    kind: "all";
+                } | {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, number>;
+            totalsForAssignments: FunctionReference<"query", "public", {
+                assignmentIds: Array<Id<"assignments">>;
+                userIds: Array<Id<"users">>;
+            }, Array<{
+                assignmentId: Id<"assignments">;
+                total: number;
+                userId: Id<"users">;
+            }>>;
+            unlinkAssignment: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                pointId: Id<"points">;
+            }, {
+                count: number;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                adjustment?: number | null;
+                clientApiVersion: string;
+                earnedAt?: number;
+                gamePointTypeId?: Id<"gamePointTypes"> | null;
+                id: Id<"points">;
+                reason?: string | null;
+            }, {
+                adjustment: number | null;
+                earnedAt: number;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                id: Id<"points">;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+        };
+        member: {
+            myAvailablePoints: FunctionReference<"query", "public", {
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+            }, number>;
         };
     };
 };

@@ -308,6 +308,10 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_assignmentId", ["assignmentId"])
+    .index("by_assignmentId_and_userId", [
+      "assignmentId",
+      "userId",
+    ])
     .index("by_userId", ["userId"])
     .index("by_pointId", ["pointId"])
     .index("by_assignmentId_and_userId_and_pointId", [
@@ -439,9 +443,19 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
+    .index("by_userId_and_earnedAt", ["userId", "earnedAt"])
     .index("by_seasonId", ["seasonId"])
+    .index("by_seasonId_and_earnedAt", [
+      "seasonId",
+      "earnedAt",
+    ])
     .index("by_gamePointTypeId", ["gamePointTypeId"])
-    .index("by_userId_and_seasonId", ["userId", "seasonId"]),
+    .index("by_userId_and_seasonId", ["userId", "seasonId"])
+    .index("by_userId_and_seasonId_and_earnedAt", [
+      "userId",
+      "seasonId",
+      "earnedAt",
+    ]),
 
   guesses: defineTable({
     legacyId: v.optional(v.string()),
@@ -521,6 +535,10 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
+    .index("by_awardKind_and_awardPointId", [
+      "award.kind",
+      "award.pointId",
+    ])
     .index("by_normalizedTag_and_userId", ["normalizedTag", "userId"])
     .index("by_tmdbId_and_normalizedTag", ["tmdbId", "normalizedTag"]),
 

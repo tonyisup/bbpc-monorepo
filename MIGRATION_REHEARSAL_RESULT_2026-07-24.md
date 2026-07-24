@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-217 Convex tests with 90.28% branch coverage. Owner-scoped episode audio metadata
+224 Convex tests with 90.07% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -154,8 +154,21 @@ point values and real calendar dates, use native pagination and exactness-labele
 bounded relationship counts, and refuse deletion while indexed relationships remain.
 Authenticated prediction scoring resolves the three canonical WTFIR point types without
 exposing configuration writes. All mutations remain S3/S4 plus API-version gated and
-emit value-free audit records. Point-event administration and the remaining guess,
-gambling, tag, quote, and ranking workflows remain in T10.
+emit value-free audit records.
+Point-event administration is now covered synthetically as a second game checkpoint.
+Administrator operations create manual, lookup-based, and assignment-linked events;
+update nullable reason, adjustment, type, and earned-time fields; paginate by user or
+season; calculate bounded all/current/explicit-season and multi-assignment totals; and
+idempotently link or unlink assignments. Adjustments enforce the authoritative nullable
+SQL `INT` contract, and lookup/current-season failures are explicit instead of silently
+creating ambiguous rows. Point deletion transactionally removes assignment links and
+clears guess, gambling-award, live tag-award, and quote-award relationships through
+dedicated indexes and bounded fanout. Authenticated availability subtracts only pending
+and locked wagers for the selected season, while anonymous current performance returns
+bounded chronological points and descending public-user totals. Broken relationships,
+budget inputs, access/write gates, aggregate arithmetic, overlapping season selection,
+and the full deletion cascade have regression coverage. The remaining guess, gambling,
+tag, quote, and ranking workflows remain in T10.
 
 ## Preserved gate
 
