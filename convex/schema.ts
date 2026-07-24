@@ -259,12 +259,14 @@ export default defineSchema({
     type: v.string(),
     playable: v.boolean(),
     slug: v.optional(v.string()),
+    normalizedSlug: v.optional(v.string()),
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_userId", ["userId"])
     .index("by_episodeId", ["episodeId"])
     .index("by_movieId", ["movieId"])
-    .index("by_slug", ["slug"]),
+    .index("by_slug", ["slug"])
+    .index("by_normalizedSlug", ["normalizedSlug"]),
 
   assignmentAudioMessages: defineTable({
     legacyId: v.optional(v.number()),
@@ -287,7 +289,12 @@ export default defineSchema({
     .index("by_legacyId", ["legacyId"])
     .index("by_assignmentId", ["assignmentId"])
     .index("by_userId", ["userId"])
-    .index("by_pointId", ["pointId"]),
+    .index("by_pointId", ["pointId"])
+    .index("by_assignmentId_and_userId_and_pointId", [
+      "assignmentId",
+      "userId",
+      "pointId",
+    ]),
 
   syllabusEntries: defineTable({
     legacyId: v.optional(v.string()),
@@ -694,6 +701,50 @@ export default defineSchema({
     fileKey: v.optional(v.string()),
     userLegacyId: v.string(),
     episodeLegacyId: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawAssignments: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    slug: v.optional(v.string()),
+    userLegacyId: v.string(),
+    episodeLegacyId: v.string(),
+    movieLegacyId: v.string(),
+    type: v.string(),
+    playable: v.boolean(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawAssignmentAudioMessages: defineTable({
+    runId: v.string(),
+    legacyId: v.number(),
+    url: v.string(),
+    createdAt: v.number(),
+    userLegacyId: v.string(),
+    assignmentLegacyId: v.optional(v.string()),
+    fileKey: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawAssignmentPointLinks: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    assignmentLegacyId: v.string(),
+    userLegacyId: v.string(),
+    pointLegacyId: v.string(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawSyllabusEntries: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    userLegacyId: v.string(),
+    movieLegacyId: v.string(),
+    order: v.number(),
+    createdAt: v.number(),
+    assignmentLegacyId: v.optional(v.string()),
     notes: v.optional(v.string()),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),

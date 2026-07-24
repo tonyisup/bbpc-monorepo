@@ -132,6 +132,12 @@ test("verifies a private immutable domain manifest", () => {
       ),
       3,
     );
+    assert.deepEqual(tablesForDomain("assignments"), [
+      "migrationRawAssignments",
+      "migrationRawAssignmentAudioMessages",
+      "migrationRawAssignmentPointLinks",
+      "migrationRawSyllabusEntries",
+    ]);
   } finally {
     fixture.cleanup();
   }

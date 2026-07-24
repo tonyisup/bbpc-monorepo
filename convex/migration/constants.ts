@@ -48,6 +48,27 @@ export const EPISODE_RECONCILIATION_OPERATIONS = {
   finish: "episodes.reconcile.finish",
 } as const;
 
+export const ASSIGNMENT_OPERATIONS = {
+  start: "assignments.start",
+  assignments: "assignments.assignments",
+  audioMessages: "assignments.audioMessages",
+  syllabusEntries: "assignments.syllabusEntries",
+  pointLinks: "assignments.pointLinks",
+  finish: "assignments.finish",
+} as const;
+
+export const ASSIGNMENT_RECONCILIATION_OPERATIONS = {
+  assignments: "assignments.reconcile.assignments",
+  audioMessages: "assignments.reconcile.audioMessages",
+  syllabusEntries: "assignments.reconcile.syllabusEntries",
+  pointLinks: "assignments.reconcile.pointLinks",
+  finish: "assignments.reconcile.finish",
+} as const;
+
+export const GAME_OPERATIONS = {
+  points: "games.points",
+} as const;
+
 export const FOUNDATION_SCRUB_SCOPE = "foundation-v1";
 
 export const FOUNDATION_SCRUB_OPERATIONS = {

@@ -22,6 +22,12 @@ const DOMAIN_TABLES = {
     "migrationRawBangers",
     "migrationRawEpisodeAudioMessages",
   ],
+  assignments: [
+    "migrationRawAssignments",
+    "migrationRawAssignmentAudioMessages",
+    "migrationRawAssignmentPointLinks",
+    "migrationRawSyllabusEntries",
+  ],
 };
 
 const TABLE_FIELDS = {
@@ -133,6 +139,53 @@ const TABLE_FIELDS = {
       "sourceRowHash",
     ],
     optional: ["fileKey", "episodeLegacyId", "notes"],
+  },
+  migrationRawAssignments: {
+    required: [
+      "runId",
+      "legacyId",
+      "userLegacyId",
+      "episodeLegacyId",
+      "movieLegacyId",
+      "type",
+      "playable",
+      "sourceRowHash",
+    ],
+    optional: ["slug"],
+  },
+  migrationRawAssignmentAudioMessages: {
+    required: [
+      "runId",
+      "legacyId",
+      "url",
+      "createdAt",
+      "userLegacyId",
+      "sourceRowHash",
+    ],
+    optional: ["assignmentLegacyId", "fileKey"],
+  },
+  migrationRawAssignmentPointLinks: {
+    required: [
+      "runId",
+      "legacyId",
+      "assignmentLegacyId",
+      "userLegacyId",
+      "pointLegacyId",
+      "sourceRowHash",
+    ],
+    optional: [],
+  },
+  migrationRawSyllabusEntries: {
+    required: [
+      "runId",
+      "legacyId",
+      "userLegacyId",
+      "movieLegacyId",
+      "order",
+      "createdAt",
+      "sourceRowHash",
+    ],
+    optional: ["assignmentLegacyId", "notes"],
   },
 };
 

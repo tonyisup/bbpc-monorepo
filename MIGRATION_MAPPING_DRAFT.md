@@ -113,9 +113,9 @@ Index names include every indexed field.
 | `episodeLinks`, `bangers`, `episodeAudioMessages` | `by_episodeId`; user-owned records also `by_userId` |
 | `movies`, `shows` | `by_tmdbId` where applicable, `by_normalizedTitle_and_year` |
 | `tags` | `by_normalizedName` |
-| `assignments` | `by_userId`, `by_episodeId`, `by_movieId`, `by_slug` |
+| `assignments` | `by_userId`, `by_episodeId`, `by_movieId`, `by_slug`, `by_normalizedSlug` |
 | `assignmentAudioMessages` | `by_assignmentId`, `by_userId` |
-| `assignmentPointLinks` | `by_assignmentId`, `by_pointId`, `by_userId` |
+| `assignmentPointLinks` | `by_assignmentId`, `by_pointId`, `by_userId`, `by_assignmentId_and_userId_and_pointId` |
 | `syllabusEntries` | `by_userId_and_order`, `by_movieId`, `by_assignmentId` |
 | `ratings` | `by_value` |
 | `reviews` | `by_userId`, `by_movieId`, `by_showId`, `by_ratingId` |
@@ -134,6 +134,30 @@ Index names include every indexed field.
 All queries must use these indexes with `.unique()`, bounded `.take()`, or pagination.
 Production-scale behavior tests may add indexes; they may not replace a measured query
 with an unbounded scan.
+
+## Cross-domain execution DAG
+
+The source foreign keys form an acyclic table graph, but the original broad domain
+ordering hid a domain-level cycle: assignment point links need game points, while game
+guesses need assignment reviews. Migration therefore uses table checkpoints as explicit
+barriers instead of requiring every broad domain to finish as one block.
+
+1. Reconcile identity, catalog, and episodes.
+2. Start assignments and complete the `assignments.assignments`,
+   `assignments.audioMessages`, and `assignments.syllabusEntries` checkpoints.
+3. Transform and reconcile reviews; assignment reviews require only the completed
+   assignment-record checkpoint.
+4. Start games and transform game types, game-point types, seasons, and points.
+5. Complete `assignments.pointLinks` after `games.points`, then finish and reconcile
+   assignments.
+6. Complete guesses, gambling entries, tag votes, and quote submissions, then reconcile
+   games.
+7. Rankings can run independently after identity, catalog, and episodes are reconciled.
+
+The assignments domain deliberately remains `running` between steps 2 and 5. Reviews
+must gate on `assignments.assignments`, not on the whole assignments-domain status.
+This keeps every relationship mandatory in canonical Convex documents without temporary
+IDs, nullable backfills, or an impossible domain order.
 
 ## Approval items
 

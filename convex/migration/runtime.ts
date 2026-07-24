@@ -247,6 +247,25 @@ export async function requireTransformedDomain(
   return domainRun;
 }
 
+export async function requireReconciledDomain(
+  ctx: DatabaseContext,
+  input: { runId: string; domain: string },
+): Promise<Doc<"migrationDomainRuns">> {
+  const domainRun = await ctx.db
+    .query("migrationDomainRuns")
+    .withIndex("by_runId_and_domain", (query) =>
+      query.eq("runId", input.runId).eq("domain", input.domain),
+    )
+    .unique();
+  if (domainRun?.status !== "reconciled") {
+    domainError(
+      "CONFLICT",
+      `The ${input.domain} migration domain must be reconciled first.`,
+    );
+  }
+  return domainRun;
+}
+
 export async function getReconciliationDomainRun(
   ctx: DatabaseContext,
   input: { runId: string; domain: string },
@@ -295,6 +314,24 @@ export async function getMigrationCheckpoint(
       query.eq("runId", runId).eq("operation", operation),
     )
     .unique();
+}
+
+export async function requireCompletedMigrationCheckpoint(
+  ctx: DatabaseContext,
+  input: { runId: string; operation: string },
+): Promise<Doc<"migrationCheckpoints">> {
+  const checkpoint = await getMigrationCheckpoint(
+    ctx,
+    input.runId,
+    input.operation,
+  );
+  if (checkpoint?.status !== "completed") {
+    domainError(
+      "CONFLICT",
+      `Migration checkpoint ${input.operation} must be completed first.`,
+    );
+  }
+  return checkpoint;
 }
 
 export async function saveMigrationCheckpoint(

@@ -361,6 +361,7 @@ export const requiredIndexesByTarget = {
     "by_episodeId",
     "by_movieId",
     "by_slug",
+    "by_normalizedSlug",
   ],
   assignmentAudioMessages: [
     "by_legacyId",
@@ -372,6 +373,7 @@ export const requiredIndexesByTarget = {
     "by_assignmentId",
     "by_userId",
     "by_pointId",
+    "by_assignmentId_and_userId_and_pointId",
   ],
   syllabusEntries: [
     "by_legacyId",

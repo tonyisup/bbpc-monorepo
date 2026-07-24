@@ -11,6 +11,7 @@ import {
   getActiveDomainRun,
   getMigrationCheckpoint,
   migrationCheckpointResult,
+  requireCompletedMigrationCheckpoint,
   requireMigrationBatchSize,
   requireMigrationCount,
   requireMigrationOperation,
@@ -386,24 +387,6 @@ async function upsertEpisodeAudioMessage(
   return "inserted";
 }
 
-async function requireCompletedCheckpoint(
-  ctx: DatabaseContext,
-  runId: string,
-  operation: string,
-): Promise<void> {
-  const checkpoint = await getMigrationCheckpoint(
-    ctx,
-    runId,
-    operation,
-  );
-  if (checkpoint?.status !== "completed") {
-    domainError(
-      "CONFLICT",
-      `Migration checkpoint ${operation} must be completed first.`,
-    );
-  }
-}
-
 export const startEpisodeRun = internalMigrationMutation({
   args: {
     sourceSchemaFingerprint: v.string(),
@@ -551,11 +534,10 @@ export const transformEpisodeLinksBatch = internalMigrationMutation({
     requireMigrationBatchSize(args.batchSize);
     const runId = ctx.systemState.cutoverRunId;
     await getActiveDomainRun(ctx, { runId, domain: DOMAIN });
-    await requireCompletedCheckpoint(
-      ctx,
+    await requireCompletedMigrationCheckpoint(ctx, {
       runId,
-      EPISODE_OPERATIONS.episodes,
-    );
+      operation: EPISODE_OPERATIONS.episodes,
+    });
     const previous = await getMigrationCheckpoint(
       ctx,
       runId,
@@ -622,11 +604,10 @@ export const transformBangersBatch = internalMigrationMutation({
     requireMigrationBatchSize(args.batchSize);
     const runId = ctx.systemState.cutoverRunId;
     await getActiveDomainRun(ctx, { runId, domain: DOMAIN });
-    await requireCompletedCheckpoint(
-      ctx,
+    await requireCompletedMigrationCheckpoint(ctx, {
       runId,
-      EPISODE_OPERATIONS.episodes,
-    );
+      operation: EPISODE_OPERATIONS.episodes,
+    });
     const previous = await getMigrationCheckpoint(
       ctx,
       runId,
@@ -694,11 +675,10 @@ export const transformEpisodeAudioMessagesBatch =
       requireMigrationBatchSize(args.batchSize);
       const runId = ctx.systemState.cutoverRunId;
       await getActiveDomainRun(ctx, { runId, domain: DOMAIN });
-      await requireCompletedCheckpoint(
-        ctx,
+      await requireCompletedMigrationCheckpoint(ctx, {
         runId,
-        EPISODE_OPERATIONS.episodes,
-      );
+        operation: EPISODE_OPERATIONS.episodes,
+      });
       const previous = await getMigrationCheckpoint(
         ctx,
         runId,

@@ -130,6 +130,25 @@ is hard-wired to the Convex `local` deployment and requires explicit acknowledge
 before replacing the allowlisted `migrationRaw*` tables. This makes interrupted staging
 repeatable without permitting an accidental cloud import.
 
+## Assignment migration rehearsal
+
+The fourth checkpointed slice covers `Assignment`, `AudioMessage`,
+`AssignmentPoints`, and `Syllabus`. It starts only after identity, catalog, and
+episodes are reconciled. Assignment, audio-message, and syllabus checkpoints form the
+assignment-core barrier consumed by the later reviews slice.
+
+Assignment point links intentionally wait for the `games.points` checkpoint. The
+assignments domain remains `running` between those barriers, which breaks the broad
+domain cycle without temporary IDs or nullable canonical relationships: reviews can
+create assignment reviews, games can then create points, and assignment point links
+can finally resolve both parents.
+
+Display slugs are preserved with a normalized uniqueness key. Syllabus owner/order and
+assignment/user/point relationship duplicates are rejected transactionally. The
+independent reconciliation pass re-resolves every parent and compares every scalar
+without repairing drift. Its guarded extractor and immutable manifest support are
+implemented but have not been run against production-derived rows.
+
 ## Foundation raw-staging scrub
 
 After identity, catalog, and episodes are each independently reconciled, an internal

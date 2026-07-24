@@ -16,7 +16,7 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:stage:local -- --run-id <id> " +
-      "--domain <identity|catalog|episodes> " +
+      "--domain <identity|catalog|episodes|assignments> " +
       `${REQUIRED_SOURCE_ACK} ${REQUIRED_REPLACE_ACK}`,
     "",
     "Imports only to the explicit Convex local deployment.",
@@ -42,10 +42,11 @@ function parseArguments(argv) {
   if (
     domain !== "identity" &&
     domain !== "catalog" &&
-    domain !== "episodes"
+    domain !== "episodes" &&
+    domain !== "assignments"
   ) {
     throw new Error(
-      "--domain must be identity, catalog, or episodes",
+      "--domain must be identity, catalog, episodes, or assignments",
     );
   }
   if (!argv.includes(REQUIRED_SOURCE_ACK)) {
