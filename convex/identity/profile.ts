@@ -19,6 +19,7 @@ export const me = authenticatedQuery({
     email: ctx.actor.user.email ?? null,
     image: ctx.actor.user.image ?? null,
     isAdmin: ctx.actor.isAdmin,
+    isHost: ctx.actor.isHost,
   }),
 });
 

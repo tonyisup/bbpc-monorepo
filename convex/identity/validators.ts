@@ -24,11 +24,10 @@ export const identityRoleMembershipValidator = v.object({
   role: identityRoleValidator,
 });
 
-export const identityRoleSummaryValidator =
-  identityRoleValidator.extend({
-    userCount: v.number(),
-    userCountIsExact: v.boolean(),
-  });
+export const identityRoleSummaryValidator = identityRoleValidator.extend({
+  userCount: v.number(),
+  userCountIsExact: v.boolean(),
+});
 
 export const identityProfileValidator = v.object({
   id: v.id("users"),
@@ -36,6 +35,7 @@ export const identityProfileValidator = v.object({
   email: nullableStringValidator,
   image: nullableStringValidator,
   isAdmin: v.boolean(),
+  isHost: v.boolean(),
 });
 
 export const identityPublicHostValidator = v.object({
@@ -44,14 +44,13 @@ export const identityPublicHostValidator = v.object({
   image: nullableStringValidator,
 });
 
-export const identityLinkResultValidator =
-  identityProfileValidator.extend({
-    linkMode: v.union(
-      v.literal("alreadyLinked"),
-      v.literal("existingUser"),
-      v.literal("newUser"),
-    ),
-  });
+export const identityLinkResultValidator = identityProfileValidator.extend({
+  linkMode: v.union(
+    v.literal("alreadyLinked"),
+    v.literal("existingUser"),
+    v.literal("newUser"),
+  ),
+});
 
 export const identityAdminUserValidator = v.object({
   id: v.id("users"),

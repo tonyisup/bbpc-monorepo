@@ -6,10 +6,7 @@ import { describe, expect, test } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
-import {
-  writeAuditEvent,
-  writeControlAuditEvent,
-} from "./lib/audit.js";
+import { writeAuditEvent, writeControlAuditEvent } from "./lib/audit.js";
 import { assertDomain, domainError } from "./lib/errors.js";
 import schema from "./schema.js";
 
@@ -52,7 +49,11 @@ async function expectDomainError(
 
 async function seedUser(
   t: TestBackend,
-  options: { admin?: boolean; status?: "active" | "disabled" } = {},
+  options: {
+    admin?: boolean;
+    host?: boolean;
+    status?: "active" | "disabled";
+  } = {},
 ) {
   return await t.run(async (ctx) => {
     const now = Date.now();
@@ -77,6 +78,22 @@ async function seedUser(
         description: "Synthetic administrator role",
         admin: true,
         permissions: ["admin"],
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("userRoles", {
+        userId,
+        roleId,
+        assignedAt: now,
+      });
+    }
+    if (options.host === true) {
+      const roleId = await ctx.db.insert("roles", {
+        name: "Host",
+        normalizedName: "host",
+        description: "Synthetic host role",
+        admin: false,
+        permissions: [],
         createdAt: now,
         updatedAt: now,
       });
@@ -147,9 +164,7 @@ async function advanceToS3(t: TestBackend): Promise<void> {
 describe("identity boundaries", () => {
   test("exposes only safe anonymous readiness data", async () => {
     const t = createTestBackend();
-    await expect(
-      t.query(api.system.health.readiness, {}),
-    ).resolves.toEqual({
+    await expect(t.query(api.system.health.readiness, {})).resolves.toEqual({
       apiVersion: BBPC_API_VERSION,
       initialized: false,
       applicationWritesEnabled: false,
@@ -178,7 +193,7 @@ describe("identity boundaries", () => {
 
   test("returns a linked profile and derives administrator status", async () => {
     const t = createTestBackend();
-    await seedUser(t, { admin: true });
+    await seedUser(t, { admin: true, host: true });
 
     await expect(
       t.withIdentity(USER_IDENTITY).query(api.identity.profile.me, {}),
@@ -186,6 +201,7 @@ describe("identity boundaries", () => {
       name: "Test User",
       email: "user@example.test",
       isAdmin: true,
+      isHost: true,
     });
   });
 
@@ -193,9 +209,7 @@ describe("identity boundaries", () => {
     const disabled = createTestBackend();
     await seedUser(disabled, { status: "disabled" });
     await expectDomainError(
-      disabled
-        .withIdentity(USER_IDENTITY)
-        .query(api.identity.profile.me, {}),
+      disabled.withIdentity(USER_IDENTITY).query(api.identity.profile.me, {}),
       "ACCOUNT_DISABLED",
     );
 
@@ -227,13 +241,12 @@ describe("application write gate", () => {
     await seedUser(t);
 
     await expectDomainError(
-      t.withIdentity(USER_IDENTITY).mutation(
-        api.identity.profile.updateMyName,
-        {
+      t
+        .withIdentity(USER_IDENTITY)
+        .mutation(api.identity.profile.updateMyName, {
           clientApiVersion: BBPC_API_VERSION,
           name: "Updated",
-        },
-      ),
+        }),
       "WRITE_DISABLED",
     );
   });
@@ -252,13 +265,12 @@ describe("application write gate", () => {
       }
 
       await expectDomainError(
-        t.withIdentity(USER_IDENTITY).mutation(
-          api.identity.profile.updateMyName,
-          {
+        t
+          .withIdentity(USER_IDENTITY)
+          .mutation(api.identity.profile.updateMyName, {
             clientApiVersion: BBPC_API_VERSION,
             name: "Updated",
-          },
-        ),
+          }),
         "WRITE_DISABLED",
       );
     },
@@ -270,13 +282,12 @@ describe("application write gate", () => {
     await advanceToS3(t);
 
     await expectDomainError(
-      t.withIdentity(USER_IDENTITY).mutation(
-        api.identity.profile.updateMyName,
-        {
+      t
+        .withIdentity(USER_IDENTITY)
+        .mutation(api.identity.profile.updateMyName, {
           clientApiVersion: "0.0.0",
           name: "Updated",
-        },
-      ),
+        }),
       "STALE_CLIENT",
     );
   });
@@ -287,13 +298,12 @@ describe("application write gate", () => {
     await advanceToS3(t);
 
     await expect(
-      t.withIdentity(USER_IDENTITY).mutation(
-        api.identity.profile.updateMyName,
-        {
+      t
+        .withIdentity(USER_IDENTITY)
+        .mutation(api.identity.profile.updateMyName, {
           clientApiVersion: BBPC_API_VERSION,
           name: "  Updated User  ",
-        },
-      ),
+        }),
     ).resolves.toMatchObject({ name: "Updated User" });
 
     const snapshot = await t.run(async (ctx) => {
@@ -311,13 +321,9 @@ describe("application write gate", () => {
       return { state, user, auditEvents };
     });
 
-    expect(snapshot.state?.firstApplicationWriteAt).toEqual(
-      expect.any(Number),
-    );
+    expect(snapshot.state?.firstApplicationWriteAt).toEqual(expect.any(Number));
     expect(snapshot.user?.name).toBe("Updated User");
-    expect(
-      snapshot.auditEvents.map((event) => event.action),
-    ).toEqual(
+    expect(snapshot.auditEvents.map((event) => event.action)).toEqual(
       expect.arrayContaining([
         "system.firstApplicationWrite",
         "identity.profile.nameUpdated",
@@ -331,13 +337,12 @@ describe("application write gate", () => {
     await advanceToS3(t);
 
     await expectDomainError(
-      t.withIdentity(USER_IDENTITY).mutation(
-        api.identity.profile.updateMyName,
-        {
+      t
+        .withIdentity(USER_IDENTITY)
+        .mutation(api.identity.profile.updateMyName, {
           clientApiVersion: BBPC_API_VERSION,
           name: " ",
-        },
-      ),
+        }),
       "VALIDATION_FAILED",
     );
   });
@@ -347,10 +352,11 @@ describe("application write gate", () => {
     await seedUser(disabled);
     await initialize(disabled);
     await expectDomainError(
-      disabled.withIdentity(USER_IDENTITY).action(
-        api.identity.profile.actionGateProbe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      disabled
+        .withIdentity(USER_IDENTITY)
+        .action(api.identity.profile.actionGateProbe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "WRITE_DISABLED",
     );
 
@@ -358,10 +364,11 @@ describe("application write gate", () => {
     await seedUser(enabled, { admin: true });
     await advanceToS3(enabled);
     await expect(
-      enabled.withIdentity(USER_IDENTITY).action(
-        api.identity.profile.actionGateProbe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      enabled
+        .withIdentity(USER_IDENTITY)
+        .action(api.identity.profile.actionGateProbe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
     ).resolves.toEqual({
       allowed: true,
       cutoverStage: "S3",
@@ -377,29 +384,23 @@ describe("cutover state machine", () => {
     await transition(t, "S0", "S1");
     await transition(t, "S1", "S2");
 
-    await expectDomainError(
-      transition(t, "S2", "S3"),
-      "VALIDATION_FAILED",
-    );
+    await expectDomainError(transition(t, "S2", "S3"), "VALIDATION_FAILED");
   });
 
   test("permits S3 rollback only before the first application write", async () => {
     const beforeWrite = createTestBackend();
     await advanceToS3(beforeWrite);
-    await expect(
-      transition(beforeWrite, "S3", "S2"),
-    ).resolves.toBeUndefined();
+    await expect(transition(beforeWrite, "S3", "S2")).resolves.toBeUndefined();
 
     const afterWrite = createTestBackend();
     await seedUser(afterWrite);
     await advanceToS3(afterWrite);
-    await afterWrite.withIdentity(USER_IDENTITY).mutation(
-      api.identity.profile.updateMyName,
-      {
+    await afterWrite
+      .withIdentity(USER_IDENTITY)
+      .mutation(api.identity.profile.updateMyName, {
         clientApiVersion: BBPC_API_VERSION,
         name: "Cutover Writer",
-      },
-    );
+      });
     await expectDomainError(
       transition(afterWrite, "S3", "S2"),
       "VALIDATION_FAILED",
@@ -411,10 +412,7 @@ describe("cutover state machine", () => {
     await initialize(t);
 
     await expectDomainError(initialize(t), "CONFLICT");
-    await expectDomainError(
-      transition(t, "S1", "S2"),
-      "CONFLICT",
-    );
+    await expectDomainError(transition(t, "S1", "S2"), "CONFLICT");
   });
 
   test("rejects transitions before initialization and from the wrong run", async () => {
@@ -441,23 +439,17 @@ describe("cutover state machine", () => {
     const abortFromS1 = createTestBackend();
     await initialize(abortFromS1);
     await transition(abortFromS1, "S0", "S1");
-    await expect(
-      transition(abortFromS1, "S1", "S0"),
-    ).resolves.toBeUndefined();
+    await expect(transition(abortFromS1, "S1", "S0")).resolves.toBeUndefined();
 
     const abortFromS2 = createTestBackend();
     await initialize(abortFromS2);
     await transition(abortFromS2, "S0", "S1");
     await transition(abortFromS2, "S1", "S2");
-    await expect(
-      transition(abortFromS2, "S2", "S0"),
-    ).resolves.toBeUndefined();
+    await expect(transition(abortFromS2, "S2", "S0")).resolves.toBeUndefined();
 
     const completed = createTestBackend();
     await advanceToS3(completed);
-    await expect(
-      transition(completed, "S3", "S4"),
-    ).resolves.toBeUndefined();
+    await expect(transition(completed, "S3", "S4")).resolves.toBeUndefined();
     await expectDomainError(
       transition(completed, "S4", "S3"),
       "VALIDATION_FAILED",
@@ -469,10 +461,7 @@ describe("cutover state machine", () => {
     await seedUser(t, { admin: true });
 
     await expect(
-      t.withIdentity(USER_IDENTITY).query(
-        api.system.cutover.getStatus,
-        {},
-      ),
+      t.withIdentity(USER_IDENTITY).query(api.system.cutover.getStatus, {}),
     ).resolves.toEqual({
       initialized: false,
       applicationWriteMode: "disabled",
@@ -480,10 +469,7 @@ describe("cutover state machine", () => {
     await initialize(t);
 
     await expect(
-      t.withIdentity(USER_IDENTITY).query(
-        api.system.cutover.getStatus,
-        {},
-      ),
+      t.withIdentity(USER_IDENTITY).query(api.system.cutover.getStatus, {}),
     ).resolves.toMatchObject({
       initialized: true,
       cutoverStage: "S0",
@@ -498,10 +484,9 @@ describe("pipeline and internal write boundaries", () => {
     const t = createTestBackend();
 
     await expectDomainError(
-      t.withIdentity(SERVICE_IDENTITY).query(
-        api.pipeline.status.capabilities,
-        {},
-      ),
+      t
+        .withIdentity(SERVICE_IDENTITY)
+        .query(api.pipeline.status.capabilities, {}),
       "FORBIDDEN",
     );
   });
@@ -516,10 +501,9 @@ describe("pipeline and internal write boundaries", () => {
     );
 
     await expectDomainError(
-      t.withIdentity(SERVICE_IDENTITY).query(
-        api.pipeline.status.capabilities,
-        {},
-      ),
+      t
+        .withIdentity(SERVICE_IDENTITY)
+        .query(api.pipeline.status.capabilities, {}),
       "FORBIDDEN",
     );
   });
@@ -529,10 +513,9 @@ describe("pipeline and internal write boundaries", () => {
     await seedService(t, ["pipeline:heartbeat", "pipeline:publish"]);
 
     await expect(
-      t.withIdentity(SERVICE_IDENTITY).query(
-        api.pipeline.status.capabilities,
-        {},
-      ),
+      t
+        .withIdentity(SERVICE_IDENTITY)
+        .query(api.pipeline.status.capabilities, {}),
     ).resolves.toMatchObject({
       name: "Test Pipeline",
       permissions: ["pipeline:heartbeat", "pipeline:publish"],
@@ -545,22 +528,18 @@ describe("pipeline and internal write boundaries", () => {
     await advanceToS3(t);
 
     await expectDomainError(
-      t.withIdentity(SERVICE_IDENTITY).mutation(
-        api.pipeline.status.heartbeat,
-        {
-          clientApiVersion: BBPC_API_VERSION,
-          requiredPermission: "pipeline:publish",
-        },
-      ),
+      t.withIdentity(SERVICE_IDENTITY).mutation(api.pipeline.status.heartbeat, {
+        clientApiVersion: BBPC_API_VERSION,
+        requiredPermission: "pipeline:publish",
+      }),
       "FORBIDDEN",
     );
-    const heartbeat = await t.withIdentity(SERVICE_IDENTITY).mutation(
-      api.pipeline.status.heartbeat,
-      {
+    const heartbeat = await t
+      .withIdentity(SERVICE_IDENTITY)
+      .mutation(api.pipeline.status.heartbeat, {
         clientApiVersion: BBPC_API_VERSION,
         requiredPermission: "pipeline:heartbeat",
-      },
-    );
+      });
     expect(typeof heartbeat.lastSeenAt).toBe("number");
 
     const service = await t.run(async (ctx) =>
@@ -574,13 +553,12 @@ describe("pipeline and internal write boundaries", () => {
     await seedService(disabled);
     await initialize(disabled);
     await expectDomainError(
-      disabled.withIdentity(SERVICE_IDENTITY).action(
-        api.pipeline.status.actionGateProbe,
-        {
+      disabled
+        .withIdentity(SERVICE_IDENTITY)
+        .action(api.pipeline.status.actionGateProbe, {
           clientApiVersion: BBPC_API_VERSION,
           requiredPermission: "pipeline:heartbeat",
-        },
-      ),
+        }),
       "WRITE_DISABLED",
     );
 
@@ -588,22 +566,20 @@ describe("pipeline and internal write boundaries", () => {
     await seedService(enabled);
     await advanceToS3(enabled);
     await expect(
-      enabled.withIdentity(SERVICE_IDENTITY).action(
-        api.pipeline.status.actionGateProbe,
-        {
+      enabled
+        .withIdentity(SERVICE_IDENTITY)
+        .action(api.pipeline.status.actionGateProbe, {
           clientApiVersion: BBPC_API_VERSION,
           requiredPermission: "pipeline:heartbeat",
-        },
-      ),
+        }),
     ).resolves.toEqual({ allowed: true, cutoverStage: "S3" });
     await expectDomainError(
-      enabled.withIdentity(SERVICE_IDENTITY).action(
-        api.pipeline.status.actionGateProbe,
-        {
+      enabled
+        .withIdentity(SERVICE_IDENTITY)
+        .action(api.pipeline.status.actionGateProbe, {
           clientApiVersion: BBPC_API_VERSION,
           requiredPermission: "pipeline:publish",
-        },
-      ),
+        }),
       "FORBIDDEN",
     );
   });
@@ -611,13 +587,10 @@ describe("pipeline and internal write boundaries", () => {
   test("gates scheduled writes and migration writes by stage and run", async () => {
     const uninitialized = createTestBackend();
     await expectDomainError(
-      uninitialized.mutation(
-        internal.system.gate.assertMigrationWriteEnabled,
-        {
-          cutoverRunId: CUTOVER_RUN_ID,
-          operationId: "test-import",
-        },
-      ),
+      uninitialized.mutation(internal.system.gate.assertMigrationWriteEnabled, {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: "test-import",
+      }),
       "WRITE_DISABLED",
     );
 

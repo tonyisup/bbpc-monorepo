@@ -26,6 +26,7 @@ export type PublicApiType = {
           id: Id<"users">;
           image: string | null;
           isAdmin: boolean;
+          isHost: boolean;
           name: string | null;
         }
       >;
@@ -364,6 +365,7 @@ export type PublicApiType = {
           id: Id<"users">;
           image: string | null;
           isAdmin: boolean;
+          isHost: boolean;
           linkMode: "alreadyLinked" | "existingUser" | "newUser";
           name: string | null;
         }

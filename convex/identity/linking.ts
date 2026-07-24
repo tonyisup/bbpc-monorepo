@@ -9,10 +9,7 @@ export const linkOrCreateMe = identityLinkMutation({
   args: {},
   returns: identityLinkResultValidator,
   handler: async (ctx) => {
-    const result = await linkOrCreateIdentity(
-      ctx,
-      ctx.identity,
-    );
+    const result = await linkOrCreateIdentity(ctx, ctx.identity);
     const actor = await requireUserActor(ctx);
     if (actor.user._id !== result.userId) {
       domainError(
@@ -38,6 +35,7 @@ export const linkOrCreateMe = identityLinkMutation({
       email: actor.user.email ?? null,
       image: actor.user.image ?? null,
       isAdmin: actor.isAdmin,
+      isHost: actor.isHost,
       linkMode: result.linkMode,
     };
   },

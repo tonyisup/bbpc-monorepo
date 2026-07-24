@@ -110,10 +110,11 @@ describe("Clerk identity linking", () => {
 
     await initializeS1(t);
     await expectDomainError(
-      t.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      t
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "WRITE_DISABLED",
     );
 
@@ -132,10 +133,11 @@ describe("Clerk identity linking", () => {
       approvedBackupChecksum: "sha256:identity-link",
     });
     await expectDomainError(
-      t.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: "stale-client" },
-      ),
+      t
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: "stale-client",
+        }),
       "STALE_CLIENT",
     );
   });
@@ -148,16 +150,18 @@ describe("Clerk identity linking", () => {
     await advanceToS3(t);
 
     await expect(
-      t.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      t
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
     ).resolves.toEqual({
       id: userId,
       name: "Clerk Member",
       email: "member@example.test",
       image: "https://images.example.test/member.png",
       isAdmin: false,
+      isHost: false,
       linkMode: "existingUser",
     });
 
@@ -165,9 +169,7 @@ describe("Clerk identity linking", () => {
       const user = await ctx.db.get("users", userId);
       const identities = await ctx.db
         .query("authIdentities")
-        .withIndex("by_userId", (index) =>
-          index.eq("userId", userId),
-        )
+        .withIndex("by_userId", (index) => index.eq("userId", userId))
         .take(2);
       const audits = await ctx.db
         .query("auditEvents")
@@ -188,9 +190,7 @@ describe("Clerk identity linking", () => {
       verifiedEmail: "Member@Example.test",
     });
     expect(
-      snapshot.audits.filter(
-        (event) => event.action === "identity.linked",
-      ),
+      snapshot.audits.filter((event) => event.action === "identity.linked"),
     ).toHaveLength(1);
     const auditJson = JSON.stringify(snapshot.audits);
     expect(auditJson).not.toContain(VERIFIED_IDENTITY.email);
@@ -215,10 +215,7 @@ describe("Clerk identity linking", () => {
     });
 
     await expect(
-      t.withIdentity(VERIFIED_IDENTITY).query(
-        api.identity.profile.me,
-        {},
-      ),
+      t.withIdentity(VERIFIED_IDENTITY).query(api.identity.profile.me, {}),
     ).resolves.toMatchObject({
       id: result.id,
       isAdmin: false,
@@ -248,10 +245,7 @@ describe("Clerk identity linking", () => {
       const identities = await ctx.db
         .query("authIdentities")
         .withIndex("by_tokenIdentifier", (index) =>
-          index.eq(
-            "tokenIdentifier",
-            VERIFIED_IDENTITY.tokenIdentifier,
-          ),
+          index.eq("tokenIdentifier", VERIFIED_IDENTITY.tokenIdentifier),
         )
         .take(2);
       const audits = await ctx.db
@@ -297,10 +291,11 @@ describe("Clerk identity linking", () => {
     await advanceToS3(t);
 
     await expect(
-      t.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      t
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
     ).resolves.toMatchObject({
       id: userId,
       name: "Migrated Admin",
@@ -314,12 +309,14 @@ describe("Clerk identity linking", () => {
     const t = createTestBackend();
     await advanceToS3(t);
     await expectDomainError(
-      t.withIdentity({
-        ...VERIFIED_IDENTITY,
-        emailVerified: false,
-      }).mutation(api.identity.linking.linkOrCreateMe, {
-        clientApiVersion: BBPC_API_VERSION,
-      }),
+      t
+        .withIdentity({
+          ...VERIFIED_IDENTITY,
+          emailVerified: false,
+        })
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "IDENTITY_CONFLICT",
     );
 
@@ -340,10 +337,11 @@ describe("Clerk identity linking", () => {
     await seedUser(duplicate, { email: "member@example.test" });
     await advanceToS3(duplicate);
     await expectDomainError(
-      duplicate.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      duplicate
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "IDENTITY_CONFLICT",
     );
 
@@ -354,10 +352,11 @@ describe("Clerk identity linking", () => {
     });
     await advanceToS3(disabled);
     await expectDomainError(
-      disabled.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      disabled
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "ACCOUNT_DISABLED",
     );
 
@@ -367,8 +366,7 @@ describe("Clerk identity linking", () => {
     });
     await claimed.run(async (ctx) => {
       await ctx.db.insert("authIdentities", {
-        tokenIdentifier:
-          "https://issuer.example.test|other-clerk-user",
+        tokenIdentifier: "https://issuer.example.test|other-clerk-user",
         issuer: "https://issuer.example.test",
         subject: "other-clerk-user",
         userId: claimedUserId,
@@ -378,10 +376,11 @@ describe("Clerk identity linking", () => {
     });
     await advanceToS3(claimed);
     await expectDomainError(
-      claimed.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      claimed
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "IDENTITY_CONFLICT",
     );
   });
@@ -393,8 +392,7 @@ describe("Clerk identity linking", () => {
     });
     await t.run(async (ctx) => {
       await ctx.db.insert("authIdentities", {
-        tokenIdentifier:
-          "unexpected-token-identifier-format",
+        tokenIdentifier: "unexpected-token-identifier-format",
         issuer: VERIFIED_IDENTITY.issuer,
         subject: VERIFIED_IDENTITY.subject,
         userId,
@@ -405,10 +403,11 @@ describe("Clerk identity linking", () => {
     await advanceToS3(t);
 
     await expectDomainError(
-      t.withIdentity(VERIFIED_IDENTITY).mutation(
-        api.identity.linking.linkOrCreateMe,
-        { clientApiVersion: BBPC_API_VERSION },
-      ),
+      t
+        .withIdentity(VERIFIED_IDENTITY)
+        .mutation(api.identity.linking.linkOrCreateMe, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
       "IDENTITY_CONFLICT",
     );
   });

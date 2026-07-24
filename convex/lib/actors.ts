@@ -14,6 +14,7 @@ export interface UserActor {
   authIdentity: Doc<"authIdentities">;
   user: Doc<"users">;
   isAdmin: boolean;
+  isHost: boolean;
 }
 
 export interface ServiceActor {
@@ -36,10 +37,7 @@ export type ApplicationActor = UserActor | ServiceActor | InternalActor;
 async function getIdentity(ctx: IdentityDatabaseContext) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
-    domainError(
-      "AUTHENTICATION_REQUIRED",
-      "Authentication is required.",
-    );
+    domainError("AUTHENTICATION_REQUIRED", "Authentication is required.");
   }
   return identity;
 }
@@ -63,10 +61,7 @@ export async function requireUserActor(
 
   const user = await ctx.db.get("users", authIdentity.userId);
   if (!user) {
-    domainError(
-      "IDENTITY_CONFLICT",
-      "The linked BBPC account is unavailable.",
-    );
+    domainError("IDENTITY_CONFLICT", "The linked BBPC account is unavailable.");
   }
   if (user.status !== "active") {
     domainError("ACCOUNT_DISABLED", "This BBPC account is disabled.");
@@ -77,11 +72,14 @@ export async function requireUserActor(
     .withIndex("by_userId", (query) => query.eq("userId", user._id))
     .take(50);
   let isAdmin = false;
+  let isHost = false;
   for (const roleLink of roleLinks) {
     const role = await ctx.db.get("roles", roleLink.roleId);
     if (role?.admin) {
       isAdmin = true;
-      break;
+    }
+    if (role?.normalizedName === "host") {
+      isHost = true;
     }
   }
 
@@ -95,6 +93,7 @@ export async function requireUserActor(
     authIdentity,
     user,
     isAdmin,
+    isHost,
   };
 }
 
