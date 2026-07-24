@@ -1248,6 +1248,84 @@ export type PublicApiType = {
                 year: number;
             }>;
         };
+        external: {
+            getMovie: FunctionReference<"action", "public", {
+                id: number;
+            }, {
+                backdrop_path: string | null;
+                first_air_date: string | null;
+                id: number;
+                imdb_id: string | null;
+                imdb_path: string | null;
+                media_type: string;
+                overview: string;
+                popularity: number;
+                poster_path: string | null;
+                release_date: string;
+                title: string;
+                vote_average: number;
+                vote_count: number;
+            }>;
+            getShow: FunctionReference<"action", "public", {
+                id: number;
+            }, {
+                backdrop_path: string | null;
+                first_air_date: string | null;
+                id: number;
+                imdb_id: string | null;
+                imdb_path: string | null;
+                media_type: string;
+                overview: string;
+                popularity: number;
+                poster_path: string | null;
+                release_date: string;
+                title: string;
+                vote_average: number;
+                vote_count: number;
+            }>;
+            searchMovies: FunctionReference<"action", "public", {
+                page?: number;
+                query: string;
+            }, {
+                page: number;
+                results: Array<{
+                    backdrop_path: string | null;
+                    first_air_date: string | null;
+                    id: number;
+                    imdb_id: string | null;
+                    imdb_path: string | null;
+                    media_type: string;
+                    overview: string;
+                    popularity: number;
+                    poster_path: string | null;
+                    release_date: string;
+                    title: string;
+                    vote_average: number;
+                    vote_count: number;
+                }>;
+            }>;
+            searchShows: FunctionReference<"action", "public", {
+                page?: number;
+                query: string;
+            }, {
+                page: number;
+                results: Array<{
+                    backdrop_path: string | null;
+                    first_air_date: string | null;
+                    id: number;
+                    imdb_id: string | null;
+                    imdb_path: string | null;
+                    media_type: string;
+                    overview: string;
+                    popularity: number;
+                    poster_path: string | null;
+                    release_date: string;
+                    title: string;
+                    vote_average: number;
+                    vote_count: number;
+                }>;
+            }>;
+        };
     };
 };
 export type InternalApiType = {};

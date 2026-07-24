@@ -193,6 +193,26 @@ export const authenticatedAction = customAction(rawAction, {
   },
 });
 
+export const authenticatedReadAction = customAction(rawAction, {
+  args: {},
+  input: async (ctx) => {
+    const actor: {
+      userId: Id<"users">;
+      isAdmin: boolean;
+    } = await ctx.runQuery(
+      internal.identity.access.resolveUserForAction,
+      {},
+    );
+    return {
+      ctx: {
+        accessClass: "authenticated-owner" as const,
+        actor,
+      },
+      args: {},
+    };
+  },
+});
+
 export const pipelineAction = customAction(rawAction, {
   args: { clientApiVersion: v.string() },
   input: async (ctx, { clientApiVersion }) => {

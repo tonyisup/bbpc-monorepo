@@ -20,6 +20,7 @@ const approvedBuilders = new Set([
   "authenticatedMutation",
   "adminMutation",
   "pipelineMutation",
+  "authenticatedReadAction",
   "authenticatedAction",
   "pipelineAction",
   "internalAppMutation",

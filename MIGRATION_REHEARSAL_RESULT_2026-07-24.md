@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-182 Convex tests with 91.25% branch coverage. Owner-scoped episode audio metadata
+191 Convex tests with 91.55% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -123,6 +123,12 @@ Catalog writes are covered synthetically as well. The suite preserves authentica
 movie/show URL upserts without collapsing imported duplicates, validates normalized
 catalog fields, keeps administrative edits/deletes administrator-only, rejects every
 canonical relationship before deletion, and confirms value-free audit records.
+TMDB search/detail actions are covered with mocked transport because the local Convex
+deployment does not yet contain `TMDB_API_KEY`. Their suite verifies authentication
+without a write-state dependency, bounded search/page/result limits, typed movie/show
+mapping, timeouts, HTTP and rate-limit translation, missing configuration, invalid JSON,
+TMDB error envelopes, and malformed records. A real smoke call remains pending secret
+configuration.
 
 ## Preserved gate
 

@@ -9,8 +9,10 @@
  */
 
 import type * as catalog_admin from "../catalog/admin.js";
+import type * as catalog_external from "../catalog/external.js";
 import type * as catalog_public from "../catalog/public.js";
 import type * as catalog_readModel from "../catalog/readModel.js";
+import type * as catalog_tmdbClient from "../catalog/tmdbClient.js";
 import type * as catalog_validators from "../catalog/validators.js";
 import type * as catalog_write from "../catalog/write.js";
 import type * as catalog_writeModel from "../catalog/writeModel.js";
@@ -72,8 +74,10 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   "catalog/admin": typeof catalog_admin;
+  "catalog/external": typeof catalog_external;
   "catalog/public": typeof catalog_public;
   "catalog/readModel": typeof catalog_readModel;
+  "catalog/tmdbClient": typeof catalog_tmdbClient;
   "catalog/validators": typeof catalog_validators;
   "catalog/write": typeof catalog_write;
   "catalog/writeModel": typeof catalog_writeModel;

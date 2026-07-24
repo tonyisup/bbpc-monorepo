@@ -302,8 +302,16 @@ movies and shows. Search limits are validated from 1 through 20, blank searches 
 no rows, and year/title matches are de-duplicated by canonical Convex ID without merging
 the intentionally preserved catalog duplicates.
 
-These functions read only the migrated local catalog. TMDB search/detail calls remain a
-separate bounded external-action contract.
+These functions read only the migrated local catalog.
+
+Authenticated `catalog.external` actions provide bounded TMDB movie/show search and
+detail lookups without depending on application write state. Searches normalize at most
+200 characters, accept pages 1 through 500, return at most 20 typed results, and skip
+the upstream call for a blank query. Requests use an eight-second timeout and translate
+missing configuration, transport failures, rate limits, HTTP failures, invalid JSON,
+TMDB error envelopes, and malformed records into bounded domain errors without exposing
+the API key. Set `TMDB_API_KEY` as a Convex deployment environment variable; it is never
+committed or returned to clients.
 
 Authenticated `catalog.write` mutations preserve the legacy ranked-list workflow:
 movie and show inputs are validated and upserted by an exact indexed URL match. Existing
