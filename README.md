@@ -75,8 +75,8 @@ verification tokens, and provider tokens are not staged at all.
 
 One fingerprinted global migration run owns independent per-domain run records and
 checkpoints. Completing the identity domain therefore does not incorrectly mark the
-full migration transformed; later catalog, episode, review, game, and ranking domains
-join the same cutover run.
+full migration transformed; later catalog, episode, review, game, ranking, and archive
+domains join the same cutover run.
 
 Identity also has an independent post-transform reconciliation pass. It re-normalizes
 emails and role keys, re-derives administrator permissions, resolves both user-role
@@ -199,6 +199,21 @@ Independent reconciliation re-resolves every user, type, list, movie, show, and 
 relationship and detects scalar or ordering drift without repair. The guarded ranking
 extractor captures all three tables in one serializable local-only snapshot and has
 synthetic coverage only; it has not read production-derived rows.
+
+## Archive migration rehearsal
+
+The archive slice preserves all 433 `Archive.Posts` rows after episodes reconcile,
+including 327 nullable episode relationships and 106 intentionally unlinked posts.
+Legacy SQL integer IDs remain indexed, `PostedOn` uses the same pending UTC conversion
+rule as other legacy timestamps, and empty content or title strings are retained
+without normalization.
+
+Its bounded transform and independent reconciliation pass detect missing episode
+parents, source-count drift, invalid cursors, and canonical scalar or relationship
+changes. The guarded extractor reads the archive table in one serializable local-only
+snapshot and has synthetic coverage only; it has not read production-derived rows.
+Canonical retention is implemented, but no product-facing archive query exists while
+the queryable-versus-backup-only policy remains pending.
 
 ## Foundation raw-staging scrub
 

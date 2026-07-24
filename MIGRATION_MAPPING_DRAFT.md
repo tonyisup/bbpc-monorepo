@@ -9,11 +9,12 @@ All 31 migrated targets and their minimum indexes are now defined in the Convex 
 and verified against the typed mapping. This does not approve or run the
 production-derived transform.
 
-The identity, catalog, episode, assignment, review, game, and ranking mappings are
-implemented as synthetic-only, checkpointed rehearsal slices. Their guarded local
+The identity, catalog, episode, assignment, review, game, ranking, and archive mappings
+are implemented as synthetic-only, checkpointed rehearsal slices. Their guarded local
 extractors exist but have not been run against the production-derived `dev` clone. The
 nine game tables and three ranking tables are each extracted atomically in a
-serializable transaction. Catalog rehearsal tests prove that
+serializable transaction; the archive table is captured as its own atomic slice.
+Catalog rehearsal tests prove that
 duplicate movie/show normalized keys remain distinct while tag collisions fail
 transactionally. A separate catalog pass independently reconciles every transformed
 field before marking that domain reconciled. Identity independently rechecks profiles,
@@ -161,6 +162,8 @@ barriers instead of requiring every broad domain to finish as one block.
 6. Complete guesses, gambling entries, tag votes, and quote submissions, then reconcile
    games.
 7. Rankings can run independently after identity, catalog, and episodes are reconciled.
+8. Transform and reconcile the archive after episodes; retain canonical rows without
+   adding a product-facing query until the visibility policy is approved.
 
 The assignments domain deliberately remains `running` between steps 2 and 5. Reviews
 must gate on `assignments.assignments`, not on the whole assignments-domain status.

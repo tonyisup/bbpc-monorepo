@@ -50,6 +50,7 @@ const DOMAIN_TABLES = {
     "migrationRawRankedLists",
     "migrationRawRankedItems",
   ],
+  archive: ["migrationRawArchivePosts"],
 };
 
 const TABLE_FIELDS = {
@@ -422,6 +423,17 @@ const TABLE_FIELDS = {
       "episodeLegacyId",
       "comment",
     ],
+  },
+  migrationRawArchivePosts: {
+    required: [
+      "runId",
+      "legacyId",
+      "postedAt",
+      "content",
+      "title",
+      "sourceRowHash",
+    ],
+    optional: ["episodeLegacyId"],
   },
 };
 

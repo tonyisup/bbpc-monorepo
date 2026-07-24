@@ -959,4 +959,14 @@ export default defineSchema({
     updatedAt: v.number(),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawArchivePosts: defineTable({
+    runId: v.string(),
+    legacyId: v.number(),
+    postedAt: v.number(),
+    content: v.string(),
+    title: v.string(),
+    episodeLegacyId: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
 });

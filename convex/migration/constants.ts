@@ -48,6 +48,17 @@ export const EPISODE_RECONCILIATION_OPERATIONS = {
   finish: "episodes.reconcile.finish",
 } as const;
 
+export const ARCHIVE_OPERATIONS = {
+  start: "archive.start",
+  posts: "archive.posts",
+  finish: "archive.finish",
+} as const;
+
+export const ARCHIVE_RECONCILIATION_OPERATIONS = {
+  posts: "archive.reconcile.posts",
+  finish: "archive.reconcile.finish",
+} as const;
+
 export const ASSIGNMENT_OPERATIONS = {
   start: "assignments.start",
   assignments: "assignments.assignments",

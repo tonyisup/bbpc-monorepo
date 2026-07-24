@@ -51,6 +51,7 @@
     "migration:extract:reviews": "node local-tools/sql/extract-reviews.mjs",
     "migration:extract:games": "node local-tools/sql/extract-games.mjs",
     "migration:extract:rankings": "node local-tools/sql/extract-rankings.mjs",
+    "migration:extract:archive": "node local-tools/sql/extract-archive.mjs",
     "migration:stage:local": "node local-tools/sql/stage-local.mjs",
     "migration:test:extractor": "node --test local-tools/sql/*.test.mjs",
     "test": "vitest run",

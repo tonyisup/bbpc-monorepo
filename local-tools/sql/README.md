@@ -16,7 +16,9 @@ preserve the checkpoint dependency boundary. The game extractor reads all nine g
 tables in one serializable transaction so points and every relationship are from one
 source snapshot; dangling historical `TagVote.pointId` UUIDs remain source evidence
 for the explicit tombstone mapping. The ranking extractor similarly captures its three
-ordered-list tables in one source snapshot.
+ordered-list tables in one source snapshot. The archive extractor preserves every
+linked and unlinked post, including empty content or title strings, without exposing a
+product-facing archive query.
 
 Before an approved rehearsal:
 
@@ -53,6 +55,10 @@ Before an approved rehearsal:
    npm run migration:extract:rankings -- \
      --run-id <cutover-run-id> \
      --ack-production-derived-local-only
+
+   npm run migration:extract:archive -- \
+     --run-id <cutover-run-id> \
+     --ack-production-derived-local-only
    ```
 
 The extractor requires a census less than 15 minutes old, verifies that the configured
@@ -76,7 +82,7 @@ After the approval gate and extraction, stage one verified domain at a time:
 ```sh
 npm run migration:stage:local -- \
   --run-id <cutover-run-id> \
-  --domain <identity|catalog|episodes|assignments|reviews|games|rankings> \
+  --domain <identity|catalog|episodes|assignments|reviews|games|rankings|archive> \
   --ack-production-derived-local-only \
   --ack-replace-local-raw-staging
 ```
