@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-249 Convex tests with 96.49% statement and 90.10% branch coverage. Owner-scoped episode
+256 Convex tests with 96.61% statement and 90.41% branch coverage. Owner-scoped episode
 audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
@@ -145,7 +145,7 @@ self-service actors, exact movie/show target shape, assignment-derived movies,
 rating/user compound-index filters, native relationship pagination, explicit rating
 clear, bounded atomic review/assignment/extra/guess deletion semantics, relationship
 fanout failures, and concurrent extra submissions. Guess submission and award workflows
-are covered by the game-domain checkpoints below; gambling remains pending.
+are covered by the game-domain checkpoints below.
 The first game-application checkpoint is also covered synthetically. Anonymous
 current-season reads accept an explicit plain date instead of reading wall-clock time
 inside a query, choose the newest overlapping active season, ignore undated legacy
@@ -228,7 +228,21 @@ clears omitted prior awards, while missing, shared, cross-user, and cross-season
 relationships fail closed. Aggregate-only inspection of the private source found two
 clean `SUBMITTED`/`MOVIE` rows with clip metadata and listener notes, neither scored,
 and no duplicate user/episode, point, bracket, or placement keys or invalid
-placement/clip-start values. Ranking workflows remain in T10.
+placement/clip-start values.
+
+Ranked lists complete the seventh and final T10 checkpoint. Authenticated owners can
+create, filter, read, update, and delete their own lists, while administrators retain
+explicit any-list access, filtered native pagination, type administration, and owner
+transfer. Every item has exactly one movie, show, or episode target matching its type,
+with unique bounded ranks and targets. Existing-target upserts swap occupied ranks, new
+targets replace occupied slots, single moves shift the intervening interval, and bulk
+reorders require the complete current item set before atomically assigning dense ranks.
+Referenced type changes and deletes fail closed, as do missing parents, malformed
+targets, duplicate ranks/targets, and oversized collections. Aggregate-only inspection
+confirmed one movie type, three owners/lists, and 19 movie items, with a configured and
+observed maximum of 10 and no constraint violations. Owner/admin access, all three
+target kinds, ordering semantics, pagination, capacities, cascades, corruption, and
+value-free audits have synthetic coverage.
 
 ## Preserved gate
 

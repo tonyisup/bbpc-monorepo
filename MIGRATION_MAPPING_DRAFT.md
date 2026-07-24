@@ -139,8 +139,9 @@ Index names include every indexed field.
 | `gamblingEntries` | one index for each relation plus `by_userId_and_seasonId` |
 | `tagVotes` | `by_createdAt`, `by_userId_and_createdAt`, `by_tmdbId_and_createdAt`, `by_userId_and_tmdbId_and_normalizedTag`, award-link indexes, and the migration-only legacy-award scrub index |
 | `quoteSubmissions` | `by_episodeId`, `by_episodeId_and_status`, `by_episodeId_and_userId`, `by_episodeId_and_createdAt`, `by_episodeId_and_bracketOrder_and_createdAt`, `by_seasonId`, `by_userId`, `by_userId_and_createdAt`, `by_pointId` |
-| `rankedLists` | `by_userId`, `by_rankedListTypeId`, `by_userId_and_rankedListTypeId` |
-| `rankedItems` | `by_rankedListId_and_rank`, plus one index for each nullable target |
+| `rankedListTypes` | `by_legacyId`, `by_createdAt` |
+| `rankedLists` | `by_userId`, `by_rankedListTypeId`, `by_userId_and_rankedListTypeId`, plus updated-time indexes for all, user, type, and user/type pagination |
+| `rankedItems` | `by_rankedListId_and_rank`, plus compound list/target indexes for each nullable target |
 
 All queries must use these indexes with `.unique()`, bounded `.take()`, or pagination.
 Production-scale behavior tests may add indexes; they may not replace a measured query

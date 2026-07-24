@@ -373,6 +373,30 @@ or clip-start values. Synthetic tests cover access/write gates, open-round owner
 normalization, deterministic brackets, award recalculation and cleanup, relationship
 corruption, audit privacy, and bounded reads.
 
+## Ranked-list API
+
+Authenticated users can list their own ranked lists, filter by target kind, read a list
+they own, and create or edit lists through their Clerk-derived identity. Administrators
+retain explicit oversight of any list, including filtered native pagination and owner
+transfer. Type discovery is authenticated; type creation, constraint changes, and
+deletion are administrator-only. A referenced type cannot change target kind, shrink
+below an existing item, or be deleted.
+
+Each item has exactly one movie, show, or episode target matching its list type. Ranks
+and targets are unique per list and bounded by a 1–100 type capacity. Upserting an
+existing target moves it and swaps an occupied destination back to the prior rank;
+upserting a new target into an occupied rank replaces that slot. Single-item moves
+shift the intervening range, while bulk reorder requires the complete, duplicate-free
+current item set and writes dense ranks atomically. List deletion cascades through its
+bounded items in the same transaction.
+
+Aggregate-only rehearsal inspection found one movie-list type, three lists owned by
+three users, and 19 movie items. The configured and observed maximum is 10 items; there
+are no invalid statuses, target shapes, target/type combinations, ranks, duplicate
+list/rank keys, or duplicate list/target keys. Synthetic tests cover owner/admin access,
+write gates, target hydration, all ordering modes, filtering/pagination, type
+constraints, capacity, cascade deletion, broken relationships, and audit privacy.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:

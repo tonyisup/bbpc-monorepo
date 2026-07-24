@@ -26,6 +26,11 @@ export const MAX_QUOTE_EPISODE_SELECTOR_SIZE = 100;
 export const MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR = 2000;
 export const MAX_QUOTE_SUBMISSIONS_PER_EPISODE = 500;
 export const MAX_QUOTE_RANDOM_SEED_LENGTH = 100;
+export const MAX_RANKED_LIST_TYPES = 100;
+export const MAX_RANKED_LISTS_PER_USER = 100;
+export const MAX_RANKED_LISTS_PER_TYPE = 500;
+export const MAX_RANKED_ITEMS_PER_LIST = 100;
+export const MAX_RANKED_LIST_PAGE_SIZE = 50;
 
 export function validateSeasonPageSize(numItems: number): void {
   if (

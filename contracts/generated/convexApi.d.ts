@@ -7110,5 +7110,546 @@ export type PublicApiType = {
             }>;
         };
     };
+    rankings: {
+        types: {
+            create: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string | null;
+                maxItems: number;
+                name: string;
+                now?: number;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
+            }, {
+                createdAt: number;
+                description: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems: number;
+                name: string;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
+                updatedAt: number;
+            }>;
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                createdAt: number;
+                description: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems: number;
+                name: string;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
+                updatedAt: number;
+            }>>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedListTypes">;
+            }, {
+                id: Id<"rankedListTypes">;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems?: number;
+                name?: string;
+                now?: number;
+                targetType?: "MOVIE" | "SHOW" | "EPISODE";
+            }, {
+                createdAt: number;
+                description: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems: number;
+                name: string;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
+                updatedAt: number;
+            }>;
+        };
+        lists: {
+            changeOwner: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedLists">;
+                now?: number;
+                userId: Id<"users">;
+            }, {
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                items: Array<{
+                    comment: string | null;
+                    createdAt: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"rankedItems">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    movieId: Id<"movies"> | null;
+                    rank: number;
+                    rankedListId: Id<"rankedLists">;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    showId: Id<"shows"> | null;
+                    targetType: "movie" | "show" | "episode";
+                    updatedAt: number;
+                }>;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            createMine: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                now?: number;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title?: string | null;
+            }, {
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                items: Array<{
+                    comment: string | null;
+                    createdAt: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"rankedItems">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    movieId: Id<"movies"> | null;
+                    rank: number;
+                    rankedListId: Id<"rankedLists">;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    showId: Id<"shows"> | null;
+                    targetType: "movie" | "show" | "episode";
+                    updatedAt: number;
+                }>;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            get: FunctionReference<"query", "public", {
+                id: Id<"rankedLists">;
+            }, {
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                items: Array<{
+                    comment: string | null;
+                    createdAt: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"rankedItems">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    movieId: Id<"movies"> | null;
+                    rank: number;
+                    rankedListId: Id<"rankedLists">;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    showId: Id<"shows"> | null;
+                    targetType: "movie" | "show" | "episode";
+                    updatedAt: number;
+                }>;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            listAdminPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                rankedListTypeId?: Id<"rankedListTypes">;
+                userId?: Id<"users">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    createdAt: number;
+                    id: Id<"rankedLists">;
+                    itemCount: number;
+                    rankedListTypeId: Id<"rankedListTypes">;
+                    status: "DRAFT" | "PUBLISHED";
+                    title: string | null;
+                    type: {
+                        createdAt: number;
+                        description: string | null;
+                        id: Id<"rankedListTypes">;
+                        maxItems: number;
+                        name: string;
+                        targetType: "MOVIE" | "SHOW" | "EPISODE";
+                        updatedAt: number;
+                    };
+                    updatedAt: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                    userId: Id<"users">;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listMine: FunctionReference<"query", "public", {
+                targetType?: "MOVIE" | "SHOW" | "EPISODE";
+            }, Array<{
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>>;
+            removeAccessible: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedLists">;
+            }, {
+                deletedItems: number;
+                id: Id<"rankedLists">;
+            }>;
+            updateAccessible: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedLists">;
+                now?: number;
+                status?: "DRAFT" | "PUBLISHED";
+                title?: string | null;
+            }, {
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                items: Array<{
+                    comment: string | null;
+                    createdAt: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"rankedItems">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    movieId: Id<"movies"> | null;
+                    rank: number;
+                    rankedListId: Id<"rankedLists">;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    showId: Id<"shows"> | null;
+                    targetType: "movie" | "show" | "episode";
+                    updatedAt: number;
+                }>;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+        };
+        items: {
+            move: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedItems">;
+                newRank: number;
+                now?: number;
+            }, {
+                comment: string | null;
+                createdAt: number;
+                episode: {
+                    date: string | null;
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"rankedItems">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                } | null;
+                movieId: Id<"movies"> | null;
+                rank: number;
+                rankedListId: Id<"rankedLists">;
+                show: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
+                } | null;
+                showId: Id<"shows"> | null;
+                targetType: "movie" | "show" | "episode";
+                updatedAt: number;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedItems">;
+                now?: number;
+            }, {
+                id: Id<"rankedItems">;
+                rank: number;
+            }>;
+            reorder: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                itemIds: Array<Id<"rankedItems">>;
+                now?: number;
+                rankedListId: Id<"rankedLists">;
+            }, {
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                items: Array<{
+                    comment: string | null;
+                    createdAt: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"rankedItems">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    movieId: Id<"movies"> | null;
+                    rank: number;
+                    rankedListId: Id<"rankedLists">;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    showId: Id<"shows"> | null;
+                    targetType: "movie" | "show" | "episode";
+                    updatedAt: number;
+                }>;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            upsert: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                comment?: string | null;
+                now?: number;
+                rank: number;
+                rankedListId: Id<"rankedLists">;
+                target: {
+                    id: Id<"movies">;
+                    kind: "movie";
+                } | {
+                    id: Id<"shows">;
+                    kind: "show";
+                } | {
+                    id: Id<"episodes">;
+                    kind: "episode";
+                };
+            }, {
+                comment: string | null;
+                createdAt: number;
+                episode: {
+                    date: string | null;
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"rankedItems">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                } | null;
+                movieId: Id<"movies"> | null;
+                rank: number;
+                rankedListId: Id<"rankedLists">;
+                show: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
+                } | null;
+                showId: Id<"shows"> | null;
+                targetType: "movie" | "show" | "episode";
+                updatedAt: number;
+            }>;
+        };
+    };
 };
 export type InternalApiType = {};

@@ -658,7 +658,9 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_legacyId", ["legacyId"]),
+  })
+    .index("by_legacyId", ["legacyId"])
+    .index("by_createdAt", ["createdAt"]),
 
   rankedLists: defineTable({
     legacyId: v.optional(v.string()),
@@ -675,6 +677,17 @@ export default defineSchema({
     .index("by_userId_and_rankedListTypeId", [
       "userId",
       "rankedListTypeId",
+    ])
+    .index("by_updatedAt", ["updatedAt"])
+    .index("by_userId_and_updatedAt", ["userId", "updatedAt"])
+    .index("by_rankedListTypeId_and_updatedAt", [
+      "rankedListTypeId",
+      "updatedAt",
+    ])
+    .index("by_userId_and_rankedListTypeId_and_updatedAt", [
+      "userId",
+      "rankedListTypeId",
+      "updatedAt",
     ]),
 
   rankedItems: defineTable({
@@ -695,6 +708,18 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_rankedListId_and_rank", ["rankedListId", "rank"])
+    .index("by_rankedListId_and_movieId", [
+      "rankedListId",
+      "movieId",
+    ])
+    .index("by_rankedListId_and_showId", [
+      "rankedListId",
+      "showId",
+    ])
+    .index("by_rankedListId_and_episodeId", [
+      "rankedListId",
+      "episodeId",
+    ])
     .index("by_movieId", ["movieId"])
     .index("by_showId", ["showId"])
     .index("by_episodeId", ["episodeId"]),
