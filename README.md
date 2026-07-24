@@ -116,6 +116,11 @@ calendar dates, finite audio timestamps, dependency checkpoints, and final sourc
 counts are validated transactionally. Numeric audio-message IDs use resumable numeric
 cursors encoded in the shared checkpoint format.
 
+The independent episode reconciliation pass rechecks every scalar, normalized slug,
+and resolved user/episode relationship. Missing parents or canonical drift roll back
+the verification batch, and exact per-table counts are required before the episode
+domain becomes reconciled.
+
 Production-derived staging is local-only and must be removed before the portable
 canonical backup. Cloud staging continues to use synthetic fixtures only.
 

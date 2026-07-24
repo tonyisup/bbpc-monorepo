@@ -19,6 +19,7 @@ import type * as lib_writeGate from "../lib/writeGate.js";
 import type * as migration_catalog from "../migration/catalog.js";
 import type * as migration_catalogReconciliation from "../migration/catalogReconciliation.js";
 import type * as migration_constants from "../migration/constants.js";
+import type * as migration_episodeReconciliation from "../migration/episodeReconciliation.js";
 import type * as migration_episodes from "../migration/episodes.js";
 import type * as migration_identity from "../migration/identity.js";
 import type * as migration_identityReconciliation from "../migration/identityReconciliation.js";
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   "migration/catalog": typeof migration_catalog;
   "migration/catalogReconciliation": typeof migration_catalogReconciliation;
   "migration/constants": typeof migration_constants;
+  "migration/episodeReconciliation": typeof migration_episodeReconciliation;
   "migration/episodes": typeof migration_episodes;
   "migration/identity": typeof migration_identity;
   "migration/identityReconciliation": typeof migration_identityReconciliation;

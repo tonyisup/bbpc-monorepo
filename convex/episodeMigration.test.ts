@@ -8,6 +8,7 @@ import { BBPC_API_VERSION } from "../contracts/index.js";
 import { internal } from "./_generated/api.js";
 import {
   EPISODE_OPERATIONS,
+  EPISODE_RECONCILIATION_OPERATIONS,
   SOURCE_SCHEMA_FINGERPRINT,
 } from "./migration/constants.js";
 import schema from "./schema.js";
@@ -141,6 +142,46 @@ async function transformAll(
       cutoverRunId: CUTOVER_RUN_ID,
       operationId: EPISODE_OPERATIONS.audioMessages,
       batchSize,
+    },
+  );
+}
+
+async function reconcileAll(t: TestBackend): Promise<void> {
+  await t.mutation(
+    internal.migration.episodeReconciliation
+      .reconcileEpisodesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: EPISODE_RECONCILIATION_OPERATIONS.episodes,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.episodeReconciliation
+      .reconcileEpisodeLinksBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: EPISODE_RECONCILIATION_OPERATIONS.links,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.episodeReconciliation
+      .reconcileBangersBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: EPISODE_RECONCILIATION_OPERATIONS.bangers,
+      batchSize: 100,
+    },
+  );
+  await t.mutation(
+    internal.migration.episodeReconciliation
+      .reconcileEpisodeAudioMessagesBatch,
+    {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId:
+        EPISODE_RECONCILIATION_OPERATIONS.audioMessages,
+      batchSize: 100,
     },
   );
 }
@@ -381,6 +422,94 @@ describe("episode migration slice", () => {
     expect(snapshot.audio.find((row) => row.legacyId === 2)).not
       .toHaveProperty("episodeId");
     expect(snapshot.domain?.status).toBe("transformed");
+
+    await reconcileAll(t);
+    await expect(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.episodes,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 2,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeLinksBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: EPISODE_RECONCILIATION_OPERATIONS.links,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileBangersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.bangers,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 1,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeAudioMessagesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.audioMessages,
+          batchSize: 10,
+        },
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+      checkedCount: 2,
+    });
+    const reconciled = await t.mutation(
+      internal.migration.episodeReconciliation
+        .finishEpisodeReconciliation,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: EPISODE_RECONCILIATION_OPERATIONS.finish,
+      },
+    );
+    expect(reconciled).toEqual({
+      runId: CUTOVER_RUN_ID,
+      status: "reconciled",
+      episodes: 2,
+      links: 1,
+      bangers: 1,
+      audioMessages: 2,
+    });
+    await expect(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .finishEpisodeReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+    ).resolves.toEqual(reconciled);
   });
 
   test("reuses matching canonical records and completed checkpoints", async () => {
@@ -1186,6 +1315,422 @@ describe("episode migration slice", () => {
           cutoverRunId: CUTOVER_RUN_ID,
           operationId: EPISODE_OPERATIONS.audioMessages,
           batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("rolls back episode reconciliation on canonical drift", async () => {
+    const t = createTestBackend();
+    await initializeReady(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", {
+        legacyId: USER_ID,
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("migrationRawEpisodes", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: EPISODE_ID_A,
+        number: 1,
+        title: "Episode",
+        sourceRowHash: "sha256:episode",
+      });
+      await ctx.db.insert("migrationRawEpisodeLinks", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: LINK_ID,
+        url: "https://example.test/link",
+        text: "Link",
+        episodeLegacyId: EPISODE_ID_A,
+        sourceRowHash: "sha256:link",
+      });
+      await ctx.db.insert("migrationRawBangers", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: BANGER_ID,
+        title: "Song",
+        artist: "Artist",
+        url: "https://example.test/song",
+        episodeLegacyId: EPISODE_ID_A,
+        userLegacyId: USER_ID,
+        sourceRowHash: "sha256:banger",
+      });
+      await ctx.db.insert("migrationRawEpisodeAudioMessages", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: 1,
+        url: "https://example.test/audio",
+        createdAt: 123,
+        userLegacyId: USER_ID,
+        episodeLegacyId: EPISODE_ID_A,
+        sourceRowHash: "sha256:audio",
+      });
+    });
+    await startRun(t, {
+      episodes: 1,
+      links: 1,
+      bangers: 1,
+      audioMessages: 1,
+    });
+    await transformAll(t);
+    await t.mutation(
+      internal.migration.episodes.finishEpisodeRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: EPISODE_OPERATIONS.finish,
+      },
+    );
+    await t.run(async (ctx) => {
+      const episode = await ctx.db
+        .query("episodes")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", EPISODE_ID_A),
+        )
+        .unique();
+      const link = await ctx.db
+        .query("episodeLinks")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", LINK_ID),
+        )
+        .unique();
+      const banger = await ctx.db
+        .query("bangers")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", BANGER_ID),
+        )
+        .unique();
+      const audio = await ctx.db
+        .query("episodeAudioMessages")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", 1),
+        )
+        .unique();
+      if (!episode || !link || !banger || !audio) {
+        throw new Error("Episode reconciliation fixture missing");
+      }
+      await ctx.db.patch("episodes", episode._id, {
+        title: "Drifted",
+      });
+      await ctx.db.patch("episodeLinks", link._id, {
+        text: "Drifted",
+      });
+      await ctx.db.patch("bangers", banger._id, {
+        title: "Drifted",
+      });
+      await ctx.db.patch("episodeAudioMessages", audio._id, {
+        url: "https://example.test/drifted",
+      });
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.episodes,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeLinksBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: EPISODE_RECONCILIATION_OPERATIONS.links,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileBangersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.bangers,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeAudioMessagesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.audioMessages,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("rejects missing reconciliation parents", async () => {
+    const t = createTestBackend();
+    await initializeReady(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", {
+        legacyId: USER_ID,
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("migrationRawEpisodes", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: EPISODE_ID_A,
+        number: 1,
+        title: "Episode",
+        sourceRowHash: "sha256:episode",
+      });
+      await ctx.db.insert("migrationRawEpisodeLinks", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: LINK_ID,
+        url: "https://example.test/link",
+        text: "Link",
+        episodeLegacyId: EPISODE_ID_A,
+        sourceRowHash: "sha256:link",
+      });
+      await ctx.db.insert("migrationRawBangers", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: BANGER_ID,
+        title: "Song",
+        artist: "Artist",
+        url: "https://example.test/song",
+        userLegacyId: USER_ID,
+        sourceRowHash: "sha256:banger",
+      });
+      await ctx.db.insert("migrationRawEpisodeAudioMessages", {
+        runId: CUTOVER_RUN_ID,
+        legacyId: 1,
+        url: "https://example.test/audio",
+        createdAt: 123,
+        userLegacyId: USER_ID,
+        sourceRowHash: "sha256:audio",
+      });
+    });
+    await startRun(t, {
+      episodes: 1,
+      links: 1,
+      bangers: 1,
+      audioMessages: 1,
+    });
+    await transformAll(t);
+    await t.mutation(
+      internal.migration.episodes.finishEpisodeRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: EPISODE_OPERATIONS.finish,
+      },
+    );
+    await t.run(async (ctx) => {
+      const episode = await ctx.db
+        .query("episodes")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", EPISODE_ID_A),
+        )
+        .unique();
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_legacyId", (query) =>
+          query.eq("legacyId", USER_ID),
+        )
+        .unique();
+      if (!episode || !user) {
+        throw new Error("Reconciliation parents missing too early");
+      }
+      await ctx.db.delete("episodes", episode._id);
+      await ctx.db.delete("users", user._id);
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeLinksBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: EPISODE_RECONCILIATION_OPERATIONS.links,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileBangersBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.bangers,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeAudioMessagesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.audioMessages,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("guards episode reconciliation state, cursor, and counts", async () => {
+    const t = createTestBackend();
+    await initializeReady(t);
+    await startRun(t, {
+      episodes: 0,
+      links: 0,
+      bangers: 0,
+      audioMessages: 0,
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.episodes,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+    await transformAll(t);
+    await t.mutation(
+      internal.migration.episodes.finishEpisodeRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: EPISODE_OPERATIONS.finish,
+      },
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.links,
+          batchSize: 10,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.episodes,
+          batchSize: 0,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .finishEpisodeReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.finish,
+        },
+      ),
+      "CONFLICT",
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationCheckpoints", {
+        runId: CUTOVER_RUN_ID,
+        operation:
+          EPISODE_RECONCILIATION_OPERATIONS.audioMessages,
+        status: "running",
+        lastLegacyKey: "invalid",
+        processedCount: 0,
+        insertedCount: 0,
+        reusedCount: 0,
+        updatedAt: 1,
+      });
+    });
+    await expectDomainError(
+      t.mutation(
+        internal.migration.episodeReconciliation
+          .reconcileEpisodeAudioMessagesBatch,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.audioMessages,
+          batchSize: 10,
+        },
+      ),
+      "CONFLICT",
+    );
+
+    const countMismatch = createTestBackend();
+    await initializeReady(countMismatch);
+    await startRun(countMismatch, {
+      episodes: 0,
+      links: 0,
+      bangers: 0,
+      audioMessages: 0,
+    });
+    await transformAll(countMismatch);
+    await countMismatch.mutation(
+      internal.migration.episodes.finishEpisodeRun,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: EPISODE_OPERATIONS.finish,
+      },
+    );
+    await reconcileAll(countMismatch);
+    await countMismatch.run(async (ctx) => {
+      const checkpoint = await ctx.db
+        .query("migrationCheckpoints")
+        .withIndex("by_runId_and_operation", (query) =>
+          query
+            .eq("runId", CUTOVER_RUN_ID)
+            .eq(
+              "operation",
+              EPISODE_RECONCILIATION_OPERATIONS.episodes,
+            ),
+        )
+        .unique();
+      if (!checkpoint) {
+        throw new Error(
+          "Episode reconciliation checkpoint missing",
+        );
+      }
+      await ctx.db.patch("migrationCheckpoints", checkpoint._id, {
+        reusedCount: 1,
+      });
+    });
+    await expectDomainError(
+      countMismatch.mutation(
+        internal.migration.episodeReconciliation
+          .finishEpisodeReconciliation,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId:
+            EPISODE_RECONCILIATION_OPERATIONS.finish,
         },
       ),
       "CONFLICT",

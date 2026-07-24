@@ -39,3 +39,11 @@ export const EPISODE_OPERATIONS = {
   audioMessages: "episodes.audioMessages",
   finish: "episodes.finish",
 } as const;
+
+export const EPISODE_RECONCILIATION_OPERATIONS = {
+  episodes: "episodes.reconcile.episodes",
+  links: "episodes.reconcile.links",
+  bangers: "episodes.reconcile.bangers",
+  audioMessages: "episodes.reconcile.audioMessages",
+  finish: "episodes.reconcile.finish",
+} as const;
