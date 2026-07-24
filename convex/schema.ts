@@ -42,6 +42,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_legacyId", ["legacyId"])
+    .index("by_name", ["name"])
     .index("by_normalizedEmail", ["normalizedEmail"])
     .index("by_status", ["status"]),
 

@@ -27,6 +27,128 @@ export type PublicApiType = {
                 updatedAt: number;
             }>;
         };
+        admin: {
+            getRole: FunctionReference<"query", "public", {
+                id: Id<"roles">;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+                userCount: number;
+                userCountIsExact: boolean;
+            } | null>;
+            getUser: FunctionReference<"query", "public", {
+                id: Id<"users">;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            } | null>;
+            listRoles: FunctionReference<"query", "public", Record<string, never>, Array<{
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+                userCount: number;
+                userCountIsExact: boolean;
+            }>>;
+            listUsersPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    createdAt: number;
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    isAdmin: boolean;
+                    legacyId: string | null;
+                    name: string | null;
+                    nextSyllabus: {
+                        id: Id<"syllabusEntries">;
+                        movie: {
+                            id: Id<"movies">;
+                            title: string;
+                        };
+                        notes: string | null;
+                        order: number;
+                    } | null;
+                    roles: Array<{
+                        assignedAt: number | null;
+                        assignedBy: Id<"users"> | null;
+                        id: Id<"userRoles">;
+                        role: {
+                            admin: boolean;
+                            description: string;
+                            id: Id<"roles">;
+                            legacyId: number | null;
+                            name: string;
+                            permissions: Array<string>;
+                        };
+                    }>;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+        };
+        roles: {
+            mine: FunctionReference<"query", "public", Record<string, never>, Array<{
+                assignedAt: number | null;
+                assignedBy: Id<"users"> | null;
+                id: Id<"userRoles">;
+                role: {
+                    admin: boolean;
+                    description: string;
+                    id: Id<"roles">;
+                    legacyId: number | null;
+                    name: string;
+                    permissions: Array<string>;
+                };
+            }>>;
+        };
     };
     pipeline: {
         status: {

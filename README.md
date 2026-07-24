@@ -296,6 +296,21 @@ These functions read only the migrated local catalog. TMDB search/detail calls r
 separate bounded external-action contract, and catalog writes remain a separately
 authorized mutation slice.
 
+## Administrator identity read API
+
+The admin slice now exposes administrator-only exact user and role reads, native
+name-ordered user pagination, and the complete bounded role list. User DTOs include
+admin-safe identity fields, resolved role memberships, the derived `isAdmin` flag, and
+the highest unassigned syllabus entry with its movie title. `identity.roles.mine`
+separately gives any authenticated user their own resolved memberships without exposing
+the broader administrator surface.
+
+Role membership hydration is limited to 50 entries per user and syllabus hydration to
+100 entries per user; missing referenced roles or movies fail closed. Role summaries
+inspect at most 101 memberships and return a capped `userCount` plus
+`userCountIsExact`, so consumers never mistake a bounded count for an exact total.
+Identity writes remain a separately authorized mutation slice.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:
