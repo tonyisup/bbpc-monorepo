@@ -2464,5 +2464,295 @@ export type PublicApiType = {
             }>;
         };
     };
+    games: {
+        config: {
+            createGamePointType: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string;
+                gameTypeId: Id<"gameTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+            }, {
+                description: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+            }>;
+            createGameType: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string;
+                lookupId: string;
+                title: string;
+            }, {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+            }>;
+            listGamePointTypes: FunctionReference<"query", "public", {
+                gameTypeId?: Id<"gameTypes">;
+            }, Array<{
+                description: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+            }>>;
+            listGameTypes: FunctionReference<"query", "public", Record<string, never>, Array<{
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+            }>>;
+            removeGamePointType: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"gamePointTypes">;
+            }, {
+                id: Id<"gamePointTypes">;
+            }>;
+            removeGameType: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"gameTypes">;
+            }, {
+                id: Id<"gameTypes">;
+            }>;
+            updateGamePointType: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string | null;
+                gameTypeId?: Id<"gameTypes">;
+                id: Id<"gamePointTypes">;
+                lookupId?: string;
+                points?: number;
+                title?: string;
+            }, {
+                description: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"gamePointTypes">;
+                lookupId: string;
+                points: number;
+                title: string;
+            }>;
+            updateGameType: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string | null;
+                id: Id<"gameTypes">;
+                lookupId?: string;
+                title?: string;
+            }, {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+            }>;
+        };
+        public: {
+            currentSeason: FunctionReference<"query", "public", {
+                today: string;
+            }, {
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            } | null>;
+            hasActiveSeason: FunctionReference<"query", "public", {
+                today: string;
+            }, boolean>;
+            predictionScoring: FunctionReference<"query", "public", Record<string, never>, {
+                allCorrectBonus: number | null;
+                allIncorrect: number | null;
+                correctHost: number | null;
+            }>;
+        };
+        seasons: {
+            create: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string;
+                endedOn?: string | null;
+                gameTypeId: Id<"gameTypes">;
+                startedOn: string;
+                title: string;
+            }, {
+                counts: {
+                    gamblingEntries: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    guesses: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    points: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    quoteSubmissions: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                };
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"seasons">;
+            }, {
+                counts: {
+                    gamblingEntries: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    guesses: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    points: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    quoteSubmissions: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                };
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            } | null>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    counts: {
+                        gamblingEntries: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                        guesses: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                        points: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                        quoteSubmissions: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                    };
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            removeIfUnreferenced: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"seasons">;
+            }, {
+                id: Id<"seasons">;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string | null;
+                endedOn?: string | null;
+                gameTypeId?: Id<"gameTypes">;
+                id: Id<"seasons">;
+                startedOn?: string;
+                title?: string;
+            }, {
+                counts: {
+                    gamblingEntries: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    guesses: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    points: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    quoteSubmissions: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                };
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            }>;
+        };
+    };
 };
 export type InternalApiType = {};

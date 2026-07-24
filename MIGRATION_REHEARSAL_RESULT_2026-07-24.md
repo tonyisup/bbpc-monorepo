@@ -103,7 +103,7 @@ exactly 1,494 movies and 6 shows. Private title and year round-trips matched the
 original canonical IDs for both catalog types; only totals and match booleans were
 emitted. Private episode-title, assigned-movie-title, and normalized legacy-ID
 round-trips also matched their original canonical episode IDs. The expanded gate passes
-211 Convex tests with 90.55% branch coverage. Owner-scoped episode audio metadata
+217 Convex tests with 90.28% branch coverage. Owner-scoped episode audio metadata
 operations are covered synthetically because the preserved S1 rehearsal intentionally
 keeps application mutations disabled and contains no linked Clerk identities.
 Administrator identity reads are likewise covered synthetically: the preserved data has
@@ -145,6 +145,17 @@ rating/user compound-index filters, native relationship pagination, explicit rat
 clear, bounded atomic review/assignment/extra/guess deletion semantics, relationship
 fanout failures, and concurrent extra submissions. Guess scoring and gambling remain
 outside this checkpoint as game-domain work.
+The first game-application checkpoint is also covered synthetically. Anonymous
+current-season reads accept an explicit plain date instead of reading wall-clock time
+inside a query, choose the newest overlapping active season, ignore undated legacy
+rows, and fail closed at a bounded inspection limit. Administrator game-type,
+game-point-type, and season operations normalize lookup IDs, enforce SQL `SMALLINT`
+point values and real calendar dates, use native pagination and exactness-labeled
+bounded relationship counts, and refuse deletion while indexed relationships remain.
+Authenticated prediction scoring resolves the three canonical WTFIR point types without
+exposing configuration writes. All mutations remain S3/S4 plus API-version gated and
+emit value-free audit records. Point-event administration and the remaining guess,
+gambling, tag, quote, and ranking workflows remain in T10.
 
 ## Preserved gate
 
