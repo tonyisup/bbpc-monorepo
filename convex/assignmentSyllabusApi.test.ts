@@ -811,6 +811,16 @@ describe("assignment and syllabus API", () => {
       },
     );
     expect(page.page).toHaveLength(1);
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.syllabus.admin.listPage,
+        {
+          paginationOpts: { numItems: 101, cursor: null },
+        },
+      ),
+      "VALIDATION_FAILED",
+      { limit: 100 },
+    );
 
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(

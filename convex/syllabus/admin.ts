@@ -19,6 +19,7 @@ import {
   hydrateAdminSyllabusEntry,
   listCanonicalSyllabusEntries,
 } from "./readModel.js";
+import { validateSyllabusAdminPageSize } from "./limits.js";
 import { syllabusAdminEntryValidator } from "./validators.js";
 import {
   normalizeUserSyllabus,
@@ -57,6 +58,7 @@ export const listPage = adminQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(syllabusAdminEntryValidator),
   handler: async (ctx, args) => {
+    validateSyllabusAdminPageSize(args.paginationOpts.numItems);
     const result = await ctx.db
       .query("syllabusEntries")
       .withIndex("by_createdAt")
