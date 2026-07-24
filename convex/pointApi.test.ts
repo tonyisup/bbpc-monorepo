@@ -540,6 +540,88 @@ describe("point API", () => {
     });
   });
 
+  test("paginates only the authenticated member's point history", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const { pointTypeId, seasonId } = await seedGameFoundation(t);
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      pointTypeId,
+      adjustment: 1,
+      earnedAt: 100,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 2,
+      earnedAt: 200,
+    });
+    await seedPoint(t, {
+      userId: otherId,
+      seasonId,
+      adjustment: 99,
+      earnedAt: 300,
+    });
+
+    await expectDomainError(
+      t.query(api.games.member.myPointsPage, {
+        paginationOpts: { numItems: 1, cursor: null },
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+    const firstPage = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.member.myPointsPage, {
+        paginationOpts: { numItems: 1, cursor: null },
+      });
+    expect(firstPage.page).toMatchObject([
+      {
+        user: { id: memberId },
+        earnedAt: 200,
+        total: 2,
+      },
+    ]);
+    expect(firstPage.isDone).toBe(false);
+    const secondPage = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.member.myPointsPage, {
+        paginationOpts: {
+          numItems: 1,
+          cursor: firstPage.continueCursor,
+        },
+      });
+    expect(secondPage.page).toMatchObject([
+      {
+        user: { id: memberId },
+        earnedAt: 100,
+        total: 11,
+      },
+    ]);
+    expect(secondPage.isDone).toBe(true);
+
+    await expect(
+      t.withIdentity(OTHER_IDENTITY).query(
+        api.games.member.myPointsPage,
+        {
+          paginationOpts: { numItems: 10, cursor: null },
+        },
+      ),
+    ).resolves.toMatchObject({
+      page: [{ user: { id: otherId }, total: 99 }],
+      isDone: true,
+    });
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myPointsPage,
+        {
+          paginationOpts: { numItems: 0, cursor: null },
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+  });
+
   test("fails closed when performance points have broken canonical relationships", async () => {
     const missingUserBackend = createTestBackend();
     const { memberId } = await seedActors(missingUserBackend);

@@ -3660,6 +3660,64 @@ export type PublicApiType = {
         },
         number
       >;
+      myPointsPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
     };
     guesses: {
       awardPoint: FunctionReference<
