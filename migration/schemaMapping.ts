@@ -338,6 +338,7 @@ export const requiredIndexesByTarget = {
     "by_legacyId",
     "by_number",
     "by_slug",
+    "by_normalizedSlug",
     "by_date_and_status",
   ],
   episodeLinks: ["by_legacyId", "by_episodeId"],

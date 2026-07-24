@@ -9,7 +9,9 @@ The identity extractor deliberately selects only `User`, `Role`, and `UserRole`.
 never selects Auth.js accounts, sessions, verification tokens, provider tokens, or
 legacy impersonation state. The catalog extractor selects only `Movie`, `Show`, and
 `Tag`; it preserves distinct rows even when movie or show titles normalize to the same
-value.
+value. The episode extractor selects only `Episode`, `Link`, `Banger`, and
+`AudioEpisodeMessage`; it preserves calendar dates separately from UTC audio-message
+timestamps and never downloads media bytes.
 
 Before an approved rehearsal:
 
@@ -26,6 +28,10 @@ Before an approved rehearsal:
    npm run migration:extract:catalog -- \
      --run-id <cutover-run-id> \
      --ack-production-derived-local-only
+
+   npm run migration:extract:episodes -- \
+     --run-id <cutover-run-id> \
+     --ack-production-derived-local-only
    ```
 
 The extractor requires a census less than 15 minutes old, verifies that the configured
@@ -34,7 +40,8 @@ and UTC date handling, verifies `DB_NAME()` again inside a serializable read-onl
 transaction, and refuses count drift or output overwrite. It writes private JSONL files
 plus a checksummed manifest with filesystem mode `0600`. Domain outputs are immutable
 siblings under `.local-migration/<run-id>/identity` and
-`.local-migration/<run-id>/catalog`.
+`.local-migration/<run-id>/catalog`, with episode output in the adjacent
+`.local-migration/<run-id>/episodes` directory.
 
 Do not run a production-derived extraction until the mapping approval gate is signed.
 Synthetic extractor tests are safe at any time:

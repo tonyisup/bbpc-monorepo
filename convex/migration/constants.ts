@@ -16,3 +16,12 @@ export const CATALOG_OPERATIONS = {
   tags: "catalog.tags",
   finish: "catalog.finish",
 } as const;
+
+export const EPISODE_OPERATIONS = {
+  start: "episodes.start",
+  episodes: "episodes.episodes",
+  links: "episodes.links",
+  bangers: "episodes.bangers",
+  audioMessages: "episodes.audioMessages",
+  finish: "episodes.finish",
+} as const;

@@ -46,6 +46,7 @@
     "lint:access": "node scripts/check-access-classification.mjs",
     "migration:extract:identity": "node local-tools/sql/extract-identity.mjs",
     "migration:extract:catalog": "node local-tools/sql/extract-catalog.mjs",
+    "migration:extract:episodes": "node local-tools/sql/extract-episodes.mjs",
     "migration:test:extractor": "node --test local-tools/sql/*-rows.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

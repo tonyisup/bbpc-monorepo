@@ -171,10 +171,12 @@ export default defineSchema({
     seoKeywords: v.optional(v.string()),
     seoTitle: v.optional(v.string()),
     slug: v.optional(v.string()),
+    normalizedSlug: v.optional(v.string()),
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_number", ["number"])
     .index("by_slug", ["slug"])
+    .index("by_normalizedSlug", ["normalizedSlug"])
     .index("by_date_and_status", ["date", "status"]),
 
   episodeLinks: defineTable({
@@ -627,6 +629,55 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     createdAt: v.number(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawEpisodes: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    number: v.number(),
+    title: v.string(),
+    recording: v.optional(v.string()),
+    date: v.optional(v.string()),
+    description: v.optional(v.string()),
+    status: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    seoDescription: v.optional(v.string()),
+    seoKeywords: v.optional(v.string()),
+    seoTitle: v.optional(v.string()),
+    slug: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawEpisodeLinks: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    url: v.string(),
+    text: v.string(),
+    episodeLegacyId: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawBangers: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    title: v.string(),
+    artist: v.string(),
+    url: v.string(),
+    episodeLegacyId: v.optional(v.string()),
+    userLegacyId: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawEpisodeAudioMessages: defineTable({
+    runId: v.string(),
+    legacyId: v.number(),
+    url: v.string(),
+    createdAt: v.number(),
+    fileKey: v.optional(v.string()),
+    userLegacyId: v.string(),
+    episodeLegacyId: v.optional(v.string()),
+    notes: v.optional(v.string()),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
 });

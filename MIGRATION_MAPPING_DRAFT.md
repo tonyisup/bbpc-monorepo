@@ -9,10 +9,12 @@ All 31 migrated targets and their minimum indexes are now defined in the Convex 
 and verified against the typed mapping. This does not approve or run the
 production-derived transform.
 
-The identity and catalog mappings are implemented as synthetic-only, checkpointed
-rehearsal slices. Their guarded local extractors exist but have not been run against the
-production-derived `dev` clone. Catalog rehearsal tests prove that duplicate
-movie/show normalized keys remain distinct while tag collisions fail transactionally.
+The identity, catalog, and episode mappings are implemented as synthetic-only,
+checkpointed rehearsal slices. Their guarded local extractors exist but have not been
+run against the production-derived `dev` clone. Catalog rehearsal tests prove that
+duplicate movie/show normalized keys remain distinct while tag collisions fail
+transactionally. Episode tests cover normalized slug uniqueness, nullable
+relationships, calendar dates, and external audio metadata.
 
 ## Global conversion rules
 
@@ -104,7 +106,7 @@ Index names include every indexed field.
 | `users` | `by_normalizedEmail`, `by_status` |
 | `roles` | `by_normalizedName` |
 | `userRoles` | `by_userId`, `by_roleId`, `by_userId_and_roleId` |
-| `episodes` | `by_number`, `by_slug`, `by_date_and_status` |
+| `episodes` | `by_number`, `by_slug`, `by_normalizedSlug`, `by_date_and_status` |
 | `episodeLinks`, `bangers`, `episodeAudioMessages` | `by_episodeId`; user-owned records also `by_userId` |
 | `movies`, `shows` | `by_tmdbId` where applicable, `by_normalizedTitle_and_year` |
 | `tags` | `by_normalizedName` |

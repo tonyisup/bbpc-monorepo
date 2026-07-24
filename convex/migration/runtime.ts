@@ -222,6 +222,25 @@ export async function getActiveDomainRun(
   return { run, domainRun };
 }
 
+export async function requireTransformedDomain(
+  ctx: DatabaseContext,
+  input: { runId: string; domain: string },
+): Promise<Doc<"migrationDomainRuns">> {
+  const domainRun = await ctx.db
+    .query("migrationDomainRuns")
+    .withIndex("by_runId_and_domain", (query) =>
+      query.eq("runId", input.runId).eq("domain", input.domain),
+    )
+    .unique();
+  if (domainRun?.status !== "transformed") {
+    domainError(
+      "CONFLICT",
+      `The ${input.domain} migration domain must be transformed first.`,
+    );
+  }
+  return domainRun;
+}
+
 export async function getMigrationCheckpoint(
   ctx: DatabaseContext,
   runId: string,

@@ -92,6 +92,20 @@ the catalog slice marks only its domain transformed while the shared migration r
 remains open. Synthetic tests cover duplicate preservation, retries, rollback,
 conflicts, corrupt state, and count reconciliation.
 
+## Episode migration rehearsal
+
+The third checkpointed slice covers `Episode`, `Link`, `Banger`, and
+`AudioEpisodeMessage` after the identity domain is transformed. It preserves SQL
+calendar dates as `YYYY-MM-DD`, keeps external media as metadata, resolves every
+non-null relationship through indexed legacy IDs, and rolls back a batch when a parent
+is missing.
+
+Episode slugs preserve their display value and add a normalized key to enforce the
+source database’s case-insensitive uniqueness. UUID and SQL integer bounds, real
+calendar dates, finite audio timestamps, dependency checkpoints, and final source
+counts are validated transactionally. Numeric audio-message IDs use resumable numeric
+cursors encoded in the shared checkpoint format.
+
 Production-derived staging is local-only and must be removed before the portable
 canonical backup. Cloud staging continues to use synthetic fixtures only.
 
