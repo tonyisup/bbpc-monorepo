@@ -78,6 +78,20 @@ checkpoints. Completing the identity domain therefore does not incorrectly mark 
 full migration transformed; later catalog, episode, review, game, and ranking domains
 join the same cutover run.
 
+## Catalog migration rehearsal
+
+The second checkpointed slice covers `Movie`, `Show`, and `Tag`. It preserves every
+legacy UUID and deliberately does not merge movies or shows whose normalized
+title/year values match. Tags use the approved-candidate normalized key and fail the
+transaction on a collision. SQL smallint/int ranges, UUIDs, and tag timestamps are
+validated before canonical insertion.
+
+Catalog transforms are internal-only, bounded to 100 rows per invocation, resumable by
+legacy-ID checkpoint, and idempotent against matching canonical documents. Finishing
+the catalog slice marks only its domain transformed while the shared migration run
+remains open. Synthetic tests cover duplicate preservation, retries, rollback,
+conflicts, corrupt state, and count reconciliation.
+
 Production-derived staging is local-only and must be removed before the portable
 canonical backup. Cloud staging continues to use synthetic fixtures only.
 

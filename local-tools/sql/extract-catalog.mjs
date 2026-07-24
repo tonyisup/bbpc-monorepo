@@ -7,10 +7,10 @@ import { fileURLToPath } from "node:url";
 import {
   serializeJsonLines,
   sha256,
-  transformRoleRow,
-  transformUserRoleRow,
-  transformUserRow,
-} from "./identity-rows.mjs";
+  transformMovieRow,
+  transformShowRow,
+  transformTagRow,
+} from "./catalog-rows.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(toolDirectory, "../..");
@@ -31,7 +31,7 @@ const REQUIRED_ACKNOWLEDGEMENT =
 function usage() {
   return [
     "Usage:",
-    "  npm run migration:extract:identity -- --run-id <id> " +
+    "  npm run migration:extract:catalog -- --run-id <id> " +
       REQUIRED_ACKNOWLEDGEMENT,
     "",
     "Requires a database census generated within the previous 15 minutes.",
@@ -132,7 +132,7 @@ loadEnv({
 const database = requiredEnvironment("SQL_DATABASE");
 if (database.toLowerCase() !== EXPECTED_DATABASE) {
   throw new Error(
-    `Refusing identity extraction: SQL_DATABASE must be exactly ${EXPECTED_DATABASE}`,
+    `Refusing catalog extraction: SQL_DATABASE must be exactly ${EXPECTED_DATABASE}`,
   );
 }
 
@@ -149,7 +149,7 @@ const connectionConfig = {
     idleTimeoutMillis: 30_000,
   },
   options: {
-    appName: "bbpc-convex-local-identity-extractor",
+    appName: "bbpc-convex-local-catalog-extractor",
     encrypt: true,
     readOnlyIntent: true,
     trustServerCertificate: false,
@@ -172,9 +172,9 @@ try {
 }
 
 const transaction = new sql.Transaction(pool);
-let userRows;
-let roleRows;
-let userRoleRows;
+let movieRows;
+let showRows;
+let tagRows;
 try {
   await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
   const identity = await transaction
@@ -185,27 +185,27 @@ try {
     EXPECTED_DATABASE
   ) {
     throw new Error(
-      `Refusing identity extraction: connected database must be exactly ${EXPECTED_DATABASE}`,
+      `Refusing catalog extraction: connected database must be exactly ${EXPECTED_DATABASE}`,
     );
   }
-  userRows = (
+  movieRows = (
     await transaction.request().query(`
-      SELECT id, name, email, emailVerified, image
-      FROM dbo.[User]
+      SELECT id, title, year, poster, url, tmdbId
+      FROM dbo.Movie
       ORDER BY id;
     `)
   ).recordset;
-  roleRows = (
+  showRows = (
     await transaction.request().query(`
-      SELECT id, name, description, admin
-      FROM dbo.Role
+      SELECT id, title, year, poster, url
+      FROM dbo.Show
       ORDER BY id;
     `)
   ).recordset;
-  userRoleRows = (
+  tagRows = (
     await transaction.request().query(`
-      SELECT id, userId, roleId
-      FROM dbo.UserRole
+      SELECT id, name, description, createdAt
+      FROM dbo.Tag
       ORDER BY id;
     `)
   ).recordset;
@@ -222,38 +222,36 @@ try {
 }
 
 assertExpectedCount(
-  userRows.length,
+  movieRows.length,
   census.expectedCounts,
-  "dbo.User",
+  "dbo.Movie",
 );
 assertExpectedCount(
-  roleRows.length,
+  showRows.length,
   census.expectedCounts,
-  "dbo.Role",
+  "dbo.Show",
 );
 assertExpectedCount(
-  userRoleRows.length,
+  tagRows.length,
   census.expectedCounts,
-  "dbo.UserRole",
+  "dbo.Tag",
 );
 
 const outputs = [
   {
-    table: "migrationRawUsers",
-    fileName: "migrationRawUsers.jsonl",
-    records: userRows.map((row) => transformUserRow(runId, row)),
+    table: "migrationRawMovies",
+    fileName: "migrationRawMovies.jsonl",
+    records: movieRows.map((row) => transformMovieRow(runId, row)),
   },
   {
-    table: "migrationRawRoles",
-    fileName: "migrationRawRoles.jsonl",
-    records: roleRows.map((row) => transformRoleRow(runId, row)),
+    table: "migrationRawShows",
+    fileName: "migrationRawShows.jsonl",
+    records: showRows.map((row) => transformShowRow(runId, row)),
   },
   {
-    table: "migrationRawUserRoles",
-    fileName: "migrationRawUserRoles.jsonl",
-    records: userRoleRows.map((row) =>
-      transformUserRoleRow(runId, row),
-    ),
+    table: "migrationRawTags",
+    fileName: "migrationRawTags.jsonl",
+    records: tagRows.map((row) => transformTagRow(runId, row)),
   },
 ].map((output) => {
   const contents = serializeJsonLines(output.records);
@@ -266,17 +264,17 @@ const outputs = [
 
 const outputRoot = path.join(projectRoot, ".local-migration");
 const runDirectory = path.join(outputRoot, runId);
-const finalDirectory = path.join(runDirectory, "identity");
+const finalDirectory = path.join(runDirectory, "catalog");
 if (fs.existsSync(finalDirectory)) {
   throw new Error(
-    "Refusing to overwrite an existing immutable identity extract",
+    "Refusing to overwrite an existing immutable catalog extract",
   );
 }
 fs.mkdirSync(runDirectory, { recursive: true, mode: 0o700 });
 fs.chmodSync(outputRoot, 0o700);
 fs.chmodSync(runDirectory, 0o700);
 const temporaryDirectory = fs.mkdtempSync(
-  path.join(runDirectory, ".identity-"),
+  path.join(runDirectory, ".catalog-"),
 );
 try {
   fs.chmodSync(temporaryDirectory, 0o700);
@@ -288,7 +286,7 @@ try {
   }
   const manifest = {
     formatVersion: 1,
-    domain: "identity",
+    domain: "catalog",
     generatedAt: new Date().toISOString(),
     runId,
     sourceDatabase: EXPECTED_DATABASE,
@@ -317,7 +315,7 @@ try {
 
 process.stdout.write(
   [
-    "Identity extraction complete.",
+    "Catalog extraction complete.",
     `runId=${runId}`,
     ...outputs.map(
       (output) =>

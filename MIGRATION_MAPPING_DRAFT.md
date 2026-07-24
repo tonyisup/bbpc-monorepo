@@ -9,6 +9,11 @@ All 31 migrated targets and their minimum indexes are now defined in the Convex 
 and verified against the typed mapping. This does not approve or run the
 production-derived transform.
 
+The identity and catalog mappings are implemented as synthetic-only, checkpointed
+rehearsal slices. Their guarded local extractors exist but have not been run against the
+production-derived `dev` clone. Catalog rehearsal tests prove that duplicate
+movie/show normalized keys remain distinct while tag collisions fail transactionally.
+
 ## Global conversion rules
 
 | SQL shape | Convex representation | Rule |

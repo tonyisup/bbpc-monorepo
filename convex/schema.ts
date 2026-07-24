@@ -599,4 +599,34 @@ export default defineSchema({
     roleLegacyId: v.number(),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawMovies: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    title: v.string(),
+    year: v.number(),
+    poster: v.optional(v.string()),
+    url: v.string(),
+    tmdbId: v.optional(v.number()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawShows: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    title: v.string(),
+    year: v.number(),
+    poster: v.optional(v.string()),
+    url: v.string(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawTags: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    name: v.string(),
+    description: v.optional(v.string()),
+    createdAt: v.number(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
 });

@@ -8,3 +8,11 @@ export const IDENTITY_OPERATIONS = {
   userRoles: "identity.userRoles",
   finish: "identity.finish",
 } as const;
+
+export const CATALOG_OPERATIONS = {
+  start: "catalog.start",
+  movies: "catalog.movies",
+  shows: "catalog.shows",
+  tags: "catalog.tags",
+  finish: "catalog.finish",
+} as const;
