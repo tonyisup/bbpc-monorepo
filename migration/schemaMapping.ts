@@ -464,44 +464,40 @@ export const requiredIndexesByTarget = {
   ],
 } as const satisfies Record<string, readonly string[]>;
 
-export const pendingDomainDecisions = [
+export const approvedDomainDecisions = [
   {
     id: "sql-datetime-timezone",
     scope: "All SQL datetime/datetime2 columns",
-    recommendation:
+    decision:
       "Interpret legacy wall-clock values as UTC and convert directly to epoch milliseconds.",
     evidence:
       "The guarded dev clone reported zero server and GETDATE-to-GETUTCDATE offsets; Azure SQL Database is documented to follow UTC.",
-    question:
-      "Approve UTC as the source timezone for legacy wall-clock timestamps.",
+    approvedAt: "2026-07-24",
   },
   {
     id: "review-timestamp-precedence",
     scope: "dbo.Review.ReviewdOn and dbo.Review.reviewedOn",
-    recommendation: "Set reviewedAt to reviewedOn ?? ReviewdOn.",
+    decision: "Set reviewedAt to reviewedOn ?? ReviewdOn.",
     evidence:
       "Of 989 rows, 528 values match, 120 have only ReviewdOn, 341 have neither, and none conflict or have only reviewedOn.",
-    question:
-      "Approve the canonical reviewedAt precedence rule while retaining both source values only in private reconciliation evidence.",
+    approvedAt: "2026-07-24",
   },
   {
     id: "normalized-text-rule",
     scope: "Case-insensitive unique and lookup text",
-    recommendation:
+    decision:
       "Trim, normalize with Unicode NFKC, then lowercase without locale-specific rules; fail on any collision.",
     evidence:
       "SQL trim/lower normalization preserved distinct cardinality and found no blanks in all five probed lookup tables.",
-    question:
-      "Approve trim plus Unicode NFKC plus locale-independent lowercasing as the Convex normalized-key rule.",
+    approvedAt: "2026-07-24",
   },
   {
     id: "archive-posts-visibility",
     scope: "Archive.Posts",
-    recommendation:
-      "Migrate all rows, preserve nullable episode linkage, and keep reads disabled unless the product explicitly needs them.",
+    decision:
+      "Migrate all rows, preserve nullable episode linkage, and retain them as backup-only records with no product-facing query.",
     evidence:
       "All 433 rows are structurally migratable: 327 link to episodes, 106 are intentionally unlinked, and none have unresolved episode references.",
-    question:
-      "Confirm whether archive posts remain queryable product data or backup-only retained records after cutover.",
+    approvedAt: "2026-07-24",
   },
 ] as const;

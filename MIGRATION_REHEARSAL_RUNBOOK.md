@@ -99,3 +99,62 @@ Never copy raw row values into the run record.
 The next gate is a separately approved portable scrub, backup, checksum, disposable
 restore, and acceptance rerun. `portable-v1` deletes local control state last and is
 intentionally not part of this command.
+
+## Portable scrub and private backup gate
+
+Inspect the prepared one-way plan without changing Convex:
+
+```sh
+npm run migration:backup:local -- \
+  --run-id <cutover-run-id> \
+  --dry-run \
+  --ack-production-derived-local-only
+```
+
+After explicit owner approval, execute:
+
+```sh
+npm run migration:backup:local -- \
+  --run-id <cutover-run-id> \
+  --batch-size 100 \
+  --ack-production-derived-local-only \
+  --ack-one-way-portable-scrub \
+  --ack-private-portable-backup
+```
+
+The command re-verifies all manifests and aggregate rehearsal evidence. It supports
+resuming an interrupted scrub, deletes every raw/control/migration table in bounded
+batches, verifies the completion audit and absence of temporary state, then exports
+only the schema-tested portable allowlist. It inspects every ZIP entry, rejects an
+unexpected table or path, checks all 31 canonical counts, and writes a private
+checksummed manifest beside the snapshot. It never includes file storage and never
+targets a cloud deployment.
+
+The backup ZIP contains production-derived row values. Keep its directory mode `0700`
+and files `0600`; do not put it in Git, cloud sync, CI, screenshots, tickets, or chat.
+
+## Disposable restore and reconciliation rerun
+
+After the portable backup succeeds:
+
+```sh
+npm run migration:restore:local -- \
+  --run-id <cutover-run-id> \
+  --batch-size 100 \
+  --ack-production-derived-local-only \
+  --ack-private-restore-validation \
+  --ack-delete-disposable-restore
+```
+
+The restore validator creates a second project-local Convex backend on separate local
+ports, imports the untouched ZIP with preserved IDs, exports it again, and requires
+exact per-table count/hash agreement. It then initializes default-deny S1, stages the
+same immutable extracts, reruns all 86 transform/reconciliation steps, and requires all
+9,283 canonical rows to be reused with zero inserts. On success it writes an
+aggregate-only restore manifest, stops the second backend, and deletes only its
+disposable local data directory.
+
+Convex documents the ZIP layout as `<table>/documents.jsonl` plus
+`generated_schema.jsonl`, and imports preserve document IDs and creation times:
+<https://docs.convex.dev/database/backup-restore> and
+<https://docs.convex.dev/database/import-export/import>.

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  pendingDomainDecisions,
+  approvedDomainDecisions,
   requiredIndexesByTarget,
   sourceTableMappings,
 } from "./schemaMapping.js";
@@ -148,19 +148,26 @@ describe("SQL-to-Convex source table mapping", () => {
     );
   });
 
-  test("keeps unresolved transform choices explicit", () => {
-    expect(pendingDomainDecisions.map((decision) => decision.id)).toEqual([
+  test("records approved transform choices explicitly", () => {
+    expect(approvedDomainDecisions.map((decision) => decision.id)).toEqual([
       "sql-datetime-timezone",
       "review-timestamp-precedence",
       "normalized-text-rule",
       "archive-posts-visibility",
     ]);
     expect(
-      pendingDomainDecisions.every(
+      approvedDomainDecisions.every(
         (decision) =>
-          decision.recommendation.length > 0 &&
+          decision.decision.length > 0 &&
           decision.evidence.length > 0,
       ),
     ).toBe(true);
+    expect(
+      new Set(
+        approvedDomainDecisions.map(
+          (decision) => decision.approvedAt,
+        ),
+      ),
+    ).toEqual(new Set(["2026-07-24"]));
   });
 });

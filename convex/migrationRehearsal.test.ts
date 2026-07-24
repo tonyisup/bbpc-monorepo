@@ -205,4 +205,147 @@ describe("local migration rehearsal preflight", () => {
       },
     });
   });
+
+  test("recognizes only a scrubbed portable target", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", {
+        legacyId: "portable-user",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("auditEvents", {
+        actorType: "internal",
+        action: "migration.portableScrub.completed",
+        targetType: "migrationScrubRun",
+        targetId: "portable-run",
+        cutoverRunId: "portable-run",
+        createdAt: 2,
+      });
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal.inspectPortableTarget,
+        { runId: "portable-run" },
+      ),
+    ).resolves.toMatchObject({
+      portable: true,
+      systemStatePresent: false,
+      completionAuditFound: true,
+      nonemptyTemporaryTables: [],
+      nonemptyRetainedTables: ["users", "auditEvents"],
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("migrationRawUsers", {
+        runId: "portable-run",
+        legacyId: "unexpected-raw-user",
+        sourceRowHash: "sha256:unexpected",
+      });
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal.inspectPortableTarget,
+        { runId: "portable-run" },
+      ),
+    ).resolves.toMatchObject({
+      portable: false,
+      nonemptyTemporaryTables: ["migrationRawUsers"],
+    });
+  });
+
+  test("reports resumable final scrub progress", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("systemState", {
+        singletonKey: "global",
+        cutoverStage: "S1",
+        applicationWriteMode: "disabled",
+        cutoverRunId: "scrub-run",
+        apiVersion: "2026-07-24",
+        initializedAt: 1,
+        updatedAt: 1,
+        updatedBy: "test",
+      });
+      await ctx.db.insert("migrationScrubRuns", {
+        runId: "scrub-run",
+        scope: "portable-v1",
+        status: "running",
+        identityRawRowsDeleted: 0,
+        catalogRawRowsDeleted: 0,
+        episodeRawRowsDeleted: 0,
+        checkpointsDeleted: 0,
+        rawRowsDeleted: {
+          identity: 40,
+        },
+        startedAt: 1,
+        updatedAt: 2,
+      });
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectFinalScrubProgress,
+        { runId: "scrub-run" },
+      ),
+    ).resolves.toEqual({
+      systemStatePresent: true,
+      matchesRun: true,
+      cutoverStage: "S1",
+      scrubStarted: true,
+      scrubStatus: "running",
+      rawRowsDeleted: { identity: 40 },
+    });
+  });
+
+  test("fails closed when rehearsal and scrub state are absent", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectRehearsalEvidence,
+        { runId: "missing-run" },
+      ),
+    ).resolves.toMatchObject({
+      runFound: false,
+      allDomainsReconciled: false,
+      totalExpectedRows: 0,
+      domainStatuses: {},
+      domainExpectedCounts: {},
+      domainDurationsMs: {},
+      checkpointSummary: {
+        total: 0,
+        completed: 0,
+        running: 0,
+        processedRows: 0,
+        insertedRows: 0,
+        reusedRows: 0,
+      },
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal.inspectPortableTarget,
+        { runId: "missing-run" },
+      ),
+    ).resolves.toEqual({
+      portable: false,
+      systemStatePresent: false,
+      completionAuditFound: false,
+      nonemptyTemporaryTables: [],
+      nonemptyRetainedTables: [],
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectFinalScrubProgress,
+        { runId: "missing-run" },
+      ),
+    ).resolves.toEqual({
+      systemStatePresent: false,
+      matchesRun: false,
+      scrubStarted: false,
+      rawRowsDeleted: {},
+    });
+  });
 });

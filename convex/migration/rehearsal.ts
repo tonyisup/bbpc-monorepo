@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { QueryCtx } from "../_generated/server.js";
 import { internalReadQuery } from "../functions.js";
 import {
+  FINAL_SCRUB_SCOPE,
   MIGRATION_DOMAINS,
   MIGRATION_RAW_TABLES_BY_DOMAIN,
   PORTABLE_BACKUP_TABLES,
@@ -229,12 +230,17 @@ export const inspectRehearsalEvidence = internalReadQuery({
       domainDurationsMs,
       checkpointSummary: {
         total: checkpoints.length,
-        completed: checkpoints.filter(
-          (checkpoint) => checkpoint.status === "completed",
-        ).length,
-        running: checkpoints.filter(
-          (checkpoint) => checkpoint.status === "running",
-        ).length,
+        completed: checkpoints.reduce(
+          (total, checkpoint) =>
+            total +
+            (checkpoint.status === "completed" ? 1 : 0),
+          0,
+        ),
+        running: checkpoints.reduce(
+          (total, checkpoint) =>
+            total + (checkpoint.status === "running" ? 1 : 0),
+          0,
+        ),
         processedRows: checkpoints.reduce(
           (total, checkpoint) =>
             total + checkpoint.processedCount,
@@ -251,6 +257,102 @@ export const inspectRehearsalEvidence = internalReadQuery({
           0,
         ),
       },
+    };
+  },
+});
+
+export const inspectPortableTarget = internalReadQuery({
+  args: { runId: v.string() },
+  returns: v.object({
+    portable: v.boolean(),
+    systemStatePresent: v.boolean(),
+    completionAuditFound: v.boolean(),
+    nonemptyTemporaryTables: v.array(v.string()),
+    nonemptyRetainedTables: v.array(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const systemState = await ctx.db
+      .query("systemState")
+      .withIndex("by_singletonKey", (query) =>
+        query.eq("singletonKey", "global"),
+      )
+      .unique();
+    const latestRunAudit = await ctx.db
+      .query("auditEvents")
+      .withIndex(
+        "by_cutoverRunId_and_createdAt",
+        (query) => query.eq("cutoverRunId", args.runId),
+      )
+      .order("desc")
+      .first();
+    const temporaryTables = [
+      ...PORTABLE_CONTROL_TABLES,
+      ...Object.values(MIGRATION_RAW_TABLES_BY_DOMAIN).flat(),
+    ] as const;
+    const nonemptyTemporaryTables: string[] = [];
+    for (const table of temporaryTables) {
+      if (await tableHasRows(ctx, table)) {
+        nonemptyTemporaryTables.push(table);
+      }
+    }
+    const nonemptyRetainedTables: string[] = [];
+    for (const table of PORTABLE_BACKUP_TABLES) {
+      if (await tableHasRows(ctx, table)) {
+        nonemptyRetainedTables.push(table);
+      }
+    }
+    const completionAuditFound =
+      latestRunAudit?.action ===
+      "migration.portableScrub.completed";
+    return {
+      portable:
+        systemState === null &&
+        completionAuditFound &&
+        nonemptyTemporaryTables.length === 0,
+      systemStatePresent: systemState !== null,
+      completionAuditFound,
+      nonemptyTemporaryTables,
+      nonemptyRetainedTables,
+    };
+  },
+});
+
+export const inspectFinalScrubProgress = internalReadQuery({
+  args: { runId: v.string() },
+  returns: v.object({
+    systemStatePresent: v.boolean(),
+    matchesRun: v.boolean(),
+    cutoverStage: v.optional(v.string()),
+    scrubStarted: v.boolean(),
+    scrubStatus: v.optional(v.string()),
+    rawRowsDeleted: v.record(v.string(), v.number()),
+  }),
+  handler: async (ctx, args) => {
+    const systemState = await ctx.db
+      .query("systemState")
+      .withIndex("by_singletonKey", (query) =>
+        query.eq("singletonKey", "global"),
+      )
+      .unique();
+    const scrubRun = await ctx.db
+      .query("migrationScrubRuns")
+      .withIndex("by_runId_and_scope", (query) =>
+        query
+          .eq("runId", args.runId)
+          .eq("scope", FINAL_SCRUB_SCOPE),
+      )
+      .unique();
+    return {
+      systemStatePresent: systemState !== null,
+      matchesRun: systemState?.cutoverRunId === args.runId,
+      ...(systemState === null
+        ? {}
+        : { cutoverStage: systemState.cutoverStage }),
+      scrubStarted: scrubRun !== null,
+      ...(scrubRun === null
+        ? {}
+        : { scrubStatus: scrubRun.status }),
+      rawRowsDeleted: scrubRun?.rawRowsDeleted ?? {},
     };
   },
 });

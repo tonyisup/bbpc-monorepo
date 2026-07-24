@@ -120,3 +120,16 @@ when no migration progress exists; after checkpoints begin it preserves raw docu
 IDs so persisted cursors remain valid. It uses domain/checkpoint state to skip completed
 work. The command stops after all eight domains reconcile and never invokes either scrub. See
 `MIGRATION_REHEARSAL_RUNBOOK.md` for the dry run, resume command, and exit gate.
+
+## Portable backup and restore
+
+The separately approved `migration:backup:local` command verifies the complete
+rehearsal evidence, runs the resumable one-way `portable-v1` scrub, exports only the
+schema-tested portable allowlist, and records private ZIP/table hashes. The
+`migration:restore:local` command restores that ZIP into a second disposable local
+backend, requires exact table hashes, then reuses all canonical rows while rerunning
+the full transform/reconciliation plan.
+
+Both commands are hard-coded to local Convex deployments and require explicit
+production-derived, scrub/backup, restore, and disposable-deletion acknowledgements.
+See `MIGRATION_REHEARSAL_RUNBOOK.md` for the exact commands and privacy boundary.

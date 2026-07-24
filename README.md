@@ -47,6 +47,8 @@ npm run check
 npm run package:check
 npm run migration:test:extractor
 npm run migration:rehearse:local -- --help
+npm run migration:backup:local -- --help
+npm run migration:restore:local -- --help
 npm run contract:generate
 npm run contract:build
 ```
@@ -197,23 +199,22 @@ list/rank slots within `1..maxItems`.
 
 Independent reconciliation re-resolves every user, type, list, movie, show, and episode
 relationship and detects scalar or ordering drift without repair. The guarded ranking
-extractor captures all three tables in one serializable local-only snapshot and has
-synthetic coverage only; it has not read production-derived rows.
+extractor captures all three tables in one serializable local-only snapshot. The
+production-derived rehearsal reconciled all 23 ranking rows.
 
 ## Archive migration rehearsal
 
 The archive slice preserves all 433 `Archive.Posts` rows after episodes reconcile,
 including 327 nullable episode relationships and 106 intentionally unlinked posts.
-Legacy SQL integer IDs remain indexed, `PostedOn` uses the same pending UTC conversion
+Legacy SQL integer IDs remain indexed, `PostedOn` uses the approved UTC conversion
 rule as other legacy timestamps, and empty content or title strings are retained
 without normalization.
 
 Its bounded transform and independent reconciliation pass detect missing episode
 parents, source-count drift, invalid cursors, and canonical scalar or relationship
 changes. The guarded extractor reads the archive table in one serializable local-only
-snapshot and has synthetic coverage only; it has not read production-derived rows.
-Canonical retention is implemented, but no product-facing archive query exists while
-the queryable-versus-backup-only policy remains pending.
+snapshot. The production-derived rehearsal reconciled all 433 rows. Approved canonical
+retention is backup-only, with no product-facing archive query.
 
 ## Raw-staging and portable scrubs
 
@@ -243,6 +244,17 @@ The guarded local rehearsal is specified in
 interruptions remain resumable, preserves raw document IDs after checkpoints begin, and
 uses persisted domain/checkpoint progress to skip completed work. It stops with all
 eight domains reconciled and raw evidence intact.
+
+The first production-derived local result is recorded in
+[`MIGRATION_REHEARSAL_RESULT_2026-07-24.md`](./MIGRATION_REHEARSAL_RESULT_2026-07-24.md).
+It reconciled all 9,283 migrated rows across 62 completed checkpoints and records only
+aggregate counts, timings, and defect dispositions.
+
+The next one-way gate is implemented but not executed. The guarded backup command
+resumes the final scrub, checks the portable ZIP allowlist/counts/hashes, and writes a
+private manifest. Its companion restore command imports the unchanged ZIP into a
+second disposable local backend, requires exact table hashes, and reruns all migration
+and reconciliation operations with zero canonical inserts.
 
 ## Package consumers
 

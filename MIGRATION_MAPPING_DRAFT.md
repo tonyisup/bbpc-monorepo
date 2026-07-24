@@ -104,7 +104,7 @@ aggregate counts and clock offsets only; it did not print or persist source-row 
 | Ranked-list constraints | 1 type, 3 lists, and 19 items: 0 invalid target types, max-item limits, statuses, target/type combinations, or rank bounds; 0 lists exceed capacity. | Accept only `MOVIE`/`SHOW`/`EPISODE`, `DRAFT`/`PUBLISHED`, ranks `1..maxItems`, and a target matching the owning list type. |
 | Ordering | 0 duplicate `(rankedListId, rank)` groups and 0 duplicate `(userId, order)` syllabus groups. | Enforce both keys transactionally in Convex. |
 | Relationship joins | 0 duplicate user-role, assignment-review, extra-review, or assignment-point relationship groups. | Preserve one canonical document per relationship and reject duplicates on future writes. |
-| Normalized lookup keys | Every role (6), tag (7), game type (2), game-point type (14), and gambling type (8) remains distinct after SQL trim/lower normalization; no blanks. | Use the proposed Unicode-aware normalized key and fail transformation if it creates a collision. |
+| Normalized lookup keys | Every role (6), tag (7), game type (2), game-point type (14), and gambling type (8) remains distinct after SQL trim/lower normalization; no blanks. | Use the approved Unicode-aware normalized key and fail transformation if it creates a collision. |
 | Identity candidates | All 19 users have nonblank email; all 19 remain distinct after SQL trim/lower normalization; 0 duplicate normalized groups. | Preserve display email, store a normalized candidate key, and still require a verified Clerk email before first-use linking. |
 | Legacy impersonation | 0 users have populated `impersonatedUserId`; 0 unresolved targets. | Do not copy the field; all future impersonation uses expiring audited sessions. |
 

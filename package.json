@@ -54,6 +54,8 @@
     "migration:extract:archive": "node local-tools/sql/extract-archive.mjs",
     "migration:stage:local": "node local-tools/sql/stage-local.mjs",
     "migration:rehearse:local": "node local-tools/sql/rehearse-local.mjs",
+    "migration:backup:local": "node local-tools/sql/portable-backup-local.mjs",
+    "migration:restore:local": "node local-tools/sql/portable-restore-local.mjs",
     "migration:test:extractor": "node --test local-tools/sql/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
