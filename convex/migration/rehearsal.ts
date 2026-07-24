@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { QueryCtx } from "../_generated/server.js";
 import { internalReadQuery } from "../functions.js";
 import {
+  MIGRATION_DOMAINS,
   MIGRATION_RAW_TABLES_BY_DOMAIN,
   PORTABLE_BACKUP_TABLES,
   PORTABLE_CONTROL_TABLES,
@@ -114,6 +115,142 @@ export const inspectRunProgress = internalReadQuery({
           checkpoint.status,
         ]),
       ),
+    };
+  },
+});
+
+export const inspectRehearsalEvidence = internalReadQuery({
+  args: { runId: v.string() },
+  returns: v.object({
+    runFound: v.boolean(),
+    cutoverStage: v.optional(v.string()),
+    apiVersion: v.optional(v.string()),
+    sourceSchemaFingerprint: v.optional(v.string()),
+    allDomainsReconciled: v.boolean(),
+    totalExpectedRows: v.number(),
+    runDurationMs: v.optional(v.number()),
+    domainStatuses: v.record(v.string(), v.string()),
+    domainExpectedCounts: v.record(
+      v.string(),
+      v.record(v.string(), v.number()),
+    ),
+    domainDurationsMs: v.record(v.string(), v.number()),
+    checkpointSummary: v.object({
+      total: v.number(),
+      completed: v.number(),
+      running: v.number(),
+      processedRows: v.number(),
+      insertedRows: v.number(),
+      reusedRows: v.number(),
+    }),
+  }),
+  handler: async (ctx, args) => {
+    const systemState = await ctx.db
+      .query("systemState")
+      .withIndex("by_singletonKey", (query) =>
+        query.eq("singletonKey", "global"),
+      )
+      .unique();
+    const migrationRun = await ctx.db
+      .query("migrationRuns")
+      .withIndex("by_runId", (query) =>
+        query.eq("runId", args.runId),
+      )
+      .unique();
+    const domainRuns = await ctx.db
+      .query("migrationDomainRuns")
+      .withIndex("by_runId_and_domain", (query) =>
+        query.eq("runId", args.runId),
+      )
+      .take(MIGRATION_DOMAINS.length);
+    const checkpoints = await ctx.db
+      .query("migrationCheckpoints")
+      .withIndex("by_runId_and_operation", (query) =>
+        query.eq("runId", args.runId),
+      )
+      .take(100);
+    const domainStatuses = Object.fromEntries(
+      domainRuns.map((domainRun) => [
+        domainRun.domain,
+        domainRun.status,
+      ]),
+    );
+    const domainExpectedCounts = Object.fromEntries(
+      domainRuns.map((domainRun) => [
+        domainRun.domain,
+        domainRun.expectedCounts,
+      ]),
+    );
+    const domainDurationsMs = Object.fromEntries(
+      domainRuns.map((domainRun) => [
+        domainRun.domain,
+        Math.max(0, domainRun.updatedAt - domainRun.startedAt),
+      ]),
+    );
+    const latestDomainUpdate = domainRuns.reduce(
+      (latest, domainRun) =>
+        Math.max(latest, domainRun.updatedAt),
+      migrationRun?.startedAt ?? 0,
+    );
+    return {
+      runFound: migrationRun !== null,
+      ...(systemState === null
+        ? {}
+        : {
+            cutoverStage: systemState.cutoverStage,
+            apiVersion: systemState.apiVersion,
+          }),
+      ...(migrationRun === null
+        ? {}
+        : {
+            sourceSchemaFingerprint:
+              migrationRun.sourceSchemaFingerprint,
+            runDurationMs: Math.max(
+              0,
+              latestDomainUpdate - migrationRun.startedAt,
+            ),
+          }),
+      allDomainsReconciled:
+        domainRuns.length === MIGRATION_DOMAINS.length &&
+        MIGRATION_DOMAINS.every(
+          (domain) => domainStatuses[domain] === "reconciled",
+        ),
+      totalExpectedRows: domainRuns.reduce(
+        (total, domainRun) =>
+          total +
+          Object.values(domainRun.expectedCounts).reduce(
+            (domainTotal, count) => domainTotal + count,
+            0,
+          ),
+        0,
+      ),
+      domainStatuses,
+      domainExpectedCounts,
+      domainDurationsMs,
+      checkpointSummary: {
+        total: checkpoints.length,
+        completed: checkpoints.filter(
+          (checkpoint) => checkpoint.status === "completed",
+        ).length,
+        running: checkpoints.filter(
+          (checkpoint) => checkpoint.status === "running",
+        ).length,
+        processedRows: checkpoints.reduce(
+          (total, checkpoint) =>
+            total + checkpoint.processedCount,
+          0,
+        ),
+        insertedRows: checkpoints.reduce(
+          (total, checkpoint) =>
+            total + checkpoint.insertedCount,
+          0,
+        ),
+        reusedRows: checkpoints.reduce(
+          (total, checkpoint) =>
+            total + checkpoint.reusedCount,
+          0,
+        ),
+      },
     };
   },
 });

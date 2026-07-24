@@ -4,6 +4,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 
 import { internal } from "./_generated/api.js";
+import { MIGRATION_DOMAINS } from "./migration/constants.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -118,6 +119,90 @@ describe("local migration rehearsal preflight", () => {
       apiVersion: "2026-07-23",
       domainStatuses: {},
       checkpointStatuses: {},
+    });
+  });
+
+  test("reports aggregate-only accepted rehearsal evidence", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("systemState", {
+        singletonKey: "global",
+        cutoverStage: "S1",
+        applicationWriteMode: "disabled",
+        cutoverRunId: "evidence-run",
+        apiVersion: "2026-07-24",
+        initializedAt: 1,
+        updatedAt: 1,
+        updatedBy: "test",
+      });
+      await ctx.db.insert("migrationRuns", {
+        runId: "evidence-run",
+        sourceSchemaFingerprint: "source-fingerprint",
+        status: "running",
+        startedAt: 10,
+        updatedAt: 10,
+      });
+      for (const [index, domain] of MIGRATION_DOMAINS.entries()) {
+        await ctx.db.insert("migrationDomainRuns", {
+          runId: "evidence-run",
+          domain,
+          status: "reconciled",
+          expectedCounts:
+            domain === "identity"
+              ? { users: 19, roles: 6, userRoles: 15 }
+              : {},
+          startedAt: 20 + index,
+          updatedAt: 120 + index,
+        });
+      }
+      await ctx.db.insert("migrationCheckpoints", {
+        runId: "evidence-run",
+        operation: "identity.users",
+        status: "completed",
+        processedCount: 19,
+        insertedCount: 19,
+        reusedCount: 0,
+        updatedAt: 30,
+      });
+      await ctx.db.insert("migrationCheckpoints", {
+        runId: "evidence-run",
+        operation: "identity.reconcile.users",
+        status: "completed",
+        processedCount: 19,
+        insertedCount: 0,
+        reusedCount: 19,
+        updatedAt: 40,
+      });
+    });
+
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectRehearsalEvidence,
+        { runId: "evidence-run" },
+      ),
+    ).resolves.toMatchObject({
+      runFound: true,
+      cutoverStage: "S1",
+      apiVersion: "2026-07-24",
+      sourceSchemaFingerprint: "source-fingerprint",
+      allDomainsReconciled: true,
+      totalExpectedRows: 40,
+      runDurationMs: 117,
+      domainStatuses: Object.fromEntries(
+        MIGRATION_DOMAINS.map((domain) => [
+          domain,
+          "reconciled",
+        ]),
+      ),
+      checkpointSummary: {
+        total: 2,
+        completed: 2,
+        running: 0,
+        processedRows: 38,
+        insertedRows: 19,
+        reusedRows: 19,
+      },
     });
   });
 });
