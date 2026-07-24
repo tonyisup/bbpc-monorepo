@@ -215,7 +215,7 @@ snapshot and has synthetic coverage only; it has not read production-derived row
 Canonical retention is implemented, but no product-facing archive query exists while
 the queryable-versus-backup-only policy remains pending.
 
-## Foundation raw-staging scrub
+## Raw-staging and portable scrubs
 
 After identity, catalog, and episodes are each independently reconciled, an internal
 `foundation-v1` scrub may remove their raw staging and migration checkpoints in bounded
@@ -224,8 +224,18 @@ checkpoint from any run remains, and retains canonical data, domain/run records,
 state, and audit evidence.
 
 This is an intermediate data-minimization milestone, not the portable-backup gate.
-Later domains must be migrated and reconciled before the final scrub removes all
-migration/control metadata and a canonical backup may be approved.
+The final `portable-v1` scrub requires all eight domains reconciled. It records a
+zero-or-greater deletion result for every domain, removes all 31 raw staging tables
+across every run, then removes checkpoints, migration/domain/scrub records,
+impersonation sessions, and service principals in bounded batches. Its final atomic
+step writes audit evidence, removes its own scrub record, and deletes the local
+`systemState`, restoring the backend's default-deny state before backup.
+
+The portable table allowlist is schema-tested: canonical domain tables, approved auth
+identities, and audit evidence are retained. Every other current table is explicitly
+classified for deletion, and adding an unclassified table fails tests. The portable
+scrub is intentionally one-way once `systemState` is removed and must not be executed
+until the runbook's production-derived rehearsal and backup gate are approved.
 
 ## Package consumers
 

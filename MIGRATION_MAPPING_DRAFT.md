@@ -170,6 +170,13 @@ must gate on `assignments.assignments`, not on the whole assignments-domain stat
 This keeps every relationship mandatory in canonical Convex documents without temporary
 IDs, nullable backfills, or an impossible domain order.
 
+After all eight domains reconcile, the implemented `portable-v1` scrub requires an
+explicit per-domain scrub result, deletes every raw table and migration/control record
+in bounded batches, retains canonical data plus auth/audit evidence, and deletes the
+deployment-local `systemState` last. A schema-wide allowlist test fails if a future table
+is not explicitly classified as retained or scrubbed. The scrub has synthetic coverage
+only and remains blocked with the production-derived transform.
+
 ## Approval items
 
 1. Approve interpreting SQL `datetime`/`datetime2` as UTC.

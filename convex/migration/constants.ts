@@ -145,3 +145,127 @@ export const FOUNDATION_SCRUB_OPERATIONS = {
   checkpoints: "scrub.foundation.checkpoints",
   finish: "scrub.foundation.finish",
 } as const;
+
+export const FINAL_SCRUB_SCOPE = "portable-v1";
+
+export const FINAL_SCRUB_OPERATIONS = {
+  start: "scrub.portable.start",
+  raw: {
+    identity: "scrub.portable.raw.identity",
+    catalog: "scrub.portable.raw.catalog",
+    episodes: "scrub.portable.raw.episodes",
+    assignments: "scrub.portable.raw.assignments",
+    reviews: "scrub.portable.raw.reviews",
+    games: "scrub.portable.raw.games",
+    rankings: "scrub.portable.raw.rankings",
+    archive: "scrub.portable.raw.archive",
+  },
+  migrationMetadata: "scrub.portable.migrationMetadata",
+  deploymentControl: "scrub.portable.deploymentControl",
+  finish: "scrub.portable.finish",
+} as const;
+
+export const MIGRATION_DOMAINS = [
+  "identity",
+  "catalog",
+  "episodes",
+  "assignments",
+  "reviews",
+  "games",
+  "rankings",
+  "archive",
+] as const;
+
+export const MIGRATION_RAW_TABLES_BY_DOMAIN = {
+  identity: [
+    "migrationRawUsers",
+    "migrationRawRoles",
+    "migrationRawUserRoles",
+  ],
+  catalog: [
+    "migrationRawMovies",
+    "migrationRawShows",
+    "migrationRawTags",
+  ],
+  episodes: [
+    "migrationRawEpisodes",
+    "migrationRawEpisodeLinks",
+    "migrationRawBangers",
+    "migrationRawEpisodeAudioMessages",
+  ],
+  assignments: [
+    "migrationRawAssignments",
+    "migrationRawAssignmentAudioMessages",
+    "migrationRawAssignmentPointLinks",
+    "migrationRawSyllabusEntries",
+  ],
+  reviews: [
+    "migrationRawRatings",
+    "migrationRawReviews",
+    "migrationRawAssignmentReviews",
+    "migrationRawExtraReviews",
+  ],
+  games: [
+    "migrationRawGameTypes",
+    "migrationRawGamePointTypes",
+    "migrationRawSeasons",
+    "migrationRawPoints",
+    "migrationRawGuesses",
+    "migrationRawGamblingTypes",
+    "migrationRawGamblingEntries",
+    "migrationRawTagVotes",
+    "migrationRawQuoteSubmissions",
+  ],
+  rankings: [
+    "migrationRawRankedListTypes",
+    "migrationRawRankedLists",
+    "migrationRawRankedItems",
+  ],
+  archive: ["migrationRawArchivePosts"],
+} as const;
+
+export const PORTABLE_BACKUP_TABLES = [
+  "users",
+  "authIdentities",
+  "roles",
+  "userRoles",
+  "auditEvents",
+  "archivePosts",
+  "episodes",
+  "episodeLinks",
+  "bangers",
+  "episodeAudioMessages",
+  "movies",
+  "shows",
+  "tags",
+  "assignments",
+  "assignmentAudioMessages",
+  "assignmentPointLinks",
+  "syllabusEntries",
+  "ratings",
+  "reviews",
+  "assignmentReviews",
+  "extraReviews",
+  "gameTypes",
+  "gamePointTypes",
+  "seasons",
+  "points",
+  "guesses",
+  "gamblingTypes",
+  "gamblingEntries",
+  "tagVotes",
+  "quoteSubmissions",
+  "rankedListTypes",
+  "rankedLists",
+  "rankedItems",
+] as const;
+
+export const PORTABLE_CONTROL_TABLES = [
+  "impersonationSessions",
+  "servicePrincipals",
+  "systemState",
+  "migrationRuns",
+  "migrationDomainRuns",
+  "migrationCheckpoints",
+  "migrationScrubRuns",
+] as const;
