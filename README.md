@@ -167,6 +167,19 @@ assignment, review, and episode parent. Its guarded extractor and local manifest
 are implemented, but production-derived execution remains blocked on the timestamp and
 normalization approval gate.
 
+## Game foundation migration rehearsal
+
+The first game phase transforms `GameType`, `GamePointType`, `Season`, and `Point` after
+identity and reviews reconcile. Normalized lookup IDs remain unique, SQL tinyint,
+smallint, and int bounds are enforced, season dates remain calendar strings, and
+nullable point adjustments stay distinct from zero.
+
+Completing `games.points` deliberately leaves the games domain `running`. That
+checkpoint unlocks `AssignmentPoints`; guesses, gambling, tag votes, and quote
+submissions follow in the second game phase before the complete domain can reconcile.
+The production-derived games extractor is intentionally deferred until both phases can
+be captured in one serializable source snapshot.
+
 ## Foundation raw-staging scrub
 
 After identity, catalog, and episodes are each independently reconciled, an internal

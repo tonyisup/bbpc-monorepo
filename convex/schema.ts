@@ -795,4 +795,47 @@ export default defineSchema({
     episodeLegacyId: v.string(),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawGameTypes: defineTable({
+    runId: v.string(),
+    legacyId: v.number(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    lookupId: v.string(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawGamePointTypes: defineTable({
+    runId: v.string(),
+    legacyId: v.number(),
+    lookupId: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    points: v.number(),
+    gameTypeLegacyId: v.number(),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawSeasons: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    gameTypeLegacyId: v.number(),
+    endedOn: v.optional(v.string()),
+    startedOn: v.optional(v.string()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
+
+  migrationRawPoints: defineTable({
+    runId: v.string(),
+    legacyId: v.string(),
+    userLegacyId: v.string(),
+    seasonLegacyId: v.string(),
+    reason: v.optional(v.string()),
+    earnedAt: v.number(),
+    adjustment: v.union(v.number(), v.null()),
+    gamePointTypeLegacyId: v.optional(v.number()),
+    sourceRowHash: v.string(),
+  }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
 });
