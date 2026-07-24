@@ -11,6 +11,7 @@ import {
   preparePublicSearchQuery,
   requirePublicSearchLimit,
 } from "../lib/publicSearch.js";
+import { validateEpisodePageSize } from "./limits.js";
 import { readEpisodeResults } from "./publicResults.js";
 import { hydrateEpisode } from "./readModel.js";
 import {
@@ -198,6 +199,7 @@ export const listPage = anonymousQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(episodeDetailValidator),
   handler: async (ctx, args) => {
+    validateEpisodePageSize(args.paginationOpts.numItems);
     const result = await ctx.db
       .query("episodes")
       .withIndex("by_date_and_status")

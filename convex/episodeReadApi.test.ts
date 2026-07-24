@@ -469,6 +469,13 @@ describe("public episode read API", () => {
     });
     expect(secondPage.page).toHaveLength(1);
     expect(secondPage.page[0]?.number).toBe(1);
+
+    await expectDomainError(
+      t.query(api.episodes.public.listPage, {
+        paginationOpts: { cursor: null, numItems: 51 },
+      }),
+      "VALIDATION_FAILED",
+    );
   });
 
   test("fails closed when a public relationship is missing", async () => {
