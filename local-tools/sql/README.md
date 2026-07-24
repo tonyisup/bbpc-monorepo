@@ -49,3 +49,27 @@ Synthetic extractor tests are safe at any time:
 ```sh
 npm run migration:test:extractor
 ```
+
+## Local raw staging
+
+After the approval gate and extraction, stage one verified domain at a time:
+
+```sh
+npm run migration:stage:local -- \
+  --run-id <cutover-run-id> \
+  --domain <identity|catalog|episodes> \
+  --ack-production-derived-local-only \
+  --ack-replace-local-raw-staging
+```
+
+The staging tool re-verifies the domain manifest, exact table allowlist, file and
+source-row checksums, row counts, run IDs, unique legacy IDs, permitted fields, and
+private filesystem modes before invoking Convex. The destination is hard-coded to the
+`local` deployment. Each verified JSONL file replaces only its corresponding
+`migrationRaw*` table, making a partially completed staging attempt safely repeatable.
+The replacement acknowledgement is required because stale raw rows from a prior local
+run are deliberately removed.
+
+Never change this command to `--prod`, a cloud deployment name, or `--append`.
+Production-derived raw rows must not enter cloud staging, CI, or the eventual production
+deployment.

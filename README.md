@@ -109,6 +109,12 @@ cursors encoded in the shared checkpoint format.
 Production-derived staging is local-only and must be removed before the portable
 canonical backup. Cloud staging continues to use synthetic fixtures only.
 
+The local staging command verifies immutable manifests, checksums, row hashes, exact
+field/table allowlists, unique legacy IDs, row counts, and private filesystem modes. It
+is hard-wired to the Convex `local` deployment and requires explicit acknowledgement
+before replacing the allowlisted `migrationRaw*` tables. This makes interrupted staging
+repeatable without permitting an accidental cloud import.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:
