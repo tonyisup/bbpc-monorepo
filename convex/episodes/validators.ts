@@ -1,29 +1,16 @@
 import { v } from "convex/values";
 
+import {
+  catalogMovieValidator,
+  catalogShowValidator,
+} from "../catalog/validators.js";
+
 const nullableStringValidator = v.union(v.string(), v.null());
-const nullableNumberValidator = v.union(v.number(), v.null());
 
 export const episodeUserValidator = v.object({
   id: v.id("users"),
   name: nullableStringValidator,
   image: nullableStringValidator,
-});
-
-export const episodeMovieValidator = v.object({
-  id: v.id("movies"),
-  title: v.string(),
-  year: v.number(),
-  poster: nullableStringValidator,
-  url: v.string(),
-  tmdbId: nullableNumberValidator,
-});
-
-export const episodeShowValidator = v.object({
-  id: v.id("shows"),
-  title: v.string(),
-  year: v.number(),
-  poster: nullableStringValidator,
-  url: v.string(),
 });
 
 export const episodeAssignmentValidator = v.object({
@@ -32,15 +19,15 @@ export const episodeAssignmentValidator = v.object({
   playable: v.boolean(),
   slug: nullableStringValidator,
   user: episodeUserValidator,
-  movie: episodeMovieValidator,
+  movie: catalogMovieValidator,
 });
 
 export const episodeExtraValidator = v.object({
   id: v.id("extraReviews"),
   review: v.object({
     id: v.id("reviews"),
-    movie: v.union(episodeMovieValidator, v.null()),
-    show: v.union(episodeShowValidator, v.null()),
+    movie: v.union(catalogMovieValidator, v.null()),
+    show: v.union(catalogShowValidator, v.null()),
   }),
 });
 

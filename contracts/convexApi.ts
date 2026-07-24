@@ -337,5 +337,114 @@ export type PublicApiType = {
       >;
     };
   };
+  catalog: {
+    public: {
+      getMovie: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"movies"> },
+        {
+          id: Id<"movies">;
+          poster: string | null;
+          title: string;
+          tmdbId: number | null;
+          url: string;
+          year: number;
+        } | null
+      >;
+      getShow: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"shows"> },
+        {
+          id: Id<"shows">;
+          poster: string | null;
+          title: string;
+          url: string;
+          year: number;
+        } | null
+      >;
+      listMoviesPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      listShowsPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            id: Id<"shows">;
+            poster: string | null;
+            title: string;
+            url: string;
+            year: number;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      searchMovies: FunctionReference<
+        "query",
+        "public",
+        { limit: number; query: string },
+        Array<{
+          id: Id<"movies">;
+          poster: string | null;
+          title: string;
+          tmdbId: number | null;
+          url: string;
+          year: number;
+        }>
+      >;
+      searchShows: FunctionReference<
+        "query",
+        "public",
+        { limit: number; query: string },
+        Array<{
+          id: Id<"shows">;
+          poster: string | null;
+          title: string;
+          url: string;
+          year: number;
+        }>
+      >;
+    };
+  };
 };
 export type InternalApiType = {};

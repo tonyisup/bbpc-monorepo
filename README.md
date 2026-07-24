@@ -274,6 +274,18 @@ limits users to public name/image fields; the prior broad Prisma include also re
 identity fields such as email. Relationship fanout is bounded and missing canonical
 parents fail closed instead of returning a partial graph.
 
+## Public catalog read API
+
+The local catalog read slice exposes anonymous exact-ID reads, bounded full-text title
+search, exact four-digit year matching for movies, and native title/year pagination for
+movies and shows. Search limits are validated from 1 through 20, blank searches return
+no rows, and year/title matches are de-duplicated by canonical Convex ID without merging
+the intentionally preserved catalog duplicates.
+
+These functions read only the migrated local catalog. TMDB search/detail calls remain a
+separate bounded external-action contract, and catalog writes remain a separately
+authorized mutation slice.
+
 ## Package consumers
 
 TypeScript consumers pin an exact GitHub Packages release:

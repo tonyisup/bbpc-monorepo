@@ -230,7 +230,9 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_tmdbId", ["tmdbId"])
-    .index("by_normalizedTitle_and_year", ["normalizedTitle", "year"]),
+    .index("by_year", ["year"])
+    .index("by_normalizedTitle_and_year", ["normalizedTitle", "year"])
+    .searchIndex("search_title", { searchField: "title" }),
 
   shows: defineTable({
     legacyId: v.optional(v.string()),
@@ -241,7 +243,9 @@ export default defineSchema({
     url: v.string(),
   })
     .index("by_legacyId", ["legacyId"])
-    .index("by_normalizedTitle_and_year", ["normalizedTitle", "year"]),
+    .index("by_year", ["year"])
+    .index("by_normalizedTitle_and_year", ["normalizedTitle", "year"])
+    .searchIndex("search_title", { searchField: "title" }),
 
   tags: defineTable({
     legacyId: v.optional(v.string()),

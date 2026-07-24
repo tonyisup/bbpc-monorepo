@@ -96,7 +96,12 @@ the legacy Prisma call requested `Published`. SQL's case-insensitive comparison 
 difference; Convex index equality does not. `latestPublished` now checks both preserved
 legacy spellings, with regression coverage. Aggregate smoke checks then confirmed a
 latest episode, a next episode, and a normalized slug round-trip without emitting row
-values. The expanded gate passes 123 Convex tests with 90.18% branch coverage.
+values.
+
+The public catalog read slice then traversed 15 movie pages and one show page, returning
+exactly 1,494 movies and 6 shows. Private title and year round-trips matched their
+original canonical IDs for both catalog types; only totals and match booleans were
+emitted. The expanded gate passes 131 Convex tests with 90.29% branch coverage.
 
 ## Preserved gate
 
