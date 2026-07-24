@@ -574,7 +574,6 @@ export default defineSchema({
     email: v.optional(v.string()),
     emailVerifiedAt: v.optional(v.number()),
     image: v.optional(v.string()),
-    legacyImpersonatedUserId: v.optional(v.string()),
     sourceRowHash: v.string(),
   }).index("by_runId_and_legacyId", ["runId", "legacyId"]),
 

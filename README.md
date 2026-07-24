@@ -45,6 +45,7 @@ Useful commands:
 npm run dev
 npm run check
 npm run package:check
+npm run migration:test:extractor
 npm run contract:generate
 npm run contract:build
 ```
@@ -68,8 +69,8 @@ synthetic fixtures:
 Every transform function is internal-only and accepts writes only in S1/S2 for the
 matching cutover run. Legacy IDs and normalized keys make retries idempotent; a mismatch,
 duplicate normalized key, missing parent, stale checkpoint, or source-fingerprint drift
-rolls back the entire batch. The raw `impersonatedUserId` may exist in local staging for
-reconciliation but is never copied into the canonical user. Auth.js accounts, sessions,
+rolls back the entire batch. Legacy `impersonatedUserId` is checked only by the
+aggregate probe and is never extracted or staged. Auth.js accounts, sessions,
 verification tokens, and provider tokens are not staged at all.
 
 Production-derived staging is local-only and must be removed before the portable

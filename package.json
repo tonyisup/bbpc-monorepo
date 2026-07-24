@@ -44,9 +44,11 @@
     "lint": "eslint .",
     "lint:queries": "node scripts/check-convex-queries.mjs",
     "lint:access": "node scripts/check-access-classification.mjs",
+    "migration:extract:identity": "node local-tools/sql/extract-identity.mjs",
+    "migration:test:extractor": "node --test local-tools/sql/identity-rows.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run test:coverage",
+    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run migration:test:extractor && npm run test:coverage",
     "package:check": "npm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {

@@ -101,7 +101,6 @@ describe("identity migration slice", () => {
         email: "  PERSON@EXAMPLE.TEST  ",
         emailVerifiedAt: 1_700_000_000_000,
         image: "https://example.test/avatar.png",
-        legacyImpersonatedUserId: "legacy-user-002",
         sourceRowHash: "sha256:user-1",
       });
       await ctx.db.insert("migrationRawUsers", {
@@ -267,9 +266,7 @@ describe("identity migration slice", () => {
       emailVerifiedAt: 1_700_000_000_000,
       status: "active",
     });
-    expect(snapshot.user).not.toHaveProperty(
-      "legacyImpersonatedUserId",
-    );
+    expect(snapshot.user).not.toHaveProperty("impersonatedUserId");
     expect(snapshot.hostRole).toMatchObject({
       normalizedName: "host",
       permissions: [],
