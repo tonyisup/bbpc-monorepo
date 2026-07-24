@@ -59,6 +59,25 @@ export const episodeAdminAudioMessageValidator =
     user: episodeAdminUserValidator,
   });
 
+export const bangerValidator = v.object({
+  id: v.id("bangers"),
+  title: v.string(),
+  artist: v.string(),
+  url: v.string(),
+  episodeId: v.union(v.id("episodes"), v.null()),
+  userId: v.union(v.id("users"), v.null()),
+  episode: v.union(
+    v.object({
+      id: v.id("episodes"),
+      number: v.number(),
+      title: v.string(),
+      status: nullableStringValidator,
+    }),
+    v.null(),
+  ),
+  user: v.union(episodeAdminUserValidator, v.null()),
+});
+
 export const episodeDetailValidator = v.object({
   id: v.id("episodes"),
   number: v.number(),

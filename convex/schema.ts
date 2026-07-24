@@ -205,6 +205,7 @@ export default defineSchema({
     userId: v.optional(v.id("users")),
   })
     .index("by_legacyId", ["legacyId"])
+    .index("by_title", ["title"])
     .index("by_episodeId", ["episodeId"])
     .index("by_userId", ["userId"]),
 
