@@ -35,8 +35,9 @@ The staging deployment is synthetic-data-only. It uses a deployment-scoped key n
 
 1. Use Node 22 and run `npm ci`.
 2. Copy `.env.example` to `.env.local` or configure a Convex local deployment.
-3. Set `CLERK_JWT_ISSUER_DOMAIN`, `BBPC_ENVIRONMENT`, and `BBPC_API_VERSION` on that
-   deployment.
+3. Set `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_M2M_AUDIENCE`,
+   `BBPC_ENVIRONMENT`, and `BBPC_API_VERSION` on that deployment. The M2M
+   audience is the Clerk machine ID for the scoped `BBPC Convex` receiver.
 4. Run `npm run check && npm run package:check`.
 
 Useful commands:
@@ -381,9 +382,11 @@ first-use linking before S3.
 The least-privilege pipeline principal uses authenticated Convex functions instead of
 direct database access. Its JWT must resolve to an active, pre-provisioned service
 principal with `pipeline:publish`; the configured Convex auth provider also requires
-the token audience to be `convex`. Read access is available only to that registered
-principal, while mutations additionally require S3/S4 application writes and the
-pinned client API version.
+the token audience to contain the scoped receiver machine ID in
+`CLERK_M2M_AUDIENCE`. Human Clerk sessions continue to use the separate `convex`
+audience. Read access is available only to that registered principal, while
+mutations additionally require S3/S4 application writes and the pinned client API
+version.
 
 The content surface provides exact episode and episode-context reads by date or ID,
 native paginated movie-catalog and episode-date scans, and poster lookup for at most 50

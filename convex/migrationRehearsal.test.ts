@@ -206,6 +206,139 @@ describe("local migration rehearsal preflight", () => {
     });
   });
 
+  test("reports value-free pipeline identity evidence", async () => {
+    const t = convexTest(schema, modules);
+    const servicePrincipalId = await t.run(async (ctx) => {
+      await ctx.db.insert("systemState", {
+        singletonKey: "global",
+        cutoverStage: "S1",
+        applicationWriteMode: "disabled",
+        cutoverRunId: "identity-run",
+        apiVersion: "2026-07-24",
+        initializedAt: 1,
+        updatedAt: 1,
+        updatedBy: "test",
+      });
+      const principalId = await ctx.db.insert(
+        "servicePrincipals",
+        {
+          tokenIdentifier: "synthetic-token",
+          issuer: "https://synthetic.clerk.accounts.dev",
+          subject: "mch_synthetic",
+          name: "Synthetic Pipeline",
+          status: "active",
+          permissions: ["pipeline:publish"],
+          cutoverRunId: "identity-run",
+          createdAt: 1,
+          updatedAt: 3,
+        },
+      );
+      await ctx.db.insert("auditEvents", {
+        actorType: "internal",
+        action:
+          "identity.pipelineService.preprovisioned",
+        targetType: "servicePrincipal",
+        targetId: principalId,
+        cutoverRunId: "identity-run",
+        createdAt: 1,
+      });
+      await ctx.db.insert("auditEvents", {
+        actorType: "internal",
+        action:
+          "identity.pipelineService.statusChanged",
+        targetType: "servicePrincipal",
+        targetId: principalId,
+        cutoverRunId: "identity-run",
+        createdAt: 2,
+        metadata: {
+          from: "active",
+          to: "disabled",
+        },
+      });
+      await ctx.db.insert("auditEvents", {
+        actorType: "internal",
+        action:
+          "identity.pipelineService.statusChanged",
+        targetType: "servicePrincipal",
+        targetId: principalId,
+        cutoverRunId: "identity-run",
+        createdAt: 3,
+        metadata: {
+          from: "disabled",
+          to: "active",
+        },
+      });
+      return principalId;
+    });
+
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectPipelineIdentityEvidence,
+        {
+          runId: "identity-run",
+          servicePrincipalId,
+        },
+      ),
+    ).resolves.toEqual({
+      runMatches: true,
+      cutoverStageS1: true,
+      applicationWritesDisabled: true,
+      firstApplicationWriteAbsent: true,
+      principalFound: true,
+      principalRunMatches: true,
+      principalActive: true,
+      permissionCount: 1,
+      publishOnly: true,
+      preprovisionAuditCount: 1,
+      statusChangeAuditCount: 2,
+      statusChangeTransitionsValid: true,
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(
+        "servicePrincipals",
+        servicePrincipalId,
+        {
+          status: "disabled",
+          permissions: [],
+          cutoverRunId: "different-run",
+        },
+      );
+      await ctx.db.insert("auditEvents", {
+        actorType: "internal",
+        action: "identity.unrelated",
+        targetType: "user",
+        targetId: "synthetic-user",
+        cutoverRunId: "different-run",
+        createdAt: 4,
+      });
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectPipelineIdentityEvidence,
+        {
+          runId: "different-run",
+          servicePrincipalId,
+        },
+      ),
+    ).resolves.toEqual({
+      runMatches: false,
+      cutoverStageS1: true,
+      applicationWritesDisabled: true,
+      firstApplicationWriteAbsent: true,
+      principalFound: true,
+      principalRunMatches: true,
+      principalActive: false,
+      permissionCount: 0,
+      publishOnly: false,
+      preprovisionAuditCount: 0,
+      statusChangeAuditCount: 0,
+      statusChangeTransitionsValid: false,
+    });
+  });
+
   test("recognizes only a scrubbed portable target", async () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {

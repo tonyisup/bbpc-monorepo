@@ -262,21 +262,61 @@ dataset:
 - `bbpc-admin`: 81 tests, strict TypeScript, the 189-procedure authorization inventory,
   lint with no errors, and successful builds in both modes with all 26 static pages
   generated;
-- `bbpc-convex`: 306 tests, 56 local migration-extractor tests, query/access audits,
+- `bbpc-convex`: 310 tests, 56 local migration-extractor tests, query/access audits,
   TypeScript, lint, and the six-file package contract plus consumer typecheck; and
-- `bbpc-pipeline`: 127 tests plus 15 subtests, entry-point compilation, and no
+- `bbpc-pipeline`: 134 tests plus 15 subtests, entry-point compilation, and no
   application SQL or `pyodbc` dependency.
 
 The Convex-mode frontend builds used a syntactically valid, non-live Clerk
 publishable-key fixture supplied only through their process environments. This proves
 static compilation and backend-selector isolation, not live authentication.
 
-An aggregate-only local control query reconfirmed exactly one S1 system state for this
-run, application writes disabled, no recorded first application write, and zero service
-principals. The pipeline now has a read-only M2M readiness probe that validates the
-JWT's issuer, subject, `aud=convex`, and expiry; derives the canonical Convex token
-identifier; and never prints the token, machine secret, unrelated claims, or migrated
-row fields. It has not been run with a real Clerk credential.
+An aggregate-only local control query initially reconfirmed exactly one S1 system state
+for this run, application writes disabled, no recorded first application write, and zero
+service principals. The pipeline now has a read-only M2M readiness probe that validates
+the JWT's issuer, subject, configured receiver-machine audience, and expiry; derives the
+canonical Convex token identifier; and never prints the token, machine secret, unrelated
+claims, or migrated row fields.
+
+## Live Clerk pipeline identity acceptance — 2026-07-25
+
+The pipeline source machine is now scoped one way to a dedicated Convex receiver
+machine. Convex keeps the human Clerk audience separate from the pipeline receiver
+audience. The real JWT issuer and subject were pre-provisioned into the preserved local
+clone with exactly `pipeline:publish`; replay returned the existing principal rather
+than creating a duplicate.
+
+Value-free live probes established:
+
+- the capability query succeeded with exactly the expected permission;
+- an aggregate date traversal returned 630 dates;
+- an exact episode-context read succeeded and reported two related movies;
+- unauthenticated capability access was denied;
+- the service token failed closed at the administrator identity boundary;
+- a valid Clerk JWT scoped only to a temporary wrong receiver was rejected with HTTP
+  401, after which both temporary probe machines were removed and the real scope was
+  reconfirmed;
+- an expired JWT was rejected with HTTP 401;
+- disabling the principal denied a still-valid JWT, and re-enabling it restored access;
+  and
+- an application mutation was rejected with `WRITE_DISABLED` at S1.
+
+The final aggregate identity query reports one active run-matching principal with one
+permission, one pre-provision audit, two valid disable/re-enable audit transitions,
+application writes disabled, and no first application write. No JWT, secret, identity
+claim value, audit row, episode value, or movie value was emitted.
+
+The live read exposed one client-contract defect: Convex JSON numbers arrive as
+JavaScript-compatible numeric values, including integral floats. The Python validator
+now accepts only finite integral values inside the JavaScript safe-integer range and
+still rejects booleans, fractional values, non-finite values, and unsafe integers. A
+thumbnail unit test was also isolated from live poster lookup after real credentials
+made its implicit network dependency visible. The post-fix gates pass 310 Convex tests,
+56 extractor tests, 134 pipeline tests plus 15 subtests, package consumer typecheck,
+entry-point compilation, and the zero-SQL dependency scan.
+
+The positive idempotent pipeline application mutation remains intentionally unexecuted:
+the preserved S1 gate must not be opened before the separately approved S3 transition.
 
 ## Preserved gate
 

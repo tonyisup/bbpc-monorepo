@@ -277,6 +277,97 @@ describe("S1 identity pre-provisioning", () => {
     });
   });
 
+  test("disables and re-enables a pipeline principal through an audited idempotent gate", async () => {
+    const t = createTestBackend();
+    await initialize(t, true);
+    const provisioned = await t.mutation(
+      internal.identity.provisioning
+        .preprovisionPipelineService,
+      {
+        cutoverRunId: CUTOVER_RUN_ID,
+        operationId: "identity.preprovision.pipeline",
+        ...SERVICE_IDENTITY,
+        name: "BBPC Pipeline",
+        permissions: ["pipeline:publish"],
+      },
+    );
+    const disableArgs = {
+      cutoverRunId: CUTOVER_RUN_ID,
+      operationId: "identity.pipeline.disable",
+      servicePrincipalId: provisioned.servicePrincipalId,
+      expectedStatus: "active" as const,
+      status: "disabled" as const,
+    };
+    await expect(
+      t.mutation(
+        internal.identity.provisioning
+          .setPipelineServiceStatus,
+        disableArgs,
+      ),
+    ).resolves.toEqual({
+      status: "disabled",
+      changed: true,
+    });
+    await expect(
+      t.mutation(
+        internal.identity.provisioning
+          .setPipelineServiceStatus,
+        disableArgs,
+      ),
+    ).resolves.toEqual({
+      status: "disabled",
+      changed: false,
+    });
+    await expectDomainError(
+      t.withIdentity(SERVICE_IDENTITY).query(
+        api.pipeline.status.capabilities,
+        {},
+      ),
+      "FORBIDDEN",
+    );
+    await expect(
+      t.mutation(
+        internal.identity.provisioning
+          .setPipelineServiceStatus,
+        {
+          cutoverRunId: CUTOVER_RUN_ID,
+          operationId: "identity.pipeline.enable",
+          servicePrincipalId:
+            provisioned.servicePrincipalId,
+          expectedStatus: "disabled",
+          status: "active",
+        },
+      ),
+    ).resolves.toEqual({
+      status: "active",
+      changed: true,
+    });
+    await expect(
+      t.withIdentity(SERVICE_IDENTITY).query(
+        api.pipeline.status.capabilities,
+        {},
+      ),
+    ).resolves.toMatchObject({
+      permissions: ["pipeline:publish"],
+    });
+
+    const audits = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("auditEvents")
+        .withIndex("by_createdAt")
+        .take(20);
+    });
+    const statusAudits = audits.filter(
+      (event) =>
+        event.action ===
+        "identity.pipelineService.statusChanged",
+    );
+    expect(statusAudits).toHaveLength(2);
+    expect(JSON.stringify(statusAudits)).not.toContain(
+      SERVICE_IDENTITY.subject,
+    );
+  });
+
   test("rejects malformed permissions and conflicting machine subjects", async () => {
     const malformed = createTestBackend();
     await initialize(malformed, true);

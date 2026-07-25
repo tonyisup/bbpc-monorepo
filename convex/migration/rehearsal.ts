@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import type { Doc } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { internalReadQuery } from "../functions.js";
 import {
@@ -257,6 +258,102 @@ export const inspectRehearsalEvidence = internalReadQuery({
           0,
         ),
       },
+    };
+  },
+});
+
+export const inspectPipelineIdentityEvidence = internalReadQuery({
+  args: {
+    runId: v.string(),
+    servicePrincipalId: v.id("servicePrincipals"),
+  },
+  returns: v.object({
+    runMatches: v.boolean(),
+    cutoverStageS1: v.boolean(),
+    applicationWritesDisabled: v.boolean(),
+    firstApplicationWriteAbsent: v.boolean(),
+    principalFound: v.boolean(),
+    principalRunMatches: v.boolean(),
+    principalActive: v.boolean(),
+    permissionCount: v.number(),
+    publishOnly: v.boolean(),
+    preprovisionAuditCount: v.number(),
+    statusChangeAuditCount: v.number(),
+    statusChangeTransitionsValid: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const systemState = await ctx.db
+      .query("systemState")
+      .withIndex("by_singletonKey", (query) =>
+        query.eq("singletonKey", "global"),
+      )
+      .unique();
+    const principal = await ctx.db.get(
+      "servicePrincipals",
+      args.servicePrincipalId,
+    );
+    const auditEvents = await ctx.db
+      .query("auditEvents")
+      .withIndex(
+        "by_cutoverRunId_and_createdAt",
+        (query) => query.eq("cutoverRunId", args.runId),
+      )
+      .order("desc")
+      .take(100);
+    let preprovisionAuditCount = 0;
+    const statusChanges: Array<Doc<"auditEvents">> = [];
+    for (const event of auditEvents) {
+      if (
+        event.targetType !== "servicePrincipal" ||
+        event.targetId !== args.servicePrincipalId
+      ) {
+        continue;
+      }
+      if (
+        event.action ===
+        "identity.pipelineService.preprovisioned"
+      ) {
+        preprovisionAuditCount += 1;
+      }
+      if (
+        event.action ===
+        "identity.pipelineService.statusChanged"
+      ) {
+        statusChanges.push(event);
+      }
+    }
+    statusChanges.sort(
+      (left, right) =>
+        left.createdAt - right.createdAt,
+    );
+    const expectedTransitions = [
+      ["active", "disabled"],
+      ["disabled", "active"],
+    ] as const;
+    return {
+      runMatches: systemState?.cutoverRunId === args.runId,
+      cutoverStageS1: systemState?.cutoverStage === "S1",
+      applicationWritesDisabled:
+        systemState?.applicationWriteMode === "disabled",
+      firstApplicationWriteAbsent:
+        systemState?.firstApplicationWriteAt === undefined,
+      principalFound: principal !== null,
+      principalRunMatches:
+        principal?.cutoverRunId === args.runId,
+      principalActive: principal?.status === "active",
+      permissionCount: principal?.permissions.length ?? 0,
+      publishOnly:
+        principal?.permissions.length === 1 &&
+        principal.permissions[0] === "pipeline:publish",
+      preprovisionAuditCount,
+      statusChangeAuditCount: statusChanges.length,
+      statusChangeTransitionsValid:
+        statusChanges.length === expectedTransitions.length &&
+        expectedTransitions.every(
+          ([from, to], index) =>
+            statusChanges[index]?.metadata?.from === from &&
+            statusChanges[index]?.metadata?.to === to,
+        ),
     };
   },
 });

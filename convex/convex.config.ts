@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export default defineApp({
   env: {
     CLERK_JWT_ISSUER_DOMAIN: v.string(),
+    CLERK_M2M_AUDIENCE: v.string(),
     BBPC_ENVIRONMENT: v.union(
       v.literal("development"),
       v.literal("staging"),
