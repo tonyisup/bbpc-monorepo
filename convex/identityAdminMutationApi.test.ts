@@ -241,11 +241,35 @@ describe("administrator identity mutations", () => {
       nextSyllabus: null,
     });
 
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.identity.admin.updateUser,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: created.id,
+          expected: {
+            name: created.name,
+            email: created.email,
+            status: created.status,
+            updatedAt: created.updatedAt - 1,
+          },
+          name: "Updated User",
+          email: "updated@example.test",
+        },
+      ),
+      "CONFLICT",
+    );
     const updated = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.identity.admin.updateUser,
       {
         clientApiVersion: BBPC_API_VERSION,
         id: created.id,
+        expected: {
+          name: created.name,
+          email: created.email,
+          status: created.status,
+          updatedAt: created.updatedAt,
+        },
         name: "  Updated User ",
         email: " Updated@Example.Test ",
       },
@@ -373,11 +397,34 @@ describe("administrator identity mutations", () => {
     });
     await advanceToS3(t);
 
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.identity.admin.setUserStatus,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: memberId,
+          expected: {
+            name: "Member",
+            email: "member@example.test",
+            status: "active",
+            updatedAt: 999,
+          },
+          status: "disabled",
+        },
+      ),
+      "CONFLICT",
+    );
     const disabled = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.identity.admin.setUserStatus,
       {
         clientApiVersion: BBPC_API_VERSION,
         id: memberId,
+        expected: {
+          name: "Member",
+          email: "member@example.test",
+          status: "active",
+          updatedAt: 1,
+        },
         status: "disabled",
       },
     );
@@ -639,12 +686,34 @@ describe("administrator identity mutations", () => {
       ),
       "CONFLICT",
     );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.identity.admin.removeRoleMembership,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: membership.id,
+          expected: {
+            userId: memberId,
+            roleId: admin.roleId,
+            assignedAt: membership.assignedAt,
+            assignedBy: membership.assignedBy,
+          },
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.identity.admin.removeRoleMembership,
         {
           clientApiVersion: BBPC_API_VERSION,
           id: membership.id,
+          expected: {
+            userId: memberId,
+            roleId,
+            assignedAt: membership.assignedAt,
+            assignedBy: membership.assignedBy,
+          },
         },
       ),
     ).resolves.toEqual({ id: membership.id });

@@ -76,3 +76,17 @@ export const identityAdminUserValidator = v.object({
     v.null(),
   ),
 });
+
+export const identityAdminUserSnapshotValidator = v.object({
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  status: identityUserStatusValidator,
+  updatedAt: v.number(),
+});
+
+export const identityRoleMembershipSnapshotValidator = v.object({
+  userId: v.id("users"),
+  roleId: v.id("roles"),
+  assignedAt: nullableNumberValidator,
+  assignedBy: v.union(v.id("users"), v.null()),
+});

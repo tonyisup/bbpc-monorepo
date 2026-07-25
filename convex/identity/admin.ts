@@ -28,11 +28,43 @@ import {
 import { hydrateAdminUser, toIdentityRole } from "./readModel.js";
 import {
   identityAdminUserValidator,
+  identityAdminUserSnapshotValidator,
   identityRoleMembershipValidator,
+  identityRoleMembershipSnapshotValidator,
   identityRoleValidator,
   identityRoleSummaryValidator,
   identityUserStatusValidator,
 } from "./validators.js";
+
+function nullable<T>(value: T | undefined): T | null {
+  return value ?? null;
+}
+
+function userSnapshot(user: Doc<"users">) {
+  return {
+    name: nullable(user.name),
+    email: nullable(user.email),
+    status: user.status,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function userSnapshotsMatch(
+  actual: ReturnType<typeof userSnapshot>,
+  expected: {
+    name: string | null;
+    email: string | null;
+    status: "active" | "disabled";
+    updatedAt: number;
+  },
+): boolean {
+  return (
+    actual.name === expected.name &&
+    actual.email === expected.email &&
+    actual.status === expected.status &&
+    actual.updatedAt === expected.updatedAt
+  );
+}
 
 async function roleSummary(
   ctx: QueryCtx,
@@ -148,12 +180,22 @@ export const createUser = adminMutation({
 export const updateUser = adminMutation({
   args: {
     id: v.id("users"),
+    expected: v.optional(identityAdminUserSnapshotValidator),
     name: v.string(),
     email: v.string(),
   },
   returns: identityAdminUserValidator,
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.id);
+    if (
+      args.expected !== undefined &&
+      !userSnapshotsMatch(userSnapshot(user), args.expected)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The user profile changed after it was loaded.",
+      );
+    }
     const profile = validateUserProfile(args.name, args.email);
     await assertUserEmailAvailable(
       ctx,
@@ -183,11 +225,21 @@ export const updateUser = adminMutation({
 export const setUserStatus = adminMutation({
   args: {
     id: v.id("users"),
+    expected: v.optional(identityAdminUserSnapshotValidator),
     status: identityUserStatusValidator,
   },
   returns: identityAdminUserValidator,
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.id);
+    if (
+      args.expected !== undefined &&
+      !userSnapshotsMatch(userSnapshot(user), args.expected)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The user profile changed after it was loaded.",
+      );
+    }
     if (
       user.status === "active" &&
       args.status === "disabled" &&
@@ -384,7 +436,10 @@ export const assignRole = adminMutation({
 });
 
 export const removeRoleMembership = adminMutation({
-  args: { id: v.id("userRoles") },
+  args: {
+    id: v.id("userRoles"),
+    expected: v.optional(identityRoleMembershipSnapshotValidator),
+  },
   returns: v.object({ id: v.id("userRoles") }),
   handler: async (ctx, args) => {
     const membership = await ctx.db.get("userRoles", args.id);
@@ -392,6 +447,18 @@ export const removeRoleMembership = adminMutation({
       domainError(
         "NOT_FOUND",
         "The role membership is unavailable.",
+      );
+    }
+    if (
+      args.expected !== undefined &&
+      (membership.userId !== args.expected.userId ||
+        membership.roleId !== args.expected.roleId ||
+        nullable(membership.assignedAt) !== args.expected.assignedAt ||
+        nullable(membership.assignedBy) !== args.expected.assignedBy)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The role membership changed after it was loaded.",
       );
     }
     const role = await requireRole(ctx, membership.roleId);

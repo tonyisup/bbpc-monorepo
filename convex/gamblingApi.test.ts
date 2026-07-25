@@ -921,11 +921,32 @@ describe("gambling API", () => {
         }),
       "VALIDATION_FAILED",
     );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.gambling.updatePoints,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: created.id,
+          expected: {
+            points: 999,
+            status: created.status,
+            awardPointId: null,
+          },
+          points: 25,
+        },
+      ),
+      "CONFLICT",
+    );
     const updated = await t
       .withIdentity(ADMIN_IDENTITY)
       .mutation(api.games.gambling.updatePoints, {
         clientApiVersion: BBPC_API_VERSION,
         id: created.id,
+        expected: {
+          points: created.points,
+          status: created.status,
+          awardPointId: null,
+        },
         points: 25,
       });
     expect(updated.points).toBe(25);

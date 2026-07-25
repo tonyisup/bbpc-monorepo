@@ -1085,11 +1085,33 @@ describe("assignment and syllabus API", () => {
     });
     await advanceToS3(t);
 
+    const unlinkedSnapshot = {
+      userId: memberId,
+      movieId,
+      order: 1,
+      createdAt: 100,
+      notes: null,
+      assignmentId: null,
+    };
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.syllabus.admin.assignEpisode,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          syllabusId,
+          expected: { ...unlinkedSnapshot, order: 99 },
+          episodeNumber: 30,
+          assignmentType: "BONUS",
+        },
+      ),
+      "CONFLICT",
+    );
     const linked = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.syllabus.admin.assignEpisode,
       {
         clientApiVersion: BBPC_API_VERSION,
         syllabusId,
+        expected: unlinkedSnapshot,
         episodeNumber: 30,
         assignmentType: "BONUS",
       },
@@ -1165,6 +1187,10 @@ describe("assignment and syllabus API", () => {
         {
           clientApiVersion: BBPC_API_VERSION,
           syllabusId,
+          expected: {
+            ...unlinkedSnapshot,
+            assignmentId,
+          },
         },
       ),
     ).resolves.toMatchObject({ assignment: null });
@@ -1183,9 +1209,69 @@ describe("assignment and syllabus API", () => {
         {
           clientApiVersion: BBPC_API_VERSION,
           id: syllabusId,
+          expected: unlinkedSnapshot,
         },
       ),
     ).resolves.toEqual({ id: syllabusId });
+  });
+
+  test("reorders the complete admin pending syllabus with exact loaded orders", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const movieA = await seedMovie(t, "admin-reorder-a");
+    const movieB = await seedMovie(t, "admin-reorder-b");
+    const aId = await seedSyllabusEntry(t, {
+      userId: memberId,
+      movieId: movieA,
+      order: 2,
+      createdAt: 100,
+    });
+    const bId = await seedSyllabusEntry(t, {
+      userId: memberId,
+      movieId: movieB,
+      order: 1,
+      createdAt: 101,
+    });
+    await advanceToS3(t);
+
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.syllabus.admin.reorderPendingForUser,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          userId: memberId,
+          items: [
+            { id: bId, expectedOrder: 99 },
+            { id: aId, expectedOrder: 2 },
+          ],
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.syllabus.admin.reorderPendingForUser,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          userId: memberId,
+          items: [{ id: aId, expectedOrder: 2 }],
+        },
+      ),
+      "CONFLICT",
+    );
+    const reordered = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.syllabus.admin.reorderPendingForUser,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        userId: memberId,
+        items: [
+          { id: bId, expectedOrder: 1 },
+          { id: aId, expectedOrder: 2 },
+        ],
+      },
+    );
+    expect(reordered.map((entry) => entry.id)).toEqual([bId, aId]);
+    expect(reordered.map((entry) => entry.order)).toEqual([2, 1]);
   });
 
   test("serializes concurrent owner additions into a dense syllabus", async () => {

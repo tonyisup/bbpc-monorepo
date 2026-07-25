@@ -54,6 +54,7 @@ import {
 } from "./pointWriteModel.js";
 import {
   assignmentGamblingGroupValidator,
+  gamblingEditableSnapshotValidator,
   gamblingEntryValidator,
   gamblingStatusValidator,
   gamblingTypeValidator,
@@ -646,10 +647,26 @@ export const create = adminMutation({
 });
 
 export const updatePoints = adminMutation({
-  args: { id: v.id("gamblingEntries"), points: v.number() },
+  args: {
+    id: v.id("gamblingEntries"),
+    expected: v.optional(gamblingEditableSnapshotValidator),
+    points: v.number(),
+  },
   returns: gamblingEntryValidator,
   handler: async (ctx, args) => {
     const entry = await requireGamblingEntry(ctx, args.id);
+    if (
+      args.expected !== undefined &&
+      (entry.points !== args.expected.points ||
+        entry.status !== args.expected.status ||
+        (entry.awardPointId ?? null) !==
+          args.expected.awardPointId)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The wager changed after it was loaded.",
+      );
+    }
     const points = validateGamblingPoints(args.points);
     if (entry.status === "pending" || entry.status === "locked") {
       if (entry.seasonId === undefined) {

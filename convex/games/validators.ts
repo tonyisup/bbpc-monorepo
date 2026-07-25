@@ -336,6 +336,12 @@ export const gamblingEntryValidator = v.object({
   awardPoint: v.union(pointCoreValidator, v.null()),
 });
 
+export const gamblingEditableSnapshotValidator = v.object({
+  points: v.number(),
+  status: gamblingStatusValidator,
+  awardPointId: v.union(v.id("points"), v.null()),
+});
+
 export const assignmentGamblingGroupValidator = v.object({
   assignmentId: v.id("assignments"),
   entries: v.array(gamblingEntryValidator),

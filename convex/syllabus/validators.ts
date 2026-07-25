@@ -3,6 +3,10 @@ import { v } from "convex/values";
 import { catalogMovieValidator } from "../catalog/validators.js";
 
 const nullableStringValidator = v.union(v.string(), v.null());
+const nullableAssignmentIdValidator = v.union(
+  v.id("assignments"),
+  v.null(),
+);
 
 export const syllabusPositionValidator = v.union(
   v.literal("TOP"),
@@ -42,3 +46,12 @@ export const syllabusAdminEntryValidator =
       status: v.union(v.literal("active"), v.literal("disabled")),
     }),
   });
+
+export const syllabusEntrySnapshotValidator = v.object({
+  userId: v.id("users"),
+  movieId: v.id("movies"),
+  order: v.number(),
+  createdAt: v.number(),
+  notes: nullableStringValidator,
+  assignmentId: nullableAssignmentIdValidator,
+});
