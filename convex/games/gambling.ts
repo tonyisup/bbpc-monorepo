@@ -721,14 +721,25 @@ async function updateEntryStatus(
   input: {
     id: Id<"gamblingEntries">;
     status: "pending" | "locked" | "won" | "lost" | "rejected";
+    expectedStatus?: "pending" | "locked" | "won" | "lost" | "rejected";
     season?:
       | { kind: "current"; today: string }
       | { kind: "season"; seasonId: Id<"seasons"> };
     earnedAt?: number;
   },
 ) {
+  const current = await requireGamblingEntry(ctx, input.id);
+  if (
+    input.expectedStatus !== undefined &&
+    current.status !== input.expectedStatus
+  ) {
+    domainError(
+      "CONFLICT",
+      "The wager status changed after it was loaded.",
+    );
+  }
   const entry = await transitionGamblingStatus(ctx, {
-    entry: await requireGamblingEntry(ctx, input.id),
+    entry: current,
     status: input.status,
     ...(input.season === undefined ? {} : { season: input.season }),
     earnedAt: input.earnedAt ?? Date.now(),
@@ -748,6 +759,7 @@ export const updateStatus = adminMutation({
   args: {
     id: v.id("gamblingEntries"),
     status: gamblingStatusValidator,
+    expectedStatus: v.optional(gamblingStatusValidator),
     season: v.optional(pointSeasonTargetValidator),
     earnedAt: v.optional(v.number()),
   },

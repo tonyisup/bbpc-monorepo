@@ -399,13 +399,26 @@ export const upsertForUser = adminMutation({
 });
 
 export const updateRating = adminMutation({
-  args: { id: v.id("guesses"), ratingId: v.id("ratings") },
+  args: {
+    id: v.id("guesses"),
+    ratingId: v.id("ratings"),
+    expectedRatingId: v.optional(v.id("ratings")),
+  },
   returns: guessValidator,
   handler: async (ctx, args) => {
     const [guess, rating] = await Promise.all([
       requireGuess(ctx, args.id),
       requireGuessRating(ctx, args.ratingId),
     ]);
+    if (
+      args.expectedRatingId !== undefined &&
+      guess.ratingId !== args.expectedRatingId
+    ) {
+      domainError(
+        "CONFLICT",
+        "The guess rating changed after it was loaded.",
+      );
+    }
     await ctx.db.patch("guesses", guess._id, {
       ratingId: rating._id,
     });
@@ -493,10 +506,37 @@ export const awardPoint = adminMutation({
 });
 
 export const remove = adminMutation({
-  args: { id: v.id("guesses") },
+  args: {
+    id: v.id("guesses"),
+    expected: v.optional(
+      v.object({
+        userId: v.id("users"),
+        assignmentReviewId: v.id("assignmentReviews"),
+        ratingId: v.id("ratings"),
+        seasonId: v.id("seasons"),
+        createdAt: v.number(),
+        hasPoint: v.boolean(),
+      }),
+    ),
+  },
   returns: v.object({ id: v.id("guesses") }),
   handler: async (ctx, args) => {
     const guess = await requireGuess(ctx, args.id);
+    if (
+      args.expected !== undefined &&
+      (guess.userId !== args.expected.userId ||
+        guess.assignmentReviewId !==
+          args.expected.assignmentReviewId ||
+        guess.ratingId !== args.expected.ratingId ||
+        guess.seasonId !== args.expected.seasonId ||
+        guess.createdAt !== args.expected.createdAt ||
+        (guess.pointId !== undefined) !== args.expected.hasPoint)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The guess changed after deletion was requested.",
+      );
+    }
     await ctx.db.delete("guesses", guess._id);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,

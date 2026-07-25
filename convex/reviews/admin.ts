@@ -292,10 +292,22 @@ export const setRating = adminMutation({
   args: {
     reviewId: v.id("reviews"),
     ratingId: v.union(v.id("ratings"), v.null()),
+    expectedRatingId: v.optional(
+      v.union(v.id("ratings"), v.null()),
+    ),
   },
   returns: reviewDetailValidator,
   handler: async (ctx, args) => {
     const review = await requireReview(ctx, args.reviewId);
+    if (
+      args.expectedRatingId !== undefined &&
+      (review.ratingId ?? null) !== args.expectedRatingId
+    ) {
+      domainError(
+        "CONFLICT",
+        "The review rating changed after it was loaded.",
+      );
+    }
     const ratingId =
       args.ratingId === null
         ? undefined

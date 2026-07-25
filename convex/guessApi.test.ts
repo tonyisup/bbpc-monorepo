@@ -730,6 +730,18 @@ describe("guess API", () => {
       },
     );
     expect(updated.rating.id).toBe(lowRatingId);
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.guesses.updateRating,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: updated.id,
+          ratingId: highRatingId,
+          expectedRatingId: highRatingId,
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).query(
         api.games.guesses.getById,
@@ -864,12 +876,38 @@ describe("guess API", () => {
       },
     );
     expect(linked.point?.id).toBe(ownPointId);
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.guesses.remove,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: guess.id,
+          expected: {
+            userId: linked.user.id,
+            assignmentReviewId: linked.assignmentReview.id,
+            ratingId: linked.rating.id,
+            seasonId: linked.season.id,
+            createdAt: linked.createdAt + 1,
+            hasPoint: true,
+          },
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.guesses.remove,
         {
           clientApiVersion: BBPC_API_VERSION,
           id: guess.id,
+          expected: {
+            userId: linked.user.id,
+            assignmentReviewId: linked.assignmentReview.id,
+            ratingId: linked.rating.id,
+            seasonId: linked.season.id,
+            createdAt: linked.createdAt,
+            hasPoint: true,
+          },
         },
       ),
     ).resolves.toEqual({ id: guess.id });

@@ -1009,6 +1009,7 @@ describe("gambling API", () => {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         status: "lost",
+        expectedStatus: "won",
         earnedAt: 300,
       });
     expect(lost).toMatchObject({
@@ -1035,12 +1036,24 @@ describe("gambling API", () => {
       id: lossAwardId,
       adjustment: -8,
     });
+    await expectDomainError(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .mutation(api.games.gambling.updateStatus, {
+          clientApiVersion: BBPC_API_VERSION,
+          id: entry.id,
+          status: "pending",
+          expectedStatus: "won",
+        }),
+      "CONFLICT",
+    );
     const pending = await t
       .withIdentity(ADMIN_IDENTITY)
       .mutation(api.games.gambling.updateStatus, {
         clientApiVersion: BBPC_API_VERSION,
         id: entry.id,
         status: "pending",
+        expectedStatus: "lost",
       });
     expect(pending).toMatchObject({
       status: "pending",

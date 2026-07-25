@@ -402,11 +402,20 @@ describe("assignment and syllabus API", () => {
     const movieId = await seedMovie(t, "validation");
     const deletedMovieId = await seedMovie(t, "deleted");
     const episodeId = await seedEpisode(t, 13);
+    const deletedEpisodeId = await seedEpisode(t, 99);
     await t.run(async (ctx) => {
       await ctx.db.delete("movies", deletedMovieId);
+      await ctx.db.delete("episodes", deletedEpisodeId);
     });
     await advanceToS3(t);
 
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.assignments.admin.listForEpisode,
+        { episodeId: deletedEpisodeId },
+      ),
+      "NOT_FOUND",
+    );
     await expectDomainError(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.assignments.admin.create,
@@ -468,6 +477,334 @@ describe("assignment and syllabus API", () => {
       ),
       "CONFLICT",
       { limit: 50, relationship: "assignments" },
+    );
+  });
+
+  test("rejects stale assignment writes and protects bounded audio metadata", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const movieId = await seedMovie(t, "workbench");
+    const episodeId = await seedEpisode(t, 15);
+    const assignmentId = await seedAssignment(t, {
+      userId: memberId,
+      movieId,
+      episodeId,
+      slug: "assignment-workbench",
+    });
+    const [
+      manualAudioId,
+      externalAudioId,
+      reviewId,
+      plainWagerId,
+    ] = await t.run(
+      async (ctx) => {
+        const manual = await ctx.db.insert("assignmentAudioMessages", {
+          userId: memberId,
+          assignmentId,
+          url: "https://audio.example.test/manual.webm",
+          createdAt: 100,
+        });
+        const external = await ctx.db.insert(
+          "assignmentAudioMessages",
+          {
+            userId: memberId,
+            assignmentId,
+            url: "https://audio.example.test/external.webm",
+            createdAt: 200,
+            fileKey: "external-audio-key",
+          },
+        );
+        const ratingId = await ctx.db.insert("ratings", {
+          name: "Good",
+          value: 3,
+        });
+        const gameTypeId = await ctx.db.insert("gameTypes", {
+          title: "Main",
+          description: "Main game",
+          lookupId: "main",
+          normalizedLookupId: "main",
+        });
+        const seasonId = await ctx.db.insert("seasons", {
+          title: "Season One",
+          gameTypeId,
+          startedOn: "2026-01-01",
+        });
+        const reviewId = await ctx.db.insert("reviews", {
+          userId: memberId,
+          movieId,
+          ratingId,
+          reviewedAt: 150,
+        });
+        const assignmentReviewId = await ctx.db.insert(
+          "assignmentReviews",
+          {
+            assignmentId,
+            reviewId,
+          },
+        );
+        await ctx.db.insert("guesses", {
+          userId: otherId,
+          assignmentReviewId,
+          ratingId,
+          seasonId,
+          createdAt: 160,
+        });
+        const unratedReviewId = await ctx.db.insert("reviews", {
+          movieId,
+        });
+        await ctx.db.insert("assignmentReviews", {
+          assignmentId,
+          reviewId: unratedReviewId,
+        });
+        const gamblingTypeId = await ctx.db.insert(
+          "gamblingTypes",
+          {
+            lookupId: "default",
+            normalizedLookupId: "default",
+            title: "Default wager",
+            description: "Default",
+            multiplier: 2,
+            isActive: true,
+            createdAt: 1,
+          },
+        );
+        const awardPointId = await ctx.db.insert("points", {
+          userId: memberId,
+          seasonId,
+          reason: "Wager",
+          earnedAt: 170,
+          adjustment: 10,
+        });
+        await ctx.db.insert("gamblingEntries", {
+          userId: memberId,
+          assignmentId,
+          points: 5,
+          createdAt: 170,
+          awardPointId,
+          seasonId,
+          gamblingTypeId,
+          targetUserId: otherId,
+          status: "won",
+        });
+        const plainWager = await ctx.db.insert("gamblingEntries", {
+          userId: otherId,
+          assignmentId,
+          points: 2,
+          createdAt: 180,
+          seasonId,
+          gamblingTypeId,
+          status: "pending",
+        });
+        return [manual, external, reviewId, plainWager] as const;
+      },
+    );
+    const deletedAssignmentId = await seedAssignment(t, {
+      userId: otherId,
+      movieId,
+      episodeId,
+      slug: "deleted-workbench-assignment",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.delete("assignments", deletedAssignmentId);
+    });
+    await advanceToS3(t);
+    const admin = t.withIdentity(ADMIN_IDENTITY);
+
+    await expect(
+      admin.query(api.assignments.admin.getWorkbench, {
+        id: deletedAssignmentId,
+      }),
+    ).resolves.toBeNull();
+    await expectDomainError(
+      admin.query(api.assignments.admin.listAudioMessages, {
+        assignmentId: deletedAssignmentId,
+        paginationOpts: { numItems: 1, cursor: null },
+      }),
+      "NOT_FOUND",
+    );
+
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.updateSlug, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        slug: "changed",
+        expectedSlug: "stale-slug",
+      }),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.setType, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        type: "BONUS",
+        expectedType: "EXTRA_CREDIT",
+      }),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.removeIfUnreferenced, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        expected: {
+          type: "BONUS",
+          slug: "assignment-workbench",
+          userId: memberId,
+          movieId,
+          episodeId,
+        },
+      }),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      admin.query(api.assignments.admin.listAudioMessages, {
+        assignmentId,
+        paginationOpts: { numItems: 51, cursor: null },
+      }),
+      "VALIDATION_FAILED",
+    );
+    const page = await admin.query(
+      api.assignments.admin.listAudioMessages,
+      {
+        assignmentId,
+        paginationOpts: { numItems: 1, cursor: null },
+      },
+    );
+    expect(page.page).toHaveLength(1);
+    expect(page.page[0]).toMatchObject({
+      assignmentId,
+      user: { id: memberId },
+    });
+    const workbench = await admin.query(
+      api.assignments.admin.getWorkbench,
+      { id: assignmentId },
+    );
+    expect(workbench).toMatchObject({
+      assignment: { id: assignmentId },
+    });
+    if (workbench === null) {
+      throw new Error("Expected assignment workbench.");
+    }
+    expect(workbench.reviews).toHaveLength(2);
+    const ratedReview = workbench.reviews.find(
+      (review) => review.reviewer?.id === memberId,
+    );
+    const unratedReview = workbench.reviews.find(
+      (review) => review.reviewer === null,
+    );
+    expect(ratedReview).toMatchObject({
+      reviewer: { id: memberId, name: "Syllabus Member" },
+      rating: { value: 3 },
+      guesses: [{ user: { id: otherId } }],
+    });
+    expect(unratedReview).toMatchObject({
+      reviewer: null,
+      rating: null,
+      reviewedAt: null,
+      guesses: [],
+    });
+    const wonWager = workbench.wagers.find(
+      (wager) => wager.status === "won",
+    );
+    const pendingWager = workbench.wagers.find(
+      (wager) => wager.status === "pending",
+    );
+    expect(wonWager).toMatchObject({
+      user: { id: memberId },
+      targetUser: { id: otherId },
+      status: "won",
+      awardAdjustment: 10,
+    });
+    expect(pendingWager).toMatchObject({
+      user: { id: otherId },
+      targetUser: null,
+      status: "pending",
+      awardAdjustment: null,
+    });
+    await t.run(async (ctx) => {
+      const showId = await ctx.db.insert("shows", {
+        title: "Wrong target",
+        normalizedTitle: "wrong target",
+        year: 2024,
+        url: "https://catalog.example.test/wrong-target",
+      });
+      await ctx.db.patch("reviews", reviewId, { showId });
+    });
+    await expectDomainError(
+      admin.query(api.assignments.admin.getWorkbench, {
+        id: assignmentId,
+      }),
+      "CONFLICT",
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.patch("reviews", reviewId, {
+        showId: undefined,
+      });
+      await ctx.db.patch("gamblingEntries", plainWagerId, {
+        status: "unsupported",
+      });
+    });
+    await expectDomainError(
+      admin.query(api.assignments.admin.getWorkbench, {
+        id: assignmentId,
+      }),
+      "CONFLICT",
+    );
+
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.removeAudioMessage, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: manualAudioId,
+        expected: {
+          assignmentId,
+          userId: memberId,
+          url: "https://audio.example.test/stale.webm",
+          fileKey: null,
+          createdAt: 100,
+        },
+      }),
+      "CONFLICT",
+    );
+    await expect(
+      admin.mutation(api.assignments.admin.removeAudioMessage, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: manualAudioId,
+        expected: {
+          assignmentId,
+          userId: memberId,
+          url: "https://audio.example.test/manual.webm",
+          fileKey: null,
+          createdAt: 100,
+        },
+      }),
+    ).resolves.toEqual({ id: manualAudioId });
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.removeAudioMessage, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: manualAudioId,
+        expected: {
+          assignmentId,
+          userId: memberId,
+          url: "https://audio.example.test/manual.webm",
+          fileKey: null,
+          createdAt: 100,
+        },
+      }),
+      "NOT_FOUND",
+    );
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.removeAudioMessage, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: externalAudioId,
+        expected: {
+          assignmentId,
+          userId: memberId,
+          url: "https://audio.example.test/external.webm",
+          fileKey: "external-audio-key",
+          createdAt: 200,
+        },
+      }),
+      "CONFLICT",
+      { externalCleanupRequired: true },
     );
   });
 

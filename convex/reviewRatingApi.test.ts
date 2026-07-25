@@ -820,6 +820,18 @@ describe("rating and review API", () => {
         },
       ),
     ).resolves.toMatchObject({ rating: { id: ratingB } });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.reviews.admin.setRating,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          reviewId: extraA.review.id,
+          ratingId: null,
+          expectedRatingId: ratingA,
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.reviews.admin.setRating,
@@ -827,6 +839,7 @@ describe("rating and review API", () => {
           clientApiVersion: BBPC_API_VERSION,
           reviewId: extraA.review.id,
           ratingId: null,
+          expectedRatingId: ratingB,
         },
       ),
     ).resolves.toMatchObject({ rating: null });
