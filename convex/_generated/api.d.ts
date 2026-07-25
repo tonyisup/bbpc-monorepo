@@ -102,6 +102,7 @@ import type * as migration_reviewReconciliation from "../migration/reviewReconci
 import type * as migration_reviews from "../migration/reviews.js";
 import type * as migration_runtime from "../migration/runtime.js";
 import type * as migration_scrub from "../migration/scrub.js";
+import type * as pipeline_content from "../pipeline/content.js";
 import type * as pipeline_status from "../pipeline/status.js";
 import type * as rankings_items from "../rankings/items.js";
 import type * as rankings_lists from "../rankings/lists.js";
@@ -233,6 +234,7 @@ declare const fullApi: ApiFromModules<{
   "migration/reviews": typeof migration_reviews;
   "migration/runtime": typeof migration_runtime;
   "migration/scrub": typeof migration_scrub;
+  "pipeline/content": typeof pipeline_content;
   "pipeline/status": typeof pipeline_status;
   "rankings/items": typeof rankings_items;
   "rankings/lists": typeof rankings_lists;

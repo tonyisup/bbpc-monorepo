@@ -376,6 +376,28 @@ permissions are bounded, normalized capability names. Both operations are run-sc
 idempotent, conflict-safe, and emit value-free audit evidence without enabling ordinary
 first-use linking before S3.
 
+## Pipeline content API
+
+The least-privilege pipeline principal uses authenticated Convex functions instead of
+direct database access. Its JWT must resolve to an active, pre-provisioned service
+principal with `pipeline:publish`; the configured Convex auth provider also requires
+the token audience to be `convex`. Read access is available only to that registered
+principal, while mutations additionally require S3/S4 application writes and the
+pinned client API version.
+
+The content surface provides exact episode and episode-context reads by date or ID,
+native paginated movie-catalog and episode-date scans, and poster lookup for at most 50
+distinct movie IDs. Catalog and date pages are limited to 100 rows, episode assignment
+and extra-review hydration is limited to 50 relationships of each kind, and duplicate
+episode dates or broken relationships fail closed.
+
+`publishEpisodeSeo` uses an exact previously-read SEO snapshot for optimistic
+concurrency. A retry whose desired state is already present succeeds without writing a
+second audit event; otherwise stale state conflicts. `upsertEpisodeFromAudio` is
+idempotent for an existing date with identical number and title, allocates the slug on
+the server for a new published episode, and rejects metadata drift. Operation IDs are
+bounded value-free labels and appear only in audit metadata.
+
 ## Quotabunga API
 
 Authenticated members can read their current `next` or `recording` episode submission.
