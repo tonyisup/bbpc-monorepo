@@ -252,6 +252,32 @@ already-claimed state. S1/S2-only internal operations pre-provision exact smoke 
 the bounded least-privilege pipeline principal. Both paths are idempotent and emit audit
 evidence without email, subject, or token values.
 
+## Whole-system offline acceptance
+
+The final offline matrix on 2026-07-24 passed without changing the preserved migrated
+dataset:
+
+- `bbpc`: 50 tests, strict TypeScript, lint with no errors, and successful SQL-default
+  and Convex-mode production builds with all 659 static pages generated;
+- `bbpc-admin`: 81 tests, strict TypeScript, the 189-procedure authorization inventory,
+  lint with no errors, and successful builds in both modes with all 26 static pages
+  generated;
+- `bbpc-convex`: 306 tests, 56 local migration-extractor tests, query/access audits,
+  TypeScript, lint, and the six-file package contract plus consumer typecheck; and
+- `bbpc-pipeline`: 127 tests plus 15 subtests, entry-point compilation, and no
+  application SQL or `pyodbc` dependency.
+
+The Convex-mode frontend builds used a syntactically valid, non-live Clerk
+publishable-key fixture supplied only through their process environments. This proves
+static compilation and backend-selector isolation, not live authentication.
+
+An aggregate-only local control query reconfirmed exactly one S1 system state for this
+run, application writes disabled, no recorded first application write, and zero service
+principals. The pipeline now has a read-only M2M readiness probe that validates the
+JWT's issuer, subject, `aud=convex`, and expiry; derives the canonical Convex token
+identifier; and never prints the token, machine secret, unrelated claims, or migrated
+row fields. It has not been run with a real Clerk credential.
+
 ## Preserved gate
 
 Raw staging, checkpoints, migration records, and S1 control state remain intact. The
