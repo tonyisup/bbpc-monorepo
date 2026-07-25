@@ -692,6 +692,63 @@ describe("point API", () => {
     expect(linked).toMatchObject({
       assignment: { id: assignmentId },
     });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.searchAssignmentsForLink,
+        { query: "Movie 2" },
+      ),
+    ).resolves.toMatchObject([{ id: assignmentId }]);
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.searchAssignmentsForLink,
+        { query: "02" },
+      ),
+    ).resolves.toMatchObject([{ id: assignmentId }]);
+    const duplicateEpisodeId = await t.run(async (ctx) => {
+      return await ctx.db.insert("episodes", {
+        number: 2,
+        title: "Duplicate episode 2",
+        status: "pending",
+        slug: "duplicate-episode-2",
+        normalizedSlug: "duplicate-episode-2",
+      });
+    });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.searchAssignmentsForLink,
+        { query: "02" },
+      ),
+      "CONFLICT",
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.delete("episodes", duplicateEpisodeId);
+    });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.searchAssignmentsForLink,
+        { query: "  " },
+      ),
+    ).resolves.toEqual([]);
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.searchAssignmentsForLink,
+        { query: "x".repeat(101) },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.getWorkbench,
+        { id: pointId },
+      ),
+    ).resolves.toMatchObject({
+      point: {
+        id: pointId,
+        assignmentLinks: [{ id: linked.id }],
+      },
+      impact: { assignmentLinkCount: 1 },
+      guessAssignments: [],
+    });
     await expectDomainError(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.points.linkAssignment,
@@ -703,11 +760,38 @@ describe("point API", () => {
       ),
       "CONFLICT",
     );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.points.update,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: pointId,
+          expected: {
+            userId: memberId,
+            seasonId,
+            reason: null,
+            adjustment: 5,
+            gamePointTypeId: pointTypeId,
+            earnedAt: 999,
+          },
+          adjustment: 1,
+        },
+      ),
+      "CONFLICT",
+    );
     const updated = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.games.points.update,
       {
         clientApiVersion: BBPC_API_VERSION,
         id: pointId,
+        expected: {
+          userId: memberId,
+          seasonId,
+          reason: null,
+          adjustment: 5,
+          gamePointTypeId: pointTypeId,
+          earnedAt: 1,
+        },
         reason: null,
         adjustment: null,
         gamePointTypeId: null,
@@ -746,6 +830,31 @@ describe("point API", () => {
       gamePointType: { id: pointTypeId },
       total: 12,
     });
+    const otherPointId = await seedPoint(t, {
+      userId: otherId,
+      seasonId,
+      pointTypeId,
+    });
+    const otherLink = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.games.points.linkAssignment,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        pointId: otherPointId,
+        assignmentId,
+      },
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.points.unlinkAssignment,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          pointId,
+          assignmentId,
+          expectedLinkId: otherLink.id,
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.points.unlinkAssignment,
@@ -753,9 +862,22 @@ describe("point API", () => {
           clientApiVersion: BBPC_API_VERSION,
           pointId,
           assignmentId,
+          expectedLinkId: linked.id,
         },
       ),
     ).resolves.toEqual({ count: 1 });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.points.unlinkAssignment,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          pointId,
+          assignmentId,
+          expectedLinkId: linked.id,
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.points.unlinkAssignment,
@@ -784,6 +906,79 @@ describe("point API", () => {
       ),
       "CONFLICT",
     );
+  });
+
+  test("fails point workbench closed on broken guess relationships", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const { pointTypeId, seasonId } = await seedGameFoundation(t);
+    const { assignmentId, movieId } = await seedAssignment(
+      t,
+      otherId,
+      "4",
+    );
+    await advanceToS3(t);
+    const pointId = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      pointTypeId,
+    });
+    const ids = await t.run(async (ctx) => {
+      const ratingId = await ctx.db.insert("ratings", {
+        name: "Excellent",
+        value: 5,
+      });
+      const reviewId = await ctx.db.insert("reviews", {
+        userId: memberId,
+        movieId,
+        reviewedAt: 1,
+      });
+      const assignmentReviewId = await ctx.db.insert(
+        "assignmentReviews",
+        { assignmentId, reviewId },
+      );
+      const guessId = await ctx.db.insert("guesses", {
+        ratingId,
+        createdAt: 1,
+        userId: memberId,
+        assignmentReviewId,
+        seasonId,
+        pointId,
+      });
+      return { assignmentReviewId, guessId, reviewId };
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.delete(
+        "assignmentReviews",
+        ids.assignmentReviewId,
+      );
+    });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.getWorkbench,
+        { id: pointId },
+      ),
+      "CONFLICT",
+    );
+    const replacementReviewId = await t.run(async (ctx) => {
+      const assignmentReviewId = await ctx.db.insert(
+        "assignmentReviews",
+        { assignmentId, reviewId: ids.reviewId },
+      );
+      await ctx.db.patch("guesses", ids.guessId, {
+        assignmentReviewId,
+      });
+      await ctx.db.delete("assignments", assignmentId);
+      return assignmentReviewId;
+    });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.getWorkbench,
+        { id: pointId },
+      ),
+      "CONFLICT",
+    );
+    expect(replacementReviewId).toBeDefined();
   });
 
   test("deletes a point while clearing every canonical award relationship", async () => {
@@ -873,6 +1068,7 @@ describe("point API", () => {
       );
       return {
         assignmentPointLinkId,
+        assignmentReviewId,
         guessId,
         gamblingEntryId,
         tagVoteId,
@@ -891,12 +1087,72 @@ describe("point API", () => {
       tagVotes: [{ id: relatedIds.tagVoteId, tag: "funny" }],
       quoteSubmissions: [{ id: relatedIds.quoteSubmissionId }],
     });
+    const expected = {
+      userId: memberId,
+      seasonId,
+      reason: null,
+      adjustment: 0,
+      gamePointTypeId: pointTypeId,
+      earnedAt: 1,
+    };
+    const expectedImpact = {
+      assignmentLinkCount: 1,
+      guessCount: 1,
+      gamblingEntryCount: 1,
+      tagVoteCount: 1,
+      quoteSubmissionCount: 1,
+    };
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.getWorkbench,
+        { id: pointId },
+      ),
+    ).resolves.toMatchObject({
+      point: { id: pointId },
+      impact: expectedImpact,
+      guessAssignments: [
+        {
+          id: relatedIds.guessId,
+          assignmentReviewId: relatedIds.assignmentReviewId,
+          assignment: { id: assignmentId },
+        },
+      ],
+    });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.points.remove,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: pointId,
+          expected: { ...expected, earnedAt: 999 },
+          expectedImpact,
+        },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.points.remove,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: pointId,
+          expected,
+          expectedImpact: {
+            ...expectedImpact,
+            assignmentLinkCount: 0,
+          },
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.points.remove,
         {
           clientApiVersion: BBPC_API_VERSION,
           id: pointId,
+          expected,
+          expectedImpact,
         },
       ),
     ).resolves.toEqual({ id: pointId });
@@ -1032,6 +1288,12 @@ describe("point API", () => {
     await expect(
       t.withIdentity(ADMIN_IDENTITY).query(
         api.games.points.getById,
+        { id: noReason.id },
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.points.getWorkbench,
         { id: noReason.id },
       ),
     ).resolves.toBeNull();

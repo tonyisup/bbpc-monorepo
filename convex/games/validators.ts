@@ -96,6 +96,35 @@ export const pointDetailValidator = pointCoreValidator.extend({
   ),
 });
 
+export const pointEditableSnapshotValidator = v.object({
+  userId: v.id("users"),
+  seasonId: v.id("seasons"),
+  reason: nullableStringValidator,
+  adjustment: nullableNumberValidator,
+  gamePointTypeId: v.union(v.id("gamePointTypes"), v.null()),
+  earnedAt: v.number(),
+});
+
+export const pointDeleteImpactValidator = v.object({
+  assignmentLinkCount: v.number(),
+  guessCount: v.number(),
+  gamblingEntryCount: v.number(),
+  tagVoteCount: v.number(),
+  quoteSubmissionCount: v.number(),
+});
+
+export const pointWorkbenchValidator = v.object({
+  point: pointDetailValidator,
+  impact: pointDeleteImpactValidator,
+  guessAssignments: v.array(
+    v.object({
+      id: v.id("guesses"),
+      assignmentReviewId: v.id("assignmentReviews"),
+      assignment: assignmentDetailValidator,
+    }),
+  ),
+});
+
 export const pointSeasonSelectorValidator = v.union(
   v.object({ kind: v.literal("all") }),
   v.object({

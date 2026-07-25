@@ -6,6 +6,7 @@ import { v } from "convex/values";
 
 import type { Doc, Id } from "../_generated/dataModel.js";
 import { hydrateAssignment } from "../assignments/readModel.js";
+import { assignmentDetailValidator } from "../assignments/validators.js";
 import { adminMutation, adminQuery } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
@@ -39,10 +40,13 @@ import {
 import {
   assignmentPointLinkValidator,
   assignmentPointTotalValidator,
+  pointDeleteImpactValidator,
   pointCoreValidator,
   pointDetailValidator,
+  pointEditableSnapshotValidator,
   pointSeasonSelectorValidator,
   pointSeasonTargetValidator,
+  pointWorkbenchValidator,
 } from "./validators.js";
 import { requireSeason } from "./writeModel.js";
 
@@ -50,6 +54,77 @@ const assignmentPointWithPointValidator = v.object({
   id: v.id("assignmentPointLinks"),
   point: pointCoreValidator,
 });
+
+const MAX_POINT_ASSIGNMENT_SEARCH_QUERY = 100;
+const MAX_POINT_ASSIGNMENT_SEARCH_SOURCES = 20;
+const MAX_POINT_ASSIGNMENT_SEARCH_RESULTS = 30;
+
+function nullable<T>(value: T | undefined): T | null {
+  return value ?? null;
+}
+
+function pointEditableSnapshot(point: Doc<"points">) {
+  return {
+    userId: point.userId,
+    seasonId: point.seasonId,
+    reason: nullable(point.reason),
+    adjustment: point.adjustment,
+    gamePointTypeId: nullable(point.gamePointTypeId),
+    earnedAt: point.earnedAt,
+  };
+}
+
+function pointDeleteImpact(
+  detail: Awaited<ReturnType<typeof hydratePointDetail>>,
+) {
+  return {
+    assignmentLinkCount: detail.assignmentLinks.length,
+    guessCount: detail.guesses.length,
+    gamblingEntryCount: detail.gamblingEntries.length,
+    tagVoteCount: detail.tagVotes.length,
+    quoteSubmissionCount: detail.quoteSubmissions.length,
+  };
+}
+
+function snapshotsMatch(
+  actual: ReturnType<typeof pointEditableSnapshot>,
+  expected: {
+    userId: Id<"users">;
+    seasonId: Id<"seasons">;
+    reason: string | null;
+    adjustment: number | null;
+    gamePointTypeId: Id<"gamePointTypes"> | null;
+    earnedAt: number;
+  },
+): boolean {
+  return (
+    actual.userId === expected.userId &&
+    actual.seasonId === expected.seasonId &&
+    actual.reason === expected.reason &&
+    actual.adjustment === expected.adjustment &&
+    actual.gamePointTypeId === expected.gamePointTypeId &&
+    actual.earnedAt === expected.earnedAt
+  );
+}
+
+function impactsMatch(
+  actual: ReturnType<typeof pointDeleteImpact>,
+  expected: {
+    assignmentLinkCount: number;
+    guessCount: number;
+    gamblingEntryCount: number;
+    tagVoteCount: number;
+    quoteSubmissionCount: number;
+  },
+): boolean {
+  return (
+    actual.assignmentLinkCount === expected.assignmentLinkCount &&
+    actual.guessCount === expected.guessCount &&
+    actual.gamblingEntryCount === expected.gamblingEntryCount &&
+    actual.tagVoteCount === expected.tagVoteCount &&
+    actual.quoteSubmissionCount === expected.quoteSubmissionCount
+  );
+}
 
 function validateDistinctIdList(
   ids: string[],
@@ -90,6 +165,147 @@ export const getById = adminQuery({
     return point === null
       ? null
       : await hydratePointDetail(ctx, point);
+  },
+});
+
+export const getWorkbench = adminQuery({
+  args: { id: v.id("points") },
+  returns: v.union(pointWorkbenchValidator, v.null()),
+  handler: async (ctx, args) => {
+    const point = await ctx.db.get("points", args.id);
+    if (point === null) {
+      return null;
+    }
+    const detail = await hydratePointDetail(ctx, point);
+    const guessAssignments = [];
+    for (const guess of detail.guesses) {
+      const assignmentReview = await ctx.db.get(
+        "assignmentReviews",
+        guess.assignmentReviewId,
+      );
+      if (assignmentReview === null) {
+        domainError(
+          "CONFLICT",
+          "Point workbench found a guess with a missing review relationship.",
+          { details: { guessId: guess.id } },
+        );
+      }
+      const assignment = await ctx.db.get(
+        "assignments",
+        assignmentReview.assignmentId,
+      );
+      if (assignment === null) {
+        domainError(
+          "CONFLICT",
+          "Point workbench found a guess with a missing assignment relationship.",
+          { details: { guessId: guess.id } },
+        );
+      }
+      guessAssignments.push({
+        id: guess.id,
+        assignmentReviewId: assignmentReview._id,
+        assignment: await hydrateAssignment(ctx, assignment),
+      });
+    }
+    return {
+      point: detail,
+      impact: pointDeleteImpact(detail),
+      guessAssignments,
+    };
+  },
+});
+
+export const searchAssignmentsForLink = adminQuery({
+  args: { query: v.string() },
+  returns: v.array(assignmentDetailValidator),
+  handler: async (ctx, args) => {
+    const query = args.query.trim().normalize("NFKC");
+    if (query.length < 2) {
+      return [];
+    }
+    if (query.length > MAX_POINT_ASSIGNMENT_SEARCH_QUERY) {
+      domainError(
+        "VALIDATION_FAILED",
+        `Assignment search cannot exceed ${String(MAX_POINT_ASSIGNMENT_SEARCH_QUERY)} characters.`,
+      );
+    }
+    const [movies, titleEpisodes] = await Promise.all([
+      ctx.db
+        .query("movies")
+        .withSearchIndex("search_title", (search) =>
+          search.search("title", query),
+        )
+        .take(MAX_POINT_ASSIGNMENT_SEARCH_SOURCES),
+      ctx.db
+        .query("episodes")
+        .withSearchIndex("search_title", (search) =>
+          search.search("title", query),
+        )
+        .take(MAX_POINT_ASSIGNMENT_SEARCH_SOURCES),
+    ]);
+    const episodeNumber = /^-?\d+$/u.test(query)
+      ? Number(query)
+      : null;
+    const exactEpisodes =
+      episodeNumber !== null && Number.isSafeInteger(episodeNumber)
+        ? await ctx.db
+            .query("episodes")
+            .withIndex("by_number", (index) =>
+              index.eq("number", episodeNumber),
+            )
+            .take(2)
+        : [];
+    if (exactEpisodes.length > 1) {
+      domainError(
+        "CONFLICT",
+        "Assignment search found duplicate episode numbers.",
+        { details: { episodeNumber } },
+      );
+    }
+    const exactEpisode = exactEpisodes.at(0);
+    const episodes = new Map(
+      titleEpisodes.map((episode) => [episode._id, episode]),
+    );
+    if (exactEpisode !== undefined) {
+      episodes.set(exactEpisode._id, exactEpisode);
+    }
+    const assignments = new Map<
+      Id<"assignments">,
+      Doc<"assignments">
+    >();
+    for (const movie of movies) {
+      const matches = await ctx.db
+        .query("assignments")
+        .withIndex("by_movieId", (index) =>
+          index.eq("movieId", movie._id),
+        )
+        .take(MAX_POINT_ASSIGNMENT_SEARCH_RESULTS);
+      for (const assignment of matches) {
+        assignments.set(assignment._id, assignment);
+      }
+    }
+    for (const episode of episodes.values()) {
+      const matches = await ctx.db
+        .query("assignments")
+        .withIndex("by_episodeId", (index) =>
+          index.eq("episodeId", episode._id),
+        )
+        .take(MAX_POINT_ASSIGNMENT_SEARCH_RESULTS);
+      for (const assignment of matches) {
+        assignments.set(assignment._id, assignment);
+      }
+    }
+    const results = await Promise.all(
+      [...assignments.values()]
+        .slice(0, MAX_POINT_ASSIGNMENT_SEARCH_RESULTS)
+        .map((assignment) => hydrateAssignment(ctx, assignment)),
+    );
+    return results.sort(
+      (left, right) =>
+        right.episode.number - left.episode.number ||
+        left.movie.title.localeCompare(right.movie.title) ||
+        left.id.localeCompare(right.id),
+    );
   },
 });
 
@@ -470,6 +686,7 @@ export const createForAssignmentByLookup = adminMutation({
 export const update = adminMutation({
   args: {
     id: v.id("points"),
+    expected: v.optional(pointEditableSnapshotValidator),
     reason: v.optional(v.union(v.string(), v.null())),
     adjustment: v.optional(v.union(v.number(), v.null())),
     gamePointTypeId: v.optional(
@@ -480,6 +697,15 @@ export const update = adminMutation({
   returns: pointCoreValidator,
   handler: async (ctx, args) => {
     const point = await requirePoint(ctx, args.id);
+    if (
+      args.expected !== undefined &&
+      !snapshotsMatch(pointEditableSnapshot(point), args.expected)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The point changed after it was loaded.",
+      );
+    }
     const patch: {
       reason?: string | undefined;
       adjustment?: number | null;
@@ -578,6 +804,7 @@ export const unlinkAssignment = adminMutation({
   args: {
     pointId: v.id("points"),
     assignmentId: v.id("assignments"),
+    expectedLinkId: v.optional(v.id("assignmentPointLinks")),
   },
   returns: v.object({ count: v.number() }),
   handler: async (ctx, args) => {
@@ -595,7 +822,22 @@ export const unlinkAssignment = adminMutation({
       )
       .first();
     if (link === null) {
+      if (args.expectedLinkId !== undefined) {
+        domainError(
+          "CONFLICT",
+          "The assignment-point link no longer exists.",
+        );
+      }
       return { count: 0 };
+    }
+    if (
+      args.expectedLinkId !== undefined &&
+      link._id !== args.expectedLinkId
+    ) {
+      domainError(
+        "CONFLICT",
+        "The assignment-point link changed after it was loaded.",
+      );
     }
     await ctx.db.delete("assignmentPointLinks", link._id);
     await writeAuditEvent(ctx, {
@@ -611,10 +853,34 @@ export const unlinkAssignment = adminMutation({
 });
 
 export const remove = adminMutation({
-  args: { id: v.id("points") },
+  args: {
+    id: v.id("points"),
+    expected: v.optional(pointEditableSnapshotValidator),
+    expectedImpact: v.optional(pointDeleteImpactValidator),
+  },
   returns: v.object({ id: v.id("points") }),
   handler: async (ctx, args) => {
     const point = await requirePoint(ctx, args.id);
+    if (
+      args.expected !== undefined &&
+      !snapshotsMatch(pointEditableSnapshot(point), args.expected)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The point changed after deletion was confirmed.",
+      );
+    }
+    if (args.expectedImpact !== undefined) {
+      const detail = await hydratePointDetail(ctx, point);
+      const actualImpact = pointDeleteImpact(detail);
+      if (!impactsMatch(actualImpact, args.expectedImpact)) {
+        domainError(
+          "CONFLICT",
+          "The point deletion impact changed after confirmation.",
+          { details: actualImpact },
+        );
+      }
+    }
     const counts = await deletePointAndClearRelationships(ctx, point);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
