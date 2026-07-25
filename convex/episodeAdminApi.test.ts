@@ -31,6 +31,7 @@ type TestBackend = ReturnType<typeof createTestBackend>;
 async function expectDomainError(
   promise: Promise<unknown>,
   expectedCode: string,
+  details?: Record<string, unknown>,
 ): Promise<void> {
   try {
     await promise;
@@ -39,7 +40,10 @@ async function expectDomainError(
     if (!(error instanceof ConvexError)) {
       throw error;
     }
-    expect(error.data).toMatchObject({ code: expectedCode });
+    expect(error.data).toMatchObject({
+      code: expectedCode,
+      ...(details === undefined ? {} : { details }),
+    });
     return;
   }
   throw new Error(`Expected domain error ${expectedCode}`);
@@ -310,6 +314,19 @@ describe("administrator episode API", () => {
         seoKeywords: " one,two ",
         seoTitle: " SEO title ",
         slug: " Custom Slug ",
+        expected: {
+          number: 7,
+          title: "Original",
+          recording: null,
+          date: null,
+          description: null,
+          status: null,
+          notes: null,
+          seoDescription: null,
+          seoKeywords: null,
+          seoTitle: null,
+          slug: "episode-7-original",
+        },
       },
     );
     expect(updated).toMatchObject({
@@ -325,6 +342,30 @@ describe("administrator episode API", () => {
       seoTitle: "SEO title",
       slug: "custom-slug",
     });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.episodes.admin.updateEpisode,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: episodeId,
+          title: "Stale overwrite",
+          expected: {
+            number: 7,
+            title: "Original",
+            recording: null,
+            date: null,
+            description: null,
+            status: null,
+            notes: null,
+            seoDescription: null,
+            seoKeywords: null,
+            seoTitle: null,
+            slug: "episode-7-original",
+          },
+        },
+      ),
+      "CONFLICT",
+    );
 
     const cleared = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.episodes.admin.updateEpisode,
@@ -677,12 +718,32 @@ describe("administrator episode API", () => {
       url: "https://example.test/episode",
       text: "Episode Link",
     });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.episodes.admin.removeLink,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: link.id,
+          expected: {
+            episodeId,
+            url: link.url,
+            text: "Stale label",
+          },
+        },
+      ),
+      "CONFLICT",
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.episodes.admin.removeLink,
         {
           clientApiVersion: BBPC_API_VERSION,
           id: link.id,
+          expected: {
+            episodeId,
+            url: link.url,
+            text: link.text,
+          },
         },
       ),
     ).resolves.toEqual({ id: link.id });
@@ -827,6 +888,48 @@ describe("administrator episode API", () => {
     );
     expect(page.page.every((message) => message.user.id === adminId))
       .toBe(true);
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.episodes.admin.removeAudioMessage,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: second.id,
+          expected: {
+            episodeId,
+            url: second.url,
+            fileKey: second.fileKey,
+            createdAt: second.createdAt,
+          },
+        },
+      ),
+    ).resolves.toEqual({ id: second.id });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.episodes.admin.removeAudioMessage,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: first.id,
+          expected: {
+            episodeId,
+            url: first.url,
+            fileKey: first.fileKey,
+            createdAt: first.createdAt,
+          },
+        },
+      ),
+      "CONFLICT",
+      { externalCleanupRequired: true },
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.episodes.admin.listAudioMessages,
+        {
+          episodeId,
+          paginationOpts: { cursor: null, numItems: 51 },
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
   });
 
   test("validates audio metadata, parents, limits, and hydration", async () => {

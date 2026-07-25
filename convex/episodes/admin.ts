@@ -24,7 +24,10 @@ import {
   validateOptionalEpisodeText,
   validatePlainDate,
 } from "./adminWriteModel.js";
-import { MAX_AUDIO_MESSAGES_PER_USER_EPISODE } from "./limits.js";
+import {
+  MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
+  validateEpisodeAudioPageSize,
+} from "./limits.js";
 import { hydrateAdminEpisode } from "./readModel.js";
 import {
   episodeAdminAudioMessageValidator,
@@ -44,6 +47,42 @@ function toAdminUser(user: Doc<"users">) {
     image: nullable(user.image),
     status: user.status,
   };
+}
+
+function assertEpisodeSnapshot(
+  episode: Doc<"episodes">,
+  expected: {
+    number: number;
+    title: string;
+    recording: string | null;
+    date: string | null;
+    description: string | null;
+    status: string | null;
+    notes: string | null;
+    seoDescription: string | null;
+    seoKeywords: string | null;
+    seoTitle: string | null;
+    slug: string | null;
+  },
+): void {
+  if (
+    episode.number !== expected.number ||
+    episode.title !== expected.title ||
+    nullable(episode.recording) !== expected.recording ||
+    nullable(episode.date) !== expected.date ||
+    nullable(episode.description) !== expected.description ||
+    nullable(episode.status) !== expected.status ||
+    nullable(episode.notes) !== expected.notes ||
+    nullable(episode.seoDescription) !== expected.seoDescription ||
+    nullable(episode.seoKeywords) !== expected.seoKeywords ||
+    nullable(episode.seoTitle) !== expected.seoTitle ||
+    nullable(episode.slug) !== expected.slug
+  ) {
+    domainError(
+      "CONFLICT",
+      "The episode changed after it was loaded. Refresh before saving.",
+    );
+  }
 }
 
 async function hydrateAdminAudioMessage(
@@ -106,6 +145,7 @@ export const listAudioMessages = adminQuery({
     episodeAdminAudioMessageValidator,
   ),
   handler: async (ctx, args) => {
+    validateEpisodeAudioPageSize(args.paginationOpts.numItems);
     const episode = await ctx.db.get("episodes", args.episodeId);
     if (episode === null) {
       domainError("NOT_FOUND", "The episode is unavailable.");
@@ -171,10 +211,28 @@ export const updateEpisode = adminMutation({
     seoKeywords: v.optional(v.union(v.string(), v.null())),
     seoTitle: v.optional(v.union(v.string(), v.null())),
     slug: v.optional(v.union(v.string(), v.null())),
+    expected: v.optional(
+      v.object({
+        number: v.number(),
+        title: v.string(),
+        recording: v.union(v.string(), v.null()),
+        date: v.union(v.string(), v.null()),
+        description: v.union(v.string(), v.null()),
+        status: v.union(v.string(), v.null()),
+        notes: v.union(v.string(), v.null()),
+        seoDescription: v.union(v.string(), v.null()),
+        seoKeywords: v.union(v.string(), v.null()),
+        seoTitle: v.union(v.string(), v.null()),
+        slug: v.union(v.string(), v.null()),
+      }),
+    ),
   },
   returns: episodeAdminDetailValidator,
   handler: async (ctx, args) => {
     const episode = await requireEpisode(ctx, args.id);
+    if (args.expected !== undefined) {
+      assertEpisodeSnapshot(episode, args.expected);
+    }
     const patch: {
       number?: number;
       title?: string;
@@ -317,12 +375,32 @@ export const addLink = adminMutation({
 });
 
 export const removeLink = adminMutation({
-  args: { id: v.id("episodeLinks") },
+  args: {
+    id: v.id("episodeLinks"),
+    expected: v.optional(
+      v.object({
+        episodeId: v.union(v.id("episodes"), v.null()),
+        url: v.string(),
+        text: v.string(),
+      }),
+    ),
+  },
   returns: v.object({ id: v.id("episodeLinks") }),
   handler: async (ctx, args) => {
     const link = await ctx.db.get("episodeLinks", args.id);
     if (link === null) {
       domainError("NOT_FOUND", "The episode link is unavailable.");
+    }
+    if (
+      args.expected !== undefined &&
+      (nullable(link.episodeId) !== args.expected.episodeId ||
+        link.url !== args.expected.url ||
+        link.text !== args.expected.text)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The episode link changed after it was loaded.",
+      );
     }
     await ctx.db.delete("episodeLinks", link._id);
     await writeAuditEvent(ctx, {
@@ -404,5 +482,60 @@ export const addAudioMessage = adminMutation({
       notes: nullable(notes),
       user: toAdminUser(ctx.actor.user),
     };
+  },
+});
+
+export const removeAudioMessage = adminMutation({
+  args: {
+    id: v.id("episodeAudioMessages"),
+    expected: v.object({
+      episodeId: v.union(v.id("episodes"), v.null()),
+      url: v.string(),
+      fileKey: v.union(v.string(), v.null()),
+      createdAt: v.number(),
+    }),
+  },
+  returns: v.object({ id: v.id("episodeAudioMessages") }),
+  handler: async (ctx, args) => {
+    const message = await ctx.db.get(
+      "episodeAudioMessages",
+      args.id,
+    );
+    if (message === null) {
+      domainError(
+        "NOT_FOUND",
+        "The episode audio message is unavailable.",
+      );
+    }
+    if (
+      nullable(message.episodeId) !== args.expected.episodeId ||
+      message.url !== args.expected.url ||
+      nullable(message.fileKey) !== args.expected.fileKey ||
+      message.createdAt !== args.expected.createdAt
+    ) {
+      domainError(
+        "CONFLICT",
+        "The episode audio message changed after it was loaded.",
+      );
+    }
+    if (message.fileKey !== undefined) {
+      domainError(
+        "CONFLICT",
+        "Externally stored audio must be removed from its file provider before deleting its metadata.",
+        { details: { externalCleanupRequired: true } },
+      );
+    }
+    await ctx.db.delete("episodeAudioMessages", message._id);
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "episodes.admin.audioMessageRemoved",
+      targetType: "episodeAudioMessage",
+      targetId: message._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      ...(message.episodeId === undefined
+        ? {}
+        : { metadata: { episodeId: message.episodeId } }),
+    });
+    return { id: message._id };
   },
 });
