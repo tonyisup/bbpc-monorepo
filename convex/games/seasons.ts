@@ -4,16 +4,23 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
+import type { Doc, Id } from "../_generated/dataModel.js";
 import { adminMutation, adminQuery } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
+import { domainError } from "../lib/errors.js";
 import {
   hydrateAdminSeason,
   requireGameTypeDocument,
 } from "./readModel.js";
 import {
   seasonAdminValidator,
+  seasonAdminPerformanceValidator,
 } from "./validators.js";
-import { validateSeasonPageSize } from "./limits.js";
+import {
+  MAX_SEASON_PERFORMANCE_ACTIVITY,
+  validateSeasonPageSize,
+} from "./limits.js";
+import { pointValue } from "./pointReadModel.js";
 import {
   assertSeasonUnreferenced,
   requireSeason,
@@ -51,6 +58,164 @@ export const listPage = adminQuery({
           hydrateAdminSeason(ctx, season),
         ),
       ),
+    };
+  },
+});
+
+export const getPerformance = adminQuery({
+  args: { seasonId: v.id("seasons") },
+  returns: seasonAdminPerformanceValidator,
+  handler: async (ctx, args) => {
+    await requireSeason(ctx, args.seasonId);
+    const [points, guesses, gamblingEntries] = await Promise.all([
+      ctx.db
+        .query("points")
+        .withIndex("by_seasonId_and_earnedAt", (index) =>
+          index.eq("seasonId", args.seasonId),
+        )
+        .order("asc")
+        .take(MAX_SEASON_PERFORMANCE_ACTIVITY + 1),
+      ctx.db
+        .query("guesses")
+        .withIndex("by_seasonId", (index) =>
+          index.eq("seasonId", args.seasonId),
+        )
+        .take(MAX_SEASON_PERFORMANCE_ACTIVITY + 1),
+      ctx.db
+        .query("gamblingEntries")
+        .withIndex("by_seasonId", (index) =>
+          index.eq("seasonId", args.seasonId),
+        )
+        .take(MAX_SEASON_PERFORMANCE_ACTIVITY + 1),
+    ]);
+    for (const [rows, label] of [
+      [points, "points"],
+      [guesses, "guesses"],
+      [gamblingEntries, "gambling entries"],
+    ] as const) {
+      if (rows.length > MAX_SEASON_PERFORMANCE_ACTIVITY) {
+        domainError(
+          "CONFLICT",
+          `Season ${label} exceed the supported performance limit.`,
+          {
+            details: {
+              relationship: label,
+              limit: MAX_SEASON_PERFORMANCE_ACTIVITY,
+            },
+          },
+        );
+      }
+    }
+
+    const userIds = new Map<Id<"users">, Id<"users">>();
+    const pointTypeIds = new Map<
+      Id<"gamePointTypes">,
+      Id<"gamePointTypes">
+    >();
+    for (const point of points) {
+      userIds.set(point.userId, point.userId);
+      if (point.gamePointTypeId !== undefined) {
+        pointTypeIds.set(point.gamePointTypeId, point.gamePointTypeId);
+      }
+    }
+    for (const guess of guesses) {
+      userIds.set(guess.userId, guess.userId);
+    }
+    for (const entry of gamblingEntries) {
+      userIds.set(entry.userId, entry.userId);
+    }
+
+    const users = new Map<Id<"users">, Doc<"users">>();
+    const pointTypes = new Map<
+      Id<"gamePointTypes">,
+      Doc<"gamePointTypes">
+    >();
+    await Promise.all([
+      ...[...userIds.values()].map(async (userId) => {
+        const user = await ctx.db.get("users", userId);
+        if (user === null) {
+          domainError(
+            "CONFLICT",
+            "Season activity has a missing user relationship.",
+            { details: { userId } },
+          );
+        }
+        users.set(userId, user);
+      }),
+      ...[...pointTypeIds.values()].map(async (pointTypeId) => {
+        const pointType = await ctx.db.get(
+          "gamePointTypes",
+          pointTypeId,
+        );
+        if (pointType === null) {
+          domainError(
+            "CONFLICT",
+            "Season point has a missing point type relationship.",
+            { details: { gamePointTypeId: pointTypeId } },
+          );
+        }
+        pointTypes.set(pointTypeId, pointType);
+      }),
+    ]);
+
+    const totals = new Map<Id<"users">, number>();
+    const guessCounts = new Map<Id<"users">, number>();
+    const gamblingCounts = new Map<Id<"users">, number>();
+    const flattenedPoints = points.map((point) => {
+      const pointType =
+        point.gamePointTypeId === undefined
+          ? null
+          : (pointTypes.get(point.gamePointTypeId) ?? null);
+      const value = pointValue(point, pointType);
+      totals.set(point.userId, (totals.get(point.userId) ?? 0) + value);
+      return {
+        userId: point.userId,
+        earnedAt: point.earnedAt,
+        pointValue: value,
+      };
+    });
+    for (const guess of guesses) {
+      guessCounts.set(
+        guess.userId,
+        (guessCounts.get(guess.userId) ?? 0) + 1,
+      );
+    }
+    for (const entry of gamblingEntries) {
+      gamblingCounts.set(
+        entry.userId,
+        (gamblingCounts.get(entry.userId) ?? 0) + 1,
+      );
+    }
+
+    const userSummary = [...userIds.values()]
+      .map((userId) => {
+        const user = users.get(userId);
+        if (user === undefined) {
+          domainError(
+            "CONFLICT",
+            "Season performance has a missing user.",
+            { details: { userId } },
+          );
+        }
+        return {
+          user: {
+            id: user._id,
+            name: user.name ?? null,
+            image: user.image ?? null,
+          },
+          total: totals.get(userId) ?? 0,
+          guessCount: guessCounts.get(userId) ?? 0,
+          gamblingCount: gamblingCounts.get(userId) ?? 0,
+        };
+      })
+      .sort(
+        (left, right) =>
+          right.total - left.total ||
+          (left.user.name ?? "").localeCompare(right.user.name ?? ""),
+      );
+    return {
+      userSummary,
+      points: flattenedPoints,
     };
   },
 });

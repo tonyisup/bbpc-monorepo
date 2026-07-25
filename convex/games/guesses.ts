@@ -220,6 +220,32 @@ export const listForUserPage = adminQuery({
   },
 });
 
+export const listForSeasonPage = adminQuery({
+  args: {
+    seasonId: v.id("seasons"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(guessValidator),
+  handler: async (ctx, args) => {
+    validateGuessPageSize(args.paginationOpts.numItems);
+    await resolvePointSeason(ctx, {
+      kind: "season",
+      seasonId: args.seasonId,
+    });
+    const result = await ctx.db
+      .query("guesses")
+      .withIndex("by_seasonId_and_createdAt", (index) =>
+        index.eq("seasonId", args.seasonId),
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...result,
+      page: await hydrateGuesses(ctx, result.page),
+    };
+  },
+});
+
 export const listForAssignment = adminQuery({
   args: { assignmentId: v.id("assignments") },
   returns: v.array(guessValidator),

@@ -558,6 +558,10 @@ export default defineSchema({
     ])
     .index("by_awardPointId", ["awardPointId"])
     .index("by_seasonId", ["seasonId"])
+    .index("by_seasonId_and_createdAt", [
+      "seasonId",
+      "createdAt",
+    ])
     .index("by_gamblingTypeId", ["gamblingTypeId"])
     .index("by_gamblingTypeId_and_createdAt", [
       "gamblingTypeId",

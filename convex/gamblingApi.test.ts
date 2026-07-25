@@ -881,6 +881,21 @@ describe("gambling API", () => {
         paginationOpts: { numItems: 10, cursor: null },
       });
     expect(userPage.page).toMatchObject([{ id: created.id }]);
+    const seasonPage = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.gambling.listForSeasonPage, {
+        seasonId,
+        paginationOpts: { numItems: 10, cursor: null },
+      });
+    expect(seasonPage.page).toMatchObject([{ id: created.id }]);
+    const seasonPerformance = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.seasons.getPerformance, { seasonId });
+    expect(
+      seasonPerformance.userSummary.find(
+        (summary) => summary.user.id === memberId,
+      ),
+    ).toMatchObject({ user: { id: memberId }, gamblingCount: 1 });
     const allPage = await t
       .withIdentity(ADMIN_IDENTITY)
       .query(api.games.gambling.listForUserPage, {
@@ -895,6 +910,15 @@ describe("gambling API", () => {
         season: { kind: "all" },
         paginationOpts: { numItems: 0, cursor: null },
       }),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.gambling.listForSeasonPage, {
+          seasonId,
+          paginationOpts: { numItems: 0, cursor: null },
+        }),
       "VALIDATION_FAILED",
     );
     const updated = await t

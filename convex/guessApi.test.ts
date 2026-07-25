@@ -668,6 +668,28 @@ describe("guess API", () => {
     );
     expect(page.page).toHaveLength(1);
     expect(page.isDone).toBe(false);
+    const seasonPage = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.games.guesses.listForSeasonPage,
+      {
+        seasonId,
+        paginationOpts: { numItems: 1, cursor: null },
+      },
+    );
+    expect(seasonPage.page).toHaveLength(1);
+    expect(seasonPage.isDone).toBe(false);
+    const seasonPerformance =
+      await t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.seasons.getPerformance,
+        { seasonId },
+      );
+    expect(seasonPerformance.userSummary).toMatchObject([
+      {
+        user: { id: memberId },
+        total: 0,
+        guessCount: 2,
+        gamblingCount: 0,
+      },
+    ]);
     const allPage = await t.withIdentity(ADMIN_IDENTITY).query(
       api.games.guesses.listForUserPage,
       {
@@ -683,6 +705,16 @@ describe("guess API", () => {
         {
           userId: memberId,
           season: { kind: "all" },
+          paginationOpts: { numItems: 0, cursor: null },
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.guesses.listForSeasonPage,
+        {
+          seasonId,
           paginationOpts: { numItems: 0, cursor: null },
         },
       ),

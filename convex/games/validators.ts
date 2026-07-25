@@ -142,6 +142,18 @@ export const currentPerformanceValidator = v.object({
   points: v.array(performancePointValidator),
 });
 
+export const seasonAdminPerformanceValidator = v.object({
+  userSummary: v.array(
+    v.object({
+      user: pointUserValidator,
+      total: v.number(),
+      guessCount: v.number(),
+      gamblingCount: v.number(),
+    }),
+  ),
+  points: v.array(performancePointValidator),
+});
+
 export const guessValidator = v.object({
   id: v.id("guesses"),
   createdAt: v.number(),

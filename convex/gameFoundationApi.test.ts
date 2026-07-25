@@ -488,14 +488,23 @@ describe("game foundation API", () => {
       startedOn: "2026-01-01",
       endedOn: "2026-12-31",
     });
-    await t.run(async (ctx) => {
+    const pointTypeId = await t.run(async (ctx) => {
+      const createdPointTypeId = await ctx.db.insert("gamePointTypes", {
+        title: "Manual bonus",
+        lookupId: "manual-bonus",
+        normalizedLookupId: "manual-bonus",
+        points: 2,
+        gameTypeId: gameType.id,
+      });
       await ctx.db.insert("points", {
         userId: memberId,
         seasonId: season.id,
         reason: "Manual award",
         earnedAt: 1,
-        adjustment: 3,
+        adjustment: 1,
+        gamePointTypeId: createdPointTypeId,
       });
+      return createdPointTypeId;
     });
 
     await expect(
@@ -512,6 +521,33 @@ describe("game foundation API", () => {
         quoteSubmissions: { count: 0, isExact: true },
       },
     });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.seasons.getPerformance,
+        { seasonId: season.id },
+      ),
+    ).resolves.toMatchObject({
+      userSummary: [
+        {
+          user: { id: memberId },
+          total: 3,
+          guessCount: 0,
+          gamblingCount: 0,
+        },
+      ],
+      points: [{ userId: memberId, earnedAt: 1, pointValue: 3 }],
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.delete("gamePointTypes", pointTypeId);
+    });
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.seasons.getPerformance,
+        { seasonId: season.id },
+      ),
+      "CONFLICT",
+      { gamePointTypeId: pointTypeId },
+    );
     const page = await t.withIdentity(ADMIN_IDENTITY).query(
       api.games.seasons.listPage,
       {
@@ -601,6 +637,12 @@ describe("game foundation API", () => {
       startedOn: "2027-01-01",
       endedOn: null,
     });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.seasons.getPerformance,
+        { seasonId: removable.id },
+      ),
+    ).resolves.toEqual({ userSummary: [], points: [] });
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.seasons.removeIfUnreferenced,
