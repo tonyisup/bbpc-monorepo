@@ -339,6 +339,127 @@ describe("local migration rehearsal preflight", () => {
     });
   });
 
+  test("reports value-free user identity evidence", async () => {
+    const t = convexTest(schema, modules);
+    const { roleId, userId } = await t.run(async (ctx) => {
+      await ctx.db.insert("systemState", {
+        singletonKey: "global",
+        cutoverStage: "S1",
+        applicationWriteMode: "disabled",
+        cutoverRunId: "identity-run",
+        apiVersion: "2026-07-24",
+        initializedAt: 1,
+        updatedAt: 1,
+        updatedBy: "test",
+      });
+      const userId = await ctx.db.insert("users", {
+        legacyId: "synthetic-user",
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      const roleId = await ctx.db.insert("roles", {
+        legacyId: 1,
+        name: "Administrator",
+        normalizedName: "administrator",
+        description: "Synthetic administrator",
+        admin: true,
+        permissions: [],
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("userRoles", {
+        legacyId: "synthetic-membership",
+        userId,
+        roleId,
+      });
+      await ctx.db.insert("authIdentities", {
+        tokenIdentifier: "synthetic-token",
+        issuer: "https://synthetic.clerk.accounts.dev",
+        subject: "user_synthetic",
+        userId,
+        linkedAt: 1,
+        lastSeenAt: 1,
+      });
+      await ctx.db.insert("auditEvents", {
+        actorType: "internal",
+        action: "identity.smokeUser.preprovisioned",
+        targetType: "user",
+        targetId: userId,
+        cutoverRunId: "identity-run",
+        createdAt: 1,
+      });
+      return { roleId, userId };
+    });
+
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectUserIdentityEvidence,
+        { runId: "identity-run" },
+      ),
+    ).resolves.toEqual({
+      runMatches: true,
+      cutoverStageS1: true,
+      applicationWritesDisabled: true,
+      firstApplicationWriteAbsent: true,
+      linkedIdentityCount: 1,
+      linkedUserCount: 1,
+      linkedActiveUserCount: 1,
+      linkedAdminUserCount: 1,
+      preprovisionAuditCount: 1,
+      ordinaryLinkAuditCount: 0,
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch("users", userId, {
+        status: "disabled",
+      });
+      await ctx.db.patch("roles", roleId, {
+        admin: false,
+      });
+      await ctx.db.insert("auditEvents", {
+        actorType: "user",
+        actorUserId: userId,
+        action: "identity.linked",
+        targetType: "user",
+        targetId: userId,
+        cutoverRunId: "identity-run",
+        createdAt: 2,
+      });
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectUserIdentityEvidence,
+        { runId: "identity-run" },
+      ),
+    ).resolves.toMatchObject({
+      linkedIdentityCount: 1,
+      linkedUserCount: 1,
+      linkedActiveUserCount: 0,
+      linkedAdminUserCount: 0,
+      preprovisionAuditCount: 1,
+      ordinaryLinkAuditCount: 1,
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.delete(userId);
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectUserIdentityEvidence,
+        { runId: "identity-run" },
+      ),
+    ).resolves.toMatchObject({
+      linkedIdentityCount: 1,
+      linkedUserCount: 0,
+      linkedActiveUserCount: 0,
+      linkedAdminUserCount: 0,
+    });
+  });
+
   test("recognizes only a scrubbed portable target", async () => {
     const t = convexTest(schema, modules);
     await t.run(async (ctx) => {

@@ -262,6 +262,98 @@ export const inspectRehearsalEvidence = internalReadQuery({
   },
 });
 
+export const inspectUserIdentityEvidence = internalReadQuery({
+  args: { runId: v.string() },
+  returns: v.object({
+    runMatches: v.boolean(),
+    cutoverStageS1: v.boolean(),
+    applicationWritesDisabled: v.boolean(),
+    firstApplicationWriteAbsent: v.boolean(),
+    linkedIdentityCount: v.number(),
+    linkedUserCount: v.number(),
+    linkedActiveUserCount: v.number(),
+    linkedAdminUserCount: v.number(),
+    preprovisionAuditCount: v.number(),
+    ordinaryLinkAuditCount: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const systemState = await ctx.db
+      .query("systemState")
+      .withIndex("by_singletonKey", (query) =>
+        query.eq("singletonKey", "global"),
+      )
+      .unique();
+    const identities = await ctx.db
+      .query("authIdentities")
+      .withIndex("by_creation_time")
+      .take(100);
+    const linkedUserIds = new Set<string>();
+    const linkedActiveUserIds = new Set<string>();
+    const linkedAdminUserIds = new Set<string>();
+    for (const identity of identities) {
+      const user = await ctx.db.get("users", identity.userId);
+      if (user === null) {
+        continue;
+      }
+      linkedUserIds.add(user._id);
+      if (user.status === "active") {
+        linkedActiveUserIds.add(user._id);
+      }
+      const memberships = await ctx.db
+        .query("userRoles")
+        .withIndex("by_userId", (query) =>
+          query.eq("userId", user._id),
+        )
+        .take(50);
+      for (const membership of memberships) {
+        const role = await ctx.db.get(
+          "roles",
+          membership.roleId,
+        );
+        if (role?.admin === true) {
+          linkedAdminUserIds.add(user._id);
+          break;
+        }
+      }
+    }
+    const auditEvents = await ctx.db
+      .query("auditEvents")
+      .withIndex(
+        "by_cutoverRunId_and_createdAt",
+        (query) => query.eq("cutoverRunId", args.runId),
+      )
+      .order("desc")
+      .take(100);
+    let preprovisionAuditCount = 0;
+    let ordinaryLinkAuditCount = 0;
+    for (const event of auditEvents) {
+      if (
+        event.action ===
+        "identity.smokeUser.preprovisioned"
+      ) {
+        preprovisionAuditCount += 1;
+      }
+      if (event.action === "identity.linked") {
+        ordinaryLinkAuditCount += 1;
+      }
+    }
+    return {
+      runMatches: systemState?.cutoverRunId === args.runId,
+      cutoverStageS1: systemState?.cutoverStage === "S1",
+      applicationWritesDisabled:
+        systemState?.applicationWriteMode === "disabled",
+      firstApplicationWriteAbsent:
+        systemState?.firstApplicationWriteAt === undefined,
+      linkedIdentityCount: identities.length,
+      linkedUserCount: linkedUserIds.size,
+      linkedActiveUserCount: linkedActiveUserIds.size,
+      linkedAdminUserCount: linkedAdminUserIds.size,
+      preprovisionAuditCount,
+      ordinaryLinkAuditCount,
+    };
+  },
+});
+
 export const inspectPipelineIdentityEvidence = internalReadQuery({
   args: {
     runId: v.string(),
