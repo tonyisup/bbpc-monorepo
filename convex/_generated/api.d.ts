@@ -63,6 +63,7 @@ import type * as games_writeModel from "../games/writeModel.js";
 import type * as identity_access from "../identity/access.js";
 import type * as identity_admin from "../identity/admin.js";
 import type * as identity_adminWriteModel from "../identity/adminWriteModel.js";
+import type * as identity_impersonation from "../identity/impersonation.js";
 import type * as identity_limits from "../identity/limits.js";
 import type * as identity_linking from "../identity/linking.js";
 import type * as identity_linkingWriteModel from "../identity/linkingWriteModel.js";
@@ -195,6 +196,7 @@ declare const fullApi: ApiFromModules<{
   "identity/access": typeof identity_access;
   "identity/admin": typeof identity_admin;
   "identity/adminWriteModel": typeof identity_adminWriteModel;
+  "identity/impersonation": typeof identity_impersonation;
   "identity/limits": typeof identity_limits;
   "identity/linking": typeof identity_linking;
   "identity/linkingWriteModel": typeof identity_linkingWriteModel;

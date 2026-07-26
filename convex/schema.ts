@@ -94,6 +94,11 @@ export default defineSchema({
     revokedBy: v.optional(v.id("users")),
   })
     .index("by_actorUserId_and_startedAt", ["actorUserId", "startedAt"])
+    .index("by_actorUserId_and_revokedAt_and_startedAt", [
+      "actorUserId",
+      "revokedAt",
+      "startedAt",
+    ])
     .index("by_targetUserId_and_startedAt", ["targetUserId", "startedAt"]),
 
   servicePrincipals: defineTable({

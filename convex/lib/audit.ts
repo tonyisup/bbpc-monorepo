@@ -1,3 +1,4 @@
+import type { Doc } from "../_generated/dataModel.js";
 import type { MutationCtx } from "../_generated/server.js";
 import type { ApplicationActor } from "./actors.js";
 
@@ -9,6 +10,7 @@ interface WriteAuditEventInput {
   targetType: string;
   targetId?: string;
   cutoverRunId?: string;
+  impersonationSessionId?: Doc<"impersonationSessions">["_id"];
   metadata?: Record<string, AuditMetadataValue>;
 }
 
@@ -16,6 +18,11 @@ export async function writeAuditEvent(
   ctx: MutationCtx,
   input: WriteAuditEventInput,
 ): Promise<void> {
+  const impersonationSessionId =
+    input.impersonationSessionId ??
+    (input.actor.kind === "user"
+      ? input.actor.impersonationSession?._id
+      : undefined);
   const common = {
     action: input.action,
     targetType: input.targetType,
@@ -24,6 +31,9 @@ export async function writeAuditEvent(
     ...(input.cutoverRunId === undefined
       ? {}
       : { cutoverRunId: input.cutoverRunId }),
+    ...(impersonationSessionId === undefined
+      ? {}
+      : { impersonationSessionId }),
     ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
   };
 
@@ -32,7 +42,7 @@ export async function writeAuditEvent(
       await ctx.db.insert("auditEvents", {
         ...common,
         actorType: "user",
-        actorUserId: input.actor.user._id,
+        actorUserId: input.actor.authenticatedUser._id,
       });
       break;
     case "service":

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import {
+  adminQuery,
   authenticatedAction,
   authenticatedMutation,
   authenticatedQuery,
@@ -19,6 +20,19 @@ export const me = authenticatedQuery({
     email: ctx.actor.user.email ?? null,
     image: ctx.actor.user.image ?? null,
     isAdmin: ctx.actor.isAdmin,
+    isHost: ctx.actor.isHost,
+  }),
+});
+
+export const administratorMe = adminQuery({
+  args: {},
+  returns: identityProfileValidator,
+  handler: async (ctx) => ({
+    id: ctx.actor.authenticatedUser._id,
+    name: ctx.actor.authenticatedUser.name ?? null,
+    email: ctx.actor.authenticatedUser.email ?? null,
+    image: ctx.actor.authenticatedUser.image ?? null,
+    isAdmin: true,
     isHost: ctx.actor.isHost,
   }),
 });
