@@ -222,8 +222,9 @@ retention is backup-only, with no product-facing archive query.
 ## Durable external side effects
 
 UploadThing deletion is modeled as a canonical `sideEffectIntents` record created in
-the same Convex transaction that removes episode or assignment audio metadata. A
-scheduled action claims each intent with a lease, calls the documented
+the same Convex transaction that removes episode or assignment audio metadata or
+replaces a profile image. A scheduled action claims each intent with a lease, calls the
+documented
 `POST /v6/deleteFiles` REST endpoint using the API key decoded from
 `UPLOADTHING_TOKEN`, and records only a redacted error code. The provider SDK is not a
 runtime dependency.
@@ -235,6 +236,15 @@ compare-and-swap redrive supports terminal recovery and intentional remote-state
 reconciliation. The application write gate is checked before a provider call, and the
 final portable scrub refuses unresolved pending, processing, retry-scheduled, or
 terminal intents.
+
+Profile uploads check the authenticated action gate before UploadThing accepts a file.
+The owner then atomically adopts the new URL/key and queues the prior UploadThing key.
+If adoption fails, the client attempts to queue the unadopted file through the same
+durable cleanup path and explicitly directs the user to operator recovery if that
+second write is unavailable. New image keys and opaque upload IDs are stored only on
+the canonical user document and are omitted from profile reads. The admin consumer
+exposes redacted native pagination plus compare-and-swap retry/reconciliation at
+`/admin/side-effects`.
 
 ## Raw-staging and portable scrubs
 

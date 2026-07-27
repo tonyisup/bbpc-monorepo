@@ -44,6 +44,8 @@ export default defineSchema({
     normalizedEmail: v.optional(v.string()),
     emailVerifiedAt: v.optional(v.number()),
     image: v.optional(v.string()),
+    imageFileKey: v.optional(v.string()),
+    imageUploadId: v.optional(v.string()),
     status: userStatus,
     createdAt: v.number(),
     updatedAt: v.number(),

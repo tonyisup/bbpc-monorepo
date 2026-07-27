@@ -30,6 +30,12 @@ export type PublicApiType = {
           name: string | null;
         }
       >;
+      discardMyProfileImageUpload: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; fileKey: string; uploadId: string },
+        { intentId: Id<"sideEffectIntents">; queued: true }
+      >;
       me: FunctionReference<
         "query",
         "public",
@@ -48,6 +54,19 @@ export type PublicApiType = {
         "public",
         { clientApiVersion: string; name: string },
         { name: string; updatedAt: number }
+      >;
+      updateMyProfileWithImage: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          expectedImage: string | null;
+          fileKey: string;
+          image: string;
+          name: string;
+          uploadId: string;
+        },
+        { image: string; name: string; updatedAt: number }
       >;
     };
     admin: {
