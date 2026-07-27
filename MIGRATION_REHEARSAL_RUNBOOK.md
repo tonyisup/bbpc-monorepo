@@ -228,3 +228,13 @@ For `dev-rehearsal-20260724-01`, the archive captured all 1,062 rows in the exac
 11-table standalone schema. The disposable restore matched every table hash and was
 deleted. The archive remains backup-only because it contains plaintext legacy
 capabilities.
+
+After that recovery gate completed, `bbpc-recording/.env.local` was moved to the
+shared local Convex client and HTTP-action endpoints and configured with the same
+Clerk development application as the core app. The recording consumer then passed
+lint, all 42 tests, strict TypeScript, and a production build. A signed-in browser
+smoke loaded without console errors, read all 825 sounders and three templates from
+shared Convex, and rendered the safe maintenance message when session creation hit the
+default-deny post-backup write gate. A successful session-creation smoke remains
+intentionally gated on an initialized S3/S4 target; the backup source is never opened
+for application writes.
