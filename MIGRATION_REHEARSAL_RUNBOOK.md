@@ -1,10 +1,11 @@
 # Local Production-Derived Migration Rehearsal
 
-Status: **mapping gate approved 2026-07-24; local rehearsal authorized**
+Status: **local rehearsal, private backups, and disposable restores validated
+2026-07-27**
 
 This runbook exercises the full offline data milestone on an approved encrypted
 development machine. It never writes SQL, never targets cloud staging or production,
-and deliberately stops before the one-way portable scrub.
+and stops before production cutover.
 
 ## Preconditions
 
@@ -96,9 +97,10 @@ Record only aggregate evidence:
 
 Never copy raw row values into the run record.
 
-The next gate is a separately approved portable scrub, backup, checksum, disposable
-restore, and acceptance rerun. `portable-v1` deletes local control state last and is
-intentionally not part of this command.
+The separately approved portable scrub, backup, checksum, disposable restore, and
+acceptance rerun completed for `dev-rehearsal-20260724-01` on 2026-07-27.
+`portable-v1` deletes local control state last and is intentionally not part of the
+ordinary rehearsal command.
 
 The exact owner approval required before either private backup workflow executes is:
 
@@ -130,12 +132,17 @@ The command re-verifies all manifests and aggregate rehearsal evidence. It suppo
 resuming an interrupted scrub, deletes every raw/control/migration table in bounded
 batches, verifies the completion audit and absence of temporary state, then exports
 only the schema-tested portable allowlist. It inspects every ZIP entry, rejects an
-unexpected table or path, checks all 43 expected canonical counts (including the
-required-empty side-effect intent and recording-history tables), and writes a private
-checksummed manifest beside the snapshot. The expected counts bind the separately
-reconciled 825-sounder/three-template public recording catalogs while keeping every
-recording session/history table at zero. It never includes file storage and never
-targets a cloud deployment.
+unexpected table or path, checks all 43 expected canonical tables plus the separately
+bound `authIdentities` and `auditEvents` tables, and writes a private checksummed
+manifest beside the snapshot. The 38 scrubbed raw/control schema entries must contain
+zero documents. The expected counts bind the separately reconciled
+825-sounder/three-template public recording catalogs while keeping every recording
+session/history table at zero. It never includes file storage and never targets a
+cloud deployment.
+
+For `dev-rehearsal-20260724-01`, the scrub completed with exact bounded deletion
+counts. The private snapshot contains 45 portable tables and 10,559 rows: 10,111
+canonical rows, two linked auth identities, and 446 value-reduced audit events.
 
 The backup ZIP contains production-derived row values. Keep its directory mode `0700`
 and files `0600`; do not put it in Git, cloud sync, CI, screenshots, tickets, or chat.
@@ -154,15 +161,24 @@ npm run migration:restore:local -- \
 ```
 
 The restore validator creates a second project-local Convex backend on separate local
-ports, imports the untouched ZIP with preserved IDs, exports it again, and requires
-exact per-table count/hash agreement. It then initializes default-deny S1, stages the
-same immutable extracts, reruns all 86 transform/reconciliation steps, and requires all
-9,283 canonical rows to be reused with zero inserts. On success it writes an
-aggregate-only restore manifest, stops the second backend, and deletes only its
-disposable local data directory.
+ports. It makes a private restore-only copy of the checksum-bound snapshot, excludes
+Convex's internal `_tables` metadata so the current function bundle remains
+authoritative, imports all portable application tables with preserved IDs, exports
+them again, and requires exact per-table count/hash agreement with the untouched
+source ZIP. Because `--replace-all` clears the disposable function registry, the
+validator force-redeploys the current source bundle before running functions. It then
+initializes default-deny S1, stages the same immutable extracts, reruns all 86
+transform/reconciliation steps, and requires all 9,283 canonical rows to be reused
+with zero inserts. On success it writes an aggregate-only restore manifest, stops the
+second backend, and deletes only its disposable local data directory.
 
-Convex documents the ZIP layout as `<table>/documents.jsonl` plus
-`generated_schema.jsonl`, and imports preserve document IDs and creation times:
+The 2026-07-27 validation matched every one of the 45 table hashes, preserved all 828
+recording catalog rows, reconciled all eight domains and 62 checkpoints with zero
+inserts, and deleted the disposable deployment.
+
+Current Convex CLI exports may include a top-level `README.md`, the internal `_tables`
+metadata table, and per-table `generated_schema.jsonl` files. Imports preserve document
+IDs and creation times:
 <https://docs.convex.dev/database/backup-restore> and
 <https://docs.convex.dev/database/import-export/import>.
 
@@ -207,3 +223,8 @@ npm run migration:recording-archive:restore -- \
 The restore uses separate local ports, imports and re-exports the private snapshot,
 requires every canonical table count/hash to match, stops the disposable backend, and
 deletes its data directory before writing value-free restore evidence.
+
+For `dev-rehearsal-20260724-01`, the archive captured all 1,062 rows in the exact
+11-table standalone schema. The disposable restore matched every table hash and was
+deleted. The archive remains backup-only because it contains plaintext legacy
+capabilities.

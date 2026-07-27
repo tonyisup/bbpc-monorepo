@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawn, spawnSync } from "node:child_process";
+import { createConnection } from "node:net";
 import {
   clearTimeout,
   setTimeout as scheduleTimeout,
@@ -11,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { BBPC_API_VERSION } from "../../contracts/index.js";
 import {
   PORTABLE_BACKUP_TABLES,
+  PORTABLE_SCRUBBED_TABLES,
   SOURCE_SCHEMA_FINGERPRINT,
 } from "../../convex/migration/constants.ts";
 import {
@@ -48,7 +50,8 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:restore:local -- --run-id <id> " +
-      "[--batch-size <1..100>] [--dry-run] " +
+      "[--batch-size <1..100>] [--cloud-port <port>] " +
+      "[--site-port <port>] [--dry-run] " +
       `${SOURCE_ACK}`,
     `  execute: ${RESTORE_ACK} ${DELETE_ACK}`,
     "",
@@ -66,9 +69,19 @@ function parseArguments(argv) {
   }
   const runIndex = argv.indexOf("--run-id");
   const batchIndex = argv.indexOf("--batch-size");
+  const cloudPortIndex = argv.indexOf("--cloud-port");
+  const sitePortIndex = argv.indexOf("--site-port");
   const runId = runIndex < 0 ? undefined : argv[runIndex + 1];
   const batchSize =
     batchIndex < 0 ? 100 : Number(argv[batchIndex + 1]);
+  const cloudPort =
+    cloudPortIndex < 0
+      ? 3_310
+      : Number(argv[cloudPortIndex + 1]);
+  const sitePort =
+    sitePortIndex < 0
+      ? 3_311
+      : Number(argv[sitePortIndex + 1]);
   const dryRun = argv.includes("--dry-run");
   if (
     typeof runId !== "string" ||
@@ -83,6 +96,25 @@ function parseArguments(argv) {
   ) {
     throw new Error("--batch-size must be an integer from 1 through 100");
   }
+  for (const [label, port] of [
+    ["--cloud-port", cloudPort],
+    ["--site-port", sitePort],
+  ]) {
+    if (
+      !Number.isSafeInteger(port) ||
+      port < 1_024 ||
+      port > 65_535
+    ) {
+      throw new Error(
+        `${label} must be an integer from 1024 through 65535`,
+      );
+    }
+  }
+  if (cloudPort === sitePort) {
+    throw new Error(
+      "Disposable local Convex ports must be distinct",
+    );
+  }
   for (const acknowledgement of [
     SOURCE_ACK,
     ...(dryRun ? [] : [RESTORE_ACK, DELETE_ACK]),
@@ -93,7 +125,13 @@ function parseArguments(argv) {
       );
     }
   }
-  return { runId, batchSize, dryRun };
+  return {
+    runId,
+    batchSize,
+    cloudPort,
+    sitePort,
+    dryRun,
+  };
 }
 
 function runCommand(
@@ -106,7 +144,11 @@ function runCommand(
     cwd,
     encoding: "utf8",
     stdio: capture ? "pipe" : "inherit",
-    env: { ...process.env, NO_COLOR: "1" },
+    env: {
+      ...process.env,
+      CONVEX_AGENT_MODE: "anonymous",
+      NO_COLOR: "1",
+    },
   });
   if (result.error || result.status !== 0) {
     if (capture && result.stderr) {
@@ -122,8 +164,6 @@ function runConvex(cwd, functionName, args) {
     convexExecutable,
     [
       "run",
-      "--deployment",
-      "local",
       "--codegen",
       "disable",
       functionName,
@@ -146,11 +186,41 @@ function createRestoreProject(restoreProject) {
     recursive: true,
     mode: 0o700,
   });
+  const sourceConvex = path.join(projectRoot, "convex");
+  const restoreConvex = path.join(
+    restoreProject,
+    "convex",
+  );
+  fs.mkdirSync(restoreConvex, {
+    mode: 0o700,
+  });
+  for (const entry of fs.readdirSync(sourceConvex, {
+    withFileTypes: true,
+  })) {
+    // Anonymous local deployments do not support the project-linked
+    // defineApp bundle, and the isolated CLI-admin restore does not use
+    // Clerk authentication. All schema, migration, and application
+    // function sources remain unchanged.
+    if (
+      entry.name === "convex.config.ts" ||
+      entry.name === "auth.config.ts"
+    ) {
+      continue;
+    }
+    fs.cpSync(
+      path.join(sourceConvex, entry.name),
+      path.join(restoreConvex, entry.name),
+      {
+        recursive: entry.isDirectory(),
+        preserveTimestamps: true,
+      },
+    );
+  }
   for (const [name, type] of [
-    ["convex", "dir"],
     ["contracts", "dir"],
     ["node_modules", "dir"],
     ["package.json", "file"],
+    ["tsconfig.json", "file"],
   ]) {
     fs.symlinkSync(
       path.join(projectRoot, name),
@@ -213,6 +283,65 @@ async function stopBackend(child) {
   }
 }
 
+function startDisposableBackend(restoreProject) {
+  return spawn(
+    convexExecutable,
+    [
+      "dev",
+      "--codegen",
+      "disable",
+      "--typecheck",
+      "disable",
+      "--tail-logs",
+      "disable",
+    ],
+    {
+      cwd: restoreProject,
+      env: {
+        ...process.env,
+        CONVEX_AGENT_MODE: "anonymous",
+        NO_COLOR: "1",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+}
+
+function isPortListening(port) {
+  return new Promise((resolve) => {
+    const socket = createConnection({
+      host: "127.0.0.1",
+      port,
+    });
+    let settled = false;
+    const finish = (listening) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.destroy();
+      resolve(listening);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(250, () => finish(false));
+  });
+}
+
+async function waitForPortRelease(port) {
+  const deadline = Date.now() + 15_000;
+  while (await isPortListening(port)) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Disposable local Convex port ${String(port)} did not stop`,
+      );
+    }
+    await new Promise((resolve) =>
+      scheduleTimeout(resolve, 100),
+    );
+  }
+}
+
 function stageVerifiedDomains({
   restoreProject,
   verifiedDomains,
@@ -236,8 +365,6 @@ function stageVerifiedDomains({
         convexExecutable,
         [
           "import",
-          "--deployment",
-          "local",
           "--table",
           file.table,
           "--format",
@@ -277,9 +404,13 @@ function assertRestoreEvidence(evidence, totalRows) {
   }
 }
 
-const { runId, batchSize, dryRun } = parseArguments(
-  process.argv.slice(2),
-);
+const {
+  runId,
+  batchSize,
+  cloudPort,
+  sitePort,
+  dryRun,
+} = parseArguments(process.argv.slice(2));
 const verifiedDomains = Object.fromEntries(
   REHEARSAL_DOMAINS.map((domain) => [
     domain,
@@ -330,17 +461,71 @@ const restoredSnapshotPath = path.join(
   restoreRoot,
   "restored-snapshot.zip",
 );
+const restoreImportSnapshotPath = path.join(
+  restoreRoot,
+  "restore-import-snapshot.zip",
+);
+const restoreRepushMarkerPath = path.join(
+  restoreProject,
+  "convex",
+  "__restore_repush.ts",
+);
+const buildRestoreRepushMarker = (generation) =>
+  [
+    'import { v } from "convex/values";',
+    'import { internalReadQuery } from "./functions.js";',
+    "",
+    "export const generation = internalReadQuery({",
+    "  args: {},",
+    "  returns: v.number(),",
+    `  handler: async () => ${String(generation)},`,
+    "});",
+    "",
+  ].join("\n");
 
 const backupManifest = JSON.parse(
   fs.readFileSync(backupManifestPath, "utf8"),
 );
+const supplementalCounts =
+  backupManifest.supplementalCounts;
+if (
+  backupManifest.formatVersion !== 2 ||
+  typeof supplementalCounts !== "object" ||
+  supplementalCounts === null ||
+  !Number.isSafeInteger(
+    supplementalCounts.authIdentities,
+  ) ||
+  supplementalCounts.authIdentities < 0 ||
+  !Number.isSafeInteger(
+    supplementalCounts.auditEvents,
+  ) ||
+  supplementalCounts.auditEvents < 1
+) {
+  throw new Error(
+    "The portable backup manifest has invalid supplemental counts",
+  );
+}
+const portableCounts = {
+  ...canonicalCounts,
+  authIdentities:
+    supplementalCounts.authIdentities,
+  auditEvents: supplementalCounts.auditEvents,
+};
+const portableRows = Object.values(portableCounts).reduce(
+  (sum, count) => sum + count,
+  0,
+);
 const sourceSnapshot = inspectPortableSnapshot({
   snapshotPath,
   allowedTables: [...PORTABLE_BACKUP_TABLES],
-  expectedCounts: canonicalCounts,
+  allowedEmptyTables: [...PORTABLE_SCRUBBED_TABLES],
+  expectedCounts: portableCounts,
 });
 if (
   backupManifest.runId !== runId ||
+  backupManifest.canonicalRows !== totalRows ||
+  backupManifest.portableRows !== portableRows ||
+  backupManifest.snapshotRows !== portableRows ||
   backupManifest.snapshotSha256 !==
     sourceSnapshot.snapshotSha256 ||
   backupManifest.recordingCatalog?.digest !==
@@ -360,7 +545,10 @@ process.stdout.write(
     "Verified private portable snapshot for disposable restore.",
     `runId=${runId}`,
     `canonicalRows=${String(totalRows)}`,
+    `portableRows=${String(portableRows)}`,
     `snapshotTables=${String(Object.keys(sourceSnapshot.tables).length)}`,
+    `cloudPort=${String(cloudPort)}`,
+    `sitePort=${String(sitePort)}`,
     "",
   ].join("\n"),
 );
@@ -375,18 +563,49 @@ if (fs.existsSync(restoreRoot)) {
   fs.rmSync(restoreRoot, { recursive: true, force: true });
 }
 createRestoreProject(restoreProject);
+fs.writeFileSync(
+  restoreRepushMarkerPath,
+  buildRestoreRepushMarker(1),
+  {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  },
+);
+fs.copyFileSync(
+  snapshotPath,
+  restoreImportSnapshotPath,
+  fs.constants.COPYFILE_EXCL,
+);
+fs.chmodSync(restoreImportSnapshotPath, 0o600);
+runCommand(
+  "/usr/bin/zip",
+  [
+    "-q",
+    "-d",
+    restoreImportSnapshotPath,
+    "_tables/*",
+  ],
+  "Disposable restore metadata exclusion",
+);
+const restoreImportSnapshot = inspectPortableSnapshot({
+  snapshotPath: restoreImportSnapshotPath,
+  allowedTables: [...PORTABLE_BACKUP_TABLES],
+  allowedEmptyTables: [...PORTABLE_SCRUBBED_TABLES],
+  expectedCounts: portableCounts,
+});
+comparePortableSnapshots(
+  sourceSnapshot,
+  restoreImportSnapshot,
+);
 runCommand(
   convexExecutable,
   [
     "dev",
-    "--configure",
-    "existing",
-    "--team",
-    "tonyisup",
-    "--project",
-    "bbpc-convex",
-    "--dev-deployment",
-    "local",
+    "--local-cloud-port",
+    String(cloudPort),
+    "--local-site-port",
+    String(sitePort),
     "--once",
     "--codegen",
     "disable",
@@ -398,24 +617,9 @@ runCommand(
   "Disposable local Convex configuration",
   { cwd: restoreProject },
 );
+await waitForPortRelease(cloudPort);
 
-const backend = spawn(
-  convexExecutable,
-  [
-    "dev",
-    "--codegen",
-    "disable",
-    "--typecheck",
-    "disable",
-    "--tail-logs",
-    "disable",
-  ],
-  {
-    cwd: restoreProject,
-    env: { ...process.env, NO_COLOR: "1" },
-    stdio: ["ignore", "pipe", "pipe"],
-  },
-);
+let backend = startDisposableBackend(restoreProject);
 
 let restoreEvidence;
 try {
@@ -424,11 +628,9 @@ try {
     convexExecutable,
     [
       "import",
-      "--deployment",
-      "local",
       "--replace-all",
       "--yes",
-      snapshotPath,
+      restoreImportSnapshotPath,
     ],
     "Disposable portable snapshot restore",
     { cwd: restoreProject },
@@ -437,8 +639,6 @@ try {
     convexExecutable,
     [
       "export",
-      "--deployment",
-      "local",
       "--path",
       restoredSnapshotPath,
     ],
@@ -448,12 +648,43 @@ try {
   const restoredSnapshot = inspectPortableSnapshot({
     snapshotPath: restoredSnapshotPath,
     allowedTables: [...PORTABLE_BACKUP_TABLES],
-    expectedCounts: canonicalCounts,
+    allowedEmptyTables: [...PORTABLE_SCRUBBED_TABLES],
+    expectedCounts: portableCounts,
   });
   const snapshotComparison = comparePortableSnapshots(
     sourceSnapshot,
     restoredSnapshot,
   );
+
+  await stopBackend(backend);
+  await waitForPortRelease(cloudPort);
+  fs.writeFileSync(
+    restoreRepushMarkerPath,
+    buildRestoreRepushMarker(2),
+    {
+      encoding: "utf8",
+      flag: "w",
+      mode: 0o600,
+    },
+  );
+  runCommand(
+    convexExecutable,
+    [
+      "dev",
+      "--once",
+      "--codegen",
+      "disable",
+      "--typecheck",
+      "disable",
+      "--tail-logs",
+      "disable",
+    ],
+    "Disposable local Convex forced function repush",
+    { cwd: restoreProject },
+  );
+  await waitForPortRelease(cloudPort);
+  backend = startDisposableBackend(restoreProject);
+  await waitForFunctionsReady(backend);
 
   runConvex(restoreProject, "system/cutover:initialize", {
     cutoverRunId: runId,

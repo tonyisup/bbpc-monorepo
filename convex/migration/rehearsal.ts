@@ -22,6 +22,8 @@ const ALL_TABLES = [
   ...PORTABLE_CONTROL_TABLES,
   ...Object.values(MIGRATION_RAW_TABLES_BY_DOMAIN).flat(),
 ] as const;
+const MAX_PORTABLE_AUTH_IDENTITIES = 10_000;
+const MAX_PORTABLE_AUDIT_EVENTS = 10_000;
 
 async function tableHasRows(
   ctx: DatabaseContext,
@@ -458,6 +460,8 @@ export const inspectPortableTarget = internalReadQuery({
     completionAuditFound: v.boolean(),
     nonemptyTemporaryTables: v.array(v.string()),
     nonemptyRetainedTables: v.array(v.string()),
+    authIdentitiesCount: v.number(),
+    auditEventsCount: v.number(),
   }),
   handler: async (ctx, args) => {
     const systemState = await ctx.db
@@ -493,6 +497,23 @@ export const inspectPortableTarget = internalReadQuery({
     const completionAuditFound =
       latestRunAudit?.action ===
       "migration.portableScrub.completed";
+    const [authIdentities, auditEvents] = await Promise.all([
+      ctx.db
+        .query("authIdentities")
+        .take(MAX_PORTABLE_AUTH_IDENTITIES + 1),
+      ctx.db
+        .query("auditEvents")
+        .take(MAX_PORTABLE_AUDIT_EVENTS + 1),
+    ]);
+    if (
+      authIdentities.length >
+        MAX_PORTABLE_AUTH_IDENTITIES ||
+      auditEvents.length > MAX_PORTABLE_AUDIT_EVENTS
+    ) {
+      throw new Error(
+        "Portable supplemental table count exceeds the audited bound",
+      );
+    }
     return {
       portable:
         systemState === null &&
@@ -502,6 +523,8 @@ export const inspectPortableTarget = internalReadQuery({
       completionAuditFound,
       nonemptyTemporaryTables,
       nonemptyRetainedTables,
+      authIdentitiesCount: authIdentities.length,
+      auditEventsCount: auditEvents.length,
     };
   },
 });

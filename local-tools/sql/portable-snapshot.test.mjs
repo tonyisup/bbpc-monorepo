@@ -48,11 +48,17 @@ test("inspects an allowlisted snapshot without exposing rows", () => {
   );
   try {
     const snapshotPath = createZip(root, "portable.zip", {
-      "generated_schema.jsonl": "{}\n",
+      "README.md": "Convex snapshot metadata\n",
+      "_tables/documents.jsonl": '{"name":"users"}\n',
+      "_tables/generated_schema.jsonl": "{}\n",
       "users/documents.jsonl":
         '{"_id":"user-1","legacyId":"legacy-1"}\n',
+      "users/generated_schema.jsonl": "{}\n",
       "auditEvents/documents.jsonl":
         '{"_id":"audit-1","action":"migration.portableScrub.completed"}\n',
+      "auditEvents/generated_schema.jsonl": "{}\n",
+      "bangers/documents.jsonl": "",
+      "bangers/generated_schema.jsonl": "{}\n",
     });
     const inspected = inspectPortableSnapshot({
       snapshotPath,
@@ -65,6 +71,7 @@ test("inspects an allowlisted snapshot without exposing rows", () => {
     assert.equal(inspected.totalRows, 2);
     assert.deepEqual(Object.keys(inspected.tables), [
       "auditEvents",
+      "bangers",
       "users",
     ]);
     assert.match(inspected.snapshotSha256, /^[a-f0-9]{64}$/u);
@@ -73,7 +80,7 @@ test("inspects an allowlisted snapshot without exposing rows", () => {
       {
         matched: true,
         totalRows: 2,
-        tables: 2,
+        tables: 3,
       },
     );
   } finally {
@@ -126,5 +133,179 @@ test("rejects unexpected tables and count drift", () => {
       force: true,
     });
     fs.rmSync(countRoot, { recursive: true, force: true });
+  }
+});
+
+test("allows only the top-level Convex README metadata entry", () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-readme-"),
+  );
+  try {
+    const nestedReadme = createZip(
+      root,
+      "nested-readme.zip",
+      {
+        "generated_schema.jsonl": "{}\n",
+        "metadata/README.md": "unexpected\n",
+      },
+    );
+    assert.throws(
+      () =>
+        inspectPortableSnapshot({
+          snapshotPath: nestedReadme,
+          allowedTables: ["users"],
+        }),
+      /unexpected table metadata/u,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("allows only the exact Convex metadata table", () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-metadata-"),
+  );
+  try {
+    const unexpectedMetadata = createZip(
+      root,
+      "unexpected-metadata.zip",
+      {
+        "generated_schema.jsonl": "{}\n",
+        "_storage/documents.jsonl": '{"_id":"storage-1"}\n',
+      },
+    );
+    assert.throws(
+      () =>
+        inspectPortableSnapshot({
+          snapshotPath: unexpectedMetadata,
+          allowedTables: ["users"],
+        }),
+      /unexpected table _storage/u,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("requires per-table schemas when no legacy top-level schema exists", () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-schema-"),
+  );
+  try {
+    const missingSchema = createZip(
+      root,
+      "missing-schema.zip",
+      {
+        "users/documents.jsonl": '{"_id":"user-1"}\n',
+        "auditEvents/generated_schema.jsonl": "{}\n",
+      },
+    );
+    assert.throws(
+      () =>
+        inspectPortableSnapshot({
+          snapshotPath: missingSchema,
+          allowedTables: ["users", "auditEvents"],
+        }),
+      /missing generated schema for users/u,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("permits exact scrubbed tables only when their document files are empty", () => {
+  const emptyRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-empty-"),
+  );
+  const nonemptyRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-nonempty-"),
+  );
+  const missingRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-missing-empty-"),
+  );
+  try {
+    const empty = createZip(emptyRoot, "empty.zip", {
+      "generated_schema.jsonl": "{}\n",
+      "users/documents.jsonl": '{"_id":"user-1"}\n',
+      "migrationRawUsers/documents.jsonl": "",
+    });
+    const inspected = inspectPortableSnapshot({
+      snapshotPath: empty,
+      allowedTables: ["users"],
+      allowedEmptyTables: ["migrationRawUsers"],
+      expectedCounts: { users: 1 },
+    });
+    assert.deepEqual(Object.keys(inspected.tables), ["users"]);
+    assert.equal(inspected.totalRows, 1);
+
+    const nonempty = createZip(
+      nonemptyRoot,
+      "nonempty.zip",
+      {
+        "generated_schema.jsonl": "{}\n",
+        "migrationRawUsers/documents.jsonl":
+          '{"_id":"raw-user-1"}\n',
+      },
+    );
+    assert.throws(
+      () =>
+        inspectPortableSnapshot({
+          snapshotPath: nonempty,
+          allowedTables: ["users"],
+          allowedEmptyTables: ["migrationRawUsers"],
+        }),
+      /required-empty table migrationRawUsers contains documents/u,
+    );
+
+    const missing = createZip(
+      missingRoot,
+      "missing-empty.zip",
+      {
+        "generated_schema.jsonl": "{}\n",
+        "users/documents.jsonl": '{"_id":"user-1"}\n',
+      },
+    );
+    assert.throws(
+      () =>
+        inspectPortableSnapshot({
+          snapshotPath: missing,
+          allowedTables: ["users"],
+          allowedEmptyTables: ["migrationRawUsers"],
+        }),
+      /missing required-empty table migrationRawUsers/u,
+    );
+  } finally {
+    fs.rmSync(emptyRoot, { recursive: true, force: true });
+    fs.rmSync(nonemptyRoot, {
+      recursive: true,
+      force: true,
+    });
+    fs.rmSync(missingRoot, {
+      recursive: true,
+      force: true,
+    });
+  }
+});
+
+test("requires expected zero-row portable tables to be present", () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), "bbpc-portable-missing-expected-"),
+  );
+  try {
+    const snapshotPath = createZip(root, "missing.zip", {
+      "generated_schema.jsonl": "{}\n",
+    });
+    assert.throws(
+      () =>
+        inspectPortableSnapshot({
+          snapshotPath,
+          allowedTables: ["sideEffectIntents"],
+          expectedCounts: { sideEffectIntents: 0 },
+        }),
+      /missing expected table sideEffectIntents/u,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

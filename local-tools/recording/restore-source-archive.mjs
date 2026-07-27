@@ -53,7 +53,11 @@ function runCommand(
     cwd,
     encoding: "utf8",
     stdio: capture ? "pipe" : "inherit",
-    env: { ...process.env, NO_COLOR: "1" },
+    env: {
+      ...process.env,
+      CONVEX_AGENT_MODE: "anonymous",
+      NO_COLOR: "1",
+    },
   });
   if (result.error || result.status !== 0) {
     if (capture && result.stderr) {
@@ -200,19 +204,6 @@ if (
     "The source project is not the standalone bbpc-recording project",
   );
 }
-const team = args.get("team") ?? "tonyisup";
-const convexProject =
-  args.get("project") ?? "bbpc-recording";
-if (
-  !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(team) ||
-  !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(
-    convexProject,
-  )
-) {
-  throw new Error(
-    "Safe Convex team and project slugs are required",
-  );
-}
 const cloudPort = requirePort(
   args.get("cloud-port") ?? "3320",
   "Cloud port",
@@ -339,14 +330,6 @@ try {
     convexExecutable,
     [
       "dev",
-      "--configure",
-      "existing",
-      "--team",
-      team,
-      "--project",
-      convexProject,
-      "--dev-deployment",
-      "local",
       "--local-cloud-port",
       String(cloudPort),
       "--local-site-port",
@@ -375,7 +358,11 @@ try {
     ],
     {
       cwd: restoreProject,
-      env: { ...process.env, NO_COLOR: "1" },
+      env: {
+        ...process.env,
+        CONVEX_AGENT_MODE: "anonymous",
+        NO_COLOR: "1",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -384,8 +371,6 @@ try {
     convexExecutable,
     [
       "import",
-      "--deployment",
-      "local",
       "--replace-all",
       "--yes",
       paths.snapshotPath,
@@ -397,8 +382,6 @@ try {
     convexExecutable,
     [
       "export",
-      "--deployment",
-      "local",
       "--path",
       restoredSnapshotPath,
     ],

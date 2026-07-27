@@ -588,6 +588,8 @@ describe("local migration rehearsal preflight", () => {
       completionAuditFound: false,
       nonemptyTemporaryTables: [],
       nonemptyRetainedTables: [],
+      authIdentitiesCount: 0,
+      auditEventsCount: 0,
     });
     await expect(
       t.query(

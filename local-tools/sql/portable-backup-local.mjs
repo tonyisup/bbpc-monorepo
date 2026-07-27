@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { BBPC_API_VERSION } from "../../contracts/index.js";
 import {
   PORTABLE_BACKUP_TABLES,
+  PORTABLE_SCRUBBED_TABLES,
   SOURCE_SCHEMA_FINGERPRINT,
 } from "../../convex/migration/constants.ts";
 import {
@@ -156,16 +157,54 @@ function writeOrVerifyManifest(manifestPath, manifest) {
       fs.readFileSync(manifestPath, "utf8"),
     );
     if (
-      existing.runId !== manifest.runId ||
-      existing.snapshotSha256 !== manifest.snapshotSha256 ||
-      JSON.stringify(existing.tables) !==
+      existing.formatVersion === 1 &&
+      manifest.formatVersion === 2 &&
+      existing.runId === manifest.runId &&
+      existing.snapshotSha256 ===
+        manifest.snapshotSha256 &&
+      existing.snapshotRows === manifest.snapshotRows &&
+      existing.canonicalRows === manifest.canonicalRows &&
+      JSON.stringify(existing.tables) ===
         JSON.stringify(manifest.tables)
     ) {
-      throw new Error(
-        "Existing portable backup manifest does not match the snapshot",
-      );
+      const supersededPath =
+        `${manifestPath}.superseded-v1`;
+      if (fs.existsSync(supersededPath)) {
+        throw new Error(
+          "A superseded portable backup manifest already exists",
+        );
+      }
+      fs.renameSync(manifestPath, supersededPath);
+      fs.chmodSync(supersededPath, 0o600);
+    } else {
+      if (
+        existing.formatVersion !==
+          manifest.formatVersion ||
+        existing.runId !== manifest.runId ||
+        existing.sourceSchemaFingerprint !==
+          manifest.sourceSchemaFingerprint ||
+        existing.apiVersion !== manifest.apiVersion ||
+        existing.snapshotSha256 !==
+          manifest.snapshotSha256 ||
+        existing.canonicalRows !==
+          manifest.canonicalRows ||
+        existing.portableRows !==
+          manifest.portableRows ||
+        existing.snapshotRows !==
+          manifest.snapshotRows ||
+        JSON.stringify(existing.supplementalCounts) !==
+          JSON.stringify(manifest.supplementalCounts) ||
+        JSON.stringify(existing.recordingCatalog) !==
+          JSON.stringify(manifest.recordingCatalog) ||
+        JSON.stringify(existing.tables) !==
+          JSON.stringify(manifest.tables)
+      ) {
+        throw new Error(
+          "Existing portable backup manifest does not match the snapshot",
+        );
+      }
+      return;
     }
-    return;
   }
   fs.writeFileSync(
     manifestPath,
@@ -290,6 +329,28 @@ if (
     "The local deployment did not reach portable backup state",
   );
 }
+if (
+  !Number.isSafeInteger(portable.authIdentitiesCount) ||
+  portable.authIdentitiesCount < 0 ||
+  !Number.isSafeInteger(portable.auditEventsCount) ||
+  portable.auditEventsCount < 1
+) {
+  throw new Error(
+    "The local deployment returned invalid portable supplemental counts",
+  );
+}
+const supplementalCounts = {
+  authIdentities: portable.authIdentitiesCount,
+  auditEvents: portable.auditEventsCount,
+};
+const portableCounts = {
+  ...canonicalCounts,
+  ...supplementalCounts,
+};
+const portableRows = Object.values(portableCounts).reduce(
+  (sum, count) => sum + count,
+  0,
+);
 
 fs.mkdirSync(backupDirectory, {
   recursive: true,
@@ -314,7 +375,8 @@ fs.chmodSync(snapshotPath, 0o600);
 const inspected = inspectPortableSnapshot({
   snapshotPath,
   allowedTables: [...PORTABLE_BACKUP_TABLES],
-  expectedCounts: canonicalCounts,
+  allowedEmptyTables: [...PORTABLE_SCRUBBED_TABLES],
+  expectedCounts: portableCounts,
 });
 const backendCommit = runCommand(
   "git",
@@ -323,7 +385,7 @@ const backendCommit = runCommand(
   true,
 );
 const manifest = {
-  formatVersion: 1,
+  formatVersion: 2,
   runId,
   createdAt: new Date().toISOString(),
   sourceSchemaFingerprint: SOURCE_SCHEMA_FINGERPRINT,
@@ -334,6 +396,8 @@ const manifest = {
   snapshotFile: path.basename(snapshotPath),
   snapshotSha256: inspected.snapshotSha256,
   canonicalRows: totalRows,
+  portableRows,
+  supplementalCounts,
   snapshotRows: inspected.totalRows,
   tables: inspected.tables,
   recordingCatalog: {
@@ -361,6 +425,7 @@ process.stdout.write(
     "Portable local backup complete.",
     `snapshotRows=${String(inspected.totalRows)}`,
     `snapshotTables=${String(Object.keys(inspected.tables).length)}`,
+    `portableRows=${String(portableRows)}`,
     `snapshotSha256=${inspected.snapshotSha256}`,
     `snapshot=${snapshotPath}`,
     `manifest=${manifestPath}`,

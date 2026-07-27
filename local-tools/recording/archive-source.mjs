@@ -25,6 +25,53 @@ const PRIVATE_ACK = "ack-private-recording-source";
 const BACKUP_ONLY_ACK = "ack-backup-only-no-shared-import";
 const SHA256 = /^[0-9a-f]{64}$/u;
 
+function classifyCommandFailure(result) {
+  if (result.error?.code === "ENOENT") {
+    return "executable-not-found";
+  }
+  const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
+    .toLowerCase();
+  if (
+    /(?:econn|enotfound|fetch failed|network|dns|socket|timed? out)/u.test(
+      output,
+    )
+  ) {
+    return "network";
+  }
+  if (
+    /(?:unauthorized|authentication|not logged in|login|access token|credentials)/u.test(
+      output,
+    )
+  ) {
+    return "authentication";
+  }
+  if (
+    /(?:deployment).*(?:not found|does not exist|cannot find|no access)/u.test(
+      output,
+    )
+  ) {
+    return "deployment-access";
+  }
+  if (
+    /(?:invalid|unknown|unexpected).*(?:deployment|argument|option)/u.test(
+      output,
+    )
+  ) {
+    return "invalid-selector";
+  }
+  if (
+    /(?:already exists|path|file).*(?:exists|occupied|permission denied)/u.test(
+      output,
+    )
+  ) {
+    return "destination";
+  }
+  if (/(?:rate limit|too many requests)/u.test(output)) {
+    return "rate-limit";
+  }
+  return "unknown";
+}
+
 function usage() {
   return [
     "Usage:",
@@ -59,6 +106,11 @@ function runCommand(
       result.stderr
     ) {
       process.stderr.write(result.stderr);
+    }
+    if (capture && suppressCapturedOutput) {
+      process.stderr.write(
+        `failureCategory=${classifyCommandFailure(result)}\n`,
+      );
     }
     throw new Error(`${label} failed`);
   }
@@ -239,7 +291,7 @@ try {
     [
       "export",
       "--deployment",
-      source.deployment,
+      source.deploymentName,
       "--path",
       partialSnapshotPath,
     ],

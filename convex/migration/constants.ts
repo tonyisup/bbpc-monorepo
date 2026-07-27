@@ -286,3 +286,15 @@ export const PORTABLE_CONTROL_TABLES = [
   "migrationCheckpoints",
   "migrationScrubRuns",
 ] as const;
+
+export const PORTABLE_SCRUBBED_TABLES = [
+  ...PORTABLE_CONTROL_TABLES,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.identity,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.catalog,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.episodes,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.assignments,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.reviews,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.games,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.rankings,
+  ...MIGRATION_RAW_TABLES_BY_DOMAIN.archive,
+] as const;

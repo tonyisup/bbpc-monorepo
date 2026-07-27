@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 
 const UNZIP = "/usr/bin/unzip";
 const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
+const CONVEX_METADATA_TABLES = new Set(["_tables"]);
 
 function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -49,6 +50,7 @@ function assertSafeEntry(entry) {
 export function inspectPortableSnapshot({
   snapshotPath,
   allowedTables,
+  allowedEmptyTables = [],
   expectedCounts = {},
 }) {
   if (
@@ -61,20 +63,48 @@ export function inspectPortableSnapshot({
   if (
     !Array.isArray(allowedTables) ||
     allowedTables.length === 0 ||
-    new Set(allowedTables).size !== allowedTables.length
+    new Set(allowedTables).size !== allowedTables.length ||
+    !Array.isArray(allowedEmptyTables) ||
+    new Set(allowedEmptyTables).size !==
+      allowedEmptyTables.length
   ) {
-    throw new Error("A unique portable table allowlist is required");
+    throw new Error(
+      "Unique portable and required-empty table allowlists are required",
+    );
   }
   const allowed = new Set(allowedTables);
+  const requiredEmpty = new Set(allowedEmptyTables);
+  if (
+    allowedTables.some((table) =>
+      requiredEmpty.has(table),
+    )
+  ) {
+    throw new Error(
+      "Portable and required-empty table allowlists must not overlap",
+    );
+  }
   const listing = String(
     runUnzip(["-Z1", snapshotPath], "Snapshot listing"),
   )
     .split(/\r?\n/u)
     .filter((entry) => entry.length > 0);
   const tableEntries = new Map();
+  const requiredEmptyEntries = new Map();
+  const metadataEntries = new Set();
+  const tableSchemaEntries = new Set();
   let generatedSchemaFound = false;
+  let readmeFound = false;
   for (const entry of listing) {
     assertSafeEntry(entry);
+    if (entry === "README.md") {
+      if (readmeFound) {
+        throw new Error(
+          "Portable snapshot contains duplicate README",
+        );
+      }
+      readmeFound = true;
+      continue;
+    }
     if (entry === "generated_schema.jsonl") {
       if (generatedSchemaFound) {
         throw new Error(
@@ -86,24 +116,65 @@ export function inspectPortableSnapshot({
     }
     if (entry.endsWith("/")) {
       const table = entry.slice(0, -1);
-      if (!allowed.has(table)) {
+      if (CONVEX_METADATA_TABLES.has(table)) {
+        continue;
+      }
+      if (
+        !allowed.has(table) &&
+        !requiredEmpty.has(table)
+      ) {
         throw new Error(
           `Portable snapshot contains unexpected table ${table}`,
         );
       }
       continue;
     }
-    const match = /^([^/]+)\/documents\.jsonl$/u.exec(entry);
+    const match =
+      /^([^/]+)\/(documents|generated_schema)\.jsonl$/u.exec(
+        entry,
+      );
     if (!match) {
       throw new Error(
         `Portable snapshot contains unexpected entry ${entry}`,
       );
     }
     const table = match[1];
-    if (!allowed.has(table)) {
+    const entryKind = match[2];
+    if (CONVEX_METADATA_TABLES.has(table)) {
+      const metadataKey = `${table}/${entryKind}`;
+      if (metadataEntries.has(metadataKey)) {
+        throw new Error(
+          `Portable snapshot contains duplicate metadata entry ${metadataKey}`,
+        );
+      }
+      metadataEntries.add(metadataKey);
+      continue;
+    }
+    if (
+      !allowed.has(table) &&
+      !requiredEmpty.has(table)
+    ) {
       throw new Error(
         `Portable snapshot contains unexpected table ${table}`,
       );
+    }
+    if (entryKind === "generated_schema") {
+      if (tableSchemaEntries.has(table)) {
+        throw new Error(
+          `Portable snapshot contains duplicate table schema ${table}`,
+        );
+      }
+      tableSchemaEntries.add(table);
+      continue;
+    }
+    if (requiredEmpty.has(table)) {
+      if (requiredEmptyEntries.has(table)) {
+        throw new Error(
+          `Portable snapshot contains duplicate required-empty table ${table}`,
+        );
+      }
+      requiredEmptyEntries.set(table, entry);
+      continue;
     }
     if (tableEntries.has(table)) {
       throw new Error(
@@ -112,17 +183,35 @@ export function inspectPortableSnapshot({
     }
     tableEntries.set(table, entry);
   }
-  if (!generatedSchemaFound) {
+  if (
+    !generatedSchemaFound &&
+    tableSchemaEntries.size === 0
+  ) {
     throw new Error(
-      "Portable snapshot is missing generated_schema.jsonl",
+      "Portable snapshot is missing generated schema metadata",
     );
   }
+  if (!generatedSchemaFound) {
+    for (const table of [
+      ...tableEntries.keys(),
+      ...requiredEmptyEntries.keys(),
+    ]) {
+      if (!tableSchemaEntries.has(table)) {
+        throw new Error(
+          `Portable snapshot is missing generated schema for ${table}`,
+        );
+      }
+    }
+  }
+  for (const table of requiredEmpty) {
+    if (!requiredEmptyEntries.has(table)) {
+      throw new Error(
+        `Portable snapshot is missing required-empty table ${table}`,
+      );
+    }
+  }
 
-  const tables = {};
-  let totalRows = 0;
-  for (const [table, entry] of [...tableEntries.entries()].sort(
-    ([left], [right]) => left.localeCompare(right),
-  )) {
+  function readTableDocuments(table, entry) {
     const bytes = runUnzip(
       ["-p", snapshotPath, entry],
       `Snapshot read for ${table}`,
@@ -153,13 +242,28 @@ export function inspectPortableSnapshot({
       }
     }
     canonicalDocuments.sort();
-    tables[table] = {
+    return {
       rows: lines.length,
       sha256: sha256(
         `${canonicalDocuments.join("\n")}${canonicalDocuments.length === 0 ? "" : "\n"}`,
       ),
     };
-    totalRows += lines.length;
+  }
+
+  const tables = {};
+  let totalRows = 0;
+  for (const [table, entry] of [...tableEntries.entries()].sort(
+    ([left], [right]) => left.localeCompare(right),
+  )) {
+    tables[table] = readTableDocuments(table, entry);
+    totalRows += tables[table].rows;
+  }
+  for (const [table, entry] of requiredEmptyEntries) {
+    if (readTableDocuments(table, entry).rows !== 0) {
+      throw new Error(
+        `Portable snapshot required-empty table ${table} contains documents`,
+      );
+    }
   }
 
   for (const [table, expectedCount] of Object.entries(
@@ -174,7 +278,12 @@ export function inspectPortableSnapshot({
         `Invalid portable snapshot expectation for ${table}`,
       );
     }
-    const actualCount = tables[table]?.rows ?? 0;
+    if (!tableEntries.has(table)) {
+      throw new Error(
+        `Portable snapshot is missing expected table ${table}`,
+      );
+    }
+    const actualCount = tables[table].rows;
     if (actualCount !== expectedCount) {
       throw new Error(
         `Portable snapshot count mismatch for ${table}: expected ${String(expectedCount)}, received ${String(actualCount)}`,
