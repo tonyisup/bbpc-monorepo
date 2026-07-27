@@ -61,9 +61,11 @@
     "migration:restore:local": "node local-tools/sql/portable-restore-local.mjs",
     "migration:test:extractor": "node --test local-tools/sql/*.test.mjs",
     "migration:test:recording": "node --test local-tools/recording/*.test.mjs",
+    "performance:benchmark:public": "node local-tools/performance/benchmark-public.mjs",
+    "performance:test": "node --test local-tools/performance/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run migration:test:extractor && npm run migration:test:recording && npm run test:coverage",
+    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run migration:test:extractor && npm run migration:test:recording && npm run performance:test && npm run test:coverage",
     "package:check": "npm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {

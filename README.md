@@ -50,6 +50,7 @@ npm run migration:test:extractor
 npm run migration:rehearse:local -- --help
 npm run migration:backup:local -- --help
 npm run migration:restore:local -- --help
+npm run performance:benchmark:public
 npm run contract:generate
 npm run contract:build
 ```
@@ -284,11 +285,20 @@ The first production-derived local result is recorded in
 It reconciled all 9,283 migrated rows across 62 completed checkpoints and records only
 aggregate counts, timings, and defect dispositions.
 
-The next one-way gate is implemented but not executed. The guarded backup command
-resumes the final scrub, checks the portable ZIP allowlist/counts/hashes, and writes a
-private manifest. Its companion restore command imports the unchanged ZIP into a
-second disposable local backend, requires exact table hashes, and reruns all migration
-and reconciliation operations with zero canonical inserts.
+The one-way scrub, guarded backup, exact disposable restore, and zero-insert
+reconciliation replay have passed twice against private local targets; the second
+target also passed the explicit S2 rollback. The second production-derived result is
+recorded in
+[`MIGRATION_REHEARSAL_RESULT_2026-07-27.md`](./MIGRATION_REHEARSAL_RESULT_2026-07-27.md).
+The aggregate SQL-to-Convex latency and migration-throughput result is in
+[`PERFORMANCE_ACCEPTANCE_RESULT_2026-07-27.md`](./PERFORMANCE_ACCEPTANCE_RESULT_2026-07-27.md),
+and the unsigned production operator record is
+[`CUTOVER_GO_NO_GO.md`](./CUTOVER_GO_NO_GO.md).
+
+The performance command is deliberately localhost-only. It mirrors the anonymously
+comparable SQL workflow baseline with matching warm-up, sequential, and concurrency
+sample counts, writes only aggregate evidence to the private `.local-migration`
+directory, and fails if a Convex p95 exceeds the SQL baseline by more than 20%.
 
 ## Public episode read API
 
