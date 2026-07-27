@@ -1,7 +1,7 @@
 # Local Production-Derived Migration Rehearsal
 
-Status: **two production-scale local rehearsals, private backups, disposable
-restores, and S2 rollback validated 2026-07-27**
+Status: **three production-scale local rehearsals, private backups, disposable
+restores, strict identity acceptance, and S2 rollback validated 2026-07-27**
 
 This runbook exercises the full offline data milestone on an approved encrypted
 development machine. It never writes SQL, never targets cloud staging or production,
@@ -106,9 +106,11 @@ acceptance rerun completed for `dev-rehearsal-20260724-01` on 2026-07-27.
 `portable-v1` deletes local control state last and is intentionally not part of the
 ordinary rehearsal command.
 
-The exact owner approval required before either private backup workflow executes is:
+The exact run-specific owner approval required before either private backup workflow
+executes is:
 
-> Approve one-way local portable scrub, private backup creation, and disposable local restore validation for run dev-rehearsal-20260724-01.
+> Approve one-way local portable scrub, private backup creation, disposable exact
+> restore validation, and S2 rollback validation for run `<approved-run-id>`.
 
 ## Portable scrub and private backup gate
 
@@ -179,6 +181,14 @@ second backend, and deletes only its disposable local data directory.
 The 2026-07-27 validation matched every one of the 45 table hashes, preserved all 828
 recording catalog rows, reconciled all eight domains and 62 checkpoints with zero
 inserts, and deleted the disposable deployment.
+
+The strict third run `dev-rehearsal-20260727-03` repeated the same exact restore and
+zero-insert replay with two approved human smoke identities in the snapshot. Before the
+one-way scrub, it also pre-provisioned a least-privilege pipeline principal, proved
+administrator/member/pipeline reads, rejected all three application-write probes in S1,
+rejected an unlinked identity, validated pipeline disable/re-enable, and passed all six
+SQL-baseline p50/p95/p99 workload comparisons. Aggregate evidence is recorded in
+`MIGRATION_REHEARSAL_RESULT_2026-07-27-03.md`.
 
 For an approved rehearsal that also needs S2 rollback evidence, add the separately
 guarded rollback flags:

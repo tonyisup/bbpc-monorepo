@@ -36,8 +36,8 @@ One person may hold multiple roles, but every row must be explicitly acknowledge
 
 ## Measured deadlines
 
-The clean local migration plus exact disposable restore validation completed in 9
-minutes 15 seconds. The proposed production deadlines apply a greater-than-three-times
+The slowest clean local migration plus exact disposable restore validation completed in
+9 minutes 43 seconds. The proposed production deadlines apply a greater-than-three-times
 operator/network buffer:
 
 | Boundary | Hard deadline | Required action if missed |
@@ -64,9 +64,24 @@ new go/no-go.
 - [ ] Legacy SQL/NextAuth variables remain available to both Vercel projects for S2
       rollback.
 - [ ] Maintenance communication is scheduled and acknowledged.
-- [ ] T15 identity-rehearsal policy is resolved in writing.
-- [ ] The authenticated admin/member/pipeline performance harness passes on the
+- [x] T15 identity-rehearsal policy is resolved in writing.
+- [x] The authenticated admin/member/pipeline performance harness passes on the
       approved identity-bearing target.
+
+Validated strict local rehearsal evidence, not valid for production restore:
+
+- Run ID: `dev-rehearsal-20260727-03`
+- Source fingerprint:
+  `5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a`
+- Canonical rows: 10,111
+- Identity matrix: one administrator, one ordinary member, one publish-only pipeline
+  principal
+- Workload gate: six of six p95 comparisons passed
+- Private backup: 983,578 bytes, 45 tables, 10,559 rows
+- Backup SHA-256:
+  `eea6d32cbd4471b4681fc659020995435cdacd2c58bb1c395723ae49fdf8518a`
+- Restore: all table hashes matched, 9,283 migration rows reused, zero inserted
+- Rollback: S1→S2→S0 passed with writes disabled and no first application write
 
 ## S1 migration and backup
 
@@ -146,7 +161,8 @@ is Convex restore or forward fix; SQL must not be reopened as an application wri
 
 ## Approvals
 
-- T15 identity-rehearsal decision: `TBD`
+- T15 identity-rehearsal decision: `strict identity-bearing third rehearsal completed;
+  owner approved 2026-07-27`
 - 30/15/45-minute deadlines approved by / at: `TBD`
 - S0→S1 production approval by / at: `TBD`
 - S2 acceptance signed by / at: `TBD`

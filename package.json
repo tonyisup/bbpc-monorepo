@@ -59,6 +59,7 @@
     "migration:rehearse:local": "node local-tools/sql/rehearse-local.mjs",
     "migration:backup:local": "node local-tools/sql/portable-backup-local.mjs",
     "migration:restore:local": "node local-tools/sql/portable-restore-local.mjs",
+    "migration:validate:identity:local": "node local-tools/performance/validate-authenticated-rehearsal.mjs",
     "migration:test:extractor": "node --test local-tools/sql/*.test.mjs",
     "migration:test:recording": "node --test local-tools/recording/*.test.mjs",
     "performance:benchmark:public": "node local-tools/performance/benchmark-public.mjs",
