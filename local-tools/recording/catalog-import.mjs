@@ -158,6 +158,60 @@ export function canonicalizeRecordingCatalogs(
   return { sounders, templates };
 }
 
+export function publicRecordingCatalogRowsFromArchive({
+  sounders,
+  templates,
+}) {
+  if (!Array.isArray(sounders) || !Array.isArray(templates)) {
+    throw new Error(
+      "Archived recording catalog documents must be arrays",
+    );
+  }
+  const orderedSounders = [...sounders].sort((left, right) => {
+    const orderDifference =
+      left.sortOrder - right.sortOrder;
+    if (orderDifference !== 0) {
+      return orderDifference;
+    }
+    const categoryDifference =
+      left.category.localeCompare(right.category);
+    if (categoryDifference !== 0) {
+      return categoryDifference;
+    }
+    return left.name.localeCompare(right.name);
+  });
+  const orderedTemplates = [...templates].sort(
+    (left, right) => {
+      const orderDifference =
+        left.sortOrder - right.sortOrder;
+      if (orderDifference !== 0) {
+        return orderDifference;
+      }
+      return left._creationTime - right._creationTime;
+    },
+  );
+  return {
+    sounders: orderedSounders.map((sounder) => ({
+      id: sounder.sounderId,
+      blobName: sounder.blobName,
+      name: sounder.name,
+      category: sounder.category,
+      url: sounder.url,
+      duration: sounder.duration,
+      size: sounder.size,
+      contentType: sounder.contentType,
+    })),
+    templates: orderedTemplates.map((template) => ({
+      id: template.templateId,
+      label: template.label,
+      type: template.type,
+      introSounder: template.introSounder,
+      outroSounder: template.outroSounder,
+      sortOrder: template.sortOrder,
+    })),
+  };
+}
+
 export function recordingCatalogDigest(catalogs) {
   return `sha256:${createHash("sha256")
     .update(JSON.stringify(catalogs))

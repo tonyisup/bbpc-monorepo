@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canonicalizeRecordingCatalogs,
+  publicRecordingCatalogRowsFromArchive,
   recordingCatalogDigest,
   recordingCatalogImportPayload,
 } from "./catalog-import.mjs";
@@ -93,5 +94,60 @@ test("rejects duplicate keys and unsafe catalog values", () => {
       rawSounders,
       [{ ...rawTemplates[0], type: "invalid" }],
     ),
+  );
+});
+
+test("reconstructs retired public catalog query ordering from archive rows", () => {
+  const publicRows =
+    publicRecordingCatalogRowsFromArchive({
+      sounders: [
+        {
+          sounderId: "later",
+          blobName: "later.mp3",
+          name: "Later",
+          category: "B",
+          url: "https://example.com/later.mp3",
+          duration: 2,
+          size: 2,
+          contentType: "audio/mpeg",
+          sortOrder: 2,
+        },
+        {
+          sounderId: "first",
+          blobName: "first.mp3",
+          name: "First",
+          category: "A",
+          url: "https://example.com/first.mp3",
+          duration: 1,
+          size: 1,
+          contentType: "audio/mpeg",
+          sortOrder: 1,
+        },
+      ],
+      templates: [
+        {
+          _creationTime: 20,
+          templateId: "second",
+          label: "Second",
+          type: "outro",
+          sortOrder: 1,
+        },
+        {
+          _creationTime: 10,
+          templateId: "first",
+          label: "First",
+          type: "intro",
+          sortOrder: 1,
+        },
+      ],
+    });
+
+  assert.deepEqual(
+    publicRows.sounders.map((sounder) => sounder.id),
+    ["first", "later"],
+  );
+  assert.deepEqual(
+    publicRows.templates.map((template) => template.id),
+    ["first", "second"],
   );
 });

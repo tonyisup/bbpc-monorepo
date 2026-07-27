@@ -1,7 +1,7 @@
 # Local Production-Derived Migration Rehearsal
 
-Status: **local rehearsal, private backups, and disposable restores validated
-2026-07-27**
+Status: **two production-scale local rehearsals, private backups, disposable
+restores, and S2 rollback validated 2026-07-27**
 
 This runbook exercises the full offline data milestone on an approved encrypted
 development machine. It never writes SQL, never targets cloud staging or production,
@@ -235,6 +235,21 @@ checks the strict table allowlist and public catalog counts, and records only ag
 counts and hashes. The ZIP contains private recording rows and plaintext legacy invite
 and participant capabilities. It is an archive only: never import it into shared
 Convex, and never copy it into Git, cloud sync, CI, screenshots, tickets, or chat.
+
+After the standalone source has been retired, a later rehearsal may reuse only the
+already-approved public sounder/template subset from a validated archive:
+
+```sh
+npm run migration:recording-catalogs -- \
+  --run-id <new-cutover-run-id> \
+  --source-archive-run-id <validated-archive-run-id>
+```
+
+This mode requires the archive's completed disposable-restore evidence, reads only the
+`sounders` and `segmentTemplates` entries, reconstructs the retired public-query
+ordering, and requires the original catalog digest before invoking the guarded S1
+catalog mutation. Session, invite, participant, RTC, event, manifest, favorite, and
+upload rows remain backup-only and are never exposed to the shared import path.
 
 Validate recovery only in an isolated disposable local backend:
 
