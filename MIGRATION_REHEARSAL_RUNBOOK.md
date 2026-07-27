@@ -176,6 +176,27 @@ The 2026-07-27 validation matched every one of the 45 table hashes, preserved al
 recording catalog rows, reconciled all eight domains and 62 checkpoints with zero
 inserts, and deleted the disposable deployment.
 
+For an approved rehearsal that also needs S2 rollback evidence, add the separately
+guarded rollback flags:
+
+```sh
+npm run migration:restore:local -- \
+  --run-id <cutover-run-id> \
+  --batch-size 100 \
+  --validate-s2-rollback \
+  --ack-production-derived-local-only \
+  --ack-private-restore-validation \
+  --ack-delete-disposable-restore \
+  --ack-s2-rollback-validation
+```
+
+After the restored reconciliation evidence passes, this option moves only the
+disposable target from S1 to S2 and then executes the state machine's explicit S2→S0
+abort. It requires application writes to remain disabled throughout, proves that no
+first application write occurred, and validates the actor-scoped audit sequence
+S0→S1, S1→S2, S2→S0 before deleting the target. The aggregate-only restore manifest
+records the result. It never transitions to S3 and never opens application writes.
+
 Current Convex CLI exports may include a top-level `README.md`, the internal `_tables`
 metadata table, and per-table `generated_schema.jsonl` files. Imports preserve document
 IDs and creation times:

@@ -24,6 +24,7 @@ const ALL_TABLES = [
 ] as const;
 const MAX_PORTABLE_AUTH_IDENTITIES = 10_000;
 const MAX_PORTABLE_AUDIT_EVENTS = 10_000;
+const MAX_S2_ROLLBACK_AUDIT_EVENTS = 2_000;
 
 async function tableHasRows(
   ctx: DatabaseContext,
@@ -447,6 +448,91 @@ export const inspectPipelineIdentityEvidence = internalReadQuery({
           ([from, to], index) =>
             statusChanges[index]?.metadata?.from === from &&
             statusChanges[index]?.metadata?.to === to,
+        ),
+    };
+  },
+});
+
+export const inspectS2RollbackEvidence = internalReadQuery({
+  args: {
+    runId: v.string(),
+    actor: v.string(),
+  },
+  returns: v.object({
+    runMatches: v.boolean(),
+    cutoverStageS0: v.boolean(),
+    applicationWritesDisabled: v.boolean(),
+    firstApplicationWriteAbsent: v.boolean(),
+    initializationAuditCount: v.number(),
+    transitionAuditCount: v.number(),
+    transitionSequenceValid: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const systemState = await ctx.db
+      .query("systemState")
+      .withIndex("by_singletonKey", (query) =>
+        query.eq("singletonKey", "global"),
+      )
+      .unique();
+    const auditEvents = await ctx.db
+      .query("auditEvents")
+      .withIndex(
+        "by_cutoverRunId_and_createdAt",
+        (query) => query.eq("cutoverRunId", args.runId),
+      )
+      .order("desc")
+      .take(MAX_S2_ROLLBACK_AUDIT_EVENTS + 1);
+    if (
+      auditEvents.length >
+      MAX_S2_ROLLBACK_AUDIT_EVENTS
+    ) {
+      throw new Error(
+        "S2 rollback audit inspection exceeds the audited bound",
+      );
+    }
+    const actorEvents: Array<Doc<"auditEvents">> = [];
+    for (const event of auditEvents) {
+      if (event.metadata?.actor === args.actor) {
+        actorEvents.push(event);
+      }
+    }
+    actorEvents.sort(
+      (left, right) =>
+        left._creationTime - right._creationTime,
+    );
+    let initializationAuditCount = 0;
+    const transitions: Array<Doc<"auditEvents">> = [];
+    for (const event of actorEvents) {
+      if (event.action === "system.initialize") {
+        initializationAuditCount += 1;
+      }
+      if (event.action === "system.transition") {
+        transitions.push(event);
+      }
+    }
+    const expectedTransitions = [
+      ["S0", "S1"],
+      ["S1", "S2"],
+      ["S2", "S0"],
+    ] as const;
+    return {
+      runMatches: systemState?.cutoverRunId === args.runId,
+      cutoverStageS0: systemState?.cutoverStage === "S0",
+      applicationWritesDisabled:
+        systemState?.applicationWriteMode === "disabled",
+      firstApplicationWriteAbsent:
+        systemState?.firstApplicationWriteAt === undefined,
+      initializationAuditCount,
+      transitionAuditCount: transitions.length,
+      transitionSequenceValid:
+        transitions.length === expectedTransitions.length &&
+        expectedTransitions.every(
+          ([fromStage, toStage], index) =>
+            transitions[index]?.metadata?.fromStage ===
+              fromStage &&
+            transitions[index]?.metadata?.toStage === toStage &&
+            transitions[index]?.metadata
+              ?.applicationWriteMode === "disabled",
         ),
     };
   },

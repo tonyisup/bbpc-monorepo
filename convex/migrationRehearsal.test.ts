@@ -3,6 +3,7 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 
+import { BBPC_API_VERSION } from "../contracts/index.js";
 import { internal } from "./_generated/api.js";
 import { MIGRATION_DOMAINS } from "./migration/constants.js";
 import schema from "./schema.js";
@@ -506,6 +507,62 @@ describe("local migration rehearsal preflight", () => {
     ).resolves.toMatchObject({
       portable: false,
       nonemptyTemporaryTables: ["migrationRawUsers"],
+    });
+  });
+
+  test("proves the audited S2-to-S0 rollback sequence", async () => {
+    const t = convexTest(schema, modules);
+    const runId = "s2-rollback-run";
+    const actor = "portable-restore-s2-rollback";
+    await t.mutation(internal.system.cutover.initialize, {
+      cutoverRunId: runId,
+      apiVersion: BBPC_API_VERSION,
+      actor,
+    });
+    await t.mutation(internal.system.cutover.transition, {
+      cutoverRunId: runId,
+      expectedStage: "S0",
+      nextStage: "S1",
+      actor,
+    });
+    await t.mutation(internal.system.cutover.transition, {
+      cutoverRunId: runId,
+      expectedStage: "S1",
+      nextStage: "S2",
+      actor,
+    });
+    await t.mutation(internal.system.cutover.transition, {
+      cutoverRunId: runId,
+      expectedStage: "S2",
+      nextStage: "S0",
+      actor,
+    });
+
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectS2RollbackEvidence,
+        { runId, actor },
+      ),
+    ).resolves.toEqual({
+      runMatches: true,
+      cutoverStageS0: true,
+      applicationWritesDisabled: true,
+      firstApplicationWriteAbsent: true,
+      initializationAuditCount: 1,
+      transitionAuditCount: 3,
+      transitionSequenceValid: true,
+    });
+    await expect(
+      t.query(
+        internal.migration.rehearsal
+          .inspectS2RollbackEvidence,
+        { runId, actor: "wrong-actor" },
+      ),
+    ).resolves.toMatchObject({
+      initializationAuditCount: 0,
+      transitionAuditCount: 0,
+      transitionSequenceValid: false,
     });
   });
 

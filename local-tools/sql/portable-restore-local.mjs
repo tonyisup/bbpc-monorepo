@@ -33,12 +33,19 @@ import { verifyDomainManifest } from "./manifest.mjs";
 import {
   readRecordingCatalogManifest,
 } from "../recording/catalog-manifest.mjs";
+import {
+  assertS2RollbackEvidence,
+  S2_ROLLBACK_ACTOR,
+} from "./s2-rollback.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(toolDirectory, "../..");
 const SOURCE_ACK = "--ack-production-derived-local-only";
 const RESTORE_ACK = "--ack-private-restore-validation";
 const DELETE_ACK = "--ack-delete-disposable-restore";
+const S2_ROLLBACK_FLAG = "--validate-s2-rollback";
+const S2_ROLLBACK_ACK =
+  "--ack-s2-rollback-validation";
 const convexExecutable = path.join(
   projectRoot,
   "node_modules",
@@ -51,9 +58,11 @@ function usage() {
     "Usage:",
     "  npm run migration:restore:local -- --run-id <id> " +
       "[--batch-size <1..100>] [--cloud-port <port>] " +
-      "[--site-port <port>] [--dry-run] " +
+      "[--site-port <port>] [--validate-s2-rollback] " +
+      "[--dry-run] " +
       `${SOURCE_ACK}`,
     `  execute: ${RESTORE_ACK} ${DELETE_ACK}`,
+    `  S2 rollback execution: ${S2_ROLLBACK_ACK}`,
     "",
     "Restores the private portable snapshot into a second disposable",
     "local Convex deployment, compares exact table hashes, reruns all",
@@ -83,6 +92,9 @@ function parseArguments(argv) {
       ? 3_311
       : Number(argv[sitePortIndex + 1]);
   const dryRun = argv.includes("--dry-run");
+  const validateS2Rollback = argv.includes(
+    S2_ROLLBACK_FLAG,
+  );
   if (
     typeof runId !== "string" ||
     !/^[A-Za-z0-9._:-]{1,100}$/u.test(runId)
@@ -115,9 +127,20 @@ function parseArguments(argv) {
       "Disposable local Convex ports must be distinct",
     );
   }
+  if (
+    !validateS2Rollback &&
+    argv.includes(S2_ROLLBACK_ACK)
+  ) {
+    throw new Error(
+      `${S2_ROLLBACK_ACK} requires ${S2_ROLLBACK_FLAG}`,
+    );
+  }
   for (const acknowledgement of [
     SOURCE_ACK,
     ...(dryRun ? [] : [RESTORE_ACK, DELETE_ACK]),
+    ...(!dryRun && validateS2Rollback
+      ? [S2_ROLLBACK_ACK]
+      : []),
   ]) {
     if (!argv.includes(acknowledgement)) {
       throw new Error(
@@ -131,6 +154,7 @@ function parseArguments(argv) {
     cloudPort,
     sitePort,
     dryRun,
+    validateS2Rollback,
   };
 }
 
@@ -410,7 +434,11 @@ const {
   cloudPort,
   sitePort,
   dryRun,
+  validateS2Rollback,
 } = parseArguments(process.argv.slice(2));
+const restoreActor = validateS2Rollback
+  ? S2_ROLLBACK_ACTOR
+  : "portable-restore-validation";
 const verifiedDomains = Object.fromEntries(
   REHEARSAL_DOMAINS.map((domain) => [
     domain,
@@ -549,6 +577,7 @@ process.stdout.write(
     `snapshotTables=${String(Object.keys(sourceSnapshot.tables).length)}`,
     `cloudPort=${String(cloudPort)}`,
     `sitePort=${String(sitePort)}`,
+    `s2RollbackValidation=${validateS2Rollback ? "enabled" : "disabled"}`,
     "",
   ].join("\n"),
 );
@@ -689,13 +718,13 @@ try {
   runConvex(restoreProject, "system/cutover:initialize", {
     cutoverRunId: runId,
     apiVersion: BBPC_API_VERSION,
-    actor: "portable-restore-validation",
+    actor: restoreActor,
   });
   runConvex(restoreProject, "system/cutover:transition", {
     cutoverRunId: runId,
     expectedStage: "S0",
     nextStage: "S1",
-    actor: "portable-restore-validation",
+    actor: restoreActor,
   });
   stageVerifiedDomains({
     restoreProject,
@@ -719,9 +748,55 @@ try {
     { runId },
   );
   assertRestoreEvidence(evidence, migrationRows);
+  let s2Rollback;
+  if (validateS2Rollback) {
+    const enteredS2 = runConvex(
+      restoreProject,
+      "system/cutover:transition",
+      {
+        cutoverRunId: runId,
+        expectedStage: "S1",
+        nextStage: "S2",
+        actor: restoreActor,
+      },
+    );
+    if (
+      enteredS2?.cutoverStage !== "S2" ||
+      enteredS2.applicationWriteMode !== "disabled"
+    ) {
+      throw new Error(
+        "The disposable target did not safely enter S2",
+      );
+    }
+    const rolledBack = runConvex(
+      restoreProject,
+      "system/cutover:transition",
+      {
+        cutoverRunId: runId,
+        expectedStage: "S2",
+        nextStage: "S0",
+        actor: restoreActor,
+      },
+    );
+    if (
+      rolledBack?.cutoverStage !== "S0" ||
+      rolledBack.applicationWriteMode !== "disabled"
+    ) {
+      throw new Error(
+        "The disposable target did not safely roll back to S0",
+      );
+    }
+    s2Rollback = assertS2RollbackEvidence(
+      runConvex(
+        restoreProject,
+        "migration/rehearsal:inspectS2RollbackEvidence",
+        { runId, actor: restoreActor },
+      ),
+    );
+  }
 
   restoreEvidence = {
-    formatVersion: 1,
+    formatVersion: 2,
     runId,
     validatedAt: new Date().toISOString(),
     sourceSnapshotSha256: sourceSnapshot.snapshotSha256,
@@ -737,6 +812,9 @@ try {
       reusedRows: evidence.checkpointSummary.reusedRows,
       allDomainsReconciled: evidence.allDomainsReconciled,
     },
+    ...(s2Rollback === undefined
+      ? {}
+      : { s2Rollback }),
     containsRowValues: false,
   };
 } finally {
@@ -772,6 +850,9 @@ process.stdout.write(
     "Every snapshot table hash matched before validation.",
     `migrationRowsReused=${String(migrationRows)}`,
     `recordingCatalogRowsPreserved=${String(totalRows - migrationRows)}`,
+    ...(validateS2Rollback
+      ? ["s2RollbackValidated=true"]
+      : []),
     `restoreManifest=${restoreManifestPath}`,
     "The disposable production-derived deployment was deleted.",
     "",
