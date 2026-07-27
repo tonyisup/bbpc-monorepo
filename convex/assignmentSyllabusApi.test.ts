@@ -482,7 +482,8 @@ describe("assignment and syllabus API", () => {
 
   test("rejects stale assignment writes and protects bounded audio metadata", async () => {
     const t = createTestBackend();
-    const { memberId, otherId } = await seedActors(t);
+    const { adminId, memberId, otherId } =
+      await seedActors(t);
     const movieId = await seedMovie(t, "workbench");
     const episodeId = await seedEpisode(t, 15);
     const assignmentId = await seedAssignment(t, {
@@ -791,7 +792,7 @@ describe("assignment and syllabus API", () => {
       }),
       "NOT_FOUND",
     );
-    await expectDomainError(
+    await expect(
       admin.mutation(api.assignments.admin.removeAudioMessage, {
         clientApiVersion: BBPC_API_VERSION,
         id: externalAudioId,
@@ -803,9 +804,47 @@ describe("assignment and syllabus API", () => {
           createdAt: 200,
         },
       }),
-      "CONFLICT",
-      { externalCleanupRequired: true },
-    );
+    ).resolves.toEqual({ id: externalAudioId });
+    await expect(
+      admin.mutation(api.assignments.admin.removeAudioMessage, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: externalAudioId,
+        expected: {
+          assignmentId,
+          userId: memberId,
+          url: "https://audio.example.test/external.webm",
+          fileKey: "external-audio-key",
+          createdAt: 200,
+        },
+      }),
+    ).resolves.toEqual({ id: externalAudioId });
+    const externalCleanup = await t.run(async (ctx) => ({
+      message: await ctx.db.get(
+        "assignmentAudioMessages",
+        externalAudioId,
+      ),
+      intent: await ctx.db
+        .query("sideEffectIntents")
+        .withIndex(
+          "by_resourceType_and_resourceId",
+          (query) =>
+            query
+              .eq(
+                "resourceType",
+                "assignmentAudioMessage",
+              )
+              .eq("resourceId", externalAudioId),
+        )
+        .unique(),
+    }));
+    expect(externalCleanup.message).toBeNull();
+    expect(externalCleanup.intent).toMatchObject({
+      operation: "uploadthing.deleteFile",
+      status: "pending",
+      attemptCount: 0,
+      requestedByUserId: adminId,
+      effectiveUserId: memberId,
+    });
   });
 
   test("refuses referenced assignment deletion and deletes unreferenced assignments", async () => {

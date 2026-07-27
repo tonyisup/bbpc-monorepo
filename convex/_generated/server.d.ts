@@ -30,6 +30,7 @@ type Env = {
   readonly CLERK_JWT_ISSUER_DOMAIN: string;
   readonly CLERK_M2M_AUDIENCE: string;
   readonly TMDB_API_KEY: string | undefined;
+  readonly UPLOADTHING_TOKEN: string | undefined;
 };
 
 /**

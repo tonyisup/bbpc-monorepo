@@ -903,7 +903,7 @@ describe("administrator episode API", () => {
         },
       ),
     ).resolves.toEqual({ id: second.id });
-    await expectDomainError(
+    await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.episodes.admin.removeAudioMessage,
         {
@@ -917,9 +917,49 @@ describe("administrator episode API", () => {
           },
         },
       ),
-      "CONFLICT",
-      { externalCleanupRequired: true },
-    );
+    ).resolves.toEqual({ id: first.id });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.episodes.admin.removeAudioMessage,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: first.id,
+          expected: {
+            episodeId,
+            url: first.url,
+            fileKey: first.fileKey,
+            createdAt: first.createdAt,
+          },
+        },
+      ),
+    ).resolves.toEqual({ id: first.id });
+    const cleanup = await t.run(async (ctx) => ({
+      message: await ctx.db.get(
+        "episodeAudioMessages",
+        first.id,
+      ),
+      intent: await ctx.db
+        .query("sideEffectIntents")
+        .withIndex(
+          "by_resourceType_and_resourceId",
+          (query) =>
+            query
+              .eq(
+                "resourceType",
+                "episodeAudioMessage",
+              )
+              .eq("resourceId", first.id),
+        )
+        .unique(),
+    }));
+    expect(cleanup.message).toBeNull();
+    expect(cleanup.intent).toMatchObject({
+      operation: "uploadthing.deleteFile",
+      status: "pending",
+      attemptCount: 0,
+      requestedByUserId: adminId,
+      effectiveUserId: adminId,
+    });
     await expectDomainError(
       t.withIdentity(ADMIN_IDENTITY).query(
         api.episodes.admin.listAudioMessages,

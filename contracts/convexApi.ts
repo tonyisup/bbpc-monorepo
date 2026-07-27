@@ -9700,5 +9700,90 @@ export type PublicApiType = {
       >;
     };
   };
+  sideEffects: {
+    intents: {
+      list: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          status?:
+            | "pending"
+            | "processing"
+            | "retryScheduled"
+            | "succeeded"
+            | "terminal";
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            attemptCount: number;
+            completedAt: number | null;
+            createdAt: number;
+            id: Id<"sideEffectIntents">;
+            lastAttemptAt: number | null;
+            lastErrorCode: string | null;
+            nextAttemptAt: number | null;
+            operation: "uploadthing.deleteFile";
+            resourceId: string;
+            resourceType:
+              "episodeAudioMessage" | "assignmentAudioMessage" | "profileImage";
+            status:
+              | "pending"
+              | "processing"
+              | "retryScheduled"
+              | "succeeded"
+              | "terminal";
+            updatedAt: number;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      redrive: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          expectedStatus:
+            | "pending"
+            | "processing"
+            | "retryScheduled"
+            | "succeeded"
+            | "terminal";
+          expectedUpdatedAt: number;
+          id: Id<"sideEffectIntents">;
+        },
+        {
+          attemptCount: number;
+          completedAt: number | null;
+          createdAt: number;
+          id: Id<"sideEffectIntents">;
+          lastAttemptAt: number | null;
+          lastErrorCode: string | null;
+          nextAttemptAt: number | null;
+          operation: "uploadthing.deleteFile";
+          resourceId: string;
+          resourceType:
+            "episodeAudioMessage" | "assignmentAudioMessage" | "profileImage";
+          status:
+            | "pending"
+            | "processing"
+            | "retryScheduled"
+            | "succeeded"
+            | "terminal";
+          updatedAt: number;
+        }
+      >;
+    };
+  };
 };
 export type InternalApiType = {};

@@ -9,6 +9,10 @@ import { adminMutation, adminQuery } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import {
+  enqueueUploadThingDelete,
+  findUploadThingDeleteIntent,
+} from "../sideEffects/intents.js";
+import {
   MAX_ASSIGNMENTS_PER_EPISODE,
   MAX_ASSIGNMENT_AUDIO_PAGE_SIZE,
   MAX_ASSIGNMENT_WORKBENCH_GUESSES,
@@ -576,6 +580,16 @@ export const removeAudioMessage = adminMutation({
   },
   returns: v.object({ id: v.id("assignmentAudioMessages") }),
   handler: async (ctx, args) => {
+    const existingIntent = await findUploadThingDeleteIntent(
+      ctx,
+      {
+        resourceType: "assignmentAudioMessage",
+        resourceId: args.id,
+      },
+    );
+    if (existingIntent !== null) {
+      return { id: args.id };
+    }
     const message = await ctx.db.get(
       "assignmentAudioMessages",
       args.id,
@@ -598,13 +612,19 @@ export const removeAudioMessage = adminMutation({
         "The assignment audio message changed after it was loaded.",
       );
     }
-    if (message.fileKey !== undefined) {
-      domainError(
-        "CONFLICT",
-        "The assignment audio file must be removed from its external provider before deleting metadata.",
-        { details: { externalCleanupRequired: true } },
-      );
-    }
+    const cleanup =
+      message.fileKey === undefined
+        ? null
+        : await enqueueUploadThingDelete(ctx, {
+            resourceType: "assignmentAudioMessage",
+            resourceId: message._id,
+            providerKey: message.fileKey,
+            requestedByUserId:
+              ctx.actor.authenticatedUser._id,
+            effectiveUserId: message.userId,
+            cutoverRunId: ctx.systemState.cutoverRunId,
+            clientApiVersion: ctx.systemState.apiVersion,
+          });
     await ctx.db.delete("assignmentAudioMessages", message._id);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
@@ -612,6 +632,13 @@ export const removeAudioMessage = adminMutation({
       targetType: "assignmentAudioMessage",
       targetId: message._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
+      ...(cleanup === null
+        ? {}
+        : {
+            metadata: {
+              sideEffectIntentId: cleanup.intent._id,
+            },
+          }),
     });
     return { id: message._id };
   },

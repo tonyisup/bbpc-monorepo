@@ -231,6 +231,7 @@ export const PORTABLE_BACKUP_TABLES = [
   "roles",
   "userRoles",
   "auditEvents",
+  "sideEffectIntents",
   "archivePosts",
   "episodes",
   "episodeLinks",

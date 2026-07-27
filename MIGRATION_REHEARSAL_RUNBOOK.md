@@ -126,9 +126,10 @@ The command re-verifies all manifests and aggregate rehearsal evidence. It suppo
 resuming an interrupted scrub, deletes every raw/control/migration table in bounded
 batches, verifies the completion audit and absence of temporary state, then exports
 only the schema-tested portable allowlist. It inspects every ZIP entry, rejects an
-unexpected table or path, checks all 31 canonical counts, and writes a private
-checksummed manifest beside the snapshot. It never includes file storage and never
-targets a cloud deployment.
+unexpected table or path, checks all 32 canonical counts (including the
+required-empty side-effect intent table), and writes a private checksummed manifest
+beside the snapshot. It never includes file storage and never targets a cloud
+deployment.
 
 The backup ZIP contains production-derived row values. Keep its directory mode `0700`
 and files `0600`; do not put it in Git, cloud sync, CI, screenshots, tickets, or chat.

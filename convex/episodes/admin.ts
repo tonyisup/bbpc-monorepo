@@ -9,6 +9,10 @@ import { adminMutation, adminQuery } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import {
+  enqueueUploadThingDelete,
+  findUploadThingDeleteIntent,
+} from "../sideEffects/intents.js";
+import {
   allocateEpisodeSlug,
   assertEpisodeLinkCapacity,
   episodeShortTextLimit,
@@ -497,6 +501,16 @@ export const removeAudioMessage = adminMutation({
   },
   returns: v.object({ id: v.id("episodeAudioMessages") }),
   handler: async (ctx, args) => {
+    const existingIntent = await findUploadThingDeleteIntent(
+      ctx,
+      {
+        resourceType: "episodeAudioMessage",
+        resourceId: args.id,
+      },
+    );
+    if (existingIntent !== null) {
+      return { id: args.id };
+    }
     const message = await ctx.db.get(
       "episodeAudioMessages",
       args.id,
@@ -518,13 +532,19 @@ export const removeAudioMessage = adminMutation({
         "The episode audio message changed after it was loaded.",
       );
     }
-    if (message.fileKey !== undefined) {
-      domainError(
-        "CONFLICT",
-        "Externally stored audio must be removed from its file provider before deleting its metadata.",
-        { details: { externalCleanupRequired: true } },
-      );
-    }
+    const cleanup =
+      message.fileKey === undefined
+        ? null
+        : await enqueueUploadThingDelete(ctx, {
+            resourceType: "episodeAudioMessage",
+            resourceId: message._id,
+            providerKey: message.fileKey,
+            requestedByUserId:
+              ctx.actor.authenticatedUser._id,
+            effectiveUserId: message.userId,
+            cutoverRunId: ctx.systemState.cutoverRunId,
+            clientApiVersion: ctx.systemState.apiVersion,
+          });
     await ctx.db.delete("episodeAudioMessages", message._id);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
@@ -532,9 +552,22 @@ export const removeAudioMessage = adminMutation({
       targetType: "episodeAudioMessage",
       targetId: message._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
-      ...(message.episodeId === undefined
+      ...(message.episodeId === undefined &&
+      cleanup === null
         ? {}
-        : { metadata: { episodeId: message.episodeId } }),
+        : {
+            metadata: {
+              ...(message.episodeId === undefined
+                ? {}
+                : { episodeId: message.episodeId }),
+              ...(cleanup === null
+                ? {}
+                : {
+                    sideEffectIntentId:
+                      cleanup.intent._id,
+                  }),
+            },
+          }),
     });
     return { id: message._id };
   },

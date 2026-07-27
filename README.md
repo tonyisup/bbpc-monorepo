@@ -219,6 +219,23 @@ changes. The guarded extractor reads the archive table in one serializable local
 snapshot. The production-derived rehearsal reconciled all 433 rows. Approved canonical
 retention is backup-only, with no product-facing archive query.
 
+## Durable external side effects
+
+UploadThing deletion is modeled as a canonical `sideEffectIntents` record created in
+the same Convex transaction that removes episode or assignment audio metadata. A
+scheduled action claims each intent with a lease, calls the documented
+`POST /v6/deleteFiles` REST endpoint using the API key decoded from
+`UPLOADTHING_TOKEN`, and records only a redacted error code. The provider SDK is not a
+runtime dependency.
+
+Dispatch is idempotent by operation and canonical resource ID. Transient failures use
+bounded 1-minute, 5-minute, 30-minute, and 2-hour delays before reaching a terminal
+state on the fifth failed attempt. Administrator reads omit provider keys;
+compare-and-swap redrive supports terminal recovery and intentional remote-state
+reconciliation. The application write gate is checked before a provider call, and the
+final portable scrub refuses unresolved pending, processing, retry-scheduled, or
+terminal intents.
+
 ## Raw-staging and portable scrubs
 
 After identity, catalog, and episodes are each independently reconciled, an internal
@@ -236,11 +253,12 @@ impersonation sessions, and service principals in bounded batches. Its final ato
 step writes audit evidence, removes its own scrub record, and deletes the local
 `systemState`, restoring the backend's default-deny state before backup.
 
-The portable table allowlist is schema-tested: canonical domain tables, approved auth
-identities, and audit evidence are retained. Every other current table is explicitly
-classified for deletion, and adding an unclassified table fails tests. The portable
-scrub is intentionally one-way once `systemState` is removed and must not be executed
-until the runbook's production-derived rehearsal and backup gate are approved.
+The 32-table portable allowlist is schema-tested: canonical domain tables, approved
+auth identities, durable side-effect intents, and audit evidence are retained. Every
+other current table is explicitly classified for deletion, and adding an unclassified
+table fails tests. The portable scrub is intentionally one-way once `systemState` is
+removed and must not be executed until the runbook's production-derived rehearsal and
+backup gate are approved.
 
 The guarded local rehearsal is specified in
 [`MIGRATION_REHEARSAL_RUNBOOK.md`](./MIGRATION_REHEARSAL_RUNBOOK.md). Its manifest-derived

@@ -68,6 +68,7 @@ export function portableCountsFromRawCounts(rawCounts) {
   )) {
     canonicalCounts[canonicalTable] = rawCounts[rawTable];
   }
+  canonicalCounts.sideEffectIntents = 0;
   const domainRows = Object.fromEntries(
     MIGRATION_DOMAINS.map((domain) => [
       domain,

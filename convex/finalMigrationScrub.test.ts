@@ -750,6 +750,49 @@ describe("final portable scrub", () => {
     );
   });
 
+  test("refuses portable scrub while an external effect remains unresolved", async () => {
+    const t = createTestBackend();
+    await initializeAtS1(t);
+    await seedReconciledRun(t);
+    const intentId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        status: "active",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      return await ctx.db.insert("sideEffectIntents", {
+        operation: "uploadthing.deleteFile",
+        resourceType: "episodeAudioMessage",
+        resourceId: "portable-effect-resource",
+        idempotencyKey:
+          "uploadthing.deleteFile:episodeAudioMessage:portable-effect-resource",
+        providerKey: "portable-effect-provider-key",
+        status: "pending",
+        requestedByUserId: userId,
+        effectiveUserId: userId,
+        cutoverRunId: CUTOVER_RUN_ID,
+        attemptCount: 0,
+        nextAttemptAt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    });
+
+    await expectDomainError(startFinalScrub(t), "CONFLICT");
+    await t.run(async (ctx) => {
+      await ctx.db.patch("sideEffectIntents", intentId, {
+        status: "succeeded",
+        nextAttemptAt: undefined,
+        completedAt: 2,
+        updatedAt: 2,
+      });
+    });
+    await expect(startFinalScrub(t)).resolves.toMatchObject({
+      status: "running",
+      created: true,
+    });
+  });
+
   test("requires the exact reconciled run and validates operations and batches", async () => {
     const missingRun = createTestBackend();
     await initializeAtS1(missingRun);

@@ -11,6 +11,11 @@ import {
 } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
+import {
+  enqueueUploadThingDelete,
+  findUploadThingDeleteIntent,
+  isIntentOwnedBy,
+} from "../sideEffects/intents.js";
 import { episodeAudioMessageValidator } from "./validators.js";
 import { MAX_AUDIO_MESSAGES_PER_USER_EPISODE } from "./limits.js";
 
@@ -173,11 +178,40 @@ export const deleteMine = authenticatedMutation({
   args: { id: v.id("episodeAudioMessages") },
   returns: v.object({ id: v.id("episodeAudioMessages") }),
   handler: async (ctx, args) => {
+    const existingIntent = await findUploadThingDeleteIntent(
+      ctx,
+      {
+        resourceType: "episodeAudioMessage",
+        resourceId: args.id,
+      },
+    );
+    if (existingIntent !== null) {
+      if (!isIntentOwnedBy(existingIntent, ctx.actor.user._id)) {
+        domainError(
+          "NOT_FOUND",
+          "The audio message is unavailable.",
+        );
+      }
+      return { id: args.id };
+    }
     const message = await ctx.db.get(
       "episodeAudioMessages",
       args.id,
     );
     requireOwnedMessage(message, ctx.actor.user._id);
+    const cleanup =
+      message.fileKey === undefined
+        ? null
+        : await enqueueUploadThingDelete(ctx, {
+            resourceType: "episodeAudioMessage",
+            resourceId: message._id,
+            providerKey: message.fileKey,
+            requestedByUserId:
+              ctx.actor.authenticatedUser._id,
+            effectiveUserId: ctx.actor.user._id,
+            cutoverRunId: ctx.systemState.cutoverRunId,
+            clientApiVersion: ctx.systemState.apiVersion,
+          });
     await ctx.db.delete("episodeAudioMessages", message._id);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
@@ -185,6 +219,13 @@ export const deleteMine = authenticatedMutation({
       targetType: "episodeAudioMessage",
       targetId: message._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
+      ...(cleanup === null
+        ? {}
+        : {
+            metadata: {
+              sideEffectIntentId: cleanup.intent._id,
+            },
+          }),
     });
     return { id: message._id };
   },

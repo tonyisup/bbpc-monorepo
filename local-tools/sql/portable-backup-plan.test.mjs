@@ -25,9 +25,10 @@ function createRawCounts() {
 
 test("maps every raw count to canonical and domain totals", () => {
   const result = portableCountsFromRawCounts(createRawCounts());
-  assert.equal(Object.keys(result.canonicalCounts).length, 31);
+  assert.equal(Object.keys(result.canonicalCounts).length, 32);
   assert.equal(result.canonicalCounts.users, 19);
   assert.equal(result.canonicalCounts.archivePosts, 433);
+  assert.equal(result.canonicalCounts.sideEffectIntents, 0);
   assert.equal(result.domainRows.identity, 40);
   assert.equal(result.domainRows.archive, 433);
   assert.equal(result.totalRows, 473);

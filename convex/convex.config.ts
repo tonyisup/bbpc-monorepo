@@ -12,5 +12,6 @@ export default defineApp({
     ),
     BBPC_API_VERSION: v.string(),
     TMDB_API_KEY: v.optional(v.string()),
+    UPLOADTHING_TOKEN: v.optional(v.string()),
   },
 });

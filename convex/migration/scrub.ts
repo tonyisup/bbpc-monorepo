@@ -831,6 +831,28 @@ async function hasDeploymentControlRows(
   return impersonationSession !== null || servicePrincipal !== null;
 }
 
+async function hasUnresolvedSideEffectIntents(
+  ctx: DatabaseContext,
+): Promise<boolean> {
+  for (const status of [
+    "pending",
+    "processing",
+    "retryScheduled",
+    "terminal",
+  ] as const) {
+    const intent = await ctx.db
+      .query("sideEffectIntents")
+      .withIndex("by_status_and_nextAttemptAt", (query) =>
+        query.eq("status", status),
+      )
+      .first();
+    if (intent !== null) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export const startFinalScrub = internalMigrationMutation({
   args: {},
   returns: v.object({
@@ -846,6 +868,12 @@ export const startFinalScrub = internalMigrationMutation({
     );
     const runId = ctx.systemState.cutoverRunId;
     await requireAllDomainsReconciled(ctx, runId);
+    if (await hasUnresolvedSideEffectIntents(ctx)) {
+      domainError(
+        "CONFLICT",
+        "Every side-effect intent must be reconciled before portable scrub.",
+      );
+    }
     const existing = await ctx.db
       .query("migrationScrubRuns")
       .withIndex("by_runId_and_scope", (query) =>
@@ -1209,7 +1237,8 @@ export const finishFinalScrub = internalMigrationMutation({
       !hasAllRawScrubEvidence(scrubRun) ||
       (await hasLegacyTagAwardIds(ctx)) ||
       (await hasMigrationMetadataExcept(ctx, scrubRun._id)) ||
-      (await hasDeploymentControlRows(ctx))
+      (await hasDeploymentControlRows(ctx)) ||
+      (await hasUnresolvedSideEffectIntents(ctx))
     ) {
       domainError(
         "CONFLICT",

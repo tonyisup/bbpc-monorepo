@@ -22,6 +22,13 @@ const migrationScrubStatus = v.union(
   v.literal("running"),
   v.literal("completed"),
 );
+const sideEffectStatus = v.union(
+  v.literal("pending"),
+  v.literal("processing"),
+  v.literal("retryScheduled"),
+  v.literal("succeeded"),
+  v.literal("terminal"),
+);
 const auditValue = v.union(
   v.string(),
   v.number(),
@@ -157,6 +164,37 @@ export default defineSchema({
       "createdAt",
     ])
     .index("by_cutoverRunId_and_createdAt", ["cutoverRunId", "createdAt"]),
+
+  sideEffectIntents: defineTable({
+    operation: v.literal("uploadthing.deleteFile"),
+    resourceType: v.union(
+      v.literal("episodeAudioMessage"),
+      v.literal("assignmentAudioMessage"),
+      v.literal("profileImage"),
+    ),
+    resourceId: v.string(),
+    idempotencyKey: v.string(),
+    providerKey: v.string(),
+    status: sideEffectStatus,
+    requestedByUserId: v.id("users"),
+    effectiveUserId: v.optional(v.id("users")),
+    cutoverRunId: v.string(),
+    attemptCount: v.number(),
+    nextAttemptAt: v.optional(v.number()),
+    leaseExpiresAt: v.optional(v.number()),
+    lastAttemptAt: v.optional(v.number()),
+    lastErrorCode: v.optional(v.string()),
+    completedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_resourceType_and_resourceId", [
+      "resourceType",
+      "resourceId",
+    ])
+    .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"])
+    .index("by_updatedAt", ["updatedAt"]),
 
   archivePosts: defineTable({
     legacyId: v.optional(v.number()),
