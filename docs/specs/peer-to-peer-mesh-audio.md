@@ -1,5 +1,11 @@
 # Peer-to-Peer Mesh Audio Room
 
+> **Shared-backend status:** This document preserves the original feature design.
+> The active implementation now lives in the shared `bbpc-convex` project under
+> `convex/recording`, with namespaced recording tables in its root schema. Paths and
+> schema snippets below that begin with `convex/` describe the retired standalone
+> implementation and are not deployable from this repository.
+
 ## Context
 
 `bbpc-recording` should replace Google Meet for the live podcast call. V1 supports 3 regular hosts plus 1 occasional guest in an audio-only WebRTC mesh, while preserving the existing local-track recording and merge workflow.
@@ -41,7 +47,8 @@ graph TD
 
 ## Data Model
 
-Add Convex tables in `convex/schema.ts`.
+The original standalone design added these tables in `convex/schema.ts`. The
+active namespaced tables now live in `bbpc-convex/convex/schema.ts`.
 
 ```ts
 rtcPresence: defineTable({
@@ -80,7 +87,10 @@ rtcSignals: defineTable({
   .index('by_created_at', ['publicSessionId', 'createdAt'])
 ```
 
-Add Convex mutations/queries in a new `convex/rtc.ts`. These use Convex reactive queries on the client through `useQuery`; there is no custom polling loop for signal delivery.
+The original standalone design added these mutations and queries in
+`convex/rtc.ts`. Their active implementation now lives in
+`bbpc-convex/convex/recording/rtc.ts`. They use Convex reactive queries on the
+client through `useQuery`; there is no custom polling loop for signal delivery.
 
 ```ts
 joinAudio(args: {
@@ -426,8 +436,8 @@ Manual E2E checklist:
 
 | File | Change |
 | --- | --- |
-| `convex/schema.ts` | Add `rtcPresence` and `rtcSignals`. |
-| `convex/rtc.ts` | New RTC presence and signaling functions. |
+| `bbpc-convex/convex/schema.ts` | Shared namespaced recording presence and signaling tables. |
+| `bbpc-convex/convex/recording/rtc.ts` | Shared recording presence and signaling functions. |
 | `src/app/api/sessions/[sessionId]/rtc/ice/route.ts` | New short-lived ICE/TURN config endpoint. |
 | `src/app/sessions/[sessionId]/page.tsx` | Pass participant access token to client app. |
 | `src/components/dashboard/DashboardApp.tsx` | Thread access token into providers/components. |

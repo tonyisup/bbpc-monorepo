@@ -35,6 +35,12 @@ Sounder/template administration and ended-session retention use the shared
 Convex Administrator mutations and the global cutover write gate. Linked
 administrators can run those bounded operations from `/admin`.
 
+This repository intentionally contains no deployable Convex function directory.
+All recording schema and server functions live under `convex/recording` in the
+shared `bbpc-convex` project. The legacy standalone deployment is retained only
+through its approved private backup archive and must not receive new deployments
+or imports.
+
 ## Merge Bundle Workflow
 
 After a recording session, use the app's `Download Merge Bundle` button. The bundle includes the manifest, Audacity labels, uploaded recording URLs, participant join/leave intervals, and sounder asset URLs.
