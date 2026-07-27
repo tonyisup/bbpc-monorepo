@@ -100,7 +100,14 @@ export function requireRecordingSounder(
 }
 
 export function requireRecordingBlobName(value: string): string {
-  return requireText(value, "Sounder blob name", 1_024);
+  const blobName = requireText(value, "Sounder blob name", 1_024);
+  if (containsControlCharacter(blobName)) {
+    domainError(
+      "VALIDATION_FAILED",
+      "Sounder blob names cannot contain control characters.",
+    );
+  }
+  return blobName;
 }
 
 export function requireContentType(value: string): string {
@@ -125,12 +132,12 @@ export function requireTemplateLabel(value: string): string {
   return requireText(value, "Segment template label", 200);
 }
 
-export function requireOptionalSounderId(
+export function requireOptionalSounderBlobName(
   value: string | undefined,
 ): string | undefined {
   return value === undefined
     ? undefined
-    : requirePortableId(value, "Template sounder ID", 160);
+    : requireRecordingBlobName(value);
 }
 
 export function requireSortOrder(value: number): number {

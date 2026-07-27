@@ -6,7 +6,7 @@ import {
 } from "../functions.js";
 import { domainError } from "../lib/errors.js";
 import {
-  requireOptionalSounderId,
+  requireOptionalSounderBlobName,
   requireSortOrder,
   requireTemplateLabel,
 } from "./catalogModel.js";
@@ -86,10 +86,10 @@ export const upsertMany = adminMutation({
     );
     const templates = args.templates.map(
       (template, index) => {
-        const introSounder = requireOptionalSounderId(
+        const introSounder = requireOptionalSounderBlobName(
           template.introSounder,
         );
-        const outroSounder = requireOptionalSounderId(
+        const outroSounder = requireOptionalSounderBlobName(
           template.outroSounder,
         );
         return {

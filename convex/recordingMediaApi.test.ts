@@ -455,6 +455,22 @@ describe("shared recording media and catalogs", () => {
       ),
       "VALIDATION_FAILED",
     );
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.recording.sounders.replaceAll,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          sounders: [
+            {
+              ...firstSounder,
+              blobName: "drops/\u0000one.mp3",
+            },
+          ],
+          updatedAt: 1_303,
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
   });
 
   test("rejects malformed uploads and enforces per-session capacity", async () => {
@@ -768,7 +784,7 @@ describe("shared recording media and catalogs", () => {
       id: "template_update",
       label: "Initial",
       type: "segment" as const,
-      outroSounder: "sounder_outro",
+      outroSounder: "Soundboard/outro.mp3",
     };
     const templateInput = {
       clientApiVersion: BBPC_API_VERSION,
@@ -844,7 +860,7 @@ describe("shared recording media and catalogs", () => {
         {
           clientApiVersion: BBPC_API_VERSION,
           sounders: Array.from(
-            { length: 501 },
+            { length: 1_001 },
             (_, index) => ({
               id: `sounder_${String(index)}`,
               blobName: `sounders/${String(index)}.mp3`,

@@ -265,10 +265,10 @@ step writes audit evidence, removes its own scrub record, and deletes the local
 
 The 43-table portable allowlist is schema-tested: canonical domain tables, approved
 auth identities, durable side-effect intents, recording data, and audit evidence are
-retained. Recording counts remain required to be zero until their independent source
-reconciliation is implemented, so the existing portable backup fails closed if
-recording data appears prematurely. Every other current table is explicitly classified
-for deletion, and adding an unclassified table fails tests. The portable scrub is
+retained. The independently reconciled public recording catalogs may be populated in
+S1, while session/history tables remain a fail-closed blocker until their separate
+source disposition is approved and reconciled. Every other current table is explicitly
+classified for deletion, and adding an unclassified table fails tests. The portable scrub is
 intentionally one-way once `systemState` is removed and must not be executed until the
 runbook's production-derived rehearsal and backup gate are approved.
 
@@ -498,6 +498,13 @@ reads remain anonymous, while template/sounder replacement and destructive clean
 administrator-only and audited. Session capabilities are not part of the reusable
 account identity model and will be regenerated rather than copied as plaintext during
 recording-source reconciliation.
+
+The sounder catalog is bounded at 1,000 entries to cover the observed source inventory.
+Template sounder references retain their bounded Azure blob paths. The run-scoped
+`migration:recording-catalogs` command reads only the standalone deployment's public
+catalog queries, normalizes and hashes the payload, imports it atomically through the
+S1 migration gate, and verifies aggregate counts plus the SHA-256 digest. It is
+idempotent and writes one value-free audit event on the first import.
 
 ## Package consumers
 

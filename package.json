@@ -52,14 +52,16 @@
     "migration:extract:games": "node local-tools/sql/extract-games.mjs",
     "migration:extract:rankings": "node local-tools/sql/extract-rankings.mjs",
     "migration:extract:archive": "node local-tools/sql/extract-archive.mjs",
+    "migration:recording-catalogs": "node local-tools/recording/import-catalogs.mjs",
     "migration:stage:local": "node local-tools/sql/stage-local.mjs",
     "migration:rehearse:local": "node local-tools/sql/rehearse-local.mjs",
     "migration:backup:local": "node local-tools/sql/portable-backup-local.mjs",
     "migration:restore:local": "node local-tools/sql/portable-restore-local.mjs",
     "migration:test:extractor": "node --test local-tools/sql/*.test.mjs",
+    "migration:test:recording": "node --test local-tools/recording/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run migration:test:extractor && npm run test:coverage",
+    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run migration:test:extractor && npm run migration:test:recording && npm run test:coverage",
     "package:check": "npm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {

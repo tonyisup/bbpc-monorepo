@@ -31,6 +31,10 @@ export const CATALOG_RECONCILIATION_OPERATIONS = {
   finish: "catalog.reconcile.finish",
 } as const;
 
+export const RECORDING_CATALOG_OPERATIONS = {
+  import: "recording.catalogs.import",
+} as const;
+
 export const EPISODE_OPERATIONS = {
   start: "episodes.start",
   episodes: "episodes.episodes",

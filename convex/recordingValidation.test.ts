@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   requireFileSize,
-  requireOptionalSounderId,
+  requireOptionalSounderBlobName,
   requireRecordingSounder,
   requireRecordingUrl,
   requireSortOrder,
@@ -121,8 +121,10 @@ describe("recording boundary validation", () => {
     });
     expect(requireFileSize(0)).toBe(0);
     expect(requireSortOrder(10_000)).toBe(10_000);
-    expect(requireOptionalSounderId(undefined)).toBeUndefined();
-    expect(requireOptionalSounderId("sounder_01")).toBe("sounder_01");
+    expect(requireOptionalSounderBlobName(undefined)).toBeUndefined();
+    expect(
+      requireOptionalSounderBlobName("Soundboard/sounder 01.mp3"),
+    ).toBe("Soundboard/sounder 01.mp3");
 
     expectValidationError(() =>
       requireRecordingSounder({
@@ -135,5 +137,8 @@ describe("recording boundary validation", () => {
     );
     expectValidationError(() => requireFileSize(-1));
     expectValidationError(() => requireSortOrder(10_001));
+    expectValidationError(() =>
+      requireOptionalSounderBlobName("Soundboard/\u0000.mp3"),
+    );
   });
 });

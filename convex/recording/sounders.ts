@@ -13,7 +13,7 @@ import {
 } from "./catalogModel.js";
 import { requireRecordingTimestamp } from "./validators.js";
 
-const MAX_SOUNDERS = 500;
+const MAX_SOUNDERS = 1_000;
 const sounderInput = v.object({
   id: v.string(),
   blobName: v.string(),
