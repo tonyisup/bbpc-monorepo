@@ -62,6 +62,7 @@
     "migration:test:extractor": "node --test local-tools/sql/*.test.mjs",
     "migration:test:recording": "node --test local-tools/recording/*.test.mjs",
     "performance:benchmark:public": "node local-tools/performance/benchmark-public.mjs",
+    "performance:benchmark:authenticated": "node local-tools/performance/benchmark-authenticated.mjs",
     "performance:test": "node --test local-tools/performance/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

@@ -81,7 +81,10 @@ pipeline workflows. A zero-identity restored target cannot reproduce their succe
 runtime path without provisioned principals. Their bounded-query lint, function tests,
 consumer tests, and prior authenticated browser/service acceptance pass, but a
 repeatable direct runtime p50/p95/p99 comparison remains coupled to the final decision
-about identity-bearing rehearsal targets.
+about identity-bearing rehearsal targets. The guarded
+`performance:benchmark:authenticated` harness is ready for that target. It accepts only
+a localhost deployment, requires mode-`0600` local configuration and minimal identity
+files, verifies three distinct principals, and emits no admin key or identity claims.
 
 No production SLO is inferred from localhost latency. T16 must record deployed Convex
 and Vercel canary p50/p95/p99, response bytes, error rate, and platform scan metrics

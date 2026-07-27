@@ -65,6 +65,8 @@ new go/no-go.
       rollback.
 - [ ] Maintenance communication is scheduled and acknowledged.
 - [ ] T15 identity-rehearsal policy is resolved in writing.
+- [ ] The authenticated admin/member/pipeline performance harness passes on the
+      approved identity-bearing target.
 
 ## S1 migration and backup
 

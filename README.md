@@ -51,6 +51,11 @@ npm run migration:rehearse:local -- --help
 npm run migration:backup:local -- --help
 npm run migration:restore:local -- --help
 npm run performance:benchmark:public
+npm run performance:benchmark:authenticated -- \
+  --local-config .convex/local/default/config.json \
+  --admin-identity .local-migration/performance/admin-identity.json \
+  --member-identity .local-migration/performance/member-identity.json \
+  --pipeline-identity .local-migration/performance/pipeline-identity.json
 npm run contract:generate
 npm run contract:build
 ```
@@ -299,6 +304,13 @@ The performance command is deliberately localhost-only. It mirrors the anonymous
 comparable SQL workflow baseline with matching warm-up, sequential, and concurrency
 sample counts, writes only aggregate evidence to the private `.local-migration`
 directory, and fails if a Convex p95 exceeds the SQL baseline by more than 20%.
+
+The authenticated performance command is reserved for an identity-bearing rehearsal
+target. It requires the mode-`0600` local Convex configuration plus three distinct,
+mode-`0600` identity files containing only `issuer`, `subject`, and
+`tokenIdentifier`. It uses local admin impersonation to exercise the already-linked
+administrator, member, and pipeline principals. Neither the admin key nor identity
+claims are written to its aggregate output.
 
 ## Public episode read API
 
