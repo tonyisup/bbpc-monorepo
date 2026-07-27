@@ -1,9 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { BlobServiceClient } from '@azure/storage-blob';
-import { fetchMutation } from 'convex/nextjs';
-import { api } from '../../../../convex/_generated/api';
 import { readSessionGrantsFromRequest } from '@/lib/sessions/cookies';
 import { getParticipantForGrant } from '@/lib/sessions/store';
+import {
+  BBPC_CLIENT_API_VERSION,
+  recordingApi,
+} from '@/lib/convex/api';
+import { mutateSharedConvex } from '@/lib/convex/http';
 import {
   MAX_RECORDING_BYTES,
   estimatedBase64Bytes,
@@ -84,7 +87,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log('[Recording Upload] Success:', { blobName, size: audioBuffer.length });
 
-    const recordingId = await fetchMutation(api.recordings.saveUpload, {
+    const recordingId = await mutateSharedConvex(recordingApi.recordings.saveUpload, {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
       publicSessionId: sessionId,
       clientId: grant.clientId,
       accessToken: grant.accessToken,

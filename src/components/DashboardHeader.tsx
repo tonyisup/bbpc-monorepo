@@ -357,7 +357,7 @@ export function DashboardHeader() {
   });
 
   const copyInvite = useCallback(async () => {
-    if (sessionStatus === 'ended') return;
+    if (sessionStatus === 'ended' || inviteUrl === null) return;
 
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -455,7 +455,8 @@ export function DashboardHeader() {
   const canEditEpisode = isOwner && !sessionEnded && !hostRecordingActive;
   const guestCanJoinRecording = !isOwner && !sessionEnded && hostRecordingActive && !localRecordingActive;
   const canEndSession = isOwner && !sessionEnded;
-  const inviteButtonClassName = sessionEnded
+  const inviteUnavailable = sessionEnded || inviteUrl === null;
+  const inviteButtonClassName = inviteUnavailable
     ? 'px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] opacity-50 cursor-not-allowed transition-colors'
     : 'px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition-colors';
 
@@ -645,14 +646,22 @@ export function DashboardHeader() {
         </div>
 
         {/* Sounder stop */}
-        <button
-          onClick={copyInvite}
-          disabled={sessionEnded}
-          className={inviteButtonClassName}
-          title={sessionEnded ? 'Session ended' : 'Copy invite link'}
-        >
-          {inviteCopied ? 'Copied' : 'Invite'}
-        </button>
+        {isOwner && (
+          <button
+            onClick={copyInvite}
+            disabled={inviteUnavailable}
+            className={inviteButtonClassName}
+            title={
+              sessionEnded
+                ? 'Session ended'
+                : inviteUrl === null
+                  ? 'Invite link unavailable'
+                  : 'Copy invite link'
+            }
+          >
+            {inviteCopied ? 'Copied' : 'Invite'}
+          </button>
+        )}
 
         {/* Sounder stop */}
         <button

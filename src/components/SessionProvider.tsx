@@ -22,7 +22,7 @@ import {
   sessionStateToManifest,
   syncEventToAction,
 } from '@/lib/session-state';
-import { api } from '../../convex/_generated/api';
+import { recordingApi } from '@/lib/convex/api';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -34,7 +34,7 @@ interface SessionContextValue {
   elapsedMs: number;
   toManifest: () => Manifest;
   sessionId: string;
-  inviteUrl: string;
+  inviteUrl: string | null;
   participantClientId: string;
   participantAccessToken: string;
   participantRole: SessionRole;
@@ -47,7 +47,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 interface SessionProviderProps {
   children: React.ReactNode;
   sessionId: string;
-  inviteUrl: string;
+  inviteUrl: string | null;
   episode?: string;
   date?: string;
   hostName?: string;
@@ -122,7 +122,7 @@ export function SessionProvider({
     onRemoteEvent: handleRemoteEvent,
     onLiveRemoteEvent: handleLiveRemoteEvent,
   });
-  const lifecycle = useQuery(api.sessions.getSessionLifecycle, {
+  const lifecycle = useQuery(recordingApi.sessions.getSessionLifecycle, {
     publicId: sessionId,
     clientId: participantClientId,
     accessToken: participantAccessToken,

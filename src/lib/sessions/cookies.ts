@@ -30,6 +30,10 @@ function decodeGrants(value: string | undefined): SessionAccessGrant[] {
       && typeof grant.sessionId === 'string'
       && typeof grant.clientId === 'string'
       && typeof grant.accessToken === 'string'
+      && (
+        grant.inviteToken === undefined
+        || typeof grant.inviteToken === 'string'
+      )
     ));
   } catch {
     return [];

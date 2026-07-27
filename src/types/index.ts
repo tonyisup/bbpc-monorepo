@@ -112,7 +112,7 @@ export interface RtcSignal {
 
 export interface RecordingUploadMetadata {
   id: string;
-  publicSessionId?: string;
+  publicSessionId: string | null;
   episode: string;
   hostName: string;
   trackType: 'mic' | 'sounders';

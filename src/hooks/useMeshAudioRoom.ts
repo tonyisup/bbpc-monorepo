@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import {
+  BBPC_CLIENT_API_VERSION,
+  recordingApi,
+} from '@/lib/convex/api';
 import type { AudioDisconnectReason, RtcPresence, RtcSignal } from '@/types';
 import { createRtcId, shouldCreateInitialOffer } from '@/lib/rtc/mesh';
 
@@ -69,6 +72,7 @@ interface UseMeshAudioRoomOptions {
 
 const STALE_AFTER_MS = 15_000;
 const HEARTBEAT_MS = 5_000;
+const SIGNAL_WINDOW_REFRESH_MS = 30_000;
 const PAGE_HIDDEN_TIMEOUT_MS = 30_000;
 
 function supportsMeshAudio(): boolean {
@@ -117,6 +121,7 @@ export function useMeshAudioRoom({
   const [connectionStates, setConnectionStates] = useState<Record<string, RTCPeerConnectionState>>({});
   const [audioLevels, setAudioLevels] = useState<Record<string, number>>({});
   const [tick, setTick] = useState(0);
+  const [signalReadAt, setSignalReadAt] = useState(() => Date.now());
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -140,14 +145,14 @@ export function useMeshAudioRoom({
     ? { publicSessionId: sessionId, clientId, accessToken }
     : 'skip';
   const listSignalsArgs = joined
-    ? { publicSessionId: sessionId, clientId, accessToken }
+    ? { publicSessionId: sessionId, clientId, accessToken, now: signalReadAt }
     : 'skip';
-  const presence = useQuery(api.rtc.listAudioPresence, listPresenceArgs) as RtcPresence[] | undefined;
-  const signals = useQuery(api.rtc.listSignalsForParticipant, listSignalsArgs) as RtcSignal[] | undefined;
-  const joinAudioMutation = useMutation(api.rtc.joinAudio);
-  const leaveAudioMutation = useMutation(api.rtc.leaveAudio);
-  const heartbeatAudio = useMutation(api.rtc.heartbeatAudio);
-  const sendSignalMutation = useMutation(api.rtc.sendSignal);
+  const presence = useQuery(recordingApi.rtc.listAudioPresence, listPresenceArgs) as RtcPresence[] | undefined;
+  const signals = useQuery(recordingApi.rtc.listSignalsForParticipant, listSignalsArgs) as RtcSignal[] | undefined;
+  const joinAudioMutation = useMutation(recordingApi.rtc.joinAudio);
+  const leaveAudioMutation = useMutation(recordingApi.rtc.leaveAudio);
+  const heartbeatAudio = useMutation(recordingApi.rtc.heartbeatAudio);
+  const sendSignalMutation = useMutation(recordingApi.rtc.sendSignal);
 
   useEffect(() => {
     onAudioJoinedRef.current = onAudioJoined;
@@ -184,6 +189,7 @@ export function useMeshAudioRoom({
     payload: unknown,
   ) => {
     await sendSignalMutation({
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
       publicSessionId: sessionId,
       clientId,
       accessToken,
@@ -348,7 +354,12 @@ export function useMeshAudioRoom({
     await Promise.allSettled(remotes.map(remoteClientId => sendSignal(remoteClientId, 'leave', { leftAt })));
     teardownLocal();
     setJoined(false);
-    await leaveAudioMutation({ publicSessionId: sessionId, clientId, accessToken });
+    await leaveAudioMutation({
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      publicSessionId: sessionId,
+      clientId,
+      accessToken,
+    });
     onAudioLeftRef.current(leftAt);
   }, [accessToken, clientId, leaveAudioMutation, sendSignal, sessionId, teardownLocal]);
 
@@ -372,6 +383,7 @@ export function useMeshAudioRoom({
 
     try {
       const joinResult = await joinAudioMutation({
+        clientApiVersion: BBPC_CLIENT_API_VERSION,
         publicSessionId: sessionId,
         clientId,
         accessToken,
@@ -407,7 +419,12 @@ export function useMeshAudioRoom({
       onAudioJoinedRef.current(Date.now());
       void tryPlayAll();
     } catch (err) {
-      await leaveAudioMutation({ publicSessionId: sessionId, clientId, accessToken }).catch(() => null);
+      await leaveAudioMutation({
+        clientApiVersion: BBPC_CLIENT_API_VERSION,
+        publicSessionId: sessionId,
+        clientId,
+        accessToken,
+      }).catch(() => null);
       teardownLocal();
       setJoined(false);
       setError(err instanceof Error ? err.message : 'Failed to join audio');
@@ -473,7 +490,18 @@ export function useMeshAudioRoom({
 
   useEffect(() => {
     if (!joined) return;
+    setSignalReadAt(Date.now());
+    const timer = setInterval(
+      () => setSignalReadAt(Date.now()),
+      SIGNAL_WINDOW_REFRESH_MS,
+    );
+    return () => clearInterval(timer);
+  }, [joined]);
+
+  useEffect(() => {
+    if (!joined) return;
     void heartbeatAudio({
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
       publicSessionId: sessionId,
       clientId,
       accessToken,
@@ -482,6 +510,7 @@ export function useMeshAudioRoom({
     });
     const timer = setInterval(() => {
       void heartbeatAudio({
+        clientApiVersion: BBPC_CLIENT_API_VERSION,
         publicSessionId: sessionId,
         clientId,
         accessToken,

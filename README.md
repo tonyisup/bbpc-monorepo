@@ -17,13 +17,23 @@ Useful commands:
 npm run lint
 npm test
 npm run build
-npm run seed:segment-templates
-npm run cleanup:ended-sessions -- --days=30 --limit=25
 ```
 
-Copy `.env.example` to `.env.local`, then configure the same
-`SESSION_ADMIN_SECRET` value in both the app runtime and the Convex deployment.
-For Convex, run `npx convex env set SESSION_ADMIN_SECRET '<generated-value>'`.
+Copy `.env.example` to `.env.local`. Point `NEXT_PUBLIC_CONVEX_URL` at the
+shared `bbpc-convex` deployment, and configure the same Clerk application used
+by the primary BBPC applications. Clerk must have a JWT template named
+`convex` with audience `convex`.
+
+Creating a session requires a linked BBPC Host or Administrator identity.
+Invited guests do not need a Clerk account: the invite route exchanges the
+one-time invite capability for a session-scoped participant capability stored
+in an HTTP-only cookie. Invite and participant capabilities are never stored
+in plaintext by Convex.
+
+The old standalone `SESSION_ADMIN_SECRET` maintenance boundary is retired.
+Sounder/template administration and ended-session retention use the shared
+Convex Administrator mutations and the global cutover write gate. Linked
+administrators can run those bounded operations from `/admin`.
 
 ## Merge Bundle Workflow
 
@@ -67,7 +77,6 @@ STUN_URLS=stun:turn.example.com:3478
 TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp
 TURN_STATIC_AUTH_SECRET=replace-me
 TURN_TTL_SECONDS=3600
-RTC_CLEANUP_ADMIN_SECRET=replace-me
 ```
 
 `TURN_STATIC_AUTH_SECRET` is used only by `/api/sessions/[sessionId]/rtc/ice`; browsers receive temporary usernames and HMAC credentials, never the static secret. See [docs/turn-server.md](docs/turn-server.md) for local setup and production firewall rules.

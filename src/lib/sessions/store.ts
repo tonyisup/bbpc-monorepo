@@ -1,5 +1,12 @@
-import { fetchMutation, fetchQuery } from 'convex/nextjs';
-import { api } from '../../../convex/_generated/api';
+import {
+  BBPC_CLIENT_API_VERSION,
+  recordingApi,
+} from '@/lib/convex/api';
+import {
+  mutateSharedConvex,
+  mutateSharedConvexAsUser,
+  querySharedConvex,
+} from '@/lib/convex/http';
 import {
   createAccessToken,
   createClientId,
@@ -12,6 +19,7 @@ import type {
   JoinSessionResult,
   RecordingSession,
   SessionAccessGrant,
+  SessionLifecycle,
 } from './types';
 
 function sanitizeDisplayName(displayName: string | undefined, fallback: string): string {
@@ -24,16 +32,14 @@ function defaultEpisode(): string {
   return `EP-${new Date().toISOString().slice(0, 10)}`;
 }
 
-export function sessionAdminSecret(): string {
-  const secret = process.env.SESSION_ADMIN_SECRET;
-  if (!secret) throw new Error('SESSION_ADMIN_SECRET is not configured');
-  return secret;
-}
-
-export async function createSession(displayName?: string): Promise<CreateSessionResult> {
+export async function createSession(
+  convexToken: string,
+  displayName?: string,
+): Promise<CreateSessionResult> {
   const now = Date.now();
   const clientId = createClientId();
   const accessToken = createAccessToken();
+  const inviteToken = createInviteToken();
   const participant = {
     clientId,
     accessToken,
@@ -41,14 +47,18 @@ export async function createSession(displayName?: string): Promise<CreateSession
     joinedAt: now,
   };
 
-  const session = await fetchMutation(api.sessions.createSession, {
-    adminSecret: sessionAdminSecret(),
-    publicId: createSessionId(),
-    inviteToken: createInviteToken(),
-    episode: defaultEpisode(),
-    createdAt: now,
-    participant,
-  });
+  const session = await mutateSharedConvexAsUser(
+    recordingApi.sessions.createSession,
+    {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      publicId: createSessionId(),
+      inviteToken,
+      episode: defaultEpisode(),
+      createdAt: now,
+      participant,
+    },
+    convexToken,
+  );
 
   return {
     session,
@@ -56,6 +66,7 @@ export async function createSession(displayName?: string): Promise<CreateSession
       sessionId: session.id,
       clientId,
       accessToken,
+      inviteToken,
     },
   };
 }
@@ -64,7 +75,7 @@ export async function getSession(
   sessionId: string,
   grant: SessionAccessGrant,
 ): Promise<RecordingSession | null> {
-  return await fetchQuery(api.sessions.getSession, {
+  return await querySharedConvex(recordingApi.sessions.getSession, {
     publicId: sessionId,
     clientId: grant.clientId,
     accessToken: grant.accessToken,
@@ -83,10 +94,14 @@ export async function joinSessionByInviteToken(
     joinedAt: now,
   };
 
-  const session = await fetchMutation(api.sessions.joinSessionByInviteToken, {
-    inviteToken,
-    participant,
-  });
+  const session = await mutateSharedConvex(
+    recordingApi.sessions.joinSessionByInviteToken,
+    {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      inviteToken,
+      participant,
+    },
+  );
 
   if (!session) return null;
 
@@ -118,11 +133,20 @@ export async function getParticipantForGrant(
 ): Promise<AuthenticatedSessionParticipant | null> {
   if (!grant || grant.sessionId !== sessionId) return null;
 
-  return await fetchQuery(api.sessions.getParticipantForGrant, {
-    publicId: sessionId,
-    clientId: grant.clientId,
-    accessToken: grant.accessToken,
-  });
+  const participant = await querySharedConvex(
+    recordingApi.sessions.getParticipantForGrant,
+    {
+      publicId: sessionId,
+      clientId: grant.clientId,
+      accessToken: grant.accessToken,
+    },
+  );
+  return participant === null
+    ? null
+    : {
+        ...participant,
+        accessToken: grant.accessToken,
+      };
 }
 
 export async function updateParticipantDisplayName(
@@ -130,12 +154,20 @@ export async function updateParticipantDisplayName(
   grant: SessionAccessGrant,
   displayName: string,
 ): Promise<AuthenticatedSessionParticipant | null> {
-  return await fetchMutation(api.sessions.updateParticipantDisplayName, {
-    publicId: sessionId,
-    clientId: grant.clientId,
+  const participant = await mutateSharedConvex(
+    recordingApi.sessions.updateParticipantDisplayName,
+    {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      publicId: sessionId,
+      clientId: grant.clientId,
+      accessToken: grant.accessToken,
+      displayName: sanitizeDisplayName(displayName, 'Guest'),
+    },
+  );
+  return {
+    ...participant,
     accessToken: grant.accessToken,
-    displayName: sanitizeDisplayName(displayName, 'Guest'),
-  });
+  };
 }
 
 export async function updateSessionEpisode(
@@ -147,26 +179,30 @@ export async function updateSessionEpisode(
   const participant = await getParticipantForGrant(sessionId, grant);
   if (!participant || participant.role !== 'owner') return null;
 
-  return await fetchMutation(api.sessions.updateSessionEpisode, {
-    publicId: sessionId,
-    clientId: grant.clientId,
-    accessToken: grant.accessToken,
-    episode: episode.trim().slice(0, 80),
-  });
+  return await mutateSharedConvex(
+    recordingApi.sessions.updateSessionEpisode,
+    {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      publicId: sessionId,
+      clientId: grant.clientId,
+      accessToken: grant.accessToken,
+      episode: episode.trim().slice(0, 80),
+    },
+  );
 }
 
 export async function endSession(
   sessionId: string,
   grant: SessionAccessGrant | undefined,
-): Promise<{ id: string; status: 'ended'; endedAt: string | null } | null> {
+): Promise<SessionLifecycle | null> {
   if (!grant) return null;
   const participant = await getParticipantForGrant(sessionId, grant);
   if (!participant || participant.role !== 'owner') return null;
 
-  return await fetchMutation(api.sessions.endSession, {
+  return await mutateSharedConvex(recordingApi.sessions.endSession, {
+    clientApiVersion: BBPC_CLIENT_API_VERSION,
     publicId: sessionId,
     clientId: grant.clientId,
     accessToken: grant.accessToken,
-    endedAt: Date.now(),
   });
 }

@@ -21,7 +21,7 @@ export default async function SessionPage({
   const grant = grants.find(candidate => candidate.sessionId === sessionId);
   const participant = await getParticipantForGrant(sessionId, grant);
 
-  if (!participant) {
+  if (!grant || !participant) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[var(--background)] text-[var(--foreground)] px-6">
         <div className="max-w-sm w-full border border-[var(--card-border)] bg-[var(--card-bg)] rounded p-6">
@@ -34,12 +34,15 @@ export default async function SessionPage({
     );
   }
 
-  const session = await getSession(sessionId, grant!);
+  const session = await getSession(sessionId, grant);
   if (!session) notFound();
 
   const headersList = await headers();
   const origin = getOrigin(headersList);
-  const inviteUrl = `${origin}/join/${session.inviteToken}`;
+  const inviteUrl =
+    participant.role === 'owner' && grant.inviteToken
+      ? `${origin}/join/${grant.inviteToken}`
+      : null;
 
   return (
     <DashboardApp

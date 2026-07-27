@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { fetchQuery } from 'convex/nextjs';
-import { api } from '../../../../convex/_generated/api';
+import { recordingApi } from '@/lib/convex/api';
+import { querySharedConvex } from '@/lib/convex/http';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -8,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const segmentTemplates = await fetchQuery(api.segmentTemplates.list, {});
+    const segmentTemplates = await querySharedConvex(recordingApi.templates.list, {});
     res.status(200).json({ segmentTemplates });
   } catch (err) {
     console.error('[SegmentTemplates] Error:', err);

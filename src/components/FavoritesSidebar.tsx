@@ -6,7 +6,10 @@ import { useSession } from './SessionProvider';
 import { useAudio } from './AudioProvider';
 import { usePresence } from './PresenceProvider';
 import type { Sounder as SounderItem } from '@/types';
-import { api } from '../../convex/_generated/api';
+import {
+  BBPC_CLIENT_API_VERSION,
+  recordingApi,
+} from '@/lib/convex/api';
 
 const EMPTY_FAVORITES: SounderItem[] = [];
 const FAVORITES_STORAGE_KEY = 'bbpc-favorites-v1';
@@ -56,12 +59,12 @@ export function FavoritesSidebar() {
   } = useSession();
   const { play } = useAudio();
   const { members, connected, resetConnections } = usePresence();
-  const savedFavorites = useQuery(api.favorites.list, {
+  const savedFavorites = useQuery(recordingApi.favorites.list, {
     publicSessionId: sessionId,
     clientId: participantClientId,
     accessToken: participantAccessToken,
   });
-  const replaceFavorites = useMutation(api.favorites.replaceAll);
+  const replaceFavorites = useMutation(recordingApi.favorites.replaceAll);
   const [optimisticFavorites, setOptimisticFavorites] = useState<SounderItem[] | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -82,6 +85,7 @@ export function FavoritesSidebar() {
     const saveSequence = saveSequenceRef.current + 1;
     saveSequenceRef.current = saveSequence;
     void replaceFavorites({
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
       publicSessionId: sessionId,
       clientId: participantClientId,
       accessToken: participantAccessToken,

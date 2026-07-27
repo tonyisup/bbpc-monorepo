@@ -1,5 +1,11 @@
-import { fetchMutation, fetchQuery } from 'convex/nextjs';
-import { api } from '../../../convex/_generated/api';
+import {
+  BBPC_CLIENT_API_VERSION,
+  recordingApi,
+} from '@/lib/convex/api';
+import {
+  mutateSharedConvex,
+  querySharedConvex,
+} from '@/lib/convex/http';
 import type { Manifest } from '@/types';
 import type { SessionAccessGrant } from '@/lib/sessions/types';
 
@@ -8,7 +14,8 @@ export async function saveManifest(manifest: Manifest, grant: SessionAccessGrant
     throw new Error('Manifest is missing session_id');
   }
 
-  return await fetchMutation(api.manifests.save, {
+  return await mutateSharedConvex(recordingApi.manifests.save, {
+    clientApiVersion: BBPC_CLIENT_API_VERSION,
     publicSessionId: manifest.session_id,
     clientId: grant.clientId,
     accessToken: grant.accessToken,
@@ -25,7 +32,7 @@ export async function getManifestForSession(
   sessionId: string,
   grant: SessionAccessGrant,
 ): Promise<Manifest | null> {
-  const saved = await fetchQuery(api.manifests.getBySession, {
+  const saved = await querySharedConvex(recordingApi.manifests.getBySession, {
     publicSessionId: sessionId,
     clientId: grant.clientId,
     accessToken: grant.accessToken,

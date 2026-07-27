@@ -20,7 +20,9 @@ const { act, create } = require('react-test-renderer') as {
   };
 };
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as typeof globalThis & {
+  IS_REACT_ACT_ENVIRONMENT: boolean;
+}).IS_REACT_ACT_ENVIRONMENT = true;
 
 function Harness({ displayName }: { displayName: string }) {
   useMeshAudioRoom({

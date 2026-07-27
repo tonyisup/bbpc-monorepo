@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchQuery } from 'convex/nextjs';
-import { api } from '../../../../../../convex/_generated/api';
 import { readSessionGrantsFromCookieHeader } from '@/lib/sessions/cookies';
 import { hasSessionAccess } from '@/lib/sessions/store';
+import { recordingApi } from '@/lib/convex/api';
+import { querySharedConvex } from '@/lib/convex/http';
 
 export async function GET(
   request: NextRequest,
@@ -17,7 +17,7 @@ export async function GET(
     return NextResponse.json({ message: 'Session access denied' }, { status: 403 });
   }
 
-  const recordings = await fetchQuery(api.recordings.listBySession, {
+  const recordings = await querySharedConvex(recordingApi.recordings.listBySession, {
     publicSessionId: sessionId,
     clientId: grant!.clientId,
     accessToken: grant!.accessToken,

@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { recordingApi } from '@/lib/convex/api';
 
 export interface PresenceMember {
   id: string;
@@ -29,7 +29,7 @@ interface PresenceProviderProps {
 }
 
 export function PresenceProvider({ children, sessionId, clientId, accessToken }: PresenceProviderProps) {
-  const members = useQuery(api.sessions.listParticipants, {
+  const members = useQuery(recordingApi.sessions.listParticipants, {
     publicId: sessionId,
     clientId,
     accessToken,

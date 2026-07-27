@@ -8,13 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "seed:segment-templates": "node scripts/seed-segment-templates.mjs",
-    "cleanup:ended-sessions": "node scripts/cleanup-ended-sessions.mjs",
     "merge-session": "node scripts/merge-session-bundle.mjs"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.32.0",
-    "convex": "^1.42.1",
+    "@clerk/nextjs": "6.39.6",
+    "convex": "1.42.3",
     "dotenv": "^17.4.2",
     "next": "16.2.10",
     "react": "19.2.4",

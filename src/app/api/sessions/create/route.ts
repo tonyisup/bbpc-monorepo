@@ -7,9 +7,27 @@ import {
   sessionGrantCookieOptions,
   upsertSessionGrant,
 } from '@/lib/sessions/cookies';
+import { getRequiredConvexToken } from '@/lib/convex/server';
 
 export async function POST(request: Request) {
-  const { session, grant } = await createSession();
+  let result: Awaited<ReturnType<typeof createSession>>;
+  try {
+    const convexToken = await getRequiredConvexToken();
+    if (convexToken === null) {
+      return NextResponse.redirect(
+        new URL('/?createError=sign-in-required', request.url),
+        303,
+      );
+    }
+    result = await createSession(convexToken);
+  } catch (error) {
+    console.error('[Recording Session] Creation failed:', error);
+    return NextResponse.redirect(
+      new URL('/?createError=unavailable', request.url),
+      303,
+    );
+  }
+  const { session, grant } = result;
   const cookieStore = await cookies();
   const grants = upsertSessionGrant(
     readSessionGrantsFromCookieValue(cookieStore.get(SESSION_GRANTS_COOKIE)?.value),

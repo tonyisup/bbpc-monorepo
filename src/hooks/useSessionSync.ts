@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import {
+  BBPC_CLIENT_API_VERSION,
+  recordingApi,
+} from '@/lib/convex/api';
 import type { SessionSyncEvent } from '@/types';
 
 interface UseSessionSyncOptions {
@@ -60,12 +63,12 @@ export function useSessionSync({
   onRemoteEvent,
   onLiveRemoteEvent,
 }: UseSessionSyncOptions) {
-  const events = useQuery(api.sessions.listSessionEvents, {
+  const events = useQuery(recordingApi.sessions.listSessionEvents, {
     publicId: sessionId,
     clientId,
     accessToken,
   });
-  const appendEvent = useMutation(api.sessions.appendSessionEvent);
+  const appendEvent = useMutation(recordingApi.sessions.appendSessionEvent);
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const onRemoteRef = useRef(onRemoteEvent);
@@ -95,6 +98,7 @@ export function useSessionSync({
   const sendEvent = useCallback(async (event: SessionSyncEvent) => {
     try {
       await appendEvent({
+        clientApiVersion: BBPC_CLIENT_API_VERSION,
         publicId: sessionId,
         clientId,
         accessToken,

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { ConvexClientProvider } from '@/components/ConvexClientProvider';
 import { SessionProvider } from '@/components/SessionProvider';
 import { AudioProvider } from '@/components/AudioProvider';
 import { PresenceProvider } from '@/components/PresenceProvider';
@@ -26,7 +25,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 interface DashboardAppProps {
   sessionId: string;
-  inviteUrl: string;
+  inviteUrl: string | null;
   episode: string;
   date: string;
   hostName: string;
@@ -100,29 +99,27 @@ export function DashboardApp({
   initialEndedAt,
 }: DashboardAppProps) {
   return (
-    <ConvexClientProvider>
-      <PresenceProvider
-        sessionId={sessionId}
-        clientId={participantClientId}
-        accessToken={participantAccessToken}
-      >
-        <AudioProvider>
-          <SessionProvider
-            sessionId={sessionId}
-            inviteUrl={inviteUrl}
-            episode={episode}
-            date={date}
-            hostName={hostName}
-            participantClientId={participantClientId}
-            participantAccessToken={participantAccessToken}
-            participantRole={participantRole}
-            initialStatus={initialStatus}
-            initialEndedAt={initialEndedAt}
-          >
-            <DashboardContent />
-          </SessionProvider>
-        </AudioProvider>
-      </PresenceProvider>
-    </ConvexClientProvider>
+    <PresenceProvider
+      sessionId={sessionId}
+      clientId={participantClientId}
+      accessToken={participantAccessToken}
+    >
+      <AudioProvider>
+        <SessionProvider
+          sessionId={sessionId}
+          inviteUrl={inviteUrl}
+          episode={episode}
+          date={date}
+          hostName={hostName}
+          participantClientId={participantClientId}
+          participantAccessToken={participantAccessToken}
+          participantRole={participantRole}
+          initialStatus={initialStatus}
+          initialEndedAt={initialEndedAt}
+        >
+          <DashboardContent />
+        </SessionProvider>
+      </AudioProvider>
+    </PresenceProvider>
   );
 }

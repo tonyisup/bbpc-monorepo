@@ -13,7 +13,16 @@ export async function GET(
   context: { params: Promise<{ inviteToken: string }> },
 ) {
   const { inviteToken } = await context.params;
-  const result = await joinSessionByInviteToken(inviteToken);
+  let result: Awaited<ReturnType<typeof joinSessionByInviteToken>>;
+  try {
+    result = await joinSessionByInviteToken(inviteToken);
+  } catch (error) {
+    console.error('[Recording Session] Invite join failed:', error);
+    return new Response(
+      'This recording session cannot accept guests right now.',
+      { status: 503 },
+    );
+  }
 
   if (!result) {
     return new Response('Invite link is invalid or expired.', { status: 404 });

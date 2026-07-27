@@ -14,18 +14,28 @@ export interface AuthenticatedSessionParticipant extends SessionParticipant {
 
 export interface RecordingSession {
   id: string;
-  inviteToken: string;
+  episodeId: string | null;
   episode: string;
   createdAt: string;
-  endedAt?: string | null;
+  endedAt: string | null;
   status: SessionStatus;
   participants: SessionParticipant[];
+}
+
+export interface SessionLifecycle {
+  id: string;
+  episodeId: string | null;
+  episode: string;
+  createdAt: string;
+  endedAt: string | null;
+  status: SessionStatus;
 }
 
 export interface SessionAccessGrant {
   sessionId: string;
   clientId: string;
   accessToken: string;
+  inviteToken?: string;
 }
 
 export interface CreateSessionResult {
