@@ -260,6 +260,17 @@ export const PORTABLE_BACKUP_TABLES = [
   "rankedListTypes",
   "rankedLists",
   "rankedItems",
+  "recordingSessions",
+  "recordingSessionInvites",
+  "recordingParticipants",
+  "recordingRtcPresence",
+  "recordingRtcSignals",
+  "recordingSessionEvents",
+  "recordingSegmentTemplates",
+  "recordingSessionManifests",
+  "recordingSessionFavorites",
+  "recordingSounders",
+  "recordingUploads",
 ] as const;
 
 export const PORTABLE_CONTROL_TABLES = [

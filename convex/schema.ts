@@ -774,6 +774,171 @@ export default defineSchema({
     .index("by_showId", ["showId"])
     .index("by_episodeId", ["episodeId"]),
 
+  recordingSessions: defineTable({
+    publicId: v.string(),
+    episodeId: v.optional(v.id("episodes")),
+    episodeLabel: v.string(),
+    ownerUserId: v.id("users"),
+    status: v.union(v.literal("active"), v.literal("ended")),
+    createdAt: v.number(),
+    endedAt: v.optional(v.number()),
+  })
+    .index("by_publicId", ["publicId"])
+    .index("by_episodeId", ["episodeId"])
+    .index("by_ownerUserId_and_createdAt", [
+      "ownerUserId",
+      "createdAt",
+    ])
+    .index("by_status_and_createdAt", ["status", "createdAt"])
+    .index("by_status_and_endedAt", ["status", "endedAt"]),
+
+  recordingSessionInvites: defineTable({
+    tokenDigest: v.string(),
+    sessionId: v.id("recordingSessions"),
+    publicSessionId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_tokenDigest", ["tokenDigest"])
+    .index("by_publicSessionId", ["publicSessionId"]),
+
+  recordingParticipants: defineTable({
+    sessionId: v.id("recordingSessions"),
+    publicSessionId: v.string(),
+    userId: v.optional(v.id("users")),
+    clientId: v.string(),
+    accessTokenDigest: v.string(),
+    displayName: v.string(),
+    role: v.union(v.literal("owner"), v.literal("participant")),
+    joinedAt: v.number(),
+  })
+    .index("by_publicSessionId", ["publicSessionId"])
+    .index("by_publicSessionId_and_clientId", [
+      "publicSessionId",
+      "clientId",
+    ])
+    .index("by_userId_and_joinedAt", ["userId", "joinedAt"]),
+
+  recordingRtcPresence: defineTable({
+    publicSessionId: v.string(),
+    clientId: v.string(),
+    displayName: v.string(),
+    role: v.union(v.literal("owner"), v.literal("participant")),
+    joinedAudioAt: v.number(),
+    lastSeenAt: v.number(),
+    muted: v.boolean(),
+    recording: v.boolean(),
+  })
+    .index("by_publicSessionId", ["publicSessionId"])
+    .index("by_participant", ["publicSessionId", "clientId"])
+    .index("by_lastSeenAt", ["publicSessionId", "lastSeenAt"]),
+
+  recordingRtcSignals: defineTable({
+    publicSessionId: v.string(),
+    fromClientId: v.string(),
+    toClientId: v.string(),
+    signalId: v.string(),
+    createdAt: v.number(),
+    type: v.union(
+      v.literal("offer"),
+      v.literal("answer"),
+      v.literal("ice-candidate"),
+      v.literal("leave"),
+      v.literal("renegotiate"),
+    ),
+    payload: v.any(),
+  })
+    .index("by_recipient", ["publicSessionId", "toClientId"])
+    .index("by_recipient_and_createdAt", [
+      "publicSessionId",
+      "toClientId",
+      "createdAt",
+    ])
+    .index("by_signalId", ["signalId"])
+    .index("by_createdAt", ["publicSessionId", "createdAt"]),
+
+  recordingSessionEvents: defineTable({
+    publicSessionId: v.string(),
+    eventId: v.string(),
+    actorId: v.string(),
+    createdAt: v.number(),
+    payload: v.any(),
+  })
+    .index("by_publicSessionId", ["publicSessionId"])
+    .index("by_eventId", ["eventId"]),
+
+  recordingSegmentTemplates: defineTable({
+    templateId: v.string(),
+    label: v.string(),
+    type: v.union(
+      v.literal("intro"),
+      v.literal("segment"),
+      v.literal("ad"),
+      v.literal("outro"),
+      v.literal("news"),
+      v.literal("interview"),
+    ),
+    introSounder: v.optional(v.string()),
+    outroSounder: v.optional(v.string()),
+    sortOrder: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_templateId", ["templateId"])
+    .index("by_sortOrder", ["sortOrder"]),
+
+  recordingSessionManifests: defineTable({
+    publicSessionId: v.string(),
+    episode: v.string(),
+    date: v.string(),
+    hosts: v.array(v.string()),
+    manifestVersion: v.string(),
+    manifest: v.any(),
+    updatedAt: v.number(),
+  }).index("by_publicSessionId", ["publicSessionId"]),
+
+  recordingSessionFavorites: defineTable({
+    publicSessionId: v.string(),
+    sounderId: v.string(),
+    name: v.string(),
+    category: v.string(),
+    duration: v.number(),
+    url: v.string(),
+    sortOrder: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_publicSessionId", ["publicSessionId"])
+    .index("by_sounder", ["publicSessionId", "sounderId"]),
+
+  recordingSounders: defineTable({
+    sounderId: v.string(),
+    blobName: v.string(),
+    name: v.string(),
+    category: v.string(),
+    url: v.string(),
+    duration: v.number(),
+    size: v.number(),
+    contentType: v.string(),
+    sortOrder: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_sounderId", ["sounderId"])
+    .index("by_category_and_name", ["category", "name"]),
+
+  recordingUploads: defineTable({
+    publicSessionId: v.optional(v.string()),
+    episode: v.string(),
+    hostName: v.string(),
+    trackType: v.union(v.literal("mic"), v.literal("sounders")),
+    startedAt: v.number(),
+    blobName: v.string(),
+    url: v.string(),
+    size: v.number(),
+    contentType: v.string(),
+    uploadedAt: v.number(),
+  })
+    .index("by_publicSessionId", ["publicSessionId"])
+    .index("by_episode", ["episode"])
+    .index("by_blobName", ["blobName"]),
+
   migrationRuns: defineTable({
     runId: v.string(),
     sourceSchemaFingerprint: v.string(),

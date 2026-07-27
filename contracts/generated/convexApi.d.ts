@@ -9296,5 +9296,710 @@ export type PublicApiType = {
             }>;
         };
     };
+    recording: {
+        sessions: {
+            appendSessionEvent: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                createdAt: number;
+                eventId: string;
+                payload: {
+                    from?: string;
+                    kind: "sounder";
+                    played_at_ms: number;
+                    played_by: string;
+                    sounder: {
+                        category: string;
+                        duration: number;
+                        id: string;
+                        name: string;
+                        url: string;
+                    };
+                } | {
+                    from?: string;
+                    kind: "note";
+                    note: {
+                        author: string;
+                        id: string;
+                        text: string;
+                        timestamp_ms: number;
+                    };
+                } | {
+                    from?: string;
+                    id: string;
+                    kind: "note-delete";
+                } | {
+                    from?: string;
+                    kind: "segment-start";
+                    segment: {
+                        end_ms: number | null;
+                        id: string;
+                        label: string;
+                        start_ms: number;
+                        type: "intro" | "segment" | "ad" | "outro" | "news" | "interview";
+                    };
+                } | {
+                    end_ms: number;
+                    from?: string;
+                    id: string;
+                    kind: "segment-end";
+                } | {
+                    from?: string;
+                    id: string;
+                    kind: "segment-delete";
+                } | {
+                    cue: {
+                        author?: string;
+                        end_ms: number | null;
+                        id: string;
+                        reason?: string;
+                        start_ms: number;
+                        type: "doxx-bleep" | "network-drop" | "dmca-music" | "spoiler" | "other";
+                    };
+                    from?: string;
+                    kind: "edit-cue";
+                } | {
+                    end_ms: number;
+                    from?: string;
+                    id: string;
+                    kind: "edit-cue-update";
+                } | {
+                    from?: string;
+                    id: string;
+                    kind: "edit-cue-delete";
+                } | {
+                    episode: string;
+                    from?: string;
+                    kind: "episode-update";
+                } | {
+                    from?: string;
+                    kind: "recording-started";
+                    participant?: {
+                        clientId: string;
+                        joinedAt: number;
+                        name: string;
+                        role: "owner";
+                    };
+                    startedAt: number;
+                    startedByRole?: "owner";
+                } | {
+                    durationMs: number;
+                    from?: string;
+                    kind: "recording-stopped";
+                    participant?: {
+                        clientId: string;
+                        leftAt: number;
+                        reason: "host-stopped";
+                    };
+                    startedAt: number;
+                    stoppedByRole?: "owner";
+                } | {
+                    from?: string;
+                    kind: "recording-joined";
+                    participant: {
+                        clientId: string;
+                        joinedAt: number;
+                        name: string;
+                        recordingStartedAt: number;
+                        role: "owner" | "participant";
+                    };
+                } | {
+                    from?: string;
+                    kind: "recording-left";
+                    participant: {
+                        clientId: string;
+                        leftAt: number;
+                        reason?: "left" | "host-stopped";
+                        recordingStartedAt: number;
+                    };
+                } | {
+                    from?: string;
+                    kind: "audio-joined";
+                    participant: {
+                        clientId: string;
+                        joinedAudioAt: number;
+                        name: string;
+                        recordingStartedAt: number | null;
+                        role: "owner" | "participant";
+                    };
+                } | {
+                    from?: string;
+                    kind: "audio-left";
+                    participant: {
+                        clientId: string;
+                        leftAudioAt: number;
+                        recordingStartedAt: number | null;
+                    };
+                } | {
+                    disconnect: {
+                        clientId: string;
+                        disconnectId: string;
+                        reason: "ice-disconnected" | "ice-failed" | "heartbeat-timeout" | "page-hidden-timeout";
+                        recordingStartedAt: number | null;
+                        startedAt: number;
+                    };
+                    from?: string;
+                    kind: "audio-disconnect-started";
+                } | {
+                    disconnect: {
+                        clientId: string;
+                        disconnectId: string;
+                        endedAt: number;
+                        recordingStartedAt: number | null;
+                    };
+                    from?: string;
+                    kind: "audio-disconnect-ended";
+                };
+                publicId: string;
+            }, Id<"recordingSessionEvents">>;
+            cleanupEndedSessions: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                confirmation: "delete-ended-sessions";
+                limit?: number;
+                olderThan: number;
+            }, {
+                events: number;
+                favorites: number;
+                invites: number;
+                manifests: number;
+                participants: number;
+                recordings: number;
+                rtcPresence: number;
+                rtcSignals: number;
+                sessions: number;
+            }>;
+            createSession: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                createdAt: number;
+                episode: string;
+                episodeId?: Id<"episodes">;
+                inviteToken: string;
+                participant: {
+                    accessToken: string;
+                    clientId: string;
+                    displayName: string;
+                    joinedAt: number;
+                };
+                publicId: string;
+            }, {
+                createdAt: string;
+                endedAt: string | null;
+                episode: string;
+                episodeId: Id<"episodes"> | null;
+                id: string;
+                participants: Array<{
+                    clientId: string;
+                    displayName: string;
+                    joinedAt: string;
+                    role: "owner" | "participant";
+                }>;
+                status: "active" | "ended";
+            }>;
+            deleteSessionData: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                confirmation: "delete-session-data";
+                publicId: string;
+            }, {
+                events: number;
+                favorites: number;
+                invites: number;
+                manifests: number;
+                participants: number;
+                recordings: number;
+                rtcPresence: number;
+                rtcSignals: number;
+                sessions: number;
+            } | null>;
+            endSession: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                publicId: string;
+            }, {
+                createdAt: string;
+                endedAt: string | null;
+                episode: string;
+                episodeId: Id<"episodes"> | null;
+                id: string;
+                status: "active" | "ended";
+            }>;
+            getParticipantForGrant: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicId: string;
+            }, {
+                clientId: string;
+                displayName: string;
+                joinedAt: string;
+                role: "owner" | "participant";
+            } | null>;
+            getSession: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicId: string;
+            }, {
+                createdAt: string;
+                endedAt: string | null;
+                episode: string;
+                episodeId: Id<"episodes"> | null;
+                id: string;
+                participants: Array<{
+                    clientId: string;
+                    displayName: string;
+                    joinedAt: string;
+                    role: "owner" | "participant";
+                }>;
+                status: "active" | "ended";
+            } | null>;
+            getSessionLifecycle: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicId: string;
+            }, {
+                createdAt: string;
+                endedAt: string | null;
+                episode: string;
+                episodeId: Id<"episodes"> | null;
+                id: string;
+                status: "active" | "ended";
+            } | null>;
+            joinSessionByInviteToken: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                inviteToken: string;
+                participant: {
+                    accessToken: string;
+                    clientId: string;
+                    displayName: string;
+                    joinedAt: number;
+                };
+            }, {
+                createdAt: string;
+                endedAt: string | null;
+                episode: string;
+                episodeId: Id<"episodes"> | null;
+                id: string;
+                participants: Array<{
+                    clientId: string;
+                    displayName: string;
+                    joinedAt: string;
+                    role: "owner" | "participant";
+                }>;
+                status: "active" | "ended";
+            } | null>;
+            listParticipants: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicId: string;
+            }, Array<{
+                id: string;
+                name: string;
+            }>>;
+            listSessionEvents: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicId: string;
+            }, Array<{
+                actorId: string;
+                createdAt: number;
+                eventId: string;
+                payload: {
+                    from?: string;
+                    kind: "sounder";
+                    played_at_ms: number;
+                    played_by: string;
+                    sounder: {
+                        category: string;
+                        duration: number;
+                        id: string;
+                        name: string;
+                        url: string;
+                    };
+                } | {
+                    from?: string;
+                    kind: "note";
+                    note: {
+                        author: string;
+                        id: string;
+                        text: string;
+                        timestamp_ms: number;
+                    };
+                } | {
+                    from?: string;
+                    id: string;
+                    kind: "note-delete";
+                } | {
+                    from?: string;
+                    kind: "segment-start";
+                    segment: {
+                        end_ms: number | null;
+                        id: string;
+                        label: string;
+                        start_ms: number;
+                        type: "intro" | "segment" | "ad" | "outro" | "news" | "interview";
+                    };
+                } | {
+                    end_ms: number;
+                    from?: string;
+                    id: string;
+                    kind: "segment-end";
+                } | {
+                    from?: string;
+                    id: string;
+                    kind: "segment-delete";
+                } | {
+                    cue: {
+                        author?: string;
+                        end_ms: number | null;
+                        id: string;
+                        reason?: string;
+                        start_ms: number;
+                        type: "doxx-bleep" | "network-drop" | "dmca-music" | "spoiler" | "other";
+                    };
+                    from?: string;
+                    kind: "edit-cue";
+                } | {
+                    end_ms: number;
+                    from?: string;
+                    id: string;
+                    kind: "edit-cue-update";
+                } | {
+                    from?: string;
+                    id: string;
+                    kind: "edit-cue-delete";
+                } | {
+                    episode: string;
+                    from?: string;
+                    kind: "episode-update";
+                } | {
+                    from?: string;
+                    kind: "recording-started";
+                    participant?: {
+                        clientId: string;
+                        joinedAt: number;
+                        name: string;
+                        role: "owner";
+                    };
+                    startedAt: number;
+                    startedByRole?: "owner";
+                } | {
+                    durationMs: number;
+                    from?: string;
+                    kind: "recording-stopped";
+                    participant?: {
+                        clientId: string;
+                        leftAt: number;
+                        reason: "host-stopped";
+                    };
+                    startedAt: number;
+                    stoppedByRole?: "owner";
+                } | {
+                    from?: string;
+                    kind: "recording-joined";
+                    participant: {
+                        clientId: string;
+                        joinedAt: number;
+                        name: string;
+                        recordingStartedAt: number;
+                        role: "owner" | "participant";
+                    };
+                } | {
+                    from?: string;
+                    kind: "recording-left";
+                    participant: {
+                        clientId: string;
+                        leftAt: number;
+                        reason?: "left" | "host-stopped";
+                        recordingStartedAt: number;
+                    };
+                } | {
+                    from?: string;
+                    kind: "audio-joined";
+                    participant: {
+                        clientId: string;
+                        joinedAudioAt: number;
+                        name: string;
+                        recordingStartedAt: number | null;
+                        role: "owner" | "participant";
+                    };
+                } | {
+                    from?: string;
+                    kind: "audio-left";
+                    participant: {
+                        clientId: string;
+                        leftAudioAt: number;
+                        recordingStartedAt: number | null;
+                    };
+                } | {
+                    disconnect: {
+                        clientId: string;
+                        disconnectId: string;
+                        reason: "ice-disconnected" | "ice-failed" | "heartbeat-timeout" | "page-hidden-timeout";
+                        recordingStartedAt: number | null;
+                        startedAt: number;
+                    };
+                    from?: string;
+                    kind: "audio-disconnect-started";
+                } | {
+                    disconnect: {
+                        clientId: string;
+                        disconnectId: string;
+                        endedAt: number;
+                        recordingStartedAt: number | null;
+                    };
+                    from?: string;
+                    kind: "audio-disconnect-ended";
+                };
+            }>>;
+            updateParticipantDisplayName: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                displayName: string;
+                publicId: string;
+            }, {
+                clientId: string;
+                displayName: string;
+                joinedAt: string;
+                role: "owner" | "participant";
+            }>;
+            updateSessionEpisode: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                episode: string;
+                episodeId?: Id<"episodes"> | null;
+                publicId: string;
+            }, {
+                createdAt: string;
+                endedAt: string | null;
+                episode: string;
+                episodeId: Id<"episodes"> | null;
+                id: string;
+                status: "active" | "ended";
+            }>;
+        };
+        manifests: {
+            getBySession: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, {
+                date: string;
+                episode: string;
+                hosts: Array<string>;
+                manifest: any;
+                manifestVersion: string;
+                publicSessionId: string;
+                updatedAt: number;
+            } | null>;
+            save: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                date: string;
+                episode: string;
+                hosts: Array<string>;
+                manifest: any;
+                manifestVersion: string;
+                publicSessionId: string;
+                updatedAt: number;
+            }, Id<"recordingSessionManifests">>;
+        };
+        recordings: {
+            listBySession: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, Array<{
+                blobName: string;
+                contentType: string;
+                episode: string;
+                hostName: string;
+                id: Id<"recordingUploads">;
+                publicSessionId: string | null;
+                size: number;
+                startedAt: number;
+                trackType: "mic" | "sounders";
+                uploadedAt: number;
+                url: string;
+            }>>;
+            saveUpload: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                blobName: string;
+                clientApiVersion: string;
+                clientId: string;
+                contentType: string;
+                episode: string;
+                hostName: string;
+                publicSessionId: string;
+                size: number;
+                startedAt: number;
+                trackType: "mic" | "sounders";
+                uploadedAt: number;
+                url: string;
+            }, Id<"recordingUploads">>;
+        };
+        favorites: {
+            list: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, Array<{
+                category: string;
+                duration: number;
+                id: string;
+                name: string;
+                url: string;
+            }>>;
+            replaceAll: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                favorites: Array<{
+                    category: string;
+                    duration: number;
+                    id: string;
+                    name: string;
+                    url: string;
+                }>;
+                publicSessionId: string;
+                updatedAt: number;
+            }, {
+                count: number;
+            }>;
+        };
+        sounders: {
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                blobName: string;
+                category: string;
+                contentType: string;
+                duration: number;
+                id: string;
+                name: string;
+                size: number;
+                url: string;
+            }>>;
+            replaceAll: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                sounders: Array<{
+                    blobName: string;
+                    category: string;
+                    contentType: string;
+                    duration: number;
+                    id: string;
+                    name: string;
+                    size: number;
+                    url: string;
+                }>;
+                updatedAt: number;
+            }, {
+                count: number;
+            }>;
+        };
+        templates: {
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                id: string;
+                introSounder: string | null;
+                label: string;
+                outroSounder: string | null;
+                sortOrder: number;
+                type: "intro" | "segment" | "ad" | "outro" | "news" | "interview";
+            }>>;
+            upsertMany: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                templates: Array<{
+                    id: string;
+                    introSounder?: string;
+                    label: string;
+                    outroSounder?: string;
+                    sortOrder?: number;
+                    type: "intro" | "segment" | "ad" | "outro" | "news" | "interview";
+                }>;
+                updatedAt: number;
+            }, {
+                count: number;
+            }>;
+        };
+        rtc: {
+            cleanupRtcSession: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                olderThan: number;
+                publicSessionId: string;
+            }, {
+                deletedPresence: number;
+                deletedSignals: number;
+            }>;
+            heartbeatAudio: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                muted: boolean;
+                publicSessionId: string;
+                recording: boolean;
+            }, {
+                ok: true;
+            } | null>;
+            joinAudio: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                muted: boolean;
+                publicSessionId: string;
+                recording: boolean;
+            }, {
+                ok: true;
+            } | {
+                ok: false;
+                reason: "room-full";
+            }>;
+            leaveAudio: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                publicSessionId: string;
+            }, {
+                ok: true;
+            }>;
+            listAudioPresence: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, Array<{
+                clientId: string;
+                displayName: string;
+                joinedAudioAt: number;
+                lastSeenAt: number;
+                muted: boolean;
+                recording: boolean;
+                role: "owner" | "participant";
+            }>>;
+            listSignalsForParticipant: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                now: number;
+                publicSessionId: string;
+            }, Array<{
+                createdAt: number;
+                fromClientId: string;
+                payload: any;
+                signalId: string;
+                toClientId: string;
+                type: "offer" | "answer" | "ice-candidate" | "leave" | "renegotiate";
+            }>>;
+            sendSignal: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                payload: any;
+                publicSessionId: string;
+                signalId: string;
+                toClientId: string;
+                type: "offer" | "answer" | "ice-candidate" | "leave" | "renegotiate";
+            }, {
+                ok: true;
+            } | null>;
+        };
+    };
 };
 export type InternalApiType = {};

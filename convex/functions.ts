@@ -59,6 +59,14 @@ export const pipelineQuery = customQuery(
   })),
 );
 
+export const recordingQuery = customQuery(
+  rawQuery,
+  customCtx(() => ({
+    accessClass: "recording-capability" as const,
+    actor: null,
+  })),
+);
+
 export const authenticatedMutation = customMutation(rawMutation, {
   args: { clientApiVersion: v.string() },
   input: async (ctx, { clientApiVersion }) => {
@@ -136,6 +144,28 @@ export const pipelineMutation = customMutation(rawMutation, {
     return {
       ctx: {
         accessClass: "pipeline-service" as const,
+        actor,
+        systemState,
+      },
+      args: {},
+    };
+  },
+});
+
+export const recordingMutation = customMutation(rawMutation, {
+  args: { clientApiVersion: v.string() },
+  input: async (ctx, { clientApiVersion }) => {
+    const actor = {
+      kind: "internal" as const,
+      label: "recording-capability",
+    };
+    const systemState = await requireApplicationWritesEnabled(ctx, {
+      actor,
+      clientApiVersion,
+    });
+    return {
+      ctx: {
+        accessClass: "recording-capability" as const,
         actor,
         systemState,
       },

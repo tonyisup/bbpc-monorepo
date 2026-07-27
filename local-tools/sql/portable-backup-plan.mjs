@@ -69,6 +69,17 @@ export function portableCountsFromRawCounts(rawCounts) {
     canonicalCounts[canonicalTable] = rawCounts[rawTable];
   }
   canonicalCounts.sideEffectIntents = 0;
+  canonicalCounts.recordingSessions = 0;
+  canonicalCounts.recordingSessionInvites = 0;
+  canonicalCounts.recordingParticipants = 0;
+  canonicalCounts.recordingRtcPresence = 0;
+  canonicalCounts.recordingRtcSignals = 0;
+  canonicalCounts.recordingSessionEvents = 0;
+  canonicalCounts.recordingSegmentTemplates = 0;
+  canonicalCounts.recordingSessionManifests = 0;
+  canonicalCounts.recordingSessionFavorites = 0;
+  canonicalCounts.recordingSounders = 0;
+  canonicalCounts.recordingUploads = 0;
   const domainRows = Object.fromEntries(
     MIGRATION_DOMAINS.map((domain) => [
       domain,

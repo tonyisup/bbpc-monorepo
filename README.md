@@ -1,7 +1,7 @@
 # BBPC Convex
 
 Shared Convex backend and pinned multi-repository API contract for `bbpc`,
-`bbpc-admin`, `bbpc-pipeline`, and later `bbpc-recording`.
+`bbpc-admin`, `bbpc-pipeline`, and `bbpc-recording`.
 
 The guarded SQL production clone remains the migration source of truth until cutover.
 Production-derived extracts, staging rows, backups, checkpoints, and reconciliation
@@ -263,12 +263,14 @@ impersonation sessions, and service principals in bounded batches. Its final ato
 step writes audit evidence, removes its own scrub record, and deletes the local
 `systemState`, restoring the backend's default-deny state before backup.
 
-The 32-table portable allowlist is schema-tested: canonical domain tables, approved
-auth identities, durable side-effect intents, and audit evidence are retained. Every
-other current table is explicitly classified for deletion, and adding an unclassified
-table fails tests. The portable scrub is intentionally one-way once `systemState` is
-removed and must not be executed until the runbook's production-derived rehearsal and
-backup gate are approved.
+The 43-table portable allowlist is schema-tested: canonical domain tables, approved
+auth identities, durable side-effect intents, recording data, and audit evidence are
+retained. Recording counts remain required to be zero until their independent source
+reconciliation is implemented, so the existing portable backup fails closed if
+recording data appears prematurely. Every other current table is explicitly classified
+for deletion, and adding an unclassified table fails tests. The portable scrub is
+intentionally one-way once `systemState` is removed and must not be executed until the
+runbook's production-derived rehearsal and backup gate are approved.
 
 The guarded local rehearsal is specified in
 [`MIGRATION_REHEARSAL_RUNBOOK.md`](./MIGRATION_REHEARSAL_RUNBOOK.md). Its manifest-derived
@@ -475,6 +477,27 @@ are no invalid statuses, target shapes, target/type combinations, ranks, duplica
 list/rank keys, or duplicate list/target keys. Synthetic tests cover owner/admin access,
 write gates, target hydration, all ordering modes, filtering/pagination, type
 constraints, capacity, cascade deletion, broken relationships, and audit privacy.
+
+## Recording API
+
+The shared recording namespace owns sessions, invite capabilities, participants, RTC
+presence/signals, events, manifests, session favorites, segment templates, sounders,
+and upload metadata. Audio blobs remain in Azure storage.
+
+A linked Clerk user with the normalized Host role, or an administrator, creates a
+session. Guest participation is a separate capability boundary and never creates or
+inherits BBPC account privileges. Invite and participant access tokens are stored only
+as SHA-256 digests and are never returned by the backend. All capability mutations
+still require S3/S4 plus the pinned client API version; reads require a valid
+session/client/token tuple. Session ownership, canonical episode links, upload host and
+episode fields, owner-only manifests, and participant-scoped event identities are
+derived or checked server-side.
+
+Every collection, payload, cleanup, and retention operation is bounded. Public catalog
+reads remain anonymous, while template/sounder replacement and destructive cleanup are
+administrator-only and audited. Session capabilities are not part of the reusable
+account identity model and will be regenerated rather than copied as plaintext during
+recording-source reconciliation.
 
 ## Package consumers
 
