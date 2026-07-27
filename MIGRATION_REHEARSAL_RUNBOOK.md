@@ -252,10 +252,13 @@ capabilities.
 
 After that recovery gate completed, `bbpc-recording/.env.local` was moved to the
 shared local Convex client and HTTP-action endpoints and configured with the same
-Clerk development application as the core app. The recording consumer then passed
-lint, all 42 tests, strict TypeScript, and a production build. A signed-in browser
-smoke loaded without console errors, read all 825 sounders and three templates from
-shared Convex, and rendered the safe maintenance message when session creation hit the
-default-deny post-backup write gate. A successful session-creation smoke remains
-intentionally gated on an initialized S3/S4 target; the backup source is never opened
-for application writes.
+Clerk development application as the core app. The recording repository's retired
+standalone Convex function tree and `convex-test` dependency were then removed, so the
+old cloud backend cannot be deployed from the consumer repository. Its six
+standalone-server tests are superseded by the shared backend suite. The recording
+consumer passes lint, all 36 live-consumer tests, strict TypeScript, and a production
+build. A signed-in browser smoke loaded without console errors, read all 825 sounders
+and three templates from shared Convex, and rendered the safe maintenance message when
+session creation hit the default-deny post-backup write gate. A successful
+session-creation smoke remains intentionally gated on an initialized S3/S4 target;
+the backup source is never opened for application writes.
