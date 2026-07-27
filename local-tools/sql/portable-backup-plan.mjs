@@ -60,14 +60,38 @@ function validateRawCounts(rawCounts) {
   }
 }
 
-export function portableCountsFromRawCounts(rawCounts) {
+export function portableCountsFromRawCounts(
+  rawCounts,
+  recordingCatalogCounts = {
+    sounders: 0,
+    templates: 0,
+  },
+) {
   validateRawCounts(rawCounts);
+  if (
+    typeof recordingCatalogCounts !== "object" ||
+    recordingCatalogCounts === null ||
+    !Number.isSafeInteger(recordingCatalogCounts.sounders) ||
+    recordingCatalogCounts.sounders < 0 ||
+    recordingCatalogCounts.sounders > 1_000 ||
+    !Number.isSafeInteger(recordingCatalogCounts.templates) ||
+    recordingCatalogCounts.templates < 0 ||
+    recordingCatalogCounts.templates > 100
+  ) {
+    throw new Error(
+      "Valid recording catalog counts are required",
+    );
+  }
   const canonicalCounts = {};
   for (const [rawTable, canonicalTable] of Object.entries(
     CANONICAL_TABLE_BY_RAW_TABLE,
   )) {
     canonicalCounts[canonicalTable] = rawCounts[rawTable];
   }
+  const migrationRows = Object.values(canonicalCounts).reduce(
+    (total, count) => total + count,
+    0,
+  );
   canonicalCounts.sideEffectIntents = 0;
   canonicalCounts.recordingSessions = 0;
   canonicalCounts.recordingSessionInvites = 0;
@@ -75,10 +99,12 @@ export function portableCountsFromRawCounts(rawCounts) {
   canonicalCounts.recordingRtcPresence = 0;
   canonicalCounts.recordingRtcSignals = 0;
   canonicalCounts.recordingSessionEvents = 0;
-  canonicalCounts.recordingSegmentTemplates = 0;
+  canonicalCounts.recordingSegmentTemplates =
+    recordingCatalogCounts.templates;
   canonicalCounts.recordingSessionManifests = 0;
   canonicalCounts.recordingSessionFavorites = 0;
-  canonicalCounts.recordingSounders = 0;
+  canonicalCounts.recordingSounders =
+    recordingCatalogCounts.sounders;
   canonicalCounts.recordingUploads = 0;
   const domainRows = Object.fromEntries(
     MIGRATION_DOMAINS.map((domain) => [
@@ -92,6 +118,7 @@ export function portableCountsFromRawCounts(rawCounts) {
   return {
     canonicalCounts: Object.freeze(canonicalCounts),
     domainRows: Object.freeze(domainRows),
+    migrationRows,
     totalRows: Object.values(canonicalCounts).reduce(
       (total, count) => total + count,
       0,

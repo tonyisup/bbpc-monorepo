@@ -504,7 +504,21 @@ Template sounder references retain their bounded Azure blob paths. The run-scope
 `migration:recording-catalogs` command reads only the standalone deployment's public
 catalog queries, normalizes and hashes the payload, imports it atomically through the
 S1 migration gate, and verifies aggregate counts plus the SHA-256 digest. It is
-idempotent and writes one value-free audit event on the first import.
+idempotent and writes one value-free audit event on the first import. A mode-`0600`,
+value-free reconciliation manifest binds those counts and digest into the guarded
+portable-backup expectation; session/history tables remain required to be empty.
+
+The old standalone recording history is retained as backup-only rather than imported
+into the shared namespace. `migration:recording-archive -- --dry-run` pins the exact
+source deployment by a value-free SHA-256 fingerprint without reading rows.
+After the separate private-backup approval, the execute form exports the eleven-table
+standalone snapshot into `.local-migration/`, checks the strict table allowlist and
+reconciled public-catalog counts, and records only aggregate table counts and hashes.
+The snapshot is explicitly labeled as containing private values and plaintext legacy
+capabilities and must never be imported into shared Convex.
+`migration:recording-archive:restore` restores it only into an isolated disposable
+local backend, compares every canonical table hash, deletes that backend, and retains
+only value-free restore evidence.
 
 ## Package consumers
 

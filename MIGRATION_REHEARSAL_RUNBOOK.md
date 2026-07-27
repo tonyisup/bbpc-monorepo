@@ -100,6 +100,10 @@ The next gate is a separately approved portable scrub, backup, checksum, disposa
 restore, and acceptance rerun. `portable-v1` deletes local control state last and is
 intentionally not part of this command.
 
+The exact owner approval required before either private backup workflow executes is:
+
+> Approve one-way local portable scrub, private backup creation, and disposable local restore validation for run dev-rehearsal-20260724-01.
+
 ## Portable scrub and private backup gate
 
 Inspect the prepared one-way plan without changing Convex:
@@ -126,10 +130,12 @@ The command re-verifies all manifests and aggregate rehearsal evidence. It suppo
 resuming an interrupted scrub, deletes every raw/control/migration table in bounded
 batches, verifies the completion audit and absence of temporary state, then exports
 only the schema-tested portable allowlist. It inspects every ZIP entry, rejects an
-unexpected table or path, checks all 32 canonical counts (including the
-required-empty side-effect intent table), and writes a private checksummed manifest
-beside the snapshot. It never includes file storage and never targets a cloud
-deployment.
+unexpected table or path, checks all 43 expected canonical counts (including the
+required-empty side-effect intent and recording-history tables), and writes a private
+checksummed manifest beside the snapshot. The expected counts bind the separately
+reconciled 825-sounder/three-template public recording catalogs while keeping every
+recording session/history table at zero. It never includes file storage and never
+targets a cloud deployment.
 
 The backup ZIP contains production-derived row values. Keep its directory mode `0700`
 and files `0600`; do not put it in Git, cloud sync, CI, screenshots, tickets, or chat.
@@ -159,3 +165,45 @@ Convex documents the ZIP layout as `<table>/documents.jsonl` plus
 `generated_schema.jsonl`, and imports preserve document IDs and creation times:
 <https://docs.convex.dev/database/backup-restore> and
 <https://docs.convex.dev/database/import-export/import>.
+
+## Standalone recording backup-only archive
+
+Before changing `bbpc-recording/.env.local` away from the old standalone deployment,
+pin the read-only archive target without reading source rows:
+
+```sh
+npm run migration:recording-archive -- \
+  --run-id <cutover-run-id> \
+  --dry-run
+```
+
+Record the value-free `sourceFingerprint` from that output. Only after the exact owner
+approval above, create the private backup-only snapshot:
+
+```sh
+npm run migration:recording-archive -- \
+  --run-id <cutover-run-id> \
+  --source-fingerprint <sha256-from-dry-run> \
+  --ack-private-recording-source \
+  --ack-backup-only-no-shared-import
+```
+
+The target must be an exact `.convex.cloud` deployment whose configured deployment
+name matches its URL. The exporter captures the standalone schema's eleven tables,
+checks the strict table allowlist and public catalog counts, and records only aggregate
+counts and hashes. The ZIP contains private recording rows and plaintext legacy invite
+and participant capabilities. It is an archive only: never import it into shared
+Convex, and never copy it into Git, cloud sync, CI, screenshots, tickets, or chat.
+
+Validate recovery only in an isolated disposable local backend:
+
+```sh
+npm run migration:recording-archive:restore -- \
+  --run-id <cutover-run-id> \
+  --ack-private-recording-restore \
+  --ack-delete-disposable-recording-restore
+```
+
+The restore uses separate local ports, imports and re-exports the private snapshot,
+requires every canonical table count/hash to match, stops the disposable backend, and
+deletes its data directory before writing value-free restore evidence.

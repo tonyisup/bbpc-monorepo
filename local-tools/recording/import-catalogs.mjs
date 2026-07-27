@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
-import { URL } from "node:url";
+import { fileURLToPath, URL } from "node:url";
 import { parseEnv } from "node:util";
 
 import { ConvexHttpClient } from "convex/browser";
@@ -12,17 +12,13 @@ import {
   canonicalizeRecordingCatalogs,
   recordingCatalogImportPayload,
 } from "./catalog-import.mjs";
+import {
+  writeOrVerifyRecordingCatalogManifest,
+} from "./catalog-manifest.mjs";
+import { parseNamedArguments } from "./cli.mjs";
 
-function argumentsMap(values) {
-  return new Map(
-    values.map((argument) => {
-      const [key, ...rest] = argument
-        .replace(/^--/u, "")
-        .split("=");
-      return [key, rest.join("=")];
-    }),
-  );
-}
+const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(toolDirectory, "../..");
 
 function runConvex(functionName, args) {
   const result = spawnSync(
@@ -50,7 +46,7 @@ function runConvex(functionName, args) {
   return JSON.parse(result.stdout);
 }
 
-const args = argumentsMap(process.argv.slice(2));
+const args = parseNamedArguments(process.argv.slice(2));
 const runId = args.get("run-id");
 if (!runId) {
   throw new Error("--run-id is required");
@@ -124,6 +120,27 @@ if (!evidence.countsMatch || !evidence.digestMatches) {
     "Recording catalog reconciliation did not match the source",
   );
 }
+const catalogManifest =
+  writeOrVerifyRecordingCatalogManifest({
+    projectRoot,
+    manifest: {
+      formatVersion: 1,
+      kind: "recording-catalog-reconciliation",
+      runId,
+      sourceObservedAt: payload.sourceObservedAt,
+      digest: payload.sourceDigest,
+      sounders: catalogs.sounders.length,
+      templates: catalogs.templates.length,
+      manifestContainsRowValues: false,
+    },
+  });
 process.stdout.write(
-  `${JSON.stringify({ imported, evidence })}\n`,
+  `${JSON.stringify({
+    imported,
+    evidence,
+    manifest: {
+      created: catalogManifest.created,
+      path: catalogManifest.manifestPath,
+    },
+  })}\n`,
 );

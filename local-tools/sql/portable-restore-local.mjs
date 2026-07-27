@@ -28,6 +28,9 @@ import {
 } from "./portable-backup-plan.mjs";
 import { buildLocalImportSpec } from "./stage-import.mjs";
 import { verifyDomainManifest } from "./manifest.mjs";
+import {
+  readRecordingCatalogManifest,
+} from "../recording/catalog-manifest.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(toolDirectory, "../..");
@@ -284,8 +287,19 @@ const verifiedDomains = Object.fromEntries(
   ]),
 );
 const rawCounts = countsFromVerifiedManifests(verifiedDomains);
-const { canonicalCounts, totalRows } =
-  portableCountsFromRawCounts(rawCounts);
+const { manifest: recordingCatalogManifest } =
+  readRecordingCatalogManifest({
+    projectRoot,
+    runId,
+  });
+const {
+  canonicalCounts,
+  migrationRows,
+  totalRows,
+} = portableCountsFromRawCounts(rawCounts, {
+  sounders: recordingCatalogManifest.sounders,
+  templates: recordingCatalogManifest.templates,
+});
 const steps = buildRehearsalPlan(rawCounts);
 const backupDirectory = path.join(
   projectRoot,
@@ -328,7 +342,13 @@ const sourceSnapshot = inspectPortableSnapshot({
 if (
   backupManifest.runId !== runId ||
   backupManifest.snapshotSha256 !==
-    sourceSnapshot.snapshotSha256
+    sourceSnapshot.snapshotSha256 ||
+  backupManifest.recordingCatalog?.digest !==
+    recordingCatalogManifest.digest ||
+  backupManifest.recordingCatalog?.sounders !==
+    recordingCatalogManifest.sounders ||
+  backupManifest.recordingCatalog?.templates !==
+    recordingCatalogManifest.templates
 ) {
   throw new Error(
     "The portable snapshot does not match its private manifest",
@@ -467,7 +487,7 @@ try {
     "migration/rehearsal:inspectRehearsalEvidence",
     { runId },
   );
-  assertRestoreEvidence(evidence, totalRows);
+  assertRestoreEvidence(evidence, migrationRows);
 
   restoreEvidence = {
     formatVersion: 1,
@@ -519,7 +539,8 @@ process.stdout.write(
   [
     "Disposable portable restore validation passed.",
     "Every snapshot table hash matched before validation.",
-    `canonicalRowsReused=${String(totalRows)}`,
+    `migrationRowsReused=${String(migrationRows)}`,
+    `recordingCatalogRowsPreserved=${String(totalRows - migrationRows)}`,
     `restoreManifest=${restoreManifestPath}`,
     "The disposable production-derived deployment was deleted.",
     "",

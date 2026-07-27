@@ -19,6 +19,9 @@ import {
 } from "./portable-backup-plan.mjs";
 import { inspectPortableSnapshot } from "./portable-snapshot.mjs";
 import { verifyDomainManifest } from "./manifest.mjs";
+import {
+  readRecordingCatalogManifest,
+} from "../recording/catalog-manifest.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(toolDirectory, "../..");
@@ -185,8 +188,20 @@ const verifiedDomains = Object.fromEntries(
   ]),
 );
 const rawCounts = countsFromVerifiedManifests(verifiedDomains);
-const { canonicalCounts, domainRows, totalRows } =
-  portableCountsFromRawCounts(rawCounts);
+const { manifest: recordingCatalogManifest } =
+  readRecordingCatalogManifest({
+    projectRoot,
+    runId,
+  });
+const {
+  canonicalCounts,
+  domainRows,
+  migrationRows,
+  totalRows,
+} = portableCountsFromRawCounts(rawCounts, {
+  sounders: recordingCatalogManifest.sounders,
+  templates: recordingCatalogManifest.templates,
+});
 const backupDirectory = path.join(
   projectRoot,
   ".local-migration",
@@ -243,7 +258,7 @@ if (portable.portable !== true) {
         "migration/rehearsal:inspectRehearsalEvidence",
         { runId },
       ),
-      totalRows,
+      migrationRows,
     );
   }
   scrubResult = await executePortableScrub({
@@ -321,6 +336,11 @@ const manifest = {
   canonicalRows: totalRows,
   snapshotRows: inspected.totalRows,
   tables: inspected.tables,
+  recordingCatalog: {
+    digest: recordingCatalogManifest.digest,
+    sounders: recordingCatalogManifest.sounders,
+    templates: recordingCatalogManifest.templates,
+  },
   ...(scrubResult === undefined
     ? {}
     : {

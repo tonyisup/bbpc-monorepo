@@ -29,9 +29,39 @@ test("maps every raw count to canonical and domain totals", () => {
   assert.equal(result.canonicalCounts.users, 19);
   assert.equal(result.canonicalCounts.archivePosts, 433);
   assert.equal(result.canonicalCounts.sideEffectIntents, 0);
+  assert.equal(result.migrationRows, 473);
   assert.equal(result.domainRows.identity, 40);
   assert.equal(result.domainRows.archive, 433);
   assert.equal(result.totalRows, 473);
+});
+
+test("includes only reconciled public recording catalogs in portable counts", () => {
+  const result = portableCountsFromRawCounts(
+    createRawCounts(),
+    {
+      sounders: 825,
+      templates: 3,
+    },
+  );
+  assert.equal(
+    result.canonicalCounts.recordingSounders,
+    825,
+  );
+  assert.equal(
+    result.canonicalCounts.recordingSegmentTemplates,
+    3,
+  );
+  assert.equal(result.canonicalCounts.recordingSessions, 0);
+  assert.equal(result.migrationRows, 473);
+  assert.equal(result.totalRows, 1_301);
+  assert.throws(
+    () =>
+      portableCountsFromRawCounts(createRawCounts(), {
+        sounders: 1_001,
+        templates: 3,
+      }),
+    /Valid recording catalog counts/u,
+  );
 });
 
 test("executes a bounded resumable portable scrub", async () => {

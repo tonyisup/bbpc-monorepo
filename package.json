@@ -53,6 +53,8 @@
     "migration:extract:rankings": "node local-tools/sql/extract-rankings.mjs",
     "migration:extract:archive": "node local-tools/sql/extract-archive.mjs",
     "migration:recording-catalogs": "node local-tools/recording/import-catalogs.mjs",
+    "migration:recording-archive": "node local-tools/recording/archive-source.mjs",
+    "migration:recording-archive:restore": "node local-tools/recording/restore-source-archive.mjs",
     "migration:stage:local": "node local-tools/sql/stage-local.mjs",
     "migration:rehearse:local": "node local-tools/sql/rehearse-local.mjs",
     "migration:backup:local": "node local-tools/sql/portable-backup-local.mjs",

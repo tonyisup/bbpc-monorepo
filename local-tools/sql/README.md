@@ -128,7 +128,9 @@ rehearsal evidence, runs the resumable one-way `portable-v1` scrub, exports only
 schema-tested portable allowlist, and records private ZIP/table hashes. The
 `migration:restore:local` command restores that ZIP into a second disposable local
 backend, requires exact table hashes, then reuses all canonical rows while rerunning
-the full transform/reconciliation plan.
+the full transform/reconciliation plan. The expected portable counts include only the
+separately reconciled public recording sounder/template catalogs; all recording
+session/history tables remain fail-closed at zero.
 
 Both commands are hard-coded to local Convex deployments and require explicit
 production-derived, scrub/backup, restore, and disposable-deletion acknowledgements.
