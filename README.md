@@ -35,6 +35,11 @@ Sounder/template administration and ended-session retention use the shared
 Convex Administrator mutations and the global cutover write gate. Linked
 administrators can run those bounded operations from `/admin`.
 
+After deploying this consumer, set `NEXT_PUBLIC_BBPC_RECORDING_URL` in
+`bbpc-admin` to its public HTTP(S) root URL. In Convex mode the admin `/record`
+route and administrator sidebar then hand off to this app. If the variable is
+absent, the admin route remains fail-closed behind its unavailable-page flow.
+
 This repository intentionally contains no deployable Convex function directory.
 All recording schema and server functions live under `convex/recording` in the
 shared `bbpc-convex` project. The legacy standalone deployment is retained only
