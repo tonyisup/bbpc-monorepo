@@ -7,6 +7,10 @@ This runbook exercises the full offline data milestone on an approved encrypted
 development machine. It never writes SQL, never targets cloud staging or production,
 and stops before production cutover.
 
+Production Vercel selector changes, S2 rollback preservation, S4 credential
+retirement, and the recording consumer handoff are documented separately in
+`CONSUMER_CUTOVER_RUNBOOK.md`.
+
 ## Preconditions
 
 1. Confirm the approval record in `MIGRATION_MAPPING_DRAFT.md`.
