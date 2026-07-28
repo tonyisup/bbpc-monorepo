@@ -39,6 +39,9 @@
     "codegen": "convex codegen",
     "contract:build": "tsc --project tsconfig.contract.json",
     "contract:generate": "convex-helpers ts-api-spec --output-file contracts/convexApi.ts",
+    "deploy:environment:check": "node scripts/check-deployment-environment.mjs",
+    "deploy:target:check": "node scripts/check-deploy-target.mjs",
+    "deployment:test": "node --test scripts/*.test.mjs",
     "release:check": "node scripts/check-release-version.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -67,7 +70,7 @@
     "performance:test": "node --test local-tools/performance/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run migration:test:extractor && npm run migration:test:recording && npm run performance:test && npm run test:coverage",
+    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run deployment:test && npm run migration:test:extractor && npm run migration:test:recording && npm run performance:test && npm run test:coverage",
     "package:check": "npm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {

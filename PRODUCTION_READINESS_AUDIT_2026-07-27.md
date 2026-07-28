@@ -77,6 +77,14 @@ backward-compatible backend before staging acceptance. Its value-free readiness
 query reports API version `0.1.0`, uninitialized state, and application writes
 disabled.
 
+The candidate staging workflow now fails before deployment unless the configured
+key targets exactly `merry-shepherd-928`, does not target
+`determined-wombat-872`, contains the complete required environment-name
+contract, reports `BBPC_ENVIRONMENT=staging`, and reports the package API
+version. The live read-only preflight accepted the staging target and rejected
+the current environment on the known missing `CLERK_M2M_AUDIENCE`, without
+printing the key or any environment value.
+
 ## Local configuration evidence
 
 Presence/equality checks, without printing values, establish that:
@@ -103,8 +111,8 @@ to `tonyisup/bbpc-convex`. Before relying on those workflows:
 3. configure the GitHub `staging` environment and
    `CONVEX_STAGING_DEPLOY_KEY` secret;
 4. set the missing required staging environment variable;
-5. push `master`, wait for the complete CI and staging deployment, and record
-   the deployed commit; and
+5. run the target/environment preflight, then push `master`, wait for the
+   complete CI and staging deployment, and record the deployed commit; and
 6. rerun the public, admin, member, pipeline, default-deny, and write-disabled
    staging smoke matrix.
 

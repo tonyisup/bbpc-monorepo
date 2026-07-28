@@ -185,4 +185,41 @@ describe("public host catalog", () => {
       "CONFLICT",
     );
   });
+
+  test("orders unnamed hosts deterministically by document creation", async () => {
+    const t = createTestBackend();
+    const roleId = await seedRole(t, {
+      name: "Administrator",
+      admin: true,
+    });
+    const first = await seedUser(t, { name: null });
+    const second = await seedUser(t, { name: null });
+    await assignRole(t, second, roleId);
+    await assignRole(t, first, roleId);
+
+    await expect(
+      t.query(api.identity.public.listHosts, {}),
+    ).resolves.toEqual([
+      { id: first, name: null, image: null },
+      { id: second, name: null, image: null },
+    ]);
+  });
+
+  test("fails closed when a host membership references a missing user", async () => {
+    const t = createTestBackend();
+    const roleId = await seedRole(t, {
+      name: "Administrator",
+      admin: true,
+    });
+    const deletedUserId = await seedUser(t, { name: "Deleted Host" });
+    await assignRole(t, deletedUserId, roleId);
+    await t.run(async (ctx) => {
+      await ctx.db.delete(deletedUserId);
+    });
+
+    await expectDomainError(
+      t.query(api.identity.public.listHosts, {}),
+      "CONFLICT",
+    );
+  });
 });

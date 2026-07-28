@@ -562,5 +562,12 @@ consumer has moved off the prior package.
 ## Deployment safety
 
 `master` deploys only to the isolated staging reference after all checks pass. Production
-has no workflow or key yet. Creating production, initializing `systemState`, or entering
-S1–S4 requires the migration runbook and its explicit backup/reconciliation gates.
+has no workflow or key yet. Before any staging deploy, CI parses the deploy-key header
+without printing secret material and requires the exact staging deployment
+`merry-shepherd-928`, while explicitly forbidding production
+`determined-wombat-872`. It then requires all four backend environment-variable names,
+requires `BBPC_ENVIRONMENT=staging`, and requires `BBPC_API_VERSION` to match the
+package version. The post-deploy contract generator follows that already-verified
+deploy-key target rather than selecting production by flag. Creating production,
+initializing `systemState`, or entering S1–S4 requires the migration runbook and its
+explicit backup/reconciliation gates.

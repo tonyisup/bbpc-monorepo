@@ -20,6 +20,9 @@ jobs:
     environment: staging
     env:
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_STAGING_DEPLOY_KEY }}
+      BBPC_EXPECTED_CONVEX_DEPLOYMENT: merry-shepherd-928
+      BBPC_FORBIDDEN_CONVEX_DEPLOYMENT: determined-wombat-872
+      BBPC_EXPECTED_ENVIRONMENT: staging
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,6 +35,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify staging deploy target
+        run: npm run deploy:target:check
+
+      - name: Verify staging environment
+        run: npm run deploy:environment:check
 
       - name: Verify source and package
         run: |
@@ -46,6 +55,6 @@ jobs:
 
       - name: Verify deployed public contract
         run: |
-          npm run contract:generate -- --prod
+          npm run contract:generate
           npm run contract:build
           git diff --exit-code -- contracts/convexApi.ts contracts/generated

@@ -584,6 +584,44 @@ describe("pipeline and internal write boundaries", () => {
     );
   });
 
+  test("rejects disabled action actors before evaluating the write gate", async () => {
+    const t = createTestBackend();
+    const userId = await seedUser(t, { status: "disabled" });
+    const servicePrincipalId = await seedService(t);
+    const deletedUserId = await seedUser(t);
+    const deletedServicePrincipalId = await seedService(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(servicePrincipalId, { status: "disabled" });
+      await ctx.db.delete(deletedUserId);
+      await ctx.db.delete(deletedServicePrincipalId);
+    });
+
+    await expect(
+      t.mutation(internal.system.gate.assertUserActionWriteEnabled, {
+        userId,
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+    ).rejects.toThrow("Action user is unavailable");
+    await expect(
+      t.mutation(internal.system.gate.assertServiceActionWriteEnabled, {
+        servicePrincipalId,
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+    ).rejects.toThrow("Action service principal is unavailable");
+    await expect(
+      t.mutation(internal.system.gate.assertUserActionWriteEnabled, {
+        userId: deletedUserId,
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+    ).rejects.toThrow("Action user is unavailable");
+    await expect(
+      t.mutation(internal.system.gate.assertServiceActionWriteEnabled, {
+        servicePrincipalId: deletedServicePrincipalId,
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+    ).rejects.toThrow("Action service principal is unavailable");
+  });
+
   test("gates scheduled writes and migration writes by stage and run", async () => {
     const uninitialized = createTestBackend();
     await expectDomainError(
