@@ -3,812 +3,23 @@ import { type GenericId as Id } from "convex/values";
 export declare const api: PublicApiType;
 export declare const internal: InternalApiType;
 export type PublicApiType = {
-    identity: {
-        profile: {
-            actionGateProbe: FunctionReference<"action", "public", {
-                clientApiVersion: string;
-            }, {
-                allowed: true;
-                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
-                isAdmin: boolean;
-            }>;
-            administratorMe: FunctionReference<"query", "public", Record<string, never>, {
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                isHost: boolean;
-                name: string | null;
-            }>;
-            discardMyProfileImageUpload: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                fileKey: string;
-                uploadId: string;
-            }, {
-                intentId: Id<"sideEffectIntents">;
-                queued: true;
-            }>;
-            me: FunctionReference<"query", "public", Record<string, never>, {
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                isHost: boolean;
-                name: string | null;
-            }>;
-            updateMyName: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                name: string;
-            }, {
-                name: string;
-                updatedAt: number;
-            }>;
-            updateMyProfileWithImage: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expectedImage: string | null;
-                fileKey: string;
-                image: string;
-                name: string;
-                uploadId: string;
-            }, {
-                image: string;
-                name: string;
-                updatedAt: number;
-            }>;
-        };
-        admin: {
-            assignRole: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                roleId: Id<"roles">;
-                userId: Id<"users">;
-            }, {
-                assignedAt: number | null;
-                assignedBy: Id<"users"> | null;
-                id: Id<"userRoles">;
-                role: {
-                    admin: boolean;
-                    description: string;
-                    id: Id<"roles">;
-                    legacyId: number | null;
+    admin: {
+        dashboard: {
+            overview: FunctionReference<"query", "public", Record<string, never>, {
+                counts: {
+                    episodes: number;
+                    movies: number;
+                    reviews: number;
+                    users: number;
+                };
+                guessStats: Array<{
+                    fullTitle: string;
+                    guesses: number;
+                    id: Id<"episodes">;
                     name: string;
-                    permissions: Array<string>;
-                };
-            }>;
-            createRole: FunctionReference<"mutation", "public", {
-                admin: boolean;
-                clientApiVersion: string;
-                description: string;
-                name: string;
-            }, {
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-            }>;
-            createUser: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                email: string;
-                name: string;
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            }>;
-            deleteRole: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"roles">;
-            }, {
-                id: Id<"roles">;
-            }>;
-            getRole: FunctionReference<"query", "public", {
-                id: Id<"roles">;
-            }, {
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-                userCount: number;
-                userCountIsExact: boolean;
-            } | null>;
-            getUser: FunctionReference<"query", "public", {
-                id: Id<"users">;
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            } | null>;
-            listRoles: FunctionReference<"query", "public", Record<string, never>, Array<{
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-                userCount: number;
-                userCountIsExact: boolean;
-            }>>;
-            listUsersPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    createdAt: number;
-                    email: string | null;
-                    id: Id<"users">;
-                    image: string | null;
-                    isAdmin: boolean;
-                    legacyId: string | null;
-                    name: string | null;
-                    nextSyllabus: {
-                        id: Id<"syllabusEntries">;
-                        movie: {
-                            id: Id<"movies">;
-                            title: string;
-                        };
-                        notes: string | null;
-                        order: number;
-                    } | null;
-                    roles: Array<{
-                        assignedAt: number | null;
-                        assignedBy: Id<"users"> | null;
-                        id: Id<"userRoles">;
-                        role: {
-                            admin: boolean;
-                            description: string;
-                            id: Id<"roles">;
-                            legacyId: number | null;
-                            name: string;
-                            permissions: Array<string>;
-                        };
-                    }>;
-                    status: "active" | "disabled";
-                    updatedAt: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            removeRoleMembership: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    roleId: Id<"roles">;
-                    userId: Id<"users">;
-                };
-                id: Id<"userRoles">;
-            }, {
-                id: Id<"userRoles">;
-            }>;
-            setUserStatus: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    email: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                    updatedAt: number;
-                };
-                id: Id<"users">;
-                status: "active" | "disabled";
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            }>;
-            updateRole: FunctionReference<"mutation", "public", {
-                admin: boolean;
-                clientApiVersion: string;
-                description: string;
-                id: Id<"roles">;
-                name: string;
-            }, {
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-            }>;
-            updateUser: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                email: string;
-                expected?: {
-                    email: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                    updatedAt: number;
-                };
-                id: Id<"users">;
-                name: string;
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            }>;
-        };
-        roles: {
-            mine: FunctionReference<"query", "public", Record<string, never>, Array<{
-                assignedAt: number | null;
-                assignedBy: Id<"users"> | null;
-                id: Id<"userRoles">;
-                role: {
-                    admin: boolean;
-                    description: string;
-                    id: Id<"roles">;
-                    legacyId: number | null;
-                    name: string;
-                    permissions: Array<string>;
-                };
-            }>>;
-        };
-        linking: {
-            linkOrCreateMe: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-            }, {
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                isHost: boolean;
-                linkMode: "alreadyLinked" | "existingUser" | "newUser";
-                name: string | null;
-            }>;
-        };
-        public: {
-            listHosts: FunctionReference<"query", "public", Record<string, never>, Array<{
-                id: Id<"users">;
-                image: string | null;
-                name: string | null;
-            }>>;
-        };
-        impersonation: {
-            current: FunctionReference<"query", "public", Record<string, never>, {
-                endsAt: number;
-                id: Id<"impersonationSessions">;
-                reason: string;
-                startedAt: number;
-                targetName: string | null;
-                targetUserId: Id<"users">;
-            } | null>;
-            revoke: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                sessionId: Id<"impersonationSessions">;
-            }, {
-                revoked: boolean;
-                revokedAt: number | null;
-            }>;
-            start: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                durationMinutes: number;
-                reason: string;
-                targetUserId: Id<"users">;
-            }, {
-                endsAt: number;
-                id: Id<"impersonationSessions">;
-                reason: string;
-                startedAt: number;
-                targetName: string | null;
-                targetUserId: Id<"users">;
-            }>;
-        };
-    };
-    pipeline: {
-        status: {
-            actionGateProbe: FunctionReference<"action", "public", {
-                clientApiVersion: string;
-                requiredPermission: string;
-            }, {
-                allowed: true;
-                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
-            }>;
-            capabilities: FunctionReference<"query", "public", Record<string, never>, {
-                name: string;
-                permissions: Array<string>;
-                servicePrincipalId: Id<"servicePrincipals">;
-            }>;
-            heartbeat: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                requiredPermission: string;
-            }, {
-                lastSeenAt: number;
-            }>;
-        };
-        content: {
-            getEpisodeByDate: FunctionReference<"query", "public", {
-                date: string;
-            }, {
-                date: string | null;
-                description: string | null;
-                id: Id<"episodes">;
-                notes: string | null;
-                number: number;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            getEpisodeContextByDate: FunctionReference<"query", "public", {
-                date: string;
-            }, {
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
                     slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                movies: Array<{
-                    assignmentType: string | null;
-                    id: Id<"movies">;
-                    poster: string | null;
-                    source: "assignment" | "extra_review";
-                    title: string;
-                    year: number;
                 }>;
-            } | null>;
-            getEpisodeContextById: FunctionReference<"query", "public", {
-                id: Id<"episodes">;
-            }, {
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                movies: Array<{
-                    assignmentType: string | null;
-                    id: Id<"movies">;
-                    poster: string | null;
-                    source: "assignment" | "extra_review";
-                    title: string;
-                    year: number;
-                }>;
-            } | null>;
-            getMoviePosters: FunctionReference<"query", "public", {
-                movieIds: Array<Id<"movies">>;
-            }, Array<{
-                id: Id<"movies">;
-                poster: string;
-            }>>;
-            listEpisodeDatesPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    date: string;
-                    id: Id<"episodes">;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listMovieCatalogPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    year: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            publishEpisodeSeo: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                date: string;
-                expected: {
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                };
-                operationId: string;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-            }, {
-                changed: boolean;
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-            }>;
-            upsertEpisodeFromAudio: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                date: string;
-                number: number;
-                operationId: string;
-                title: string;
-            }, {
-                created: boolean;
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-            }>;
-        };
-    };
-    system: {
-        cutover: {
-            getStatus: FunctionReference<"query", "public", Record<string, never>, {
-                applicationWriteMode: "disabled";
-                initialized: false;
-            } | {
-                apiVersion: string;
-                applicationWriteMode: "disabled" | "enabled";
-                cutoverRunId: string;
-                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
-                firstApplicationWriteAt: number | null;
-                initialized: true;
-                updatedAt: number;
-            }>;
-        };
-        health: {
-            readiness: FunctionReference<"query", "public", Record<string, never>, {
-                apiVersion: string;
-                applicationWritesEnabled: boolean;
-                initialized: boolean;
-            }>;
-        };
-    };
-    episodes: {
-        public: {
-            getByLegacyId: FunctionReference<"query", "public", {
-                legacyId: string;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                number: number;
-                recording: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            getBySlug: FunctionReference<"query", "public", {
-                slug: string;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                number: number;
-                recording: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            latestPublished: FunctionReference<"query", "public", {
-                onOrBefore: string;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                number: number;
-                recording: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            listPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
+                latestEpisode: {
                     assignments: Array<{
                         id: Id<"assignments">;
                         movie: {
@@ -862,263 +73,10 @@ export type PublicApiType = {
                     slug: string | null;
                     status: string | null;
                     title: string;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            nextScheduled: FunctionReference<"query", "public", Record<string, never>, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                number: number;
-                recording: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            results: FunctionReference<"query", "public", {
-                episodeId: Id<"episodes">;
-            }, {
-                gamblingWinners: Array<{
-                    gamblingType: {
-                        multiplier: number;
-                        title: string;
-                    };
-                    id: Id<"gamblingEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    points: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                guessWinners: Array<{
-                    actualRating: number;
-                    host: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                    id: Id<"guesses">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-            }>;
-            search: FunctionReference<"query", "public", {
-                limit: number;
-                query: string;
-            }, Array<{
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                number: number;
-                recording: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            }>>;
-        };
-        audio: {
-            deleteMine: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"episodeAudioMessages">;
-            }, {
-                id: Id<"episodeAudioMessages">;
-            }>;
-            listMine: FunctionReference<"query", "public", {
-                episodeId: Id<"episodes">;
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
+                } | null;
+                latestSyllabus: Array<{
                     createdAt: number;
-                    episodeId: Id<"episodes"> | null;
-                    fileKey: string | null;
-                    id: Id<"episodeAudioMessages">;
-                    notes: string | null;
-                    url: string;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            updateMine: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                episodeId: Id<"episodes">;
-                fileKey: string;
-                id: Id<"episodeAudioMessages">;
-                notes?: string;
-            }, {
-                createdAt: number;
-                episodeId: Id<"episodes"> | null;
-                fileKey: string | null;
-                id: Id<"episodeAudioMessages">;
-                notes: string | null;
-                url: string;
-            }>;
-            usageForEpisode: FunctionReference<"query", "public", {
-                episodeId: Id<"episodes">;
-            }, {
-                canUpload: boolean;
-                count: number;
-                limit: number;
-            }>;
-        };
-        admin: {
-            addAudioMessage: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                episodeId: Id<"episodes">;
-                fileKey?: string;
-                notes?: string;
-                url: string;
-            }, {
-                createdAt: number;
-                episodeId: Id<"episodes"> | null;
-                fileKey: string | null;
-                id: Id<"episodeAudioMessages">;
-                notes: string | null;
-                url: string;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            }>;
-            addLink: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                episodeId: Id<"episodes">;
-                text: string;
-                url: string;
-            }, {
-                id: Id<"episodeLinks">;
-                text: string;
-                url: string;
-            }>;
-            createEpisode: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                number: number;
-                title: string;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
+                    id: Id<"syllabusEntries">;
                     movie: {
                         id: Id<"movies">;
                         poster: string | null;
@@ -1127,21 +85,14 @@ export type PublicApiType = {
                         url: string;
                         year: number;
                     };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
                     user: {
                         id: Id<"users">;
-                        image: string | null;
                         name: string | null;
                     };
                 }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
+                upcomingEpisode: {
+                    assignments: Array<{
+                        id: Id<"assignments">;
                         movie: {
                             id: Id<"movies">;
                             poster: string | null;
@@ -1149,788 +100,51 @@ export type PublicApiType = {
                             tmdbId: number | null;
                             url: string;
                             year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                notes: string | null;
-                number: number;
-                recording: string | null;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"episodes">;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                notes: string | null;
-                number: number;
-                recording: string | null;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            getByNumber: FunctionReference<"query", "public", {
-                number: number;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                notes: string | null;
-                number: number;
-                recording: string | null;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            listAudioMessages: FunctionReference<"query", "public", {
-                episodeId: Id<"episodes">;
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    createdAt: number;
-                    episodeId: Id<"episodes"> | null;
-                    fileKey: string | null;
-                    id: Id<"episodeAudioMessages">;
-                    notes: string | null;
-                    url: string;
-                    user: {
-                        email: string | null;
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            removeAudioMessage: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected: {
-                    createdAt: number;
-                    episodeId: Id<"episodes"> | null;
-                    fileKey: string | null;
-                    url: string;
-                };
-                id: Id<"episodeAudioMessages">;
-            }, {
-                id: Id<"episodeAudioMessages">;
-            }>;
-            removeLink: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    episodeId: Id<"episodes"> | null;
-                    text: string;
-                    url: string;
-                };
-                id: Id<"episodeLinks">;
-            }, {
-                id: Id<"episodeLinks">;
-            }>;
-            updateEpisode: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                date?: string | null;
-                description?: string | null;
-                expected?: {
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: string;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    }>;
                     date: string | null;
                     description: string | null;
-                    notes: string | null;
+                    extras: Array<{
+                        id: Id<"extraReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
+                        };
+                    }>;
+                    id: Id<"episodes">;
+                    links: Array<{
+                        id: Id<"episodeLinks">;
+                        text: string;
+                        url: string;
+                    }>;
                     number: number;
                     recording: string | null;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
                     slug: string | null;
                     status: string | null;
                     title: string;
-                };
-                id: Id<"episodes">;
-                notes?: string | null;
-                number?: number;
-                recording?: string | null;
-                seoDescription?: string | null;
-                seoKeywords?: string | null;
-                seoTitle?: string | null;
-                slug?: string | null;
-                status?: string;
-                title?: string;
-            }, {
-                assignments: Array<{
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                date: string | null;
-                description: string | null;
-                extras: Array<{
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                    };
-                }>;
-                id: Id<"episodes">;
-                links: Array<{
-                    id: Id<"episodeLinks">;
-                    text: string;
-                    url: string;
-                }>;
-                notes: string | null;
-                number: number;
-                recording: string | null;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            }>;
-        };
-        bangers: {
-            create: FunctionReference<"mutation", "public", {
-                artist: string;
-                clientApiVersion: string;
-                episodeId: Id<"episodes"> | null;
-                title: string;
-                url: string;
-                userId: Id<"users"> | null;
-            }, {
-                artist: string;
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    status: string | null;
-                    title: string;
                 } | null;
-                episodeId: Id<"episodes"> | null;
-                id: Id<"bangers">;
-                title: string;
-                url: string;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                } | null;
-                userId: Id<"users"> | null;
-            }>;
-            getAdminById: FunctionReference<"query", "public", {
-                id: Id<"bangers">;
-            }, {
-                artist: string;
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    status: string | null;
-                    title: string;
-                } | null;
-                episodeId: Id<"episodes"> | null;
-                id: Id<"bangers">;
-                title: string;
-                url: string;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                } | null;
-                userId: Id<"users"> | null;
-            } | null>;
-            listAdminPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    artist: string;
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        status: string | null;
-                        title: string;
-                    } | null;
-                    episodeId: Id<"episodes"> | null;
-                    id: Id<"bangers">;
-                    title: string;
-                    url: string;
-                    user: {
-                        email: string | null;
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                    userId: Id<"users"> | null;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            remove: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    artist: string;
-                    episodeId: Id<"episodes"> | null;
-                    title: string;
-                    url: string;
-                    userId: Id<"users"> | null;
-                };
-                id: Id<"bangers">;
-            }, {
-                id: Id<"bangers">;
-            }>;
-            update: FunctionReference<"mutation", "public", {
-                artist: string;
-                clientApiVersion: string;
-                episodeId: Id<"episodes"> | null;
-                id: Id<"bangers">;
-                title: string;
-                url: string;
-                userId: Id<"users"> | null;
-            }, {
-                artist: string;
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    status: string | null;
-                    title: string;
-                } | null;
-                episodeId: Id<"episodes"> | null;
-                id: Id<"bangers">;
-                title: string;
-                url: string;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                } | null;
-                userId: Id<"users"> | null;
-            }>;
-        };
-    };
-    catalog: {
-        public: {
-            getMovie: FunctionReference<"query", "public", {
-                id: Id<"movies">;
-            }, {
-                id: Id<"movies">;
-                poster: string | null;
-                title: string;
-                tmdbId: number | null;
-                url: string;
-                year: number;
-            } | null>;
-            getShow: FunctionReference<"query", "public", {
-                id: Id<"shows">;
-            }, {
-                id: Id<"shows">;
-                poster: string | null;
-                title: string;
-                url: string;
-                year: number;
-            } | null>;
-            listMoviesPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listShowsPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    id: Id<"shows">;
-                    poster: string | null;
-                    title: string;
-                    url: string;
-                    year: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            searchMovies: FunctionReference<"query", "public", {
-                limit: number;
-                query: string;
-            }, Array<{
-                id: Id<"movies">;
-                poster: string | null;
-                title: string;
-                tmdbId: number | null;
-                url: string;
-                year: number;
-            }>>;
-            searchShows: FunctionReference<"query", "public", {
-                limit: number;
-                query: string;
-            }, Array<{
-                id: Id<"shows">;
-                poster: string | null;
-                title: string;
-                url: string;
-                year: number;
-            }>>;
-        };
-        admin: {
-            deleteMovie: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"movies">;
-            }, {
-                id: Id<"movies">;
-            }>;
-            deleteShow: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"shows">;
-            }, {
-                id: Id<"shows">;
-            }>;
-            getMovieDetail: FunctionReference<"query", "public", {
-                id: Id<"movies">;
-            }, {
-                media: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                reviews: Array<{
-                    assignmentReviews: Array<{
-                        assignment: {
-                            episode: {
-                                id: Id<"episodes">;
-                                number: number;
-                                slug: string | null;
-                                status: string | null;
-                                title: string;
-                            };
-                            id: Id<"assignments">;
-                            playable: boolean;
-                            type: string;
-                        };
-                        id: Id<"assignmentReviews">;
-                    }>;
-                    extraReviews: Array<{
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"extraReviews">;
-                    }>;
-                    id: Id<"reviews">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    } | null;
-                    reviewedAt: number | null;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                }>;
-            } | null>;
-            getShowDetail: FunctionReference<"query", "public", {
-                id: Id<"shows">;
-            }, {
-                media: {
-                    id: Id<"shows">;
-                    poster: string | null;
-                    title: string;
-                    url: string;
-                    year: number;
-                };
-                reviews: Array<{
-                    assignmentReviews: Array<{
-                        assignment: {
-                            episode: {
-                                id: Id<"episodes">;
-                                number: number;
-                                slug: string | null;
-                                status: string | null;
-                                title: string;
-                            };
-                            id: Id<"assignments">;
-                            playable: boolean;
-                            type: string;
-                        };
-                        id: Id<"assignmentReviews">;
-                    }>;
-                    extraReviews: Array<{
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"extraReviews">;
-                    }>;
-                    id: Id<"reviews">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    } | null;
-                    reviewedAt: number | null;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                }>;
-            } | null>;
-            updateShow: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"shows">;
-                poster?: string;
-                title: string;
-                url: string;
-                year: number;
-            }, {
-                id: Id<"shows">;
-                poster: string | null;
-                title: string;
-                url: string;
-                year: number;
-            }>;
-        };
-        write: {
-            upsertMovieByUrl: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                poster: string;
-                title: string;
-                tmdbId?: number;
-                url: string;
-                year: number;
-            }, {
-                id: Id<"movies">;
-                poster: string | null;
-                title: string;
-                tmdbId: number | null;
-                url: string;
-                year: number;
-            }>;
-            upsertShowByUrl: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                poster: string;
-                title: string;
-                url: string;
-                year: number;
-            }, {
-                id: Id<"shows">;
-                poster: string | null;
-                title: string;
-                url: string;
-                year: number;
-            }>;
-        };
-        external: {
-            getMovie: FunctionReference<"action", "public", {
-                id: number;
-            }, {
-                backdrop_path: string | null;
-                first_air_date: string | null;
-                id: number;
-                imdb_id: string | null;
-                imdb_path: string | null;
-                media_type: string;
-                overview: string;
-                popularity: number;
-                poster_path: string | null;
-                release_date: string;
-                title: string;
-                vote_average: number;
-                vote_count: number;
-            }>;
-            getShow: FunctionReference<"action", "public", {
-                id: number;
-            }, {
-                backdrop_path: string | null;
-                first_air_date: string | null;
-                id: number;
-                imdb_id: string | null;
-                imdb_path: string | null;
-                media_type: string;
-                overview: string;
-                popularity: number;
-                poster_path: string | null;
-                release_date: string;
-                title: string;
-                vote_average: number;
-                vote_count: number;
-            }>;
-            searchMovies: FunctionReference<"action", "public", {
-                page?: number;
-                query: string;
-            }, {
-                page: number;
-                results: Array<{
-                    backdrop_path: string | null;
-                    first_air_date: string | null;
-                    id: number;
-                    imdb_id: string | null;
-                    imdb_path: string | null;
-                    media_type: string;
-                    overview: string;
-                    popularity: number;
-                    poster_path: string | null;
-                    release_date: string;
-                    title: string;
-                    vote_average: number;
-                    vote_count: number;
-                }>;
-            }>;
-            searchShows: FunctionReference<"action", "public", {
-                page?: number;
-                query: string;
-            }, {
-                page: number;
-                results: Array<{
-                    backdrop_path: string | null;
-                    first_air_date: string | null;
-                    id: number;
-                    imdb_id: string | null;
-                    imdb_path: string | null;
-                    media_type: string;
-                    overview: string;
-                    popularity: number;
-                    poster_path: string | null;
-                    release_date: string;
-                    title: string;
-                    vote_average: number;
-                    vote_count: number;
-                }>;
             }>;
         };
     };
@@ -2336,38 +550,24 @@ export type PublicApiType = {
             } | null>;
         };
     };
-    syllabus: {
+    catalog: {
         admin: {
-            assignEpisode: FunctionReference<"mutation", "public", {
-                assignmentType: string;
+            deleteMovie: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
-                episodeNumber: number;
-                expected?: {
-                    assignmentId: Id<"assignments"> | null;
-                    createdAt: number;
-                    movieId: Id<"movies">;
-                    notes: string | null;
-                    order: number;
-                    userId: Id<"users">;
-                };
-                syllabusId: Id<"syllabusEntries">;
+                id: Id<"movies">;
             }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
+                id: Id<"movies">;
+            }>;
+            deleteShow: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"shows">;
+            }, {
+                id: Id<"shows">;
+            }>;
+            getMovieDetail: FunctionReference<"query", "public", {
+                id: Id<"movies">;
+            }, {
+                media: {
                     id: Id<"movies">;
                     poster: string | null;
                     title: string;
@@ -2375,737 +575,7 @@ export type PublicApiType = {
                     url: string;
                     year: number;
                 };
-                notes: string | null;
-                order: number;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"syllabusEntries">;
-            }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            } | null>;
-            listForUser: FunctionReference<"query", "public", {
-                userId: Id<"users">;
-            }, Array<{
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            }>>;
-            listPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        slug: string | null;
-                        type: string;
-                    } | null;
-                    createdAt: number;
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    notes: string | null;
-                    order: number;
-                    user: {
-                        email: string | null;
-                        id: Id<"users">;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            removeEntry: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    assignmentId: Id<"assignments"> | null;
-                    createdAt: number;
-                    movieId: Id<"movies">;
-                    notes: string | null;
-                    order: number;
-                    userId: Id<"users">;
-                };
-                id: Id<"syllabusEntries">;
-            }, {
-                id: Id<"syllabusEntries">;
-            }>;
-            reorderPendingForUser: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                items: Array<{
-                    expectedOrder: number;
-                    id: Id<"syllabusEntries">;
-                }>;
-                userId: Id<"users">;
-            }, Array<{
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            }>>;
-            unlinkEpisode: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    assignmentId: Id<"assignments"> | null;
-                    createdAt: number;
-                    movieId: Id<"movies">;
-                    notes: string | null;
-                    order: number;
-                    userId: Id<"users">;
-                };
-                syllabusId: Id<"syllabusEntries">;
-            }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-                user: {
-                    email: string | null;
-                    id: Id<"users">;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            }>;
-        };
-        mine: {
-            add: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                movieId: Id<"movies">;
-                position?: "TOP" | "AFTER_NEXT" | "END";
-            }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-            }>;
-            list: FunctionReference<"query", "public", Record<string, never>, Array<{
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-            }>>;
-            remove: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"syllabusEntries">;
-            }, {
-                id: Id<"syllabusEntries">;
-            }>;
-            reorderPending: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                orderedPendingIds: Array<Id<"syllabusEntries">>;
-            }, {
-                success: true;
-            }>;
-            updateNotes: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"syllabusEntries">;
-                notes: string | null;
-            }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    slug: string | null;
-                    type: string;
-                } | null;
-                createdAt: number;
-                id: Id<"syllabusEntries">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                notes: string | null;
-                order: number;
-            }>;
-        };
-    };
-    ratings: {
-        admin: {
-            create: FunctionReference<"mutation", "public", {
-                category?: string;
-                clientApiVersion: string;
-                icon?: string;
-                name: string;
-                sound?: string;
-                value: number;
-            }, {
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"ratings">;
-            }, {
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            } | null>;
-            list: FunctionReference<"query", "public", Record<string, never>, Array<{
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            }>>;
-            removeIfUnreferenced: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"ratings">;
-            }, {
-                id: Id<"ratings">;
-            }>;
-            update: FunctionReference<"mutation", "public", {
-                category?: string | null;
-                clientApiVersion: string;
-                icon?: string | null;
-                id: Id<"ratings">;
-                name?: string;
-                sound?: string | null;
-                value?: number;
-            }, {
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            }>;
-        };
-        public: {
-            getById: FunctionReference<"query", "public", {
-                id: Id<"ratings">;
-            }, {
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            } | null>;
-            getByValue: FunctionReference<"query", "public", {
-                value: number;
-            }, {
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            } | null>;
-            list: FunctionReference<"query", "public", Record<string, never>, Array<{
-                category: string | null;
-                icon: string | null;
-                id: Id<"ratings">;
-                name: string;
-                sound: string | null;
-                value: number;
-            }>>;
-        };
-    };
-    reviews: {
-        admin: {
-            createExtra: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                episodeId: Id<"episodes">;
-                movieId?: Id<"movies">;
-                ratingId?: Id<"ratings">;
-                showId?: Id<"shows">;
-                userId: Id<"users">;
-            }, {
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                id: Id<"extraReviews">;
-                review: {
-                    id: Id<"reviews">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    } | null;
-                    reviewedAt: number | null;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                };
-            }>;
-            createForAssignment: FunctionReference<"mutation", "public", {
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                ratingId?: Id<"ratings">;
-                userId: Id<"users">;
-            }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    playable: boolean;
-                    type: string;
-                };
-                id: Id<"assignmentReviews">;
-                review: {
-                    id: Id<"reviews">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    } | null;
-                    reviewedAt: number | null;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                };
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"reviews">;
-            }, {
-                assignmentReviews: Array<{
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                }>;
-                extraReviews: Array<{
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"extraReviews">;
-                }>;
-                id: Id<"reviews">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                } | null;
-                reviewedAt: number | null;
-                show: {
-                    id: Id<"shows">;
-                    poster: string | null;
-                    title: string;
-                    url: string;
-                    year: number;
-                } | null;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                } | null;
-            } | null>;
-            getDeleteImpact: FunctionReference<"query", "public", {
-                id: Id<"reviews">;
-            }, {
-                assignmentReviewCount: number;
-                extraReviewCount: number;
-                guessCount: number;
-                id: Id<"reviews">;
-            }>;
-            listExtrasForEpisode: FunctionReference<"query", "public", {
-                episodeId: Id<"episodes">;
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"extraReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listForAssignment: FunctionReference<"query", "public", {
-                assignmentId: Id<"assignments">;
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-                ratingId?: Id<"ratings">;
-                unrated?: boolean;
-                userId?: Id<"users">;
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
+                reviews: Array<{
                     assignmentReviews: Array<{
                         assignment: {
                             episode: {
@@ -3163,37 +633,34 @@ export type PublicApiType = {
                         status: "active" | "disabled";
                     } | null;
                 }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            remove: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expectedImpact?: {
-                    assignmentReviewCount: number;
-                    extraReviewCount: number;
-                    guessCount: number;
+            } | null>;
+            getShowDetail: FunctionReference<"query", "public", {
+                id: Id<"shows">;
+            }, {
+                media: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
                 };
-                id: Id<"reviews">;
-            }, {
-                assignmentReviewCount: number;
-                extraReviewCount: number;
-                guessCount: number;
-                id: Id<"reviews">;
-            }>;
-            removeAssignmentIfNoGuesses: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"assignmentReviews">;
-            }, {
-                id: Id<"assignmentReviews">;
-            }>;
-            setRating: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expectedRatingId?: Id<"ratings"> | null;
-                ratingId: Id<"ratings"> | null;
-                reviewId: Id<"reviews">;
-            }, {
-                assignmentReviews: Array<{
-                    assignment: {
+                reviews: Array<{
+                    assignmentReviews: Array<{
+                        assignment: {
+                            episode: {
+                                id: Id<"episodes">;
+                                number: number;
+                                slug: string | null;
+                                status: string | null;
+                                title: string;
+                            };
+                            id: Id<"assignments">;
+                            playable: boolean;
+                            type: string;
+                        };
+                        id: Id<"assignmentReviews">;
+                    }>;
+                    extraReviews: Array<{
                         episode: {
                             id: Id<"episodes">;
                             number: number;
@@ -3201,185 +668,1196 @@ export type PublicApiType = {
                             status: string | null;
                             title: string;
                         };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                }>;
-                extraReviews: Array<{
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
+                        id: Id<"extraReviews">;
+                    }>;
+                    id: Id<"reviews">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
                         title: string;
-                    };
-                    id: Id<"extraReviews">;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    } | null;
+                    reviewedAt: number | null;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
                 }>;
-                id: Id<"reviews">;
-                movie: {
+            } | null>;
+            updateShow: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"shows">;
+                poster?: string;
+                title: string;
+                url: string;
+                year: number;
+            }, {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+            }>;
+        };
+        external: {
+            getMovie: FunctionReference<"action", "public", {
+                id: number;
+            }, {
+                backdrop_path: string | null;
+                first_air_date: string | null;
+                id: number;
+                imdb_id: string | null;
+                imdb_path: string | null;
+                media_type: string;
+                overview: string;
+                popularity: number;
+                poster_path: string | null;
+                release_date: string;
+                title: string;
+                vote_average: number;
+                vote_count: number;
+            }>;
+            getShow: FunctionReference<"action", "public", {
+                id: number;
+            }, {
+                backdrop_path: string | null;
+                first_air_date: string | null;
+                id: number;
+                imdb_id: string | null;
+                imdb_path: string | null;
+                media_type: string;
+                overview: string;
+                popularity: number;
+                poster_path: string | null;
+                release_date: string;
+                title: string;
+                vote_average: number;
+                vote_count: number;
+            }>;
+            searchMovies: FunctionReference<"action", "public", {
+                page?: number;
+                query: string;
+            }, {
+                page: number;
+                results: Array<{
+                    backdrop_path: string | null;
+                    first_air_date: string | null;
+                    id: number;
+                    imdb_id: string | null;
+                    imdb_path: string | null;
+                    media_type: string;
+                    overview: string;
+                    popularity: number;
+                    poster_path: string | null;
+                    release_date: string;
+                    title: string;
+                    vote_average: number;
+                    vote_count: number;
+                }>;
+            }>;
+            searchShows: FunctionReference<"action", "public", {
+                page?: number;
+                query: string;
+            }, {
+                page: number;
+                results: Array<{
+                    backdrop_path: string | null;
+                    first_air_date: string | null;
+                    id: number;
+                    imdb_id: string | null;
+                    imdb_path: string | null;
+                    media_type: string;
+                    overview: string;
+                    popularity: number;
+                    poster_path: string | null;
+                    release_date: string;
+                    title: string;
+                    vote_average: number;
+                    vote_count: number;
+                }>;
+            }>;
+        };
+        public: {
+            getMovie: FunctionReference<"query", "public", {
+                id: Id<"movies">;
+            }, {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+            } | null>;
+            getShow: FunctionReference<"query", "public", {
+                id: Id<"shows">;
+            }, {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+            } | null>;
+            listMoviesPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
                     id: Id<"movies">;
                     poster: string | null;
                     title: string;
                     tmdbId: number | null;
                     url: string;
                     year: number;
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                } | null;
-                reviewedAt: number | null;
-                show: {
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listShowsPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
                     id: Id<"shows">;
                     poster: string | null;
                     title: string;
                     url: string;
                     year: number;
-                } | null;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            searchMovies: FunctionReference<"query", "public", {
+                limit: number;
+                query: string;
+            }, Array<{
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+            }>>;
+            searchShows: FunctionReference<"query", "public", {
+                limit: number;
+                query: string;
+            }, Array<{
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+            }>>;
+        };
+        write: {
+            upsertMovieByUrl: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                poster: string;
+                title: string;
+                tmdbId?: number;
+                url: string;
+                year: number;
+            }, {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+            }>;
+            upsertShowByUrl: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                poster: string;
+                title: string;
+                url: string;
+                year: number;
+            }, {
+                id: Id<"shows">;
+                poster: string | null;
+                title: string;
+                url: string;
+                year: number;
+            }>;
+        };
+    };
+    episodes: {
+        admin: {
+            addAudioMessage: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                episodeId: Id<"episodes">;
+                fileKey?: string;
+                notes?: string;
+                url: string;
+            }, {
+                createdAt: number;
+                episodeId: Id<"episodes"> | null;
+                fileKey: string | null;
+                id: Id<"episodeAudioMessages">;
+                notes: string | null;
+                url: string;
                 user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>;
+            addLink: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                episodeId: Id<"episodes">;
+                text: string;
+                url: string;
+            }, {
+                id: Id<"episodeLinks">;
+                text: string;
+                url: string;
+            }>;
+            createEpisode: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                number: number;
+                title: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                notes: string | null;
+                number: number;
+                recording: string | null;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"episodes">;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                notes: string | null;
+                number: number;
+                recording: string | null;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            getByNumber: FunctionReference<"query", "public", {
+                number: number;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                notes: string | null;
+                number: number;
+                recording: string | null;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            listAudioMessages: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    createdAt: number;
+                    episodeId: Id<"episodes"> | null;
+                    fileKey: string | null;
+                    id: Id<"episodeAudioMessages">;
+                    notes: string | null;
+                    url: string;
+                    user: {
+                        email: string | null;
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            removeAudioMessage: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected: {
+                    createdAt: number;
+                    episodeId: Id<"episodes"> | null;
+                    fileKey: string | null;
+                    url: string;
+                };
+                id: Id<"episodeAudioMessages">;
+            }, {
+                id: Id<"episodeAudioMessages">;
+            }>;
+            removeLink: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    episodeId: Id<"episodes"> | null;
+                    text: string;
+                    url: string;
+                };
+                id: Id<"episodeLinks">;
+            }, {
+                id: Id<"episodeLinks">;
+            }>;
+            updateEpisode: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                date?: string | null;
+                description?: string | null;
+                expected?: {
+                    date: string | null;
+                    description: string | null;
+                    notes: string | null;
+                    number: number;
+                    recording: string | null;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"episodes">;
+                notes?: string | null;
+                number?: number;
+                recording?: string | null;
+                seoDescription?: string | null;
+                seoKeywords?: string | null;
+                seoTitle?: string | null;
+                slug?: string | null;
+                status?: string;
+                title?: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                notes: string | null;
+                number: number;
+                recording: string | null;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            }>;
+        };
+        audio: {
+            deleteMine: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"episodeAudioMessages">;
+            }, {
+                id: Id<"episodeAudioMessages">;
+            }>;
+            listMine: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    createdAt: number;
+                    episodeId: Id<"episodes"> | null;
+                    fileKey: string | null;
+                    id: Id<"episodeAudioMessages">;
+                    notes: string | null;
+                    url: string;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            updateMine: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                episodeId: Id<"episodes">;
+                fileKey: string;
+                id: Id<"episodeAudioMessages">;
+                notes?: string;
+            }, {
+                createdAt: number;
+                episodeId: Id<"episodes"> | null;
+                fileKey: string | null;
+                id: Id<"episodeAudioMessages">;
+                notes: string | null;
+                url: string;
+            }>;
+            usageForEpisode: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+            }, {
+                canUpload: boolean;
+                count: number;
+                limit: number;
+            }>;
+        };
+        bangers: {
+            create: FunctionReference<"mutation", "public", {
+                artist: string;
+                clientApiVersion: string;
+                episodeId: Id<"episodes"> | null;
+                title: string;
+                url: string;
+                userId: Id<"users"> | null;
+            }, {
+                artist: string;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"bangers">;
+                title: string;
+                url: string;
+                user: {
+                    email: string | null;
                     id: Id<"users">;
                     image: string | null;
                     name: string | null;
                     status: "active" | "disabled";
                 } | null;
+                userId: Id<"users"> | null;
             }>;
-        };
-        mine: {
-            addMovieExtra: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                episodeId: Id<"episodes">;
-                movieId: Id<"movies">;
+            getAdminById: FunctionReference<"query", "public", {
+                id: Id<"bangers">;
             }, {
+                artist: string;
                 episode: {
                     id: Id<"episodes">;
                     number: number;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                id: Id<"extraReviews">;
-                review: {
-                    id: Id<"reviews">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    } | null;
-                    reviewedAt: number | null;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                };
-            }>;
-            addShowExtra: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                episodeId: Id<"episodes">;
-                showId: Id<"shows">;
-            }, {
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                id: Id<"extraReviews">;
-                review: {
-                    id: Id<"reviews">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    } | null;
-                    reviewedAt: number | null;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    } | null;
-                };
-            }>;
-        };
-        public: {
-            listMovieReviewsForYear: FunctionReference<"query", "public", {
-                year: number;
-            }, Array<{
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    slug: string | null;
                     status: string | null;
                     title: string;
                 } | null;
-                id: Id<"reviews">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                } | null;
-                reviewedAt: number;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"bangers">;
+                title: string;
+                url: string;
                 user: {
+                    email: string | null;
                     id: Id<"users">;
                     image: string | null;
                     name: string | null;
+                    status: "active" | "disabled";
                 } | null;
+                userId: Id<"users"> | null;
+            } | null>;
+            listAdminPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    artist: string;
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"bangers">;
+                    title: string;
+                    url: string;
+                    user: {
+                        email: string | null;
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
+                    userId: Id<"users"> | null;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    artist: string;
+                    episodeId: Id<"episodes"> | null;
+                    title: string;
+                    url: string;
+                    userId: Id<"users"> | null;
+                };
+                id: Id<"bangers">;
+            }, {
+                id: Id<"bangers">;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                artist: string;
+                clientApiVersion: string;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"bangers">;
+                title: string;
+                url: string;
+                userId: Id<"users"> | null;
+            }, {
+                artist: string;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"bangers">;
+                title: string;
+                url: string;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                } | null;
+                userId: Id<"users"> | null;
+            }>;
+        };
+        public: {
+            getByLegacyId: FunctionReference<"query", "public", {
+                legacyId: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            getBySlug: FunctionReference<"query", "public", {
+                slug: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            latestPublished: FunctionReference<"query", "public", {
+                onOrBefore: string;
+            }, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignments: Array<{
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: string;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    }>;
+                    date: string | null;
+                    description: string | null;
+                    extras: Array<{
+                        id: Id<"extraReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
+                        };
+                    }>;
+                    id: Id<"episodes">;
+                    links: Array<{
+                        id: Id<"episodeLinks">;
+                        text: string;
+                        url: string;
+                    }>;
+                    number: number;
+                    recording: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            nextScheduled: FunctionReference<"query", "public", Record<string, never>, {
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            results: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+            }, {
+                gamblingWinners: Array<{
+                    gamblingType: {
+                        multiplier: number;
+                        title: string;
+                    };
+                    id: Id<"gamblingEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    points: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                guessWinners: Array<{
+                    actualRating: number;
+                    host: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                    id: Id<"guesses">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+            }>;
+            search: FunctionReference<"query", "public", {
+                limit: number;
+                query: string;
+            }, Array<{
+                assignments: Array<{
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                date: string | null;
+                description: string | null;
+                extras: Array<{
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                    };
+                }>;
+                id: Id<"episodes">;
+                links: Array<{
+                    id: Id<"episodeLinks">;
+                    text: string;
+                    url: string;
+                }>;
+                number: number;
+                recording: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
             }>>;
         };
     };
@@ -3482,2553 +1960,6 @@ export type PublicApiType = {
                 lookupId: string;
                 title: string;
             }>;
-        };
-        public: {
-            currentPerformance: FunctionReference<"query", "public", {
-                today: string;
-            }, {
-                points: Array<{
-                    earnedAt: number;
-                    pointValue: number;
-                    userId: Id<"users">;
-                }>;
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                userSummary: Array<{
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-            } | null>;
-            currentSeason: FunctionReference<"query", "public", {
-                today: string;
-            }, {
-                description: string | null;
-                endedOn: string | null;
-                gameType: {
-                    description: string | null;
-                    id: Id<"gameTypes">;
-                    lookupId: string;
-                    title: string;
-                };
-                id: Id<"seasons">;
-                startedOn: string | null;
-                title: string;
-            } | null>;
-            hasActiveSeason: FunctionReference<"query", "public", {
-                today: string;
-            }, boolean>;
-            predictionScoring: FunctionReference<"query", "public", Record<string, never>, {
-                allCorrectBonus: number | null;
-                allIncorrect: number | null;
-                correctHost: number | null;
-            }>;
-        };
-        seasons: {
-            create: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                description?: string;
-                endedOn?: string | null;
-                gameTypeId: Id<"gameTypes">;
-                startedOn: string;
-                title: string;
-            }, {
-                counts: {
-                    gamblingEntries: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    guesses: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    points: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    quoteSubmissions: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                };
-                description: string | null;
-                endedOn: string | null;
-                gameType: {
-                    description: string | null;
-                    id: Id<"gameTypes">;
-                    lookupId: string;
-                    title: string;
-                };
-                id: Id<"seasons">;
-                startedOn: string | null;
-                title: string;
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"seasons">;
-            }, {
-                counts: {
-                    gamblingEntries: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    guesses: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    points: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    quoteSubmissions: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                };
-                description: string | null;
-                endedOn: string | null;
-                gameType: {
-                    description: string | null;
-                    id: Id<"gameTypes">;
-                    lookupId: string;
-                    title: string;
-                };
-                id: Id<"seasons">;
-                startedOn: string | null;
-                title: string;
-            } | null>;
-            getPerformance: FunctionReference<"query", "public", {
-                seasonId: Id<"seasons">;
-            }, {
-                points: Array<{
-                    earnedAt: number;
-                    pointValue: number;
-                    userId: Id<"users">;
-                }>;
-                userSummary: Array<{
-                    gamblingCount: number;
-                    guessCount: number;
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-            }>;
-            listPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    counts: {
-                        gamblingEntries: {
-                            count: number;
-                            isExact: boolean;
-                        };
-                        guesses: {
-                            count: number;
-                            isExact: boolean;
-                        };
-                        points: {
-                            count: number;
-                            isExact: boolean;
-                        };
-                        quoteSubmissions: {
-                            count: number;
-                            isExact: boolean;
-                        };
-                    };
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            removeIfUnreferenced: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"seasons">;
-            }, {
-                id: Id<"seasons">;
-            }>;
-            update: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                description?: string | null;
-                endedOn?: string | null;
-                gameTypeId?: Id<"gameTypes">;
-                id: Id<"seasons">;
-                startedOn?: string;
-                title?: string;
-            }, {
-                counts: {
-                    gamblingEntries: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    guesses: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    points: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                    quoteSubmissions: {
-                        count: number;
-                        isExact: boolean;
-                    };
-                };
-                description: string | null;
-                endedOn: string | null;
-                gameType: {
-                    description: string | null;
-                    id: Id<"gameTypes">;
-                    lookupId: string;
-                    title: string;
-                };
-                id: Id<"seasons">;
-                startedOn: string | null;
-                title: string;
-            }>;
-        };
-        points: {
-            create: FunctionReference<"mutation", "public", {
-                adjustment: number | null;
-                clientApiVersion: string;
-                earnedAt?: number;
-                gamePointTypeId?: Id<"gamePointTypes">;
-                reason?: string;
-                season: {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-                userId: Id<"users">;
-            }, {
-                adjustment: number | null;
-                earnedAt: number;
-                gamePointType: {
-                    description: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"gamePointTypes">;
-                    lookupId: string;
-                    points: number;
-                    title: string;
-                } | null;
-                id: Id<"points">;
-                reason: string | null;
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                total: number;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            createByLookup: FunctionReference<"mutation", "public", {
-                adjustment?: number;
-                clientApiVersion: string;
-                earnedAt?: number;
-                gamePointLookupId: string;
-                reason: string;
-                season: {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-                userId: Id<"users">;
-            }, {
-                adjustment: number | null;
-                earnedAt: number;
-                gamePointType: {
-                    description: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"gamePointTypes">;
-                    lookupId: string;
-                    points: number;
-                    title: string;
-                } | null;
-                id: Id<"points">;
-                reason: string | null;
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                total: number;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            createForAssignmentByLookup: FunctionReference<"mutation", "public", {
-                adjustment?: number;
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                earnedAt?: number;
-                gamePointLookupId: string;
-                reason: string;
-                season: {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-                userId: Id<"users">;
-            }, {
-                adjustment: number | null;
-                assignmentLinks: Array<{
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        };
-                        playable: boolean;
-                        slug: string | null;
-                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        };
-                    };
-                    id: Id<"assignmentPointLinks">;
-                }>;
-                earnedAt: number;
-                gamblingEntries: Array<{
-                    id: Id<"gamblingEntries">;
-                }>;
-                gamePointType: {
-                    description: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"gamePointTypes">;
-                    lookupId: string;
-                    points: number;
-                    title: string;
-                } | null;
-                guesses: Array<{
-                    assignmentReviewId: Id<"assignmentReviews">;
-                    id: Id<"guesses">;
-                }>;
-                id: Id<"points">;
-                quoteSubmissions: Array<{
-                    id: Id<"quoteSubmissions">;
-                }>;
-                reason: string | null;
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                tagVotes: Array<{
-                    id: Id<"tagVotes">;
-                    tag: string;
-                }>;
-                total: number;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"points">;
-            }, {
-                adjustment: number | null;
-                assignmentLinks: Array<{
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        };
-                        playable: boolean;
-                        slug: string | null;
-                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        };
-                    };
-                    id: Id<"assignmentPointLinks">;
-                }>;
-                earnedAt: number;
-                gamblingEntries: Array<{
-                    id: Id<"gamblingEntries">;
-                }>;
-                gamePointType: {
-                    description: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"gamePointTypes">;
-                    lookupId: string;
-                    points: number;
-                    title: string;
-                } | null;
-                guesses: Array<{
-                    assignmentReviewId: Id<"assignmentReviews">;
-                    id: Id<"guesses">;
-                }>;
-                id: Id<"points">;
-                quoteSubmissions: Array<{
-                    id: Id<"quoteSubmissions">;
-                }>;
-                reason: string | null;
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                tagVotes: Array<{
-                    id: Id<"tagVotes">;
-                    tag: string;
-                }>;
-                total: number;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            } | null>;
-            getWorkbench: FunctionReference<"query", "public", {
-                id: Id<"points">;
-            }, {
-                guessAssignments: Array<{
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        };
-                        playable: boolean;
-                        slug: string | null;
-                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        };
-                    };
-                    assignmentReviewId: Id<"assignmentReviews">;
-                    id: Id<"guesses">;
-                }>;
-                impact: {
-                    assignmentLinkCount: number;
-                    gamblingEntryCount: number;
-                    guessCount: number;
-                    quoteSubmissionCount: number;
-                    tagVoteCount: number;
-                };
-                point: {
-                    adjustment: number | null;
-                    assignmentLinks: Array<{
-                        assignment: {
-                            episode: {
-                                id: Id<"episodes">;
-                                number: number;
-                                slug: string | null;
-                                status: string | null;
-                                title: string;
-                            };
-                            id: Id<"assignments">;
-                            movie: {
-                                id: Id<"movies">;
-                                poster: string | null;
-                                title: string;
-                                tmdbId: number | null;
-                                url: string;
-                                year: number;
-                            };
-                            playable: boolean;
-                            slug: string | null;
-                            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
-                            user: {
-                                id: Id<"users">;
-                                image: string | null;
-                                name: string | null;
-                                status: "active" | "disabled";
-                            };
-                        };
-                        id: Id<"assignmentPointLinks">;
-                    }>;
-                    earnedAt: number;
-                    gamblingEntries: Array<{
-                        id: Id<"gamblingEntries">;
-                    }>;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    guesses: Array<{
-                        assignmentReviewId: Id<"assignmentReviews">;
-                        id: Id<"guesses">;
-                    }>;
-                    id: Id<"points">;
-                    quoteSubmissions: Array<{
-                        id: Id<"quoteSubmissions">;
-                    }>;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    tagVotes: Array<{
-                        id: Id<"tagVotes">;
-                        tag: string;
-                    }>;
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                };
-            } | null>;
-            linkAssignment: FunctionReference<"mutation", "public", {
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                pointId: Id<"points">;
-            }, {
-                assignment: {
-                    episode: {
-                        id: Id<"episodes">;
-                        number: number;
-                        slug: string | null;
-                        status: string | null;
-                        title: string;
-                    };
-                    id: Id<"assignments">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    playable: boolean;
-                    slug: string | null;
-                    type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                        status: "active" | "disabled";
-                    };
-                };
-                id: Id<"assignmentPointLinks">;
-            }>;
-            listForAssignmentAndUser: FunctionReference<"query", "public", {
-                assignmentId: Id<"assignments">;
-                userId: Id<"users">;
-            }, Array<{
-                id: Id<"assignmentPointLinks">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                };
-            }>>;
-            listForSeasonPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-                seasonId: Id<"seasons">;
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listForUserPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-                season: {
-                    kind: "all";
-                } | {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-                userId: Id<"users">;
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            remove: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointTypeId: Id<"gamePointTypes"> | null;
-                    reason: string | null;
-                    seasonId: Id<"seasons">;
-                    userId: Id<"users">;
-                };
-                expectedImpact?: {
-                    assignmentLinkCount: number;
-                    gamblingEntryCount: number;
-                    guessCount: number;
-                    quoteSubmissionCount: number;
-                    tagVoteCount: number;
-                };
-                id: Id<"points">;
-            }, {
-                id: Id<"points">;
-            }>;
-            searchAssignmentsForLink: FunctionReference<"query", "public", {
-                query: string;
-            }, Array<{
-                episode: {
-                    id: Id<"episodes">;
-                    number: number;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                id: Id<"assignments">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                };
-                playable: boolean;
-                slug: string | null;
-                type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                };
-            }>>;
-            totalForUser: FunctionReference<"query", "public", {
-                season: {
-                    kind: "all";
-                } | {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-                userId: Id<"users">;
-            }, number>;
-            totalsForAssignments: FunctionReference<"query", "public", {
-                assignmentIds: Array<Id<"assignments">>;
-                userIds: Array<Id<"users">>;
-            }, Array<{
-                assignmentId: Id<"assignments">;
-                total: number;
-                userId: Id<"users">;
-            }>>;
-            unlinkAssignment: FunctionReference<"mutation", "public", {
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                expectedLinkId?: Id<"assignmentPointLinks">;
-                pointId: Id<"points">;
-            }, {
-                count: number;
-            }>;
-            update: FunctionReference<"mutation", "public", {
-                adjustment?: number | null;
-                clientApiVersion: string;
-                earnedAt?: number;
-                expected?: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointTypeId: Id<"gamePointTypes"> | null;
-                    reason: string | null;
-                    seasonId: Id<"seasons">;
-                    userId: Id<"users">;
-                };
-                gamePointTypeId?: Id<"gamePointTypes"> | null;
-                id: Id<"points">;
-                reason?: string | null;
-            }, {
-                adjustment: number | null;
-                earnedAt: number;
-                gamePointType: {
-                    description: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"gamePointTypes">;
-                    lookupId: string;
-                    points: number;
-                    title: string;
-                } | null;
-                id: Id<"points">;
-                reason: string | null;
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                total: number;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-        };
-        member: {
-            myAvailablePoints: FunctionReference<"query", "public", {
-                season: {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-            }, number>;
-            myPointsPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-        };
-        guesses: {
-            awardPoint: FunctionReference<"mutation", "public", {
-                adjustment: number;
-                clientApiVersion: string;
-                earnedAt?: number;
-                gamePointTypeId?: Id<"gamePointTypes">;
-                id: Id<"guesses">;
-                reason: string;
-            }, {
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            create: FunctionReference<"mutation", "public", {
-                assignmentReviewId: Id<"assignmentReviews">;
-                clientApiVersion: string;
-                createdAt?: number;
-                ratingId: Id<"ratings">;
-                seasonId: Id<"seasons">;
-                userId: Id<"users">;
-            }, {
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            getById: FunctionReference<"query", "public", {
-                id: Id<"guesses">;
-            }, {
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            } | null>;
-            listForAssignment: FunctionReference<"query", "public", {
-                assignmentId: Id<"assignments">;
-            }, Array<{
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>>;
-            listForSeasonPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-                seasonId: Id<"seasons">;
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    assignmentReview: {
-                        assignment: {
-                            episode: {
-                                id: Id<"episodes">;
-                                number: number;
-                                slug: string | null;
-                                status: string | null;
-                                title: string;
-                            };
-                            id: Id<"assignments">;
-                            playable: boolean;
-                            type: string;
-                        };
-                        id: Id<"assignmentReviews">;
-                        review: {
-                            id: Id<"reviews">;
-                            movie: {
-                                id: Id<"movies">;
-                                poster: string | null;
-                                title: string;
-                                tmdbId: number | null;
-                                url: string;
-                                year: number;
-                            } | null;
-                            rating: {
-                                category: string | null;
-                                icon: string | null;
-                                id: Id<"ratings">;
-                                name: string;
-                                sound: string | null;
-                                value: number;
-                            } | null;
-                            reviewedAt: number | null;
-                            show: {
-                                id: Id<"shows">;
-                                poster: string | null;
-                                title: string;
-                                url: string;
-                                year: number;
-                            } | null;
-                            user: {
-                                id: Id<"users">;
-                                image: string | null;
-                                name: string | null;
-                                status: "active" | "disabled";
-                            } | null;
-                        };
-                    };
-                    createdAt: number;
-                    id: Id<"guesses">;
-                    point: {
-                        adjustment: number | null;
-                        earnedAt: number;
-                        gamePointType: {
-                            description: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"gamePointTypes">;
-                            lookupId: string;
-                            points: number;
-                            title: string;
-                        } | null;
-                        id: Id<"points">;
-                        reason: string | null;
-                        season: {
-                            description: string | null;
-                            endedOn: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"seasons">;
-                            startedOn: string | null;
-                            title: string;
-                        };
-                        total: number;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                        };
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    };
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listForUserPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-                season: {
-                    kind: "all";
-                } | {
-                    kind: "current";
-                    today: string;
-                } | {
-                    kind: "season";
-                    seasonId: Id<"seasons">;
-                };
-                userId: Id<"users">;
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    assignmentReview: {
-                        assignment: {
-                            episode: {
-                                id: Id<"episodes">;
-                                number: number;
-                                slug: string | null;
-                                status: string | null;
-                                title: string;
-                            };
-                            id: Id<"assignments">;
-                            playable: boolean;
-                            type: string;
-                        };
-                        id: Id<"assignmentReviews">;
-                        review: {
-                            id: Id<"reviews">;
-                            movie: {
-                                id: Id<"movies">;
-                                poster: string | null;
-                                title: string;
-                                tmdbId: number | null;
-                                url: string;
-                                year: number;
-                            } | null;
-                            rating: {
-                                category: string | null;
-                                icon: string | null;
-                                id: Id<"ratings">;
-                                name: string;
-                                sound: string | null;
-                                value: number;
-                            } | null;
-                            reviewedAt: number | null;
-                            show: {
-                                id: Id<"shows">;
-                                poster: string | null;
-                                title: string;
-                                url: string;
-                                year: number;
-                            } | null;
-                            user: {
-                                id: Id<"users">;
-                                image: string | null;
-                                name: string | null;
-                                status: "active" | "disabled";
-                            } | null;
-                        };
-                    };
-                    createdAt: number;
-                    id: Id<"guesses">;
-                    point: {
-                        adjustment: number | null;
-                        earnedAt: number;
-                        gamePointType: {
-                            description: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"gamePointTypes">;
-                            lookupId: string;
-                            points: number;
-                            title: string;
-                        } | null;
-                        id: Id<"points">;
-                        reason: string | null;
-                        season: {
-                            description: string | null;
-                            endedOn: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"seasons">;
-                            startedOn: string | null;
-                            title: string;
-                        };
-                        total: number;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                        };
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    };
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            mineForAssignment: FunctionReference<"query", "public", {
-                assignmentId: Id<"assignments">;
-            }, Array<{
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>>;
-            mineForAssignments: FunctionReference<"query", "public", {
-                assignmentIds: Array<Id<"assignments">>;
-            }, Array<{
-                assignmentId: Id<"assignments">;
-                guesses: Array<{
-                    assignmentReview: {
-                        assignment: {
-                            episode: {
-                                id: Id<"episodes">;
-                                number: number;
-                                slug: string | null;
-                                status: string | null;
-                                title: string;
-                            };
-                            id: Id<"assignments">;
-                            playable: boolean;
-                            type: string;
-                        };
-                        id: Id<"assignmentReviews">;
-                        review: {
-                            id: Id<"reviews">;
-                            movie: {
-                                id: Id<"movies">;
-                                poster: string | null;
-                                title: string;
-                                tmdbId: number | null;
-                                url: string;
-                                year: number;
-                            } | null;
-                            rating: {
-                                category: string | null;
-                                icon: string | null;
-                                id: Id<"ratings">;
-                                name: string;
-                                sound: string | null;
-                                value: number;
-                            } | null;
-                            reviewedAt: number | null;
-                            show: {
-                                id: Id<"shows">;
-                                poster: string | null;
-                                title: string;
-                                url: string;
-                                year: number;
-                            } | null;
-                            user: {
-                                id: Id<"users">;
-                                image: string | null;
-                                name: string | null;
-                                status: "active" | "disabled";
-                            } | null;
-                        };
-                    };
-                    createdAt: number;
-                    id: Id<"guesses">;
-                    point: {
-                        adjustment: number | null;
-                        earnedAt: number;
-                        gamePointType: {
-                            description: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"gamePointTypes">;
-                            lookupId: string;
-                            points: number;
-                            title: string;
-                        } | null;
-                        id: Id<"points">;
-                        reason: string | null;
-                        season: {
-                            description: string | null;
-                            endedOn: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"seasons">;
-                            startedOn: string | null;
-                            title: string;
-                        };
-                        total: number;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                        };
-                    } | null;
-                    rating: {
-                        category: string | null;
-                        icon: string | null;
-                        id: Id<"ratings">;
-                        name: string;
-                        sound: string | null;
-                        value: number;
-                    };
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                }>;
-            }>>;
-            remove: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    assignmentReviewId: Id<"assignmentReviews">;
-                    createdAt: number;
-                    hasPoint: boolean;
-                    ratingId: Id<"ratings">;
-                    seasonId: Id<"seasons">;
-                    userId: Id<"users">;
-                };
-                id: Id<"guesses">;
-            }, {
-                id: Id<"guesses">;
-            }>;
-            removeForAssignmentUser: FunctionReference<"mutation", "public", {
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                userId: Id<"users">;
-            }, {
-                deletedGuesses: number;
-                deletedPoints: number;
-            }>;
-            setPoint: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"guesses">;
-                pointId: Id<"points"> | null;
-            }, {
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            submit: FunctionReference<"mutation", "public", {
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                createdAt?: number;
-                hostId: Id<"users">;
-                ratingId: Id<"ratings">;
-                today: string;
-            }, {
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            updateRating: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expectedRatingId?: Id<"ratings">;
-                id: Id<"guesses">;
-                ratingId: Id<"ratings">;
-            }, {
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>;
-            upsertForUser: FunctionReference<"mutation", "public", {
-                assignmentId: Id<"assignments">;
-                clientApiVersion: string;
-                createdAt?: number;
-                guesses: Array<{
-                    hostId: Id<"users">;
-                    ratingId: Id<"ratings">;
-                }>;
-                today: string;
-                userId: Id<"users">;
-            }, Array<{
-                assignmentReview: {
-                    assignment: {
-                        episode: {
-                            id: Id<"episodes">;
-                            number: number;
-                            slug: string | null;
-                            status: string | null;
-                            title: string;
-                        };
-                        id: Id<"assignments">;
-                        playable: boolean;
-                        type: string;
-                    };
-                    id: Id<"assignmentReviews">;
-                    review: {
-                        id: Id<"reviews">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        } | null;
-                        rating: {
-                            category: string | null;
-                            icon: string | null;
-                            id: Id<"ratings">;
-                            name: string;
-                            sound: string | null;
-                            value: number;
-                        } | null;
-                        reviewedAt: number | null;
-                        show: {
-                            id: Id<"shows">;
-                            poster: string | null;
-                            title: string;
-                            url: string;
-                            year: number;
-                        } | null;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                            status: "active" | "disabled";
-                        } | null;
-                    };
-                };
-                createdAt: number;
-                id: Id<"guesses">;
-                point: {
-                    adjustment: number | null;
-                    earnedAt: number;
-                    gamePointType: {
-                        description: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"gamePointTypes">;
-                        lookupId: string;
-                        points: number;
-                        title: string;
-                    } | null;
-                    id: Id<"points">;
-                    reason: string | null;
-                    season: {
-                        description: string | null;
-                        endedOn: string | null;
-                        gameType: {
-                            description: string | null;
-                            id: Id<"gameTypes">;
-                            lookupId: string;
-                            title: string;
-                        };
-                        id: Id<"seasons">;
-                        startedOn: string | null;
-                        title: string;
-                    };
-                    total: number;
-                    user: {
-                        id: Id<"users">;
-                        image: string | null;
-                        name: string | null;
-                    };
-                } | null;
-                rating: {
-                    category: string | null;
-                    icon: string | null;
-                    id: Id<"ratings">;
-                    name: string;
-                    sound: string | null;
-                    value: number;
-                };
-                season: {
-                    description: string | null;
-                    endedOn: string | null;
-                    gameType: {
-                        description: string | null;
-                        id: Id<"gameTypes">;
-                        lookupId: string;
-                        title: string;
-                    };
-                    id: Id<"seasons">;
-                    startedOn: string | null;
-                    title: string;
-                };
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-            }>>;
         };
         gambling: {
             confirm: FunctionReference<"mutation", "public", {
@@ -7916,158 +3847,490 @@ export type PublicApiType = {
                 title: string;
             }>;
         };
-        tags: {
-            applyVotePoints: FunctionReference<"mutation", "public", {
+        guesses: {
+            awardPoint: FunctionReference<"mutation", "public", {
+                adjustment: number;
                 clientApiVersion: string;
                 earnedAt?: number;
-                id: Id<"tagVotes">;
-                today: string;
+                gamePointTypeId?: Id<"gamePointTypes">;
+                id: Id<"guesses">;
+                reason: string;
             }, {
-                award: {
-                    kind: "unawarded";
-                } | {
-                    kind: "point";
-                    point: {
-                        adjustment: number | null;
-                        earnedAt: number;
-                        gamePointType: {
-                            description: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"gamePointTypes">;
-                            lookupId: string;
-                            points: number;
-                            title: string;
-                        } | null;
-                        id: Id<"points">;
-                        reason: string | null;
-                        season: {
-                            description: string | null;
-                            endedOn: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"seasons">;
-                            startedOn: string | null;
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
                             title: string;
                         };
-                        total: number;
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
                         user: {
                             id: Id<"users">;
                             image: string | null;
                             name: string | null;
-                        };
+                            status: "active" | "disabled";
+                        } | null;
                     };
-                } | {
-                    kind: "legacyAwardTombstone";
                 };
                 createdAt: number;
-                id: Id<"tagVotes">;
-                isTag: boolean | null;
-                tag: string;
-                tmdbId: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
                 user: {
                     id: Id<"users">;
                     image: string | null;
                     name: string | null;
-                } | null;
+                };
             }>;
-            createCatalogTag: FunctionReference<"mutation", "public", {
+            create: FunctionReference<"mutation", "public", {
+                assignmentReviewId: Id<"assignmentReviews">;
                 clientApiVersion: string;
                 createdAt?: number;
-                description?: string;
-                name: string;
+                ratingId: Id<"ratings">;
+                seasonId: Id<"seasons">;
+                userId: Id<"users">;
             }, {
-                createdAt: number;
-                description: string | null;
-                id: Id<"tags">;
-                name: string;
-            }>;
-            deleteCatalogTag: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"tags">;
-            }, {
-                id: Id<"tags">;
-            }>;
-            deleteVote: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"tagVotes">;
-            }, {
-                id: Id<"tagVotes">;
-            }>;
-            getVoteById: FunctionReference<"query", "public", {
-                id: Id<"tagVotes">;
-            }, {
-                award: {
-                    kind: "unawarded";
-                } | {
-                    kind: "point";
-                    point: {
-                        adjustment: number | null;
-                        earnedAt: number;
-                        gamePointType: {
-                            description: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"gamePointTypes">;
-                            lookupId: string;
-                            points: number;
-                            title: string;
-                        } | null;
-                        id: Id<"points">;
-                        reason: string | null;
-                        season: {
-                            description: string | null;
-                            endedOn: string | null;
-                            gameType: {
-                                description: string | null;
-                                id: Id<"gameTypes">;
-                                lookupId: string;
-                                title: string;
-                            };
-                            id: Id<"seasons">;
-                            startedOn: string | null;
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
                             title: string;
                         };
-                        total: number;
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
                         user: {
                             id: Id<"users">;
                             image: string | null;
                             name: string | null;
-                        };
+                            status: "active" | "disabled";
+                        } | null;
                     };
-                } | {
-                    kind: "legacyAwardTombstone";
                 };
                 createdAt: number;
-                id: Id<"tagVotes">;
-                isTag: boolean | null;
-                tag: string;
-                tmdbId: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
                 user: {
                     id: Id<"users">;
                     image: string | null;
                     name: string | null;
-                } | null;
-            } | null>;
-            listCatalog: FunctionReference<"query", "public", Record<string, never>, Array<{
+                };
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"guesses">;
+            }, {
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
                 createdAt: number;
-                description: string | null;
-                id: Id<"tags">;
-                name: string;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            } | null>;
+            listForAssignment: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+            }, Array<{
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
+                createdAt: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
             }>>;
-            listVotesForUserPage: FunctionReference<"query", "public", {
+            listForSeasonPage: FunctionReference<"query", "public", {
                 paginationOpts: {
                     cursor: string | null;
                     endCursor?: string | null;
@@ -8075,72 +4338,1034 @@ export type PublicApiType = {
                     maximumBytesRead?: number;
                     maximumRowsRead?: number;
                     numItems: number;
+                };
+                seasonId: Id<"seasons">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignmentReview: {
+                        assignment: {
+                            episode: {
+                                id: Id<"episodes">;
+                                number: number;
+                                slug: string | null;
+                                status: string | null;
+                                title: string;
+                            };
+                            id: Id<"assignments">;
+                            playable: boolean;
+                            type: string;
+                        };
+                        id: Id<"assignmentReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            rating: {
+                                category: string | null;
+                                icon: string | null;
+                                id: Id<"ratings">;
+                                name: string;
+                                sound: string | null;
+                                value: number;
+                            } | null;
+                            reviewedAt: number | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
+                            user: {
+                                id: Id<"users">;
+                                image: string | null;
+                                name: string | null;
+                                status: "active" | "disabled";
+                            } | null;
+                        };
+                    };
+                    createdAt: number;
+                    id: Id<"guesses">;
+                    point: {
+                        adjustment: number | null;
+                        earnedAt: number;
+                        gamePointType: {
+                            description: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"gamePointTypes">;
+                            lookupId: string;
+                            points: number;
+                            title: string;
+                        } | null;
+                        id: Id<"points">;
+                        reason: string | null;
+                        season: {
+                            description: string | null;
+                            endedOn: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"seasons">;
+                            startedOn: string | null;
+                            title: string;
+                        };
+                        total: number;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    };
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listForUserPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                season: {
+                    kind: "all";
+                } | {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
                 };
                 userId: Id<"users">;
             }, {
                 continueCursor: string;
                 isDone: boolean;
                 page: Array<{
-                    award: {
-                        kind: "unawarded";
-                    } | {
-                        kind: "point";
-                        point: {
-                            adjustment: number | null;
-                            earnedAt: number;
-                            gamePointType: {
-                                description: string | null;
-                                gameType: {
-                                    description: string | null;
-                                    id: Id<"gameTypes">;
-                                    lookupId: string;
-                                    title: string;
-                                };
-                                id: Id<"gamePointTypes">;
-                                lookupId: string;
-                                points: number;
-                                title: string;
-                            } | null;
-                            id: Id<"points">;
-                            reason: string | null;
-                            season: {
-                                description: string | null;
-                                endedOn: string | null;
-                                gameType: {
-                                    description: string | null;
-                                    id: Id<"gameTypes">;
-                                    lookupId: string;
-                                    title: string;
-                                };
-                                id: Id<"seasons">;
-                                startedOn: string | null;
+                    assignmentReview: {
+                        assignment: {
+                            episode: {
+                                id: Id<"episodes">;
+                                number: number;
+                                slug: string | null;
+                                status: string | null;
                                 title: string;
                             };
-                            total: number;
+                            id: Id<"assignments">;
+                            playable: boolean;
+                            type: string;
+                        };
+                        id: Id<"assignmentReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            rating: {
+                                category: string | null;
+                                icon: string | null;
+                                id: Id<"ratings">;
+                                name: string;
+                                sound: string | null;
+                                value: number;
+                            } | null;
+                            reviewedAt: number | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
                             user: {
                                 id: Id<"users">;
                                 image: string | null;
                                 name: string | null;
-                            };
+                                status: "active" | "disabled";
+                            } | null;
                         };
-                    } | {
-                        kind: "legacyAwardTombstone";
                     };
                     createdAt: number;
-                    id: Id<"tagVotes">;
-                    isTag: boolean | null;
-                    tag: string;
-                    tmdbId: number;
+                    id: Id<"guesses">;
+                    point: {
+                        adjustment: number | null;
+                        earnedAt: number;
+                        gamePointType: {
+                            description: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"gamePointTypes">;
+                            lookupId: string;
+                            points: number;
+                            title: string;
+                        } | null;
+                        id: Id<"points">;
+                        reason: string | null;
+                        season: {
+                            description: string | null;
+                            endedOn: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"seasons">;
+                            startedOn: string | null;
+                            title: string;
+                        };
+                        total: number;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    };
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
                     user: {
                         id: Id<"users">;
                         image: string | null;
                         name: string | null;
-                    } | null;
+                    };
                 }>;
                 pageStatus?: "SplitRecommended" | "SplitRequired" | null;
                 splitCursor?: string | null;
             }>;
-            listVotesPage: FunctionReference<"query", "public", {
+            mineForAssignment: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+            }, Array<{
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
+                createdAt: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>>;
+            mineForAssignments: FunctionReference<"query", "public", {
+                assignmentIds: Array<Id<"assignments">>;
+            }, Array<{
+                assignmentId: Id<"assignments">;
+                guesses: Array<{
+                    assignmentReview: {
+                        assignment: {
+                            episode: {
+                                id: Id<"episodes">;
+                                number: number;
+                                slug: string | null;
+                                status: string | null;
+                                title: string;
+                            };
+                            id: Id<"assignments">;
+                            playable: boolean;
+                            type: string;
+                        };
+                        id: Id<"assignmentReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            rating: {
+                                category: string | null;
+                                icon: string | null;
+                                id: Id<"ratings">;
+                                name: string;
+                                sound: string | null;
+                                value: number;
+                            } | null;
+                            reviewedAt: number | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
+                            user: {
+                                id: Id<"users">;
+                                image: string | null;
+                                name: string | null;
+                                status: "active" | "disabled";
+                            } | null;
+                        };
+                    };
+                    createdAt: number;
+                    id: Id<"guesses">;
+                    point: {
+                        adjustment: number | null;
+                        earnedAt: number;
+                        gamePointType: {
+                            description: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"gamePointTypes">;
+                            lookupId: string;
+                            points: number;
+                            title: string;
+                        } | null;
+                        id: Id<"points">;
+                        reason: string | null;
+                        season: {
+                            description: string | null;
+                            endedOn: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"seasons">;
+                            startedOn: string | null;
+                            title: string;
+                        };
+                        total: number;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    };
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+            }>>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    assignmentReviewId: Id<"assignmentReviews">;
+                    createdAt: number;
+                    hasPoint: boolean;
+                    ratingId: Id<"ratings">;
+                    seasonId: Id<"seasons">;
+                    userId: Id<"users">;
+                };
+                id: Id<"guesses">;
+            }, {
+                id: Id<"guesses">;
+            }>;
+            removeForAssignmentUser: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                userId: Id<"users">;
+            }, {
+                deletedGuesses: number;
+                deletedPoints: number;
+            }>;
+            setPoint: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"guesses">;
+                pointId: Id<"points"> | null;
+            }, {
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
+                createdAt: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            submit: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                createdAt?: number;
+                hostId: Id<"users">;
+                ratingId: Id<"ratings">;
+                today: string;
+            }, {
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
+                createdAt: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            updateRating: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedRatingId?: Id<"ratings">;
+                id: Id<"guesses">;
+                ratingId: Id<"ratings">;
+            }, {
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
+                createdAt: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            upsertForUser: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                createdAt?: number;
+                guesses: Array<{
+                    hostId: Id<"users">;
+                    ratingId: Id<"ratings">;
+                }>;
+                today: string;
+                userId: Id<"users">;
+            }, Array<{
+                assignmentReview: {
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                };
+                createdAt: number;
+                id: Id<"guesses">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                };
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>>;
+        };
+        member: {
+            myAvailablePoints: FunctionReference<"query", "public", {
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+            }, number>;
+            myPointsPage: FunctionReference<"query", "public", {
                 paginationOpts: {
                     cursor: string | null;
                     endCursor?: string | null;
@@ -8149,80 +5374,841 @@ export type PublicApiType = {
                     maximumRowsRead?: number;
                     numItems: number;
                 };
-                tmdbId?: number;
             }, {
                 continueCursor: string;
                 isDone: boolean;
                 page: Array<{
-                    award: {
-                        kind: "unawarded";
-                    } | {
-                        kind: "point";
-                        point: {
-                            adjustment: number | null;
-                            earnedAt: number;
-                            gamePointType: {
-                                description: string | null;
-                                gameType: {
-                                    description: string | null;
-                                    id: Id<"gameTypes">;
-                                    lookupId: string;
-                                    title: string;
-                                };
-                                id: Id<"gamePointTypes">;
-                                lookupId: string;
-                                points: number;
-                                title: string;
-                            } | null;
-                            id: Id<"points">;
-                            reason: string | null;
-                            season: {
-                                description: string | null;
-                                endedOn: string | null;
-                                gameType: {
-                                    description: string | null;
-                                    id: Id<"gameTypes">;
-                                    lookupId: string;
-                                    title: string;
-                                };
-                                id: Id<"seasons">;
-                                startedOn: string | null;
-                                title: string;
-                            };
-                            total: number;
-                            user: {
-                                id: Id<"users">;
-                                image: string | null;
-                                name: string | null;
-                            };
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
                         };
-                    } | {
-                        kind: "legacyAwardTombstone";
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
                     };
-                    createdAt: number;
-                    id: Id<"tagVotes">;
-                    isTag: boolean | null;
-                    tag: string;
-                    tmdbId: number;
+                    total: number;
                     user: {
                         id: Id<"users">;
                         image: string | null;
                         name: string | null;
-                    } | null;
+                    };
                 }>;
                 pageStatus?: "SplitRecommended" | "SplitRequired" | null;
                 splitCursor?: string | null;
             }>;
-            updateCatalogTag: FunctionReference<"mutation", "public", {
+        };
+        points: {
+            create: FunctionReference<"mutation", "public", {
+                adjustment: number | null;
                 clientApiVersion: string;
-                description?: string | null;
-                id: Id<"tags">;
-                name?: string;
+                earnedAt?: number;
+                gamePointTypeId?: Id<"gamePointTypes">;
+                reason?: string;
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
             }, {
-                createdAt: number;
+                adjustment: number | null;
+                earnedAt: number;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                id: Id<"points">;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            createByLookup: FunctionReference<"mutation", "public", {
+                adjustment?: number;
+                clientApiVersion: string;
+                earnedAt?: number;
+                gamePointLookupId: string;
+                reason: string;
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                adjustment: number | null;
+                earnedAt: number;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                id: Id<"points">;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            createForAssignmentByLookup: FunctionReference<"mutation", "public", {
+                adjustment?: number;
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                earnedAt?: number;
+                gamePointLookupId: string;
+                reason: string;
+                season: {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                adjustment: number | null;
+                assignmentLinks: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        };
+                    };
+                    id: Id<"assignmentPointLinks">;
+                }>;
+                earnedAt: number;
+                gamblingEntries: Array<{
+                    id: Id<"gamblingEntries">;
+                }>;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                guesses: Array<{
+                    assignmentReviewId: Id<"assignmentReviews">;
+                    id: Id<"guesses">;
+                }>;
+                id: Id<"points">;
+                quoteSubmissions: Array<{
+                    id: Id<"quoteSubmissions">;
+                }>;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                tagVotes: Array<{
+                    id: Id<"tagVotes">;
+                    tag: string;
+                }>;
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"points">;
+            }, {
+                adjustment: number | null;
+                assignmentLinks: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        };
+                    };
+                    id: Id<"assignmentPointLinks">;
+                }>;
+                earnedAt: number;
+                gamblingEntries: Array<{
+                    id: Id<"gamblingEntries">;
+                }>;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                guesses: Array<{
+                    assignmentReviewId: Id<"assignmentReviews">;
+                    id: Id<"guesses">;
+                }>;
+                id: Id<"points">;
+                quoteSubmissions: Array<{
+                    id: Id<"quoteSubmissions">;
+                }>;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                tagVotes: Array<{
+                    id: Id<"tagVotes">;
+                    tag: string;
+                }>;
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            } | null>;
+            getWorkbench: FunctionReference<"query", "public", {
+                id: Id<"points">;
+            }, {
+                guessAssignments: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        };
+                    };
+                    assignmentReviewId: Id<"assignmentReviews">;
+                    id: Id<"guesses">;
+                }>;
+                impact: {
+                    assignmentLinkCount: number;
+                    gamblingEntryCount: number;
+                    guessCount: number;
+                    quoteSubmissionCount: number;
+                    tagVoteCount: number;
+                };
+                point: {
+                    adjustment: number | null;
+                    assignmentLinks: Array<{
+                        assignment: {
+                            episode: {
+                                id: Id<"episodes">;
+                                number: number;
+                                slug: string | null;
+                                status: string | null;
+                                title: string;
+                            };
+                            id: Id<"assignments">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            };
+                            playable: boolean;
+                            slug: string | null;
+                            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                            user: {
+                                id: Id<"users">;
+                                image: string | null;
+                                name: string | null;
+                                status: "active" | "disabled";
+                            };
+                        };
+                        id: Id<"assignmentPointLinks">;
+                    }>;
+                    earnedAt: number;
+                    gamblingEntries: Array<{
+                        id: Id<"gamblingEntries">;
+                    }>;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    guesses: Array<{
+                        assignmentReviewId: Id<"assignmentReviews">;
+                        id: Id<"guesses">;
+                    }>;
+                    id: Id<"points">;
+                    quoteSubmissions: Array<{
+                        id: Id<"quoteSubmissions">;
+                    }>;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    tagVotes: Array<{
+                        id: Id<"tagVotes">;
+                        tag: string;
+                    }>;
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                };
+            } | null>;
+            linkAssignment: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                pointId: Id<"points">;
+            }, {
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    playable: boolean;
+                    slug: string | null;
+                    type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    };
+                };
+                id: Id<"assignmentPointLinks">;
+            }>;
+            listForAssignmentAndUser: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+                userId: Id<"users">;
+            }, Array<{
+                id: Id<"assignmentPointLinks">;
+                point: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                };
+            }>>;
+            listForSeasonPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                seasonId: Id<"seasons">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listForUserPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                season: {
+                    kind: "all";
+                } | {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointType: {
+                        description: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"gamePointTypes">;
+                        lookupId: string;
+                        points: number;
+                        title: string;
+                    } | null;
+                    id: Id<"points">;
+                    reason: string | null;
+                    season: {
+                        description: string | null;
+                        endedOn: string | null;
+                        gameType: {
+                            description: string | null;
+                            id: Id<"gameTypes">;
+                            lookupId: string;
+                            title: string;
+                        };
+                        id: Id<"seasons">;
+                        startedOn: string | null;
+                        title: string;
+                    };
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointTypeId: Id<"gamePointTypes"> | null;
+                    reason: string | null;
+                    seasonId: Id<"seasons">;
+                    userId: Id<"users">;
+                };
+                expectedImpact?: {
+                    assignmentLinkCount: number;
+                    gamblingEntryCount: number;
+                    guessCount: number;
+                    quoteSubmissionCount: number;
+                    tagVoteCount: number;
+                };
+                id: Id<"points">;
+            }, {
+                id: Id<"points">;
+            }>;
+            searchAssignmentsForLink: FunctionReference<"query", "public", {
+                query: string;
+            }, Array<{
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"assignments">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                playable: boolean;
+                slug: string | null;
+                type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>>;
+            totalForUser: FunctionReference<"query", "public", {
+                season: {
+                    kind: "all";
+                } | {
+                    kind: "current";
+                    today: string;
+                } | {
+                    kind: "season";
+                    seasonId: Id<"seasons">;
+                };
+                userId: Id<"users">;
+            }, number>;
+            totalsForAssignments: FunctionReference<"query", "public", {
+                assignmentIds: Array<Id<"assignments">>;
+                userIds: Array<Id<"users">>;
+            }, Array<{
+                assignmentId: Id<"assignments">;
+                total: number;
+                userId: Id<"users">;
+            }>>;
+            unlinkAssignment: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                expectedLinkId?: Id<"assignmentPointLinks">;
+                pointId: Id<"points">;
+            }, {
+                count: number;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                adjustment?: number | null;
+                clientApiVersion: string;
+                earnedAt?: number;
+                expected?: {
+                    adjustment: number | null;
+                    earnedAt: number;
+                    gamePointTypeId: Id<"gamePointTypes"> | null;
+                    reason: string | null;
+                    seasonId: Id<"seasons">;
+                    userId: Id<"users">;
+                };
+                gamePointTypeId?: Id<"gamePointTypes"> | null;
+                id: Id<"points">;
+                reason?: string | null;
+            }, {
+                adjustment: number | null;
+                earnedAt: number;
+                gamePointType: {
+                    description: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"gamePointTypes">;
+                    lookupId: string;
+                    points: number;
+                    title: string;
+                } | null;
+                id: Id<"points">;
+                reason: string | null;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                total: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+            }>;
+        };
+        public: {
+            currentPerformance: FunctionReference<"query", "public", {
+                today: string;
+            }, {
+                points: Array<{
+                    earnedAt: number;
+                    pointValue: number;
+                    userId: Id<"users">;
+                }>;
+                season: {
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                };
+                userSummary: Array<{
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+            } | null>;
+            currentSeason: FunctionReference<"query", "public", {
+                today: string;
+            }, {
                 description: string | null;
-                id: Id<"tags">;
-                name: string;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            } | null>;
+            hasActiveSeason: FunctionReference<"query", "public", {
+                today: string;
+            }, boolean>;
+            predictionScoring: FunctionReference<"query", "public", Record<string, never>, {
+                allCorrectBonus: number | null;
+                allIncorrect: number | null;
+                correctHost: number | null;
             }>;
         };
         quotes: {
@@ -8556,55 +6542,1256 @@ export type PublicApiType = {
                 id: Id<"quoteSubmissions">;
             }>;
         };
-    };
-    rankings: {
-        types: {
+        seasons: {
             create: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
-                description?: string | null;
-                maxItems: number;
-                name: string;
-                now?: number;
-                targetType: "MOVIE" | "SHOW" | "EPISODE";
+                description?: string;
+                endedOn?: string | null;
+                gameTypeId: Id<"gameTypes">;
+                startedOn: string;
+                title: string;
             }, {
-                createdAt: number;
+                counts: {
+                    gamblingEntries: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    guesses: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    points: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    quoteSubmissions: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                };
                 description: string | null;
-                id: Id<"rankedListTypes">;
-                maxItems: number;
-                name: string;
-                targetType: "MOVIE" | "SHOW" | "EPISODE";
-                updatedAt: number;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
             }>;
-            list: FunctionReference<"query", "public", Record<string, never>, Array<{
-                createdAt: number;
-                description: string | null;
-                id: Id<"rankedListTypes">;
-                maxItems: number;
-                name: string;
-                targetType: "MOVIE" | "SHOW" | "EPISODE";
-                updatedAt: number;
-            }>>;
-            remove: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"rankedListTypes">;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"seasons">;
             }, {
-                id: Id<"rankedListTypes">;
+                counts: {
+                    gamblingEntries: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    guesses: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    points: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    quoteSubmissions: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                };
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            } | null>;
+            getPerformance: FunctionReference<"query", "public", {
+                seasonId: Id<"seasons">;
+            }, {
+                points: Array<{
+                    earnedAt: number;
+                    pointValue: number;
+                    userId: Id<"users">;
+                }>;
+                userSummary: Array<{
+                    gamblingCount: number;
+                    guessCount: number;
+                    total: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    };
+                }>;
+            }>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    counts: {
+                        gamblingEntries: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                        guesses: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                        points: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                        quoteSubmissions: {
+                            count: number;
+                            isExact: boolean;
+                        };
+                    };
+                    description: string | null;
+                    endedOn: string | null;
+                    gameType: {
+                        description: string | null;
+                        id: Id<"gameTypes">;
+                        lookupId: string;
+                        title: string;
+                    };
+                    id: Id<"seasons">;
+                    startedOn: string | null;
+                    title: string;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            removeIfUnreferenced: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"seasons">;
+            }, {
+                id: Id<"seasons">;
             }>;
             update: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
                 description?: string | null;
-                id: Id<"rankedListTypes">;
-                maxItems?: number;
-                name?: string;
-                now?: number;
-                targetType?: "MOVIE" | "SHOW" | "EPISODE";
+                endedOn?: string | null;
+                gameTypeId?: Id<"gameTypes">;
+                id: Id<"seasons">;
+                startedOn?: string;
+                title?: string;
+            }, {
+                counts: {
+                    gamblingEntries: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    guesses: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    points: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                    quoteSubmissions: {
+                        count: number;
+                        isExact: boolean;
+                    };
+                };
+                description: string | null;
+                endedOn: string | null;
+                gameType: {
+                    description: string | null;
+                    id: Id<"gameTypes">;
+                    lookupId: string;
+                    title: string;
+                };
+                id: Id<"seasons">;
+                startedOn: string | null;
+                title: string;
+            }>;
+        };
+        tags: {
+            applyVotePoints: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                earnedAt?: number;
+                id: Id<"tagVotes">;
+                today: string;
+            }, {
+                award: {
+                    kind: "unawarded";
+                } | {
+                    kind: "point";
+                    point: {
+                        adjustment: number | null;
+                        earnedAt: number;
+                        gamePointType: {
+                            description: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"gamePointTypes">;
+                            lookupId: string;
+                            points: number;
+                            title: string;
+                        } | null;
+                        id: Id<"points">;
+                        reason: string | null;
+                        season: {
+                            description: string | null;
+                            endedOn: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"seasons">;
+                            startedOn: string | null;
+                            title: string;
+                        };
+                        total: number;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    };
+                } | {
+                    kind: "legacyAwardTombstone";
+                };
+                createdAt: number;
+                id: Id<"tagVotes">;
+                isTag: boolean | null;
+                tag: string;
+                tmdbId: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                } | null;
+            }>;
+            createCatalogTag: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                createdAt?: number;
+                description?: string;
+                name: string;
             }, {
                 createdAt: number;
                 description: string | null;
-                id: Id<"rankedListTypes">;
-                maxItems: number;
+                id: Id<"tags">;
                 name: string;
-                targetType: "MOVIE" | "SHOW" | "EPISODE";
+            }>;
+            deleteCatalogTag: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"tags">;
+            }, {
+                id: Id<"tags">;
+            }>;
+            deleteVote: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"tagVotes">;
+            }, {
+                id: Id<"tagVotes">;
+            }>;
+            getVoteById: FunctionReference<"query", "public", {
+                id: Id<"tagVotes">;
+            }, {
+                award: {
+                    kind: "unawarded";
+                } | {
+                    kind: "point";
+                    point: {
+                        adjustment: number | null;
+                        earnedAt: number;
+                        gamePointType: {
+                            description: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"gamePointTypes">;
+                            lookupId: string;
+                            points: number;
+                            title: string;
+                        } | null;
+                        id: Id<"points">;
+                        reason: string | null;
+                        season: {
+                            description: string | null;
+                            endedOn: string | null;
+                            gameType: {
+                                description: string | null;
+                                id: Id<"gameTypes">;
+                                lookupId: string;
+                                title: string;
+                            };
+                            id: Id<"seasons">;
+                            startedOn: string | null;
+                            title: string;
+                        };
+                        total: number;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    };
+                } | {
+                    kind: "legacyAwardTombstone";
+                };
+                createdAt: number;
+                id: Id<"tagVotes">;
+                isTag: boolean | null;
+                tag: string;
+                tmdbId: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                } | null;
+            } | null>;
+            listCatalog: FunctionReference<"query", "public", Record<string, never>, Array<{
+                createdAt: number;
+                description: string | null;
+                id: Id<"tags">;
+                name: string;
+            }>>;
+            listVotesForUserPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                userId: Id<"users">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    award: {
+                        kind: "unawarded";
+                    } | {
+                        kind: "point";
+                        point: {
+                            adjustment: number | null;
+                            earnedAt: number;
+                            gamePointType: {
+                                description: string | null;
+                                gameType: {
+                                    description: string | null;
+                                    id: Id<"gameTypes">;
+                                    lookupId: string;
+                                    title: string;
+                                };
+                                id: Id<"gamePointTypes">;
+                                lookupId: string;
+                                points: number;
+                                title: string;
+                            } | null;
+                            id: Id<"points">;
+                            reason: string | null;
+                            season: {
+                                description: string | null;
+                                endedOn: string | null;
+                                gameType: {
+                                    description: string | null;
+                                    id: Id<"gameTypes">;
+                                    lookupId: string;
+                                    title: string;
+                                };
+                                id: Id<"seasons">;
+                                startedOn: string | null;
+                                title: string;
+                            };
+                            total: number;
+                            user: {
+                                id: Id<"users">;
+                                image: string | null;
+                                name: string | null;
+                            };
+                        };
+                    } | {
+                        kind: "legacyAwardTombstone";
+                    };
+                    createdAt: number;
+                    id: Id<"tagVotes">;
+                    isTag: boolean | null;
+                    tag: string;
+                    tmdbId: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    } | null;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listVotesPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                tmdbId?: number;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    award: {
+                        kind: "unawarded";
+                    } | {
+                        kind: "point";
+                        point: {
+                            adjustment: number | null;
+                            earnedAt: number;
+                            gamePointType: {
+                                description: string | null;
+                                gameType: {
+                                    description: string | null;
+                                    id: Id<"gameTypes">;
+                                    lookupId: string;
+                                    title: string;
+                                };
+                                id: Id<"gamePointTypes">;
+                                lookupId: string;
+                                points: number;
+                                title: string;
+                            } | null;
+                            id: Id<"points">;
+                            reason: string | null;
+                            season: {
+                                description: string | null;
+                                endedOn: string | null;
+                                gameType: {
+                                    description: string | null;
+                                    id: Id<"gameTypes">;
+                                    lookupId: string;
+                                    title: string;
+                                };
+                                id: Id<"seasons">;
+                                startedOn: string | null;
+                                title: string;
+                            };
+                            total: number;
+                            user: {
+                                id: Id<"users">;
+                                image: string | null;
+                                name: string | null;
+                            };
+                        };
+                    } | {
+                        kind: "legacyAwardTombstone";
+                    };
+                    createdAt: number;
+                    id: Id<"tagVotes">;
+                    isTag: boolean | null;
+                    tag: string;
+                    tmdbId: number;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                    } | null;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            updateCatalogTag: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                description?: string | null;
+                id: Id<"tags">;
+                name?: string;
+            }, {
+                createdAt: number;
+                description: string | null;
+                id: Id<"tags">;
+                name: string;
+            }>;
+        };
+    };
+    identity: {
+        admin: {
+            assignRole: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                roleId: Id<"roles">;
+                userId: Id<"users">;
+            }, {
+                assignedAt: number | null;
+                assignedBy: Id<"users"> | null;
+                id: Id<"userRoles">;
+                role: {
+                    admin: boolean;
+                    description: string;
+                    id: Id<"roles">;
+                    legacyId: number | null;
+                    name: string;
+                    permissions: Array<string>;
+                };
+            }>;
+            createRole: FunctionReference<"mutation", "public", {
+                admin: boolean;
+                clientApiVersion: string;
+                description: string;
+                name: string;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+            }>;
+            createUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                email: string;
+                name: string;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+            deleteRole: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"roles">;
+            }, {
+                id: Id<"roles">;
+            }>;
+            getRole: FunctionReference<"query", "public", {
+                id: Id<"roles">;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+                userCount: number;
+                userCountIsExact: boolean;
+            } | null>;
+            getUser: FunctionReference<"query", "public", {
+                id: Id<"users">;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            } | null>;
+            listRoles: FunctionReference<"query", "public", Record<string, never>, Array<{
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+                userCount: number;
+                userCountIsExact: boolean;
+            }>>;
+            listUsersPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    createdAt: number;
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    isAdmin: boolean;
+                    legacyId: string | null;
+                    name: string | null;
+                    nextSyllabus: {
+                        id: Id<"syllabusEntries">;
+                        movie: {
+                            id: Id<"movies">;
+                            title: string;
+                        };
+                        notes: string | null;
+                        order: number;
+                    } | null;
+                    roles: Array<{
+                        assignedAt: number | null;
+                        assignedBy: Id<"users"> | null;
+                        id: Id<"userRoles">;
+                        role: {
+                            admin: boolean;
+                            description: string;
+                            id: Id<"roles">;
+                            legacyId: number | null;
+                            name: string;
+                            permissions: Array<string>;
+                        };
+                    }>;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            removeRoleMembership: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    roleId: Id<"roles">;
+                    userId: Id<"users">;
+                };
+                id: Id<"userRoles">;
+            }, {
+                id: Id<"userRoles">;
+            }>;
+            setUserStatus: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    email: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                };
+                id: Id<"users">;
+                status: "active" | "disabled";
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+            updateRole: FunctionReference<"mutation", "public", {
+                admin: boolean;
+                clientApiVersion: string;
+                description: string;
+                id: Id<"roles">;
+                name: string;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+            }>;
+            updateUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                email: string;
+                expected?: {
+                    email: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                };
+                id: Id<"users">;
+                name: string;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+        };
+        impersonation: {
+            current: FunctionReference<"query", "public", Record<string, never>, {
+                endsAt: number;
+                id: Id<"impersonationSessions">;
+                reason: string;
+                startedAt: number;
+                targetName: string | null;
+                targetUserId: Id<"users">;
+            } | null>;
+            revoke: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                sessionId: Id<"impersonationSessions">;
+            }, {
+                revoked: boolean;
+                revokedAt: number | null;
+            }>;
+            start: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                durationMinutes: number;
+                reason: string;
+                targetUserId: Id<"users">;
+            }, {
+                endsAt: number;
+                id: Id<"impersonationSessions">;
+                reason: string;
+                startedAt: number;
+                targetName: string | null;
+                targetUserId: Id<"users">;
+            }>;
+        };
+        linking: {
+            linkOrCreateMe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                isHost: boolean;
+                linkMode: "alreadyLinked" | "existingUser" | "newUser";
+                name: string | null;
+            }>;
+        };
+        profile: {
+            actionGateProbe: FunctionReference<"action", "public", {
+                clientApiVersion: string;
+            }, {
+                allowed: true;
+                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
+                isAdmin: boolean;
+            }>;
+            administratorMe: FunctionReference<"query", "public", Record<string, never>, {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                isHost: boolean;
+                name: string | null;
+            }>;
+            discardMyProfileImageUpload: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                fileKey: string;
+                uploadId: string;
+            }, {
+                intentId: Id<"sideEffectIntents">;
+                queued: true;
+            }>;
+            me: FunctionReference<"query", "public", Record<string, never>, {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                isHost: boolean;
+                name: string | null;
+            }>;
+            updateMyName: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                name: string;
+            }, {
+                name: string;
+                updatedAt: number;
+            }>;
+            updateMyProfileWithImage: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedImage: string | null;
+                fileKey: string;
+                image: string;
+                name: string;
+                uploadId: string;
+            }, {
+                image: string;
+                name: string;
+                updatedAt: number;
+            }>;
+        };
+        public: {
+            listHosts: FunctionReference<"query", "public", Record<string, never>, Array<{
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+            }>>;
+        };
+        roles: {
+            mine: FunctionReference<"query", "public", Record<string, never>, Array<{
+                assignedAt: number | null;
+                assignedBy: Id<"users"> | null;
+                id: Id<"userRoles">;
+                role: {
+                    admin: boolean;
+                    description: string;
+                    id: Id<"roles">;
+                    legacyId: number | null;
+                    name: string;
+                    permissions: Array<string>;
+                };
+            }>>;
+        };
+    };
+    pipeline: {
+        content: {
+            getEpisodeByDate: FunctionReference<"query", "public", {
+                date: string;
+            }, {
+                date: string | null;
+                description: string | null;
+                id: Id<"episodes">;
+                notes: string | null;
+                number: number;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            getEpisodeContextByDate: FunctionReference<"query", "public", {
+                date: string;
+            }, {
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                movies: Array<{
+                    assignmentType: string | null;
+                    id: Id<"movies">;
+                    poster: string | null;
+                    source: "assignment" | "extra_review";
+                    title: string;
+                    year: number;
+                }>;
+            } | null>;
+            getEpisodeContextById: FunctionReference<"query", "public", {
+                id: Id<"episodes">;
+            }, {
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                movies: Array<{
+                    assignmentType: string | null;
+                    id: Id<"movies">;
+                    poster: string | null;
+                    source: "assignment" | "extra_review";
+                    title: string;
+                    year: number;
+                }>;
+            } | null>;
+            getMoviePosters: FunctionReference<"query", "public", {
+                movieIds: Array<Id<"movies">>;
+            }, Array<{
+                id: Id<"movies">;
+                poster: string;
+            }>>;
+            listEpisodeDatesPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    date: string;
+                    id: Id<"episodes">;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listMovieCatalogPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    year: number;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            publishEpisodeSeo: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                date: string;
+                expected: {
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                };
+                operationId: string;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+            }, {
+                changed: boolean;
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+            }>;
+            upsertEpisodeFromAudio: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                date: string;
+                number: number;
+                operationId: string;
+                title: string;
+            }, {
+                created: boolean;
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+            }>;
+        };
+        status: {
+            actionGateProbe: FunctionReference<"action", "public", {
+                clientApiVersion: string;
+                requiredPermission: string;
+            }, {
+                allowed: true;
+                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
+            }>;
+            capabilities: FunctionReference<"query", "public", Record<string, never>, {
+                name: string;
+                permissions: Array<string>;
+                servicePrincipalId: Id<"servicePrincipals">;
+            }>;
+            heartbeat: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                requiredPermission: string;
+            }, {
+                lastSeenAt: number;
+            }>;
+        };
+    };
+    rankings: {
+        items: {
+            move: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedItems">;
+                newRank: number;
+                now?: number;
+            }, {
+                comment: string | null;
+                createdAt: number;
+                episode: {
+                    date: string | null;
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"rankedItems">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                } | null;
+                movieId: Id<"movies"> | null;
+                rank: number;
+                rankedListId: Id<"rankedLists">;
+                show: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
+                } | null;
+                showId: Id<"shows"> | null;
+                targetType: "movie" | "show" | "episode";
+                updatedAt: number;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"rankedItems">;
+                now?: number;
+            }, {
+                id: Id<"rankedItems">;
+                rank: number;
+            }>;
+            reorder: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                itemIds: Array<Id<"rankedItems">>;
+                now?: number;
+                rankedListId: Id<"rankedLists">;
+            }, {
+                createdAt: number;
+                id: Id<"rankedLists">;
+                itemCount: number;
+                items: Array<{
+                    comment: string | null;
+                    createdAt: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        status: string | null;
+                        title: string;
+                    } | null;
+                    episodeId: Id<"episodes"> | null;
+                    id: Id<"rankedItems">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    movieId: Id<"movies"> | null;
+                    rank: number;
+                    rankedListId: Id<"rankedLists">;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    showId: Id<"shows"> | null;
+                    targetType: "movie" | "show" | "episode";
+                    updatedAt: number;
+                }>;
+                rankedListTypeId: Id<"rankedListTypes">;
+                status: "DRAFT" | "PUBLISHED";
+                title: string | null;
+                type: {
+                    createdAt: number;
+                    description: string | null;
+                    id: Id<"rankedListTypes">;
+                    maxItems: number;
+                    name: string;
+                    targetType: "MOVIE" | "SHOW" | "EPISODE";
+                    updatedAt: number;
+                };
+                updatedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                };
+                userId: Id<"users">;
+            }>;
+            upsert: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                comment?: string | null;
+                now?: number;
+                rank: number;
+                rankedListId: Id<"rankedLists">;
+                target: {
+                    id: Id<"movies">;
+                    kind: "movie";
+                } | {
+                    id: Id<"shows">;
+                    kind: "show";
+                } | {
+                    id: Id<"episodes">;
+                    kind: "episode";
+                };
+            }, {
+                comment: string | null;
+                createdAt: number;
+                episode: {
+                    date: string | null;
+                    id: Id<"episodes">;
+                    number: number;
+                    status: string | null;
+                    title: string;
+                } | null;
+                episodeId: Id<"episodes"> | null;
+                id: Id<"rankedItems">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                } | null;
+                movieId: Id<"movies"> | null;
+                rank: number;
+                rankedListId: Id<"rankedLists">;
+                show: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
+                } | null;
+                showId: Id<"shows"> | null;
+                targetType: "movie" | "show" | "episode";
                 updatedAt: number;
             }>;
         };
@@ -8935,368 +8122,316 @@ export type PublicApiType = {
                 userId: Id<"users">;
             }>;
         };
-        items: {
-            move: FunctionReference<"mutation", "public", {
+        types: {
+            create: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
-                id: Id<"rankedItems">;
-                newRank: number;
+                description?: string | null;
+                maxItems: number;
+                name: string;
                 now?: number;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
             }, {
-                comment: string | null;
                 createdAt: number;
-                episode: {
-                    date: string | null;
-                    id: Id<"episodes">;
-                    number: number;
-                    status: string | null;
-                    title: string;
-                } | null;
-                episodeId: Id<"episodes"> | null;
-                id: Id<"rankedItems">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                } | null;
-                movieId: Id<"movies"> | null;
-                rank: number;
-                rankedListId: Id<"rankedLists">;
-                show: {
-                    id: Id<"shows">;
-                    poster: string | null;
-                    title: string;
-                    url: string;
-                    year: number;
-                } | null;
-                showId: Id<"shows"> | null;
-                targetType: "movie" | "show" | "episode";
+                description: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems: number;
+                name: string;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
                 updatedAt: number;
             }>;
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                createdAt: number;
+                description: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems: number;
+                name: string;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
+                updatedAt: number;
+            }>>;
             remove: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
-                id: Id<"rankedItems">;
-                now?: number;
+                id: Id<"rankedListTypes">;
             }, {
-                id: Id<"rankedItems">;
-                rank: number;
+                id: Id<"rankedListTypes">;
             }>;
-            reorder: FunctionReference<"mutation", "public", {
+            update: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
-                itemIds: Array<Id<"rankedItems">>;
+                description?: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems?: number;
+                name?: string;
                 now?: number;
-                rankedListId: Id<"rankedLists">;
+                targetType?: "MOVIE" | "SHOW" | "EPISODE";
             }, {
                 createdAt: number;
-                id: Id<"rankedLists">;
-                itemCount: number;
-                items: Array<{
-                    comment: string | null;
-                    createdAt: number;
-                    episode: {
-                        date: string | null;
-                        id: Id<"episodes">;
-                        number: number;
-                        status: string | null;
-                        title: string;
-                    } | null;
-                    episodeId: Id<"episodes"> | null;
-                    id: Id<"rankedItems">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    } | null;
-                    movieId: Id<"movies"> | null;
-                    rank: number;
-                    rankedListId: Id<"rankedLists">;
-                    show: {
-                        id: Id<"shows">;
-                        poster: string | null;
-                        title: string;
-                        url: string;
-                        year: number;
-                    } | null;
-                    showId: Id<"shows"> | null;
-                    targetType: "movie" | "show" | "episode";
-                    updatedAt: number;
-                }>;
-                rankedListTypeId: Id<"rankedListTypes">;
-                status: "DRAFT" | "PUBLISHED";
-                title: string | null;
-                type: {
-                    createdAt: number;
-                    description: string | null;
-                    id: Id<"rankedListTypes">;
-                    maxItems: number;
-                    name: string;
-                    targetType: "MOVIE" | "SHOW" | "EPISODE";
-                    updatedAt: number;
-                };
-                updatedAt: number;
-                user: {
-                    id: Id<"users">;
-                    image: string | null;
-                    name: string | null;
-                };
-                userId: Id<"users">;
-            }>;
-            upsert: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                comment?: string | null;
-                now?: number;
-                rank: number;
-                rankedListId: Id<"rankedLists">;
-                target: {
-                    id: Id<"movies">;
-                    kind: "movie";
-                } | {
-                    id: Id<"shows">;
-                    kind: "show";
-                } | {
-                    id: Id<"episodes">;
-                    kind: "episode";
-                };
-            }, {
-                comment: string | null;
-                createdAt: number;
-                episode: {
-                    date: string | null;
-                    id: Id<"episodes">;
-                    number: number;
-                    status: string | null;
-                    title: string;
-                } | null;
-                episodeId: Id<"episodes"> | null;
-                id: Id<"rankedItems">;
-                movie: {
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    tmdbId: number | null;
-                    url: string;
-                    year: number;
-                } | null;
-                movieId: Id<"movies"> | null;
-                rank: number;
-                rankedListId: Id<"rankedLists">;
-                show: {
-                    id: Id<"shows">;
-                    poster: string | null;
-                    title: string;
-                    url: string;
-                    year: number;
-                } | null;
-                showId: Id<"shows"> | null;
-                targetType: "movie" | "show" | "episode";
+                description: string | null;
+                id: Id<"rankedListTypes">;
+                maxItems: number;
+                name: string;
+                targetType: "MOVIE" | "SHOW" | "EPISODE";
                 updatedAt: number;
             }>;
         };
     };
-    admin: {
-        dashboard: {
-            overview: FunctionReference<"query", "public", Record<string, never>, {
-                counts: {
-                    episodes: number;
-                    movies: number;
-                    reviews: number;
-                    users: number;
-                };
-                guessStats: Array<{
-                    fullTitle: string;
-                    guesses: number;
-                    id: Id<"episodes">;
-                    name: string;
-                    slug: string | null;
-                }>;
-                latestEpisode: {
-                    assignments: Array<{
-                        id: Id<"assignments">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        };
-                        playable: boolean;
-                        slug: string | null;
-                        type: string;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                        };
-                    }>;
-                    date: string | null;
-                    description: string | null;
-                    extras: Array<{
-                        id: Id<"extraReviews">;
-                        review: {
-                            id: Id<"reviews">;
-                            movie: {
-                                id: Id<"movies">;
-                                poster: string | null;
-                                title: string;
-                                tmdbId: number | null;
-                                url: string;
-                                year: number;
-                            } | null;
-                            show: {
-                                id: Id<"shows">;
-                                poster: string | null;
-                                title: string;
-                                url: string;
-                                year: number;
-                            } | null;
-                        };
-                    }>;
-                    id: Id<"episodes">;
-                    links: Array<{
-                        id: Id<"episodeLinks">;
-                        text: string;
-                        url: string;
-                    }>;
-                    number: number;
-                    recording: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                } | null;
-                latestSyllabus: Array<{
-                    createdAt: number;
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        poster: string | null;
-                        title: string;
-                        tmdbId: number | null;
-                        url: string;
-                        year: number;
-                    };
-                    user: {
-                        id: Id<"users">;
-                        name: string | null;
-                    };
-                }>;
-                upcomingEpisode: {
-                    assignments: Array<{
-                        id: Id<"assignments">;
-                        movie: {
-                            id: Id<"movies">;
-                            poster: string | null;
-                            title: string;
-                            tmdbId: number | null;
-                            url: string;
-                            year: number;
-                        };
-                        playable: boolean;
-                        slug: string | null;
-                        type: string;
-                        user: {
-                            id: Id<"users">;
-                            image: string | null;
-                            name: string | null;
-                        };
-                    }>;
-                    date: string | null;
-                    description: string | null;
-                    extras: Array<{
-                        id: Id<"extraReviews">;
-                        review: {
-                            id: Id<"reviews">;
-                            movie: {
-                                id: Id<"movies">;
-                                poster: string | null;
-                                title: string;
-                                tmdbId: number | null;
-                                url: string;
-                                year: number;
-                            } | null;
-                            show: {
-                                id: Id<"shows">;
-                                poster: string | null;
-                                title: string;
-                                url: string;
-                                year: number;
-                            } | null;
-                        };
-                    }>;
-                    id: Id<"episodes">;
-                    links: Array<{
-                        id: Id<"episodeLinks">;
-                        text: string;
-                        url: string;
-                    }>;
-                    number: number;
-                    recording: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                } | null;
+    ratings: {
+        admin: {
+            create: FunctionReference<"mutation", "public", {
+                category?: string;
+                clientApiVersion: string;
+                icon?: string;
+                name: string;
+                sound?: string;
+                value: number;
+            }, {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"ratings">;
+            }, {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+            } | null>;
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+            }>>;
+            removeIfUnreferenced: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"ratings">;
+            }, {
+                id: Id<"ratings">;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                category?: string | null;
+                clientApiVersion: string;
+                icon?: string | null;
+                id: Id<"ratings">;
+                name?: string;
+                sound?: string | null;
+                value?: number;
+            }, {
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
             }>;
         };
-    };
-    sideEffects: {
-        intents: {
-            list: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-                status?: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
+        public: {
+            getById: FunctionReference<"query", "public", {
+                id: Id<"ratings">;
             }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    attemptCount: number;
-                    completedAt: number | null;
-                    createdAt: number;
-                    id: Id<"sideEffectIntents">;
-                    lastAttemptAt: number | null;
-                    lastErrorCode: string | null;
-                    nextAttemptAt: number | null;
-                    operation: "uploadthing.deleteFile";
-                    resourceId: string;
-                    resourceType: "episodeAudioMessage" | "assignmentAudioMessage" | "profileImage";
-                    status: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
-                    updatedAt: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            redrive: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expectedStatus: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
-                expectedUpdatedAt: number;
-                id: Id<"sideEffectIntents">;
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+            } | null>;
+            getByValue: FunctionReference<"query", "public", {
+                value: number;
             }, {
-                attemptCount: number;
-                completedAt: number | null;
-                createdAt: number;
-                id: Id<"sideEffectIntents">;
-                lastAttemptAt: number | null;
-                lastErrorCode: string | null;
-                nextAttemptAt: number | null;
-                operation: "uploadthing.deleteFile";
-                resourceId: string;
-                resourceType: "episodeAudioMessage" | "assignmentAudioMessage" | "profileImage";
-                status: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
-                updatedAt: number;
-            }>;
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+            } | null>;
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                category: string | null;
+                icon: string | null;
+                id: Id<"ratings">;
+                name: string;
+                sound: string | null;
+                value: number;
+            }>>;
         };
     };
     recording: {
+        favorites: {
+            list: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, Array<{
+                category: string;
+                duration: number;
+                id: string;
+                name: string;
+                url: string;
+            }>>;
+            replaceAll: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                favorites: Array<{
+                    category: string;
+                    duration: number;
+                    id: string;
+                    name: string;
+                    url: string;
+                }>;
+                publicSessionId: string;
+                updatedAt: number;
+            }, {
+                count: number;
+            }>;
+        };
+        manifests: {
+            getBySession: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, {
+                date: string;
+                episode: string;
+                hosts: Array<string>;
+                manifest: any;
+                manifestVersion: string;
+                publicSessionId: string;
+                updatedAt: number;
+            } | null>;
+            save: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                date: string;
+                episode: string;
+                hosts: Array<string>;
+                manifest: any;
+                manifestVersion: string;
+                publicSessionId: string;
+                updatedAt: number;
+            }, Id<"recordingSessionManifests">>;
+        };
+        recordings: {
+            listBySession: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, Array<{
+                blobName: string;
+                contentType: string;
+                episode: string;
+                hostName: string;
+                id: Id<"recordingUploads">;
+                publicSessionId: string | null;
+                size: number;
+                startedAt: number;
+                trackType: "mic" | "sounders";
+                uploadedAt: number;
+                url: string;
+            }>>;
+            saveUpload: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                blobName: string;
+                clientApiVersion: string;
+                clientId: string;
+                contentType: string;
+                episode: string;
+                hostName: string;
+                publicSessionId: string;
+                size: number;
+                startedAt: number;
+                trackType: "mic" | "sounders";
+                uploadedAt: number;
+                url: string;
+            }, Id<"recordingUploads">>;
+        };
+        rtc: {
+            cleanupRtcSession: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                olderThan: number;
+                publicSessionId: string;
+            }, {
+                deletedPresence: number;
+                deletedSignals: number;
+            }>;
+            heartbeatAudio: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                muted: boolean;
+                publicSessionId: string;
+                recording: boolean;
+            }, {
+                ok: true;
+            } | null>;
+            joinAudio: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                muted: boolean;
+                publicSessionId: string;
+                recording: boolean;
+            }, {
+                ok: true;
+            } | {
+                ok: false;
+                reason: "room-full";
+            }>;
+            leaveAudio: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                publicSessionId: string;
+            }, {
+                ok: true;
+            }>;
+            listAudioPresence: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                publicSessionId: string;
+            }, Array<{
+                clientId: string;
+                displayName: string;
+                joinedAudioAt: number;
+                lastSeenAt: number;
+                muted: boolean;
+                recording: boolean;
+                role: "owner" | "participant";
+            }>>;
+            listSignalsForParticipant: FunctionReference<"query", "public", {
+                accessToken: string;
+                clientId: string;
+                now: number;
+                publicSessionId: string;
+            }, Array<{
+                createdAt: number;
+                fromClientId: string;
+                payload: any;
+                signalId: string;
+                toClientId: string;
+                type: "offer" | "answer" | "ice-candidate" | "leave" | "renegotiate";
+            }>>;
+            sendSignal: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                clientId: string;
+                payload: any;
+                publicSessionId: string;
+                signalId: string;
+                toClientId: string;
+                type: "offer" | "answer" | "ice-candidate" | "leave" | "renegotiate";
+            }, {
+                ok: true;
+            } | null>;
+        };
         sessions: {
             appendSessionEvent: FunctionReference<"mutation", "public", {
                 accessToken: string;
@@ -9779,96 +8914,6 @@ export type PublicApiType = {
                 status: "active" | "ended";
             }>;
         };
-        manifests: {
-            getBySession: FunctionReference<"query", "public", {
-                accessToken: string;
-                clientId: string;
-                publicSessionId: string;
-            }, {
-                date: string;
-                episode: string;
-                hosts: Array<string>;
-                manifest: any;
-                manifestVersion: string;
-                publicSessionId: string;
-                updatedAt: number;
-            } | null>;
-            save: FunctionReference<"mutation", "public", {
-                accessToken: string;
-                clientApiVersion: string;
-                clientId: string;
-                date: string;
-                episode: string;
-                hosts: Array<string>;
-                manifest: any;
-                manifestVersion: string;
-                publicSessionId: string;
-                updatedAt: number;
-            }, Id<"recordingSessionManifests">>;
-        };
-        recordings: {
-            listBySession: FunctionReference<"query", "public", {
-                accessToken: string;
-                clientId: string;
-                publicSessionId: string;
-            }, Array<{
-                blobName: string;
-                contentType: string;
-                episode: string;
-                hostName: string;
-                id: Id<"recordingUploads">;
-                publicSessionId: string | null;
-                size: number;
-                startedAt: number;
-                trackType: "mic" | "sounders";
-                uploadedAt: number;
-                url: string;
-            }>>;
-            saveUpload: FunctionReference<"mutation", "public", {
-                accessToken: string;
-                blobName: string;
-                clientApiVersion: string;
-                clientId: string;
-                contentType: string;
-                episode: string;
-                hostName: string;
-                publicSessionId: string;
-                size: number;
-                startedAt: number;
-                trackType: "mic" | "sounders";
-                uploadedAt: number;
-                url: string;
-            }, Id<"recordingUploads">>;
-        };
-        favorites: {
-            list: FunctionReference<"query", "public", {
-                accessToken: string;
-                clientId: string;
-                publicSessionId: string;
-            }, Array<{
-                category: string;
-                duration: number;
-                id: string;
-                name: string;
-                url: string;
-            }>>;
-            replaceAll: FunctionReference<"mutation", "public", {
-                accessToken: string;
-                clientApiVersion: string;
-                clientId: string;
-                favorites: Array<{
-                    category: string;
-                    duration: number;
-                    id: string;
-                    name: string;
-                    url: string;
-                }>;
-                publicSessionId: string;
-                updatedAt: number;
-            }, {
-                count: number;
-            }>;
-        };
         sounders: {
             list: FunctionReference<"query", "public", Record<string, never>, Array<{
                 blobName: string;
@@ -9921,84 +8966,1042 @@ export type PublicApiType = {
                 count: number;
             }>;
         };
-        rtc: {
-            cleanupRtcSession: FunctionReference<"mutation", "public", {
+    };
+    reviews: {
+        admin: {
+            createExtra: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
-                olderThan: number;
-                publicSessionId: string;
+                episodeId: Id<"episodes">;
+                movieId?: Id<"movies">;
+                ratingId?: Id<"ratings">;
+                showId?: Id<"shows">;
+                userId: Id<"users">;
             }, {
-                deletedPresence: number;
-                deletedSignals: number;
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"extraReviews">;
+                review: {
+                    id: Id<"reviews">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    } | null;
+                    reviewedAt: number | null;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
+                };
             }>;
-            heartbeatAudio: FunctionReference<"mutation", "public", {
-                accessToken: string;
+            createForAssignment: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
                 clientApiVersion: string;
-                clientId: string;
-                muted: boolean;
-                publicSessionId: string;
-                recording: boolean;
+                ratingId?: Id<"ratings">;
+                userId: Id<"users">;
             }, {
-                ok: true;
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    type: string;
+                };
+                id: Id<"assignmentReviews">;
+                review: {
+                    id: Id<"reviews">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    } | null;
+                    reviewedAt: number | null;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
+                };
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"reviews">;
+            }, {
+                assignmentReviews: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                }>;
+                extraReviews: Array<{
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"extraReviews">;
+                }>;
+                id: Id<"reviews">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                } | null;
+                reviewedAt: number | null;
+                show: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
+                } | null;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                } | null;
             } | null>;
-            joinAudio: FunctionReference<"mutation", "public", {
-                accessToken: string;
-                clientApiVersion: string;
-                clientId: string;
-                muted: boolean;
-                publicSessionId: string;
-                recording: boolean;
+            getDeleteImpact: FunctionReference<"query", "public", {
+                id: Id<"reviews">;
             }, {
-                ok: true;
-            } | {
-                ok: false;
-                reason: "room-full";
+                assignmentReviewCount: number;
+                extraReviewCount: number;
+                guessCount: number;
+                id: Id<"reviews">;
             }>;
-            leaveAudio: FunctionReference<"mutation", "public", {
-                accessToken: string;
-                clientApiVersion: string;
-                clientId: string;
-                publicSessionId: string;
+            listExtrasForEpisode: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
             }, {
-                ok: true;
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"extraReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
             }>;
-            listAudioPresence: FunctionReference<"query", "public", {
-                accessToken: string;
-                clientId: string;
-                publicSessionId: string;
+            listForAssignment: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                    review: {
+                        id: Id<"reviews">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        } | null;
+                        rating: {
+                            category: string | null;
+                            icon: string | null;
+                            id: Id<"ratings">;
+                            name: string;
+                            sound: string | null;
+                            value: number;
+                        } | null;
+                        reviewedAt: number | null;
+                        show: {
+                            id: Id<"shows">;
+                            poster: string | null;
+                            title: string;
+                            url: string;
+                            year: number;
+                        } | null;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                            status: "active" | "disabled";
+                        } | null;
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                ratingId?: Id<"ratings">;
+                unrated?: boolean;
+                userId?: Id<"users">;
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignmentReviews: Array<{
+                        assignment: {
+                            episode: {
+                                id: Id<"episodes">;
+                                number: number;
+                                slug: string | null;
+                                status: string | null;
+                                title: string;
+                            };
+                            id: Id<"assignments">;
+                            playable: boolean;
+                            type: string;
+                        };
+                        id: Id<"assignmentReviews">;
+                    }>;
+                    extraReviews: Array<{
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"extraReviews">;
+                    }>;
+                    id: Id<"reviews">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    } | null;
+                    reviewedAt: number | null;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedImpact?: {
+                    assignmentReviewCount: number;
+                    extraReviewCount: number;
+                    guessCount: number;
+                };
+                id: Id<"reviews">;
+            }, {
+                assignmentReviewCount: number;
+                extraReviewCount: number;
+                guessCount: number;
+                id: Id<"reviews">;
+            }>;
+            removeAssignmentIfNoGuesses: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"assignmentReviews">;
+            }, {
+                id: Id<"assignmentReviews">;
+            }>;
+            setRating: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedRatingId?: Id<"ratings"> | null;
+                ratingId: Id<"ratings"> | null;
+                reviewId: Id<"reviews">;
+            }, {
+                assignmentReviews: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        type: string;
+                    };
+                    id: Id<"assignmentReviews">;
+                }>;
+                extraReviews: Array<{
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"extraReviews">;
+                }>;
+                id: Id<"reviews">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                } | null;
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                } | null;
+                reviewedAt: number | null;
+                show: {
+                    id: Id<"shows">;
+                    poster: string | null;
+                    title: string;
+                    url: string;
+                    year: number;
+                } | null;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                } | null;
+            }>;
+        };
+        mine: {
+            addMovieExtra: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                episodeId: Id<"episodes">;
+                movieId: Id<"movies">;
+            }, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"extraReviews">;
+                review: {
+                    id: Id<"reviews">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    } | null;
+                    reviewedAt: number | null;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
+                };
+            }>;
+            addShowExtra: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                episodeId: Id<"episodes">;
+                showId: Id<"shows">;
+            }, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"extraReviews">;
+                review: {
+                    id: Id<"reviews">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    } | null;
+                    rating: {
+                        category: string | null;
+                        icon: string | null;
+                        id: Id<"ratings">;
+                        name: string;
+                        sound: string | null;
+                        value: number;
+                    } | null;
+                    reviewedAt: number | null;
+                    show: {
+                        id: Id<"shows">;
+                        poster: string | null;
+                        title: string;
+                        url: string;
+                        year: number;
+                    } | null;
+                    user: {
+                        id: Id<"users">;
+                        image: string | null;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    } | null;
+                };
+            }>;
+        };
+        public: {
+            listMovieReviewsForYear: FunctionReference<"query", "public", {
+                year: number;
             }, Array<{
-                clientId: string;
-                displayName: string;
-                joinedAudioAt: number;
-                lastSeenAt: number;
-                muted: boolean;
-                recording: boolean;
-                role: "owner" | "participant";
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                } | null;
+                id: Id<"reviews">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                rating: {
+                    category: string | null;
+                    icon: string | null;
+                    id: Id<"ratings">;
+                    name: string;
+                    sound: string | null;
+                    value: number;
+                } | null;
+                reviewedAt: number;
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                } | null;
             }>>;
-            listSignalsForParticipant: FunctionReference<"query", "public", {
-                accessToken: string;
-                clientId: string;
-                now: number;
-                publicSessionId: string;
-            }, Array<{
+        };
+    };
+    sideEffects: {
+        intents: {
+            list: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+                status?: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    attemptCount: number;
+                    completedAt: number | null;
+                    createdAt: number;
+                    id: Id<"sideEffectIntents">;
+                    lastAttemptAt: number | null;
+                    lastErrorCode: string | null;
+                    nextAttemptAt: number | null;
+                    operation: "uploadthing.deleteFile";
+                    resourceId: string;
+                    resourceType: "episodeAudioMessage" | "assignmentAudioMessage" | "profileImage";
+                    status: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
+                    updatedAt: number;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            redrive: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedStatus: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
+                expectedUpdatedAt: number;
+                id: Id<"sideEffectIntents">;
+            }, {
+                attemptCount: number;
+                completedAt: number | null;
                 createdAt: number;
-                fromClientId: string;
-                payload: any;
-                signalId: string;
-                toClientId: string;
-                type: "offer" | "answer" | "ice-candidate" | "leave" | "renegotiate";
-            }>>;
-            sendSignal: FunctionReference<"mutation", "public", {
-                accessToken: string;
+                id: Id<"sideEffectIntents">;
+                lastAttemptAt: number | null;
+                lastErrorCode: string | null;
+                nextAttemptAt: number | null;
+                operation: "uploadthing.deleteFile";
+                resourceId: string;
+                resourceType: "episodeAudioMessage" | "assignmentAudioMessage" | "profileImage";
+                status: "pending" | "processing" | "retryScheduled" | "succeeded" | "terminal";
+                updatedAt: number;
+            }>;
+        };
+    };
+    syllabus: {
+        admin: {
+            assignEpisode: FunctionReference<"mutation", "public", {
+                assignmentType: string;
                 clientApiVersion: string;
-                clientId: string;
-                payload: any;
-                publicSessionId: string;
-                signalId: string;
-                toClientId: string;
-                type: "offer" | "answer" | "ice-candidate" | "leave" | "renegotiate";
+                episodeNumber: number;
+                expected?: {
+                    assignmentId: Id<"assignments"> | null;
+                    createdAt: number;
+                    movieId: Id<"movies">;
+                    notes: string | null;
+                    order: number;
+                    userId: Id<"users">;
+                };
+                syllabusId: Id<"syllabusEntries">;
             }, {
-                ok: true;
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>;
+            getById: FunctionReference<"query", "public", {
+                id: Id<"syllabusEntries">;
+            }, {
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
             } | null>;
+            listForUser: FunctionReference<"query", "public", {
+                userId: Id<"users">;
+            }, Array<{
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignment: {
+                        episode: {
+                            id: Id<"episodes">;
+                            number: number;
+                            slug: string | null;
+                            status: string | null;
+                            title: string;
+                        };
+                        id: Id<"assignments">;
+                        playable: boolean;
+                        slug: string | null;
+                        type: string;
+                    } | null;
+                    createdAt: number;
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        poster: string | null;
+                        title: string;
+                        tmdbId: number | null;
+                        url: string;
+                        year: number;
+                    };
+                    notes: string | null;
+                    order: number;
+                    user: {
+                        email: string | null;
+                        id: Id<"users">;
+                        name: string | null;
+                        status: "active" | "disabled";
+                    };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            removeEntry: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    assignmentId: Id<"assignments"> | null;
+                    createdAt: number;
+                    movieId: Id<"movies">;
+                    notes: string | null;
+                    order: number;
+                    userId: Id<"users">;
+                };
+                id: Id<"syllabusEntries">;
+            }, {
+                id: Id<"syllabusEntries">;
+            }>;
+            reorderPendingForUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                items: Array<{
+                    expectedOrder: number;
+                    id: Id<"syllabusEntries">;
+                }>;
+                userId: Id<"users">;
+            }, Array<{
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>>;
+            unlinkEpisode: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    assignmentId: Id<"assignments"> | null;
+                    createdAt: number;
+                    movieId: Id<"movies">;
+                    notes: string | null;
+                    order: number;
+                    userId: Id<"users">;
+                };
+                syllabusId: Id<"syllabusEntries">;
+            }, {
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+                user: {
+                    email: string | null;
+                    id: Id<"users">;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>;
+        };
+        mine: {
+            add: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                movieId: Id<"movies">;
+                position?: "TOP" | "AFTER_NEXT" | "END";
+            }, {
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+            }>;
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+            }>>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"syllabusEntries">;
+            }, {
+                id: Id<"syllabusEntries">;
+            }>;
+            reorderPending: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                orderedPendingIds: Array<Id<"syllabusEntries">>;
+            }, {
+                success: true;
+            }>;
+            updateNotes: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"syllabusEntries">;
+                notes: string | null;
+            }, {
+                assignment: {
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        status: string | null;
+                        title: string;
+                    };
+                    id: Id<"assignments">;
+                    playable: boolean;
+                    slug: string | null;
+                    type: string;
+                } | null;
+                createdAt: number;
+                id: Id<"syllabusEntries">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                notes: string | null;
+                order: number;
+            }>;
+        };
+    };
+    system: {
+        cutover: {
+            getStatus: FunctionReference<"query", "public", Record<string, never>, {
+                applicationWriteMode: "disabled";
+                initialized: false;
+            } | {
+                apiVersion: string;
+                applicationWriteMode: "disabled" | "enabled";
+                cutoverRunId: string;
+                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
+                firstApplicationWriteAt: number | null;
+                initialized: true;
+                updatedAt: number;
+            }>;
+        };
+        health: {
+            applicationWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            readiness: FunctionReference<"query", "public", Record<string, never>, {
+                apiVersion: string;
+                applicationWritesEnabled: boolean;
+                initialized: boolean;
+            }>;
         };
     };
 };

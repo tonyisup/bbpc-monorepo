@@ -85,6 +85,16 @@ version. The live read-only preflight accepted the staging target and rejected
 the current environment on the known missing `CLERK_M2M_AUDIENCE`, without
 printing the key or any environment value.
 
+After an authorized deployment, the same workflow now performs a value-free
+remote invariant gate before contract verification. It requires API version
+`0.1.0`, an uninitialized write-disabled backend, two successful anonymous
+catalog reads, authentication denials across member/administrator/pipeline
+reads, and a `WRITE_DISABLED` denial from a valid recording mutation probe.
+The probe's handler always fails without writing, sends no deploy key to the
+application endpoint, and prints only
+aggregate counts. The later synthetic Clerk and pipeline identity matrix
+remains a distinct acceptance gate after controlled staging initialization.
+
 ## Local configuration evidence
 
 Presence/equality checks, without printing values, establish that:
@@ -134,7 +144,8 @@ to `tonyisup/bbpc-convex`. Before relying on those workflows:
    `CONVEX_STAGING_DEPLOY_KEY` secret;
 4. set the missing required staging environment variable;
 5. run the target/environment preflight, then push `master`, wait for the
-   complete CI and staging deployment, and record the deployed commit; and
+   complete CI, deployment, invariant, and contract gates, and record the
+   deployed commit; and
 6. rerun the public, admin, member, pipeline, default-deny, and write-disabled
    staging smoke matrix.
 

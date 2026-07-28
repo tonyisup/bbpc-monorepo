@@ -178,6 +178,27 @@ describe("identity boundaries", () => {
     });
   });
 
+  test("exposes a non-writing application write-gate probe", async () => {
+    const disabled = createTestBackend();
+    await expectDomainError(
+      disabled.mutation(
+        api.system.health.applicationWriteGateProbe,
+        { clientApiVersion: BBPC_API_VERSION },
+      ),
+      "WRITE_DISABLED",
+    );
+
+    const enabled = createTestBackend();
+    await advanceToS3(enabled);
+    await expectDomainError(
+      enabled.mutation(
+        api.system.health.applicationWriteGateProbe,
+        { clientApiVersion: BBPC_API_VERSION },
+      ),
+      "VALIDATION_FAILED",
+    );
+  });
+
   test("requires an authenticated, linked identity", async () => {
     const t = createTestBackend();
 

@@ -40,6 +40,7 @@
     "contract:build": "tsc --project tsconfig.contract.json",
     "contract:generate": "convex-helpers ts-api-spec --output-file contracts/convexApi.ts",
     "deploy:environment:check": "node scripts/check-deployment-environment.mjs",
+    "deploy:staging:verify": "node scripts/verify-staging-deployment.mjs",
     "deploy:target:check": "node scripts/check-deploy-target.mjs",
     "deployment:test": "node --test scripts/*.test.mjs",
     "release:check": "node scripts/check-release-version.mjs",

@@ -64,6 +64,8 @@ new go/no-go.
 - [ ] Convex, Clerk, Vercel, pipeline, recording, and rollback credentials pass
       value-free probes.
 - [ ] Exact commits and deploy artifacts are recorded above.
+- [ ] The backend staging commit passed its automated post-deploy invariant gate
+      and the separate authenticated synthetic acceptance matrix.
 - [ ] Two approved Clerk smoke identities exist: one administrator and one ordinary
       member.
 - [ ] Ordinary identity linking remains disabled.

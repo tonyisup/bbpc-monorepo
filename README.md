@@ -572,6 +572,15 @@ deploy-key target rather than selecting production by flag. Creating production,
 initializing `systemState`, or entering S1–S4 requires the migration runbook and its
 explicit backup/reconciliation gates.
 
+Immediately after deployment, CI also calls the staged backend through its canonical
+deployment URL. The value-free invariant gate requires the expected API version,
+an uninitialized write-disabled backend, successful anonymous sounder/template reads,
+authentication denials for member/administrator/pipeline reads, and a `WRITE_DISABLED`
+denial from a dedicated mutation whose handler always fails without writing. It reports only aggregate counts and
+never sends or prints the deploy key. This is the pre-initialization gate; the later
+synthetic Clerk administrator/member and pipeline M2M matrix remains a separate
+staging-acceptance step.
+
 All third-party GitHub Actions are pinned to verified full commit SHAs, and a
 repository test rejects mutable remote action references. `CODEOWNERS` assigns the
 workflow and deployment-checker controls to `@tonyisup`. Local security reports under

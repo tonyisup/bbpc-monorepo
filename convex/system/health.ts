@@ -1,6 +1,10 @@
 import { BBPC_API_VERSION } from "../../contracts/index.js";
 import { v } from "convex/values";
-import { anonymousQuery } from "../functions.js";
+import {
+  anonymousQuery,
+  recordingMutation,
+} from "../functions.js";
+import { domainError } from "../lib/errors.js";
 import { getSystemState } from "../lib/writeGate.js";
 
 export const readiness = anonymousQuery({
@@ -18,5 +22,16 @@ export const readiness = anonymousQuery({
       applicationWritesEnabled:
         state?.applicationWriteMode === "enabled",
     };
+  },
+});
+
+export const applicationWriteGateProbe = recordingMutation({
+  args: {},
+  returns: v.null(),
+  handler: async () => {
+    domainError(
+      "VALIDATION_FAILED",
+      "The application write-gate probe never performs writes.",
+    );
   },
 });

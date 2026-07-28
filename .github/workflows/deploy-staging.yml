@@ -53,6 +53,9 @@ jobs:
           --typecheck enable
           --message "GitHub staging ${GITHUB_SHA}"
 
+      - name: Verify deployed staging invariants
+        run: npm run deploy:staging:verify
+
       - name: Verify deployed public contract
         run: |
           npm run contract:generate
