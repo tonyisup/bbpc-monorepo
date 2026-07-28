@@ -20,6 +20,12 @@ explicit approval.
 - Admin Vercel deployment: `TBD`
 - Recording deployment URL: `TBD`
 
+The exact production artifacts remain intentionally `TBD` until publication and
+deployment. The read-only pre-publication inventory, including local candidate
+commits, current deployed commits, cloud configuration gaps, and the safe release
+order, is recorded in `PRODUCTION_READINESS_AUDIT_2026-07-27.md`. Local candidate
+hashes must be replaced here with the final pushed/deployed hashes before S1.
+
 ## Responsible operators
 
 | Responsibility | Primary | Backup | Confirmed at |
