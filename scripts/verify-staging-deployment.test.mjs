@@ -202,7 +202,7 @@ test("staging workflow runs invariant verification after deployment", () => {
     "npm run deploy:staging:verify",
   );
   const contractIndex = workflow.indexOf(
-    "npm run contract:generate",
+    "npm run contract:compare",
   );
 
   assert.ok(deployIndex >= 0);

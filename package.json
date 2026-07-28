@@ -38,6 +38,7 @@
     "dev:local": "convex dev",
     "codegen": "convex codegen",
     "contract:build": "tsc --project tsconfig.contract.json",
+    "contract:compare": "node scripts/compare-public-contract.mjs",
     "contract:generate": "convex-helpers ts-api-spec --output-file contracts/convexApi.ts",
     "deploy:environment:check": "node scripts/check-deployment-environment.mjs",
     "deploy:staging:verify-authenticated": "node scripts/verify-authenticated-staging.mjs",

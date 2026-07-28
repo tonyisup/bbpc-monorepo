@@ -58,6 +58,5 @@ jobs:
 
       - name: Verify deployed public contract
         run: |
-          npm run contract:generate
-          npm run contract:build
-          git diff --exit-code -- contracts/convexApi.ts contracts/generated
+          npx convex-helpers ts-api-spec --output-file "$RUNNER_TEMP/convexApi.deployed.ts"
+          npm run contract:compare -- contracts/convexApi.ts "$RUNNER_TEMP/convexApi.deployed.ts"

@@ -121,6 +121,10 @@ test("staging workflow pins and verifies the key target before deployment", () =
   );
   assert.ok(checkIndex >= 0);
   assert.ok(deployIndex > checkIndex);
-  assert.match(workflow, /npm run contract:generate\n/u);
-  assert.doesNotMatch(workflow, /contract:generate -- --prod/u);
+  assert.match(
+    workflow,
+    /npx convex-helpers ts-api-spec --output-file/u,
+  );
+  assert.match(workflow, /npm run contract:compare --/u);
+  assert.doesNotMatch(workflow, /ts-api-spec[^\n]*--prod/u);
 });

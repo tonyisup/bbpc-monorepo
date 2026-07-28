@@ -556,9 +556,11 @@ import {
 ```
 
 The release tag must exactly match `v<package.json version>`. Staging deploy CI verifies
-that the deployed public contract is identical to the committed artifact before a tag
-may publish it. Previous compatible backend functions remain deployed until every
-consumer has moved off the prior package.
+that the deployed public contract is semantically identical to the committed artifact
+before a tag may publish it. The comparison canonicalizes generated property and union
+ordering because Convex can return equivalent function metadata in a different order
+across deployments. Signature changes still fail closed. Previous compatible backend
+functions remain deployed until every consumer has moved off the prior package.
 
 ## Deployment safety
 
