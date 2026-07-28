@@ -29,7 +29,8 @@ The three currently deployed Vercel artifacts report `success`:
 
 These URLs identify the current pre-migration deployments. They are not T16
 candidate deployment URLs and do not prove that the migration commits are
-published.
+published. A direct anonymous probe returned HTTP 200 for public, HTTP 200 for
+admin, and the recording app's expected HTTP 302 redirect.
 
 ## Build and contract portability
 
@@ -72,7 +73,9 @@ publication step: each push is a production deployment change.
 
 The staging function set is an early identity/pipeline/cutover slice, not the
 current release candidate. It must be configured and replaced by the current
-backward-compatible backend before staging acceptance.
+backward-compatible backend before staging acceptance. Its value-free readiness
+query reports API version `0.1.0`, uninitialized state, and application writes
+disabled.
 
 ## Local configuration evidence
 
