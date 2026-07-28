@@ -12,7 +12,7 @@ paths, or SQL connection details.
 
 | Repository | Local candidate | Publication state | Current production state |
 | --- | --- | --- | --- |
-| `bbpc-convex` | `686026dabdc5b98303b43853ae1bb3e635701f1f` on `master` | Clean; no Git remote; `tonyisup/bbpc-convex` does not yet exist | Convex production `determined-wombat-872` has zero functions and zero environment variables |
+| `bbpc-convex` | Current local `master`; record the exact final SHA immediately before an authorized push | No Git remote; `tonyisup/bbpc-convex` does not yet exist | Convex production `determined-wombat-872` has zero functions and zero environment variables |
 | `bbpc` | `4c0eab43293699e19ca81f06579f650f88b94418` on `master` | 31 commits ahead of `origin/master`; the only working-tree change is the owner-owned `public/sw.js`, which is excluded from the candidate | Latest successful Vercel production deployment uses `1dfd9991a794b2cf75e17c3ad765e9cd525f3ebd` |
 | `bbpc-admin` | `b2e57dc3648d44248ddb2f9aa32755599eb2bdbc` on `master` | Clean; 37 commits ahead of `origin/master` | Latest successful Vercel production deployment uses `93e22442b40190def3edb91cbde851fe9fb6470f` |
 | `bbpc-pipeline` | `5dd3fe527cd452fbd7f6dd244387f0e25e8cab5e` on `main` | Clean; no Git remote; `tonyisup/bbpc-pipeline` does not yet exist | No automatic deployment was discovered; the documented execution model is local/manual |
@@ -101,12 +101,34 @@ This proves only the local rehearsal configuration. Vercel production
 environment settings and Convex production Clerk/provider settings are still
 unverified.
 
+## Pre-publication security census
+
+A focused, read-only infrastructure and history audit covered all 90 commits,
+1,343 Git objects, 866 text blobs, all three workflows, the tracked lockfile,
+and the production dependency graph:
+
+- the high-confidence history scan found no credential, token, private-key,
+  credentialed-URL, or JWT patterns;
+- no environment files, private migration artifacts, or large/binary blobs are
+  tracked anywhere in history;
+- `npm audit --omit=dev` reported zero advisories;
+- none of the three direct production dependencies declares an install script;
+  and
+- `gitleaks`, `trufflehog`, and `detect-secrets` were unavailable, so the
+  aggregate result records those tools as skipped rather than claiming they ran.
+
+The one independently verified medium finding was that the workflows used
+mutable `v4` action tags. All six references are now pinned to verified full
+commit SHAs, a test rejects future mutable remote-action references, and
+`CODEOWNERS` covers workflows and deployment checkers. The detailed AI-assisted
+report remains local under the ignored `.gstack/` directory.
+
 ## Publication prerequisite
 
 `bbpc-convex` has no remote even though its staging and package workflows refer
 to `tonyisup/bbpc-convex`. Before relying on those workflows:
 
-1. choose repository visibility and create the repository;
+1. create `tonyisup/bbpc-convex` as a private repository;
 2. add its remote without changing the local candidate;
 3. configure the GitHub `staging` environment and
    `CONVEX_STAGING_DEPLOY_KEY` secret;

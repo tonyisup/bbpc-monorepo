@@ -571,3 +571,8 @@ package version. The post-deploy contract generator follows that already-verifie
 deploy-key target rather than selecting production by flag. Creating production,
 initializing `systemState`, or entering S1–S4 requires the migration runbook and its
 explicit backup/reconciliation gates.
+
+All third-party GitHub Actions are pinned to verified full commit SHAs, and a
+repository test rejects mutable remote action references. `CODEOWNERS` assigns the
+workflow and deployment-checker controls to `@tonyisup`. Local security reports under
+`.gstack/` are ignored and must not be published.

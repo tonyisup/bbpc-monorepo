@@ -6,5 +6,6 @@ node_modules/
 coverage/
 dist/
 .local-migration/
+.gstack/
 *.tgz
 *.log
