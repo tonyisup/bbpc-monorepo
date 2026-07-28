@@ -8,7 +8,7 @@ import test from "node:test";
 import { ConvexError } from "convex/values";
 
 import {
-  assertUninitializedReadiness,
+  assertExpectedStagingState,
   deploymentUrl,
   expectDomainFailure,
   verifyStagingDeployment,
@@ -29,39 +29,82 @@ test("constructs only a canonical Convex deployment URL", () => {
   );
 });
 
-test("requires an uninitialized write-disabled staging target", () => {
+test("requires the explicitly expected safe staging lifecycle state", () => {
   assert.doesNotThrow(() =>
-    assertUninitializedReadiness(
+    assertExpectedStagingState(
       {
         apiVersion,
         initialized: false,
         applicationWritesEnabled: false,
+        cutoverStage: "uninitialized",
+        firstApplicationWriteRecorded: false,
       },
       apiVersion,
+      "uninitialized",
     ),
   );
-  for (const readiness of [
-    {
+  assert.doesNotThrow(() =>
+    assertExpectedStagingState(
+      {
+        apiVersion,
+        initialized: true,
+        applicationWritesEnabled: false,
+        cutoverStage: "S2",
+        firstApplicationWriteRecorded: false,
+      },
       apiVersion,
-      initialized: true,
-      applicationWritesEnabled: false,
+      "S2",
+    ),
+  );
+  for (const [readiness, expectedState] of [
+    {
+      readiness: {
+        apiVersion,
+        initialized: true,
+        applicationWritesEnabled: false,
+        cutoverStage: "S2",
+        firstApplicationWriteRecorded: false,
+      },
+      expectedState: "uninitialized",
     },
     {
-      apiVersion,
-      initialized: false,
-      applicationWritesEnabled: true,
+      readiness: {
+        apiVersion,
+        initialized: true,
+        applicationWritesEnabled: true,
+        cutoverStage: "S3",
+        firstApplicationWriteRecorded: true,
+      },
+      expectedState: "S2",
     },
     {
-      apiVersion: "0.0.0",
-      initialized: false,
-      applicationWritesEnabled: false,
+      readiness: {
+        apiVersion: "0.0.0",
+        initialized: true,
+        applicationWritesEnabled: false,
+        cutoverStage: "S2",
+        firstApplicationWriteRecorded: false,
+      },
+      expectedState: "S2",
     },
-  ]) {
+  ].map((value) => [
+    value.readiness,
+    value.expectedState,
+  ])) {
     assert.throws(
-      () => assertUninitializedReadiness(readiness, apiVersion),
-      /must be uninitialized, write-disabled/u,
+      () =>
+        assertExpectedStagingState(
+          readiness,
+          apiVersion,
+          expectedState,
+        ),
+      /expected|write-disabled/u,
     );
   }
+  assert.throws(
+    () => assertExpectedStagingState({}, apiVersion, "S3"),
+    /exactly uninitialized or S2/u,
+  );
 });
 
 test("accepts only the expected structured domain failure", async () => {
@@ -113,8 +156,10 @@ test("verifies aggregate public, denial, and write-gate invariants", async () =>
       if (queryCount === 1) {
         return {
           apiVersion,
-          initialized: false,
+          initialized: true,
           applicationWritesEnabled: false,
+          cutoverStage: "S2",
+          firstApplicationWriteRecorded: false,
         };
       }
       if (queryCount === 2 || queryCount === 3) {
@@ -139,13 +184,20 @@ test("verifies aggregate public, denial, and write-gate invariants", async () =>
 
   await assert.doesNotReject(async () => {
     assert.deepEqual(
-      await verifyStagingDeployment({ client, apiVersion }),
+      await verifyStagingDeployment({
+        client,
+        apiVersion,
+        expectedState: "S2",
+      }),
       {
         readiness: {
           apiVersion,
-          initialized: false,
+          initialized: true,
           applicationWritesEnabled: false,
+          cutoverStage: "S2",
+          firstApplicationWriteRecorded: false,
         },
+        expectedState: "S2",
         publicCatalogCounts: {
           sounders: 0,
           templates: 0,

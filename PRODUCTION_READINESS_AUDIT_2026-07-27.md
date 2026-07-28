@@ -62,38 +62,35 @@ publication step: each push is a production deployment change.
 ### Staging
 
 - Deployment: `merry-shepherd-928`
-- Functions: `16`
+- Functions: current backward-compatible release candidate
 - Present environment variable names:
-  `BBPC_API_VERSION`, `BBPC_ENVIRONMENT`, and
-  `CLERK_JWT_ISSUER_DOMAIN`
-- Missing required variable:
+  `BBPC_API_VERSION`, `BBPC_ENVIRONMENT`, `CLERK_JWT_ISSUER_DOMAIN`, and
   `CLERK_M2M_AUDIENCE`
 - Optional provider variables not present:
   `TMDB_API_KEY` and `UPLOADTHING_TOKEN`
 
-The staging function set is an early identity/pipeline/cutover slice, not the
-current release candidate. It must be configured and replaced by the current
-backward-compatible backend before staging acceptance. Its value-free readiness
-query reports API version `0.1.0`, uninitialized state, and application writes
-disabled.
+The current backward-compatible backend is deployed. Its value-free readiness query
+reports API version `0.1.0`, synthetic cutover stage S2, no first application write,
+and application writes disabled.
 
 The candidate staging workflow now fails before deployment unless the configured
 key targets exactly `merry-shepherd-928`, does not target
 `determined-wombat-872`, contains the complete required environment-name
 contract, reports `BBPC_ENVIRONMENT=staging`, and reports the package API
-version. The live read-only preflight accepted the staging target and rejected
-the current environment on the known missing `CLERK_M2M_AUDIENCE`, without
-printing the key or any environment value.
+version. The live value-free preflight now accepts the complete staging environment
+without printing the key or any environment value.
 
 After an authorized deployment, the same workflow now performs a value-free
 remote invariant gate before contract verification. It requires API version
-`0.1.0`, an uninitialized write-disabled backend, two successful anonymous
-catalog reads, authentication denials across member/administrator/pipeline
-reads, and a `WRITE_DISABLED` denial from a valid recording mutation probe.
+`0.1.0`, the explicitly committed lifecycle state, application writes disabled,
+two successful anonymous catalog reads, authentication denials across
+member/administrator/pipeline reads, and a `WRITE_DISABLED` denial from a valid
+recording mutation probe. The initial gate required an uninitialized target; the
+post-acceptance gate requires S2, no first application write, and writes disabled.
 The probe's handler always fails without writing, sends no deploy key to the
 application endpoint, and prints only
-aggregate counts. The later synthetic Clerk and pipeline identity matrix
-remains a distinct acceptance gate after controlled staging initialization.
+aggregate counts. The synthetic Clerk and pipeline identity matrix remains a distinct
+acceptance gate after controlled staging initialization.
 
 That acceptance gate is now implemented fail closed. A deterministic private fixture
 contains exactly two synthetic users, one synthetic administrator role and membership,
@@ -109,6 +106,33 @@ authorized reads, the unlinked default denial, and three actor-specific
 `WRITE_DISABLED` mutation denials. Each probe mutation also has an always-failing
 handler, so the verifier cannot create application data if the write gate is
 misconfigured. Tokens are neither logged nor retained by the verifier.
+
+## Staging publication result — 2026-07-28
+
+- Private repository: `tonyisup/bbpc-convex`
+- Accepted backend commit: `3c3852baede0cbafea8048213d12d85a9f08062c`
+- Independent CI run: `30374676292`, passed
+- Staging deployment run: `30374676241`, passed
+- Deployment target: `merry-shepherd-928`
+- Target/environment, source/package, live invariant, and semantic public-contract
+  gates: passed
+- Synthetic run: `staging-acceptance-20260727-01`
+- Fresh-target result: zero nonempty tables
+- Synthetic initialization: two human principals, one publish-only pipeline principal,
+  identity reconciled, zero production rows, write-disabled S2
+- Authenticated acceptance: three authorized reads, one unlinked denial, three
+  `WRITE_DISABLED` denials
+- Credential cleanup: three temporary human sessions revoked, all four token files
+  removed, no token values printed
+
+The first deployment exposed order-only differences between API metadata returned by
+local and cloud deployments. CI still passed and the backend/live invariant deployed
+successfully, but run `30374174874` failed its byte comparison. The replacement gate
+canonicalizes only TypeScript property, union, and intersection ordering and rejects
+signature changes; it passed both regression tests and a direct comparison to staging.
+The workflow now declares expected lifecycle state `S2` and fails unless staging is
+initialized, write-disabled, has no first application write, and reports the exact API
+version.
 
 ## Local configuration evidence
 

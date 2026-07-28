@@ -8,6 +8,7 @@ import {
   recordingMutation,
 } from "../functions.js";
 import { domainError } from "../lib/errors.js";
+import { cutoverStageValidator } from "../lib/validators.js";
 import { getSystemState } from "../lib/writeGate.js";
 
 export const readiness = anonymousQuery({
@@ -16,6 +17,11 @@ export const readiness = anonymousQuery({
     apiVersion: v.string(),
     initialized: v.boolean(),
     applicationWritesEnabled: v.boolean(),
+    cutoverStage: v.union(
+      v.literal("uninitialized"),
+      cutoverStageValidator,
+    ),
+    firstApplicationWriteRecorded: v.boolean(),
   }),
   handler: async (ctx) => {
     const state = await getSystemState(ctx);
@@ -24,6 +30,10 @@ export const readiness = anonymousQuery({
       initialized: state !== null,
       applicationWritesEnabled:
         state?.applicationWriteMode === "enabled",
+      cutoverStage:
+        state?.cutoverStage ?? ("uninitialized" as const),
+      firstApplicationWriteRecorded:
+        state?.firstApplicationWriteAt !== undefined,
     };
   },
 });

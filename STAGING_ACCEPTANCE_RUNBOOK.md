@@ -19,8 +19,8 @@ SQL changes, or publication of `bbpc-pipeline`.
 ## 1. Publication gate
 
 The `master` workflow checks the deployment-key target and required environment names,
-deploys the reviewed backend to staging, runs the uninitialized remote invariant gate,
-and confirms that the generated public contract matches the committed artifact.
+deploys the reviewed backend to staging, runs the explicit lifecycle-state invariant
+gate, and confirms that the generated public contract matches the committed artifact.
 
 Required staging environment names:
 
@@ -29,9 +29,10 @@ Required staging environment names:
 - `CLERK_JWT_ISSUER_DOMAIN`
 - `CLERK_M2M_AUDIENCE`
 
-The invariant gate must report the expected API version, an uninitialized backend,
-writes disabled, two anonymous catalog reads, three authentication denials, and one
-non-writing `WRITE_DISABLED` probe.
+Before initialization the committed expectation is `uninitialized`; after acceptance
+it is `S2`. The invariant gate must report the expected API version and lifecycle
+state, writes disabled, no first application write in S2, two anonymous catalog reads,
+three authentication denials, and one non-writing `WRITE_DISABLED` probe.
 
 ## 2. Prepare the synthetic fixture
 

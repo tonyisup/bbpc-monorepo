@@ -23,6 +23,7 @@ jobs:
       BBPC_EXPECTED_CONVEX_DEPLOYMENT: merry-shepherd-928
       BBPC_FORBIDDEN_CONVEX_DEPLOYMENT: determined-wombat-872
       BBPC_EXPECTED_ENVIRONMENT: staging
+      BBPC_EXPECTED_STAGING_STATE: S2
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

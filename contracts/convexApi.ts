@@ -10633,6 +10633,8 @@ export type PublicApiType = {
         {
           apiVersion: string;
           applicationWritesEnabled: boolean;
+          cutoverStage: "uninitialized" | "S0" | "S1" | "S2" | "S3" | "S4";
+          firstApplicationWriteRecorded: boolean;
           initialized: boolean;
         }
       >;

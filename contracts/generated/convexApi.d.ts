@@ -10009,6 +10009,8 @@ export type PublicApiType = {
             readiness: FunctionReference<"query", "public", Record<string, never>, {
                 apiVersion: string;
                 applicationWritesEnabled: boolean;
+                cutoverStage: "uninitialized" | "S0" | "S1" | "S2" | "S3" | "S4";
+                firstApplicationWriteRecorded: boolean;
                 initialized: boolean;
             }>;
         };

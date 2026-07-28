@@ -46,16 +46,45 @@ export function deploymentUrl(deployment) {
   return `https://${deployment}.convex.cloud`;
 }
 
-export function assertUninitializedReadiness(readiness, apiVersion) {
+export function assertExpectedStagingState(
+  readiness,
+  apiVersion,
+  expectedState,
+) {
+  if (!["uninitialized", "S2"].includes(expectedState)) {
+    throw new Error(
+      "Expected staging state must be exactly uninitialized or S2.",
+    );
+  }
   if (
     typeof readiness !== "object" ||
     readiness === null ||
     readiness.apiVersion !== apiVersion ||
-    readiness.initialized !== false ||
     readiness.applicationWritesEnabled !== false
   ) {
     throw new Error(
-      "Staging readiness must be uninitialized, write-disabled, and on the expected API version.",
+      "Staging readiness must be write-disabled and on the expected API version.",
+    );
+  }
+  if (expectedState === "uninitialized") {
+    if (
+      readiness.initialized !== false ||
+      readiness.cutoverStage !== "uninitialized" ||
+      readiness.firstApplicationWriteRecorded !== false
+    ) {
+      throw new Error(
+        "Staging must match the expected uninitialized state.",
+      );
+    }
+    return;
+  }
+  if (
+    readiness.initialized !== true ||
+    readiness.cutoverStage !== "S2" ||
+    readiness.firstApplicationWriteRecorded !== false
+  ) {
+    throw new Error(
+      "Staging must match the expected write-disabled S2 state.",
     );
   }
 }
@@ -114,12 +143,17 @@ async function runProbe(operation, label) {
 export async function verifyStagingDeployment({
   client,
   apiVersion,
+  expectedState,
 }) {
   const readiness = await runProbe(
     () => client.query(readinessReference, {}),
     "Staging readiness query",
   );
-  assertUninitializedReadiness(readiness, apiVersion);
+  assertExpectedStagingState(
+    readiness,
+    apiVersion,
+    expectedState,
+  );
 
   const [sounders, templates] = await Promise.all([
     runProbe(
@@ -168,7 +202,11 @@ export async function verifyStagingDeployment({
       initialized: readiness.initialized,
       applicationWritesEnabled:
         readiness.applicationWritesEnabled,
+      cutoverStage: readiness.cutoverStage,
+      firstApplicationWriteRecorded:
+        readiness.firstApplicationWriteRecorded,
     },
+    expectedState,
     publicCatalogCounts: {
       sounders: sounders.length,
       templates: templates.length,
@@ -193,13 +231,15 @@ export async function main(env = process.env) {
   const result = await verifyStagingDeployment({
     client: new ConvexHttpClient(deploymentUrl(target.deployment)),
     apiVersion: packageJson.version,
+    expectedState: env.BBPC_EXPECTED_STAGING_STATE,
   });
   process.stdout.write(
     [
       "Staging deployment invariant gate passed.",
       `deployment=${target.deployment}`,
       `apiVersion=${result.readiness.apiVersion}`,
-      "initialized=false",
+      `expectedState=${result.expectedState}`,
+      `initialized=${String(result.readiness.initialized)}`,
       "applicationWritesEnabled=false",
       "anonymousReads=3",
       "anonymousCatalogReads=2",

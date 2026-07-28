@@ -24,7 +24,7 @@ details never belong in this repository.
 | Environment | Convex target | State |
 |---|---|---|
 | local | `local-tonyisup-bbpc_convex` | developer-only |
-| staging | project `bbpc-convex`, reference `staging` | deployed, uninitialized, writes denied |
+| staging | project `bbpc-convex`, reference `staging` | synthetic S2, writes denied |
 | production | not provisioned for consumers | intentionally unavailable |
 
 The staging deployment is synthetic-data-only. It uses a deployment-scoped key named
@@ -576,13 +576,14 @@ initializing `systemState`, or entering S1–S4 requires the migration runbook a
 explicit backup/reconciliation gates.
 
 Immediately after deployment, CI also calls the staged backend through its canonical
-deployment URL. The value-free invariant gate requires the expected API version,
-an uninitialized write-disabled backend, successful anonymous sounder/template reads,
-authentication denials for member/administrator/pipeline reads, and a `WRITE_DISABLED`
-denial from a dedicated mutation whose handler always fails without writing. It reports only aggregate counts and
-never sends or prints the deploy key. This is the pre-initialization gate; the later
-synthetic Clerk administrator/member and pipeline M2M matrix remains a separate
-staging-acceptance step.
+deployment URL. The value-free invariant gate requires the expected API version, the
+explicit lifecycle state committed in the workflow, application writes disabled,
+successful anonymous sounder/template reads, authentication denials for
+member/administrator/pipeline reads, and a `WRITE_DISABLED` denial from a dedicated
+mutation whose handler always fails without writing. The initial publication required
+an uninitialized target; after synthetic acceptance the workflow requires S2, no first
+application write, and writes still disabled. It reports only aggregate counts and
+never sends or prints the deploy key.
 
 The separate staging acceptance procedure is defined in
 `STAGING_ACCEPTANCE_RUNBOOK.md`. It creates a deterministic private fixture with two
@@ -592,6 +593,13 @@ write-disabled S2, and records only aggregate evidence. The authenticated gate t
 reads four distinct compact JWTs from private files, proves administrator/member/pipeline
 reads and unlinked-identity denial, and calls actor-specific mutations that can never
 write even if the write gate is accidentally enabled.
+
+Staging acceptance run `staging-acceptance-20260727-01` completed on 2026-07-28.
+The fresh-target check found zero nonempty tables; synthetic initialization reconciled
+two human principals and one publish-only pipeline principal in S2 with zero production
+rows. The authenticated gate passed three reads, one unlinked denial, and three blocked
+writes. Its three temporary human sessions were revoked and all four token files were
+removed immediately afterward.
 
 All third-party GitHub Actions are pinned to verified full commit SHAs, and a
 repository test rejects mutable remote action references. `CODEOWNERS` assigns the

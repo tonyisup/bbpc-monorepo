@@ -168,6 +168,8 @@ describe("identity boundaries", () => {
       apiVersion: BBPC_API_VERSION,
       initialized: false,
       applicationWritesEnabled: false,
+      cutoverStage: "uninitialized",
+      firstApplicationWriteRecorded: false,
     });
     await initialize(t);
     await expect(
@@ -175,6 +177,8 @@ describe("identity boundaries", () => {
     ).resolves.toMatchObject({
       initialized: true,
       applicationWritesEnabled: false,
+      cutoverStage: "S0",
+      firstApplicationWriteRecorded: false,
     });
   });
 

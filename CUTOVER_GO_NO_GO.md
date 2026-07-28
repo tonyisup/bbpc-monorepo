@@ -64,7 +64,7 @@ new go/no-go.
 - [ ] Convex, Clerk, Vercel, pipeline, recording, and rollback credentials pass
       value-free probes.
 - [ ] Exact commits and deploy artifacts are recorded above.
-- [ ] The backend staging commit passed its automated post-deploy invariant gate
+- [x] The backend staging commit passed its automated post-deploy invariant gate
       and the separate authenticated synthetic acceptance matrix.
       The synthetic matrix must use a fresh empty target, exactly two synthetic human
       users plus one publish-only pipeline principal, four distinct private JWT files
