@@ -270,6 +270,7 @@ export const inspectUserIdentityEvidence = internalReadQuery({
   returns: v.object({
     runMatches: v.boolean(),
     cutoverStageS1: v.boolean(),
+    cutoverStageS2: v.boolean(),
     applicationWritesDisabled: v.boolean(),
     firstApplicationWriteAbsent: v.boolean(),
     linkedIdentityCount: v.number(),
@@ -343,6 +344,7 @@ export const inspectUserIdentityEvidence = internalReadQuery({
     return {
       runMatches: systemState?.cutoverRunId === args.runId,
       cutoverStageS1: systemState?.cutoverStage === "S1",
+      cutoverStageS2: systemState?.cutoverStage === "S2",
       applicationWritesDisabled:
         systemState?.applicationWriteMode === "disabled",
       firstApplicationWriteAbsent:
@@ -365,6 +367,7 @@ export const inspectPipelineIdentityEvidence = internalReadQuery({
   returns: v.object({
     runMatches: v.boolean(),
     cutoverStageS1: v.boolean(),
+    cutoverStageS2: v.boolean(),
     applicationWritesDisabled: v.boolean(),
     firstApplicationWriteAbsent: v.boolean(),
     principalFound: v.boolean(),
@@ -428,6 +431,7 @@ export const inspectPipelineIdentityEvidence = internalReadQuery({
     return {
       runMatches: systemState?.cutoverRunId === args.runId,
       cutoverStageS1: systemState?.cutoverStage === "S1",
+      cutoverStageS2: systemState?.cutoverStage === "S2",
       applicationWritesDisabled:
         systemState?.applicationWriteMode === "disabled",
       firstApplicationWriteAbsent:

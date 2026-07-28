@@ -284,6 +284,7 @@ describe("local migration rehearsal preflight", () => {
     ).resolves.toEqual({
       runMatches: true,
       cutoverStageS1: true,
+      cutoverStageS2: false,
       applicationWritesDisabled: true,
       firstApplicationWriteAbsent: true,
       principalFound: true,
@@ -327,6 +328,7 @@ describe("local migration rehearsal preflight", () => {
     ).resolves.toEqual({
       runMatches: false,
       cutoverStageS1: true,
+      cutoverStageS2: false,
       applicationWritesDisabled: true,
       firstApplicationWriteAbsent: true,
       principalFound: true,
@@ -402,6 +404,7 @@ describe("local migration rehearsal preflight", () => {
     ).resolves.toEqual({
       runMatches: true,
       cutoverStageS1: true,
+      cutoverStageS2: false,
       applicationWritesDisabled: true,
       firstApplicationWriteAbsent: true,
       linkedIdentityCount: 1,

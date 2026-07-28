@@ -66,6 +66,11 @@ new go/no-go.
 - [ ] Exact commits and deploy artifacts are recorded above.
 - [ ] The backend staging commit passed its automated post-deploy invariant gate
       and the separate authenticated synthetic acceptance matrix.
+      The synthetic matrix must use a fresh empty target, exactly two synthetic human
+      users plus one publish-only pipeline principal, four distinct private JWT files
+      including an unlinked identity, and the three non-writing actor-specific
+      `WRITE_DISABLED` probes. A nonempty staging target is a stop condition, not
+      permission to reset it.
 - [ ] Two approved Clerk smoke identities exist: one administrator and one ordinary
       member.
 - [ ] Ordinary identity linking remains disabled.

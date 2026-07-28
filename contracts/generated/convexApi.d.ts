@@ -9994,7 +9994,16 @@ export type PublicApiType = {
             }>;
         };
         health: {
+            administratorWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
             applicationWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            memberWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            pipelineWriteGateProbe: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
             }, null>;
             readiness: FunctionReference<"query", "public", Record<string, never>, {

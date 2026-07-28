@@ -95,6 +95,21 @@ application endpoint, and prints only
 aggregate counts. The later synthetic Clerk and pipeline identity matrix
 remains a distinct acceptance gate after controlled staging initialization.
 
+That acceptance gate is now implemented fail closed. A deterministic private fixture
+contains exactly two synthetic users, one synthetic administrator role and membership,
+and no production-derived rows. Its fresh initializer requires two explicit
+acknowledgements, refuses unless every backend table is empty, imports only the three
+identity raw tables, reconciles identity, preprovisions one administrator, one member,
+and one `pipeline:publish` principal, and enters S2 with application writes disabled.
+It does not reset or repair a nonempty staging target.
+
+The authenticated verifier requires four distinct compact JWTs in private `0600`
+files: administrator, member, pipeline, and deliberately unlinked. It proves the three
+authorized reads, the unlinked default denial, and three actor-specific
+`WRITE_DISABLED` mutation denials. Each probe mutation also has an always-failing
+handler, so the verifier cannot create application data if the write gate is
+misconfigured. Tokens are neither logged nor retained by the verifier.
+
 ## Local configuration evidence
 
 Presence/equality checks, without printing values, establish that:
@@ -133,10 +148,15 @@ commit SHAs, a test rejects future mutable remote-action references, and
 `CODEOWNERS` covers workflows and deployment checkers. The detailed AI-assisted
 report remains local under the ignored `.gstack/` directory.
 
-## Publication prerequisite
+## Staging publication authorization
 
-`bbpc-convex` has no remote even though its staging and package workflows refer
-to `tonyisup/bbpc-convex`. Before relying on those workflows:
+On 2026-07-28 the owner authorized staging-only publication with the recommended
+defaults: create `tonyisup/bbpc-convex` as a private repository, leave
+`bbpc-pipeline` local, configure only Convex staging `merry-shepherd-928`, push only
+the backend, and run the staging gates. Production, Vercel, consumer repositories,
+and pipeline publication remain out of scope.
+
+The authorized execution sequence is:
 
 1. create `tonyisup/bbpc-convex` as a private repository;
 2. add its remote without changing the local candidate;
@@ -146,7 +166,9 @@ to `tonyisup/bbpc-convex`. Before relying on those workflows:
 5. run the target/environment preflight, then push `master`, wait for the
    complete CI, deployment, invariant, and contract gates, and record the
    deployed commit; and
-6. rerun the public, admin, member, pipeline, default-deny, and write-disabled
+6. initialize only if the target is completely empty; otherwise stop without
+   resetting it; and
+7. run the public, admin, member, pipeline, default-deny, and write-disabled
    staging smoke matrix.
 
 `bbpc-pipeline` can remain a versioned local operator tool for T16. If it is to
@@ -192,17 +214,15 @@ No step below grants authority for a later step.
 
 The remaining inputs cannot be inferred safely from local state:
 
-1. repository visibility for `bbpc-convex`, and whether
-   `bbpc-pipeline` should stay local or be privacy-scrubbed and published;
-2. authorization to change cloud staging configuration, create the backend
-   repository, configure its GitHub secret, push it, and deploy staging;
-3. confirmation or inspectable access for the public/admin Vercel production
+1. four short-lived staging JWTs, if they cannot be acquired through the configured
+   Clerk test sessions and M2M application without owner interaction;
+2. confirmation or inspectable access for the public/admin Vercel production
    variable names and backend selectors;
-4. named operators/backups, approved 30/15/45-minute deadlines, maintenance
+3. named operators/backups, approved 30/15/45-minute deadlines, maintenance
    window, and communication owner; and
-5. later, a separate production S0→S1 authorization. S2→S3 remains a second,
+4. later, a separate production S0→S1 authorization. S2→S3 remains a second,
    independent approval after acceptance.
 
-Until those inputs are recorded, the correct state is: production SQL serving
-traffic, Convex production inert, local rehearsals retained privately, and no
-production branch pushes.
+Throughout staging publication, the correct production state remains: production SQL
+serving traffic, Convex production inert, local rehearsals retained privately, and no
+consumer or production branch pushes.

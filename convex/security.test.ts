@@ -199,6 +199,63 @@ describe("identity boundaries", () => {
     );
   });
 
+  test("exposes non-writing actor-specific write-gate probes", async () => {
+    const disabled = createTestBackend();
+    await seedUser(disabled, { admin: true });
+    await seedService(disabled, ["pipeline:publish"]);
+    for (const probe of [
+      () =>
+        disabled
+          .withIdentity(USER_IDENTITY)
+          .mutation(api.system.health.memberWriteGateProbe, {
+            clientApiVersion: BBPC_API_VERSION,
+          }),
+      () =>
+        disabled
+          .withIdentity(USER_IDENTITY)
+          .mutation(
+            api.system.health.administratorWriteGateProbe,
+            { clientApiVersion: BBPC_API_VERSION },
+          ),
+      () =>
+        disabled
+          .withIdentity(SERVICE_IDENTITY)
+          .mutation(api.system.health.pipelineWriteGateProbe, {
+            clientApiVersion: BBPC_API_VERSION,
+          }),
+    ]) {
+      await expectDomainError(probe(), "WRITE_DISABLED");
+    }
+
+    const enabled = createTestBackend();
+    await seedUser(enabled, { admin: true });
+    await seedService(enabled, ["pipeline:publish"]);
+    await advanceToS3(enabled);
+    for (const probe of [
+      () =>
+        enabled
+          .withIdentity(USER_IDENTITY)
+          .mutation(api.system.health.memberWriteGateProbe, {
+            clientApiVersion: BBPC_API_VERSION,
+          }),
+      () =>
+        enabled
+          .withIdentity(USER_IDENTITY)
+          .mutation(
+            api.system.health.administratorWriteGateProbe,
+            { clientApiVersion: BBPC_API_VERSION },
+          ),
+      () =>
+        enabled
+          .withIdentity(SERVICE_IDENTITY)
+          .mutation(api.system.health.pipelineWriteGateProbe, {
+            clientApiVersion: BBPC_API_VERSION,
+          }),
+    ]) {
+      await expectDomainError(probe(), "VALIDATION_FAILED");
+    }
+  });
+
   test("requires an authenticated, linked identity", async () => {
     const t = createTestBackend();
 

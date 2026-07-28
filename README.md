@@ -56,6 +56,7 @@ npm run performance:benchmark:authenticated -- \
   --admin-identity .local-migration/performance/admin-identity.json \
   --member-identity .local-migration/performance/member-identity.json \
   --pipeline-identity .local-migration/performance/pipeline-identity.json
+npm run staging:test
 npm run contract:generate
 npm run contract:build
 ```
@@ -580,6 +581,15 @@ denial from a dedicated mutation whose handler always fails without writing. It 
 never sends or prints the deploy key. This is the pre-initialization gate; the later
 synthetic Clerk administrator/member and pipeline M2M matrix remains a separate
 staging-acceptance step.
+
+The separate staging acceptance procedure is defined in
+`STAGING_ACCEPTANCE_RUNBOOK.md`. It creates a deterministic private fixture with two
+synthetic users, one synthetic administrator membership, and one publish-only pipeline
+principal. The initializer refuses a nonempty target, reconciles identity data, enters
+write-disabled S2, and records only aggregate evidence. The authenticated gate then
+reads four distinct compact JWTs from private files, proves administrator/member/pipeline
+reads and unlinked-identity denial, and calls actor-specific mutations that can never
+write even if the write gate is accidentally enabled.
 
 All third-party GitHub Actions are pinned to verified full commit SHAs, and a
 repository test rejects mutable remote action references. `CODEOWNERS` assigns the
