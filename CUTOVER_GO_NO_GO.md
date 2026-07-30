@@ -21,24 +21,28 @@ explicit approval.
 - Recording deployment URL: `TBD`
 
 The exact production artifacts remain intentionally `TBD` until publication and
-deployment. The read-only pre-publication inventory, including local candidate
-commits, current deployed commits, cloud configuration gaps, and the safe release
-order, is recorded in `PRODUCTION_READINESS_AUDIT_2026-07-27.md`. Local candidate
-hashes must be replaced here with the final pushed/deployed hashes before S1.
+deployment. The read-only pre-publication inventory is recorded in
+`PRODUCTION_READINESS_AUDIT_2026-07-27.md`; the current cloud evidence, final
+staging-accepted backend commit, signed operator/deadline form, and name-only Vercel
+census contract are recorded in `PRODUCTION_PREFLIGHT_PACKET_2026-07-28.md`. Local
+candidate hashes must be replaced here with the final pushed/deployed hashes before S1.
 
 ## Responsible operators
 
 | Responsibility | Primary | Backup | Confirmed at |
 | --- | --- | --- | --- |
-| Cutover lead / final go-no-go | TBD | TBD | TBD |
-| SQL freeze and rollback | TBD | TBD | TBD |
-| Convex migration, backup, and restore | TBD | TBD | TBD |
-| Vercel public/admin deployment | TBD | TBD | TBD |
-| Clerk identity and JWT template | TBD | TBD | TBD |
-| Pipeline and recording smoke | TBD | TBD | TBD |
-| Maintenance communication | TBD | TBD | TBD |
+| Cutover lead / final go-no-go | Tony | Tony | 2026-07-30 08:40 PDT |
+| SQL freeze and rollback | Tony | Tony | 2026-07-30 08:40 PDT |
+| Convex migration, backup, and restore | Tony | Tony | 2026-07-30 08:40 PDT |
+| Vercel public/admin deployment | Tony | Tony | 2026-07-30 08:40 PDT |
+| Clerk identity and JWT template | Tony | Tony | 2026-07-30 08:40 PDT |
+| Pipeline and recording smoke | Tony | Tony | 2026-07-30 08:40 PDT |
+| Maintenance communication | Tony | Tony | 2026-07-30 08:40 PDT |
 
 One person may hold multiple roles, but every row must be explicitly acknowledged.
+The owner explicitly assigned Tony as both primary and backup. This provides no
+personnel redundancy: if Tony is unavailable, loses required control-plane access, or
+cannot complete a check, the cutover is no-go.
 
 ## Measured deadlines
 
@@ -53,12 +57,35 @@ operator/network buffer:
 | Maximum SQL read-only window before S3 decision | 45 minutes total | Abort before any S3 transition or application write |
 | S3 authorization decision | Explicit, separate approval | Remain in write-disabled S2 |
 
-These deadlines remain `TBD-approved` until the owner signs them below. Production
-metrics may shorten them; they may not be extended during an active cutover without a
-new go/no-go.
+Tony approved these deadlines at `2026-07-30 08:40 PDT`. Production metrics may
+shorten them; they may not be extended during an active cutover without a new
+go/no-go.
+
+## Maintenance communication and retention
+
+- Scheduled start: `2026-08-01 12:00 PDT (America/Los_Angeles)`
+- Operator log: `this Codex task`
+- User-facing channel: `existing in-app read-only messaging`
+- External broadcast: `none required`
+- Start, abort/rollback, and completion messages:
+  `owner approved 2026-07-30`
+- Portable-backup owner/deadline:
+  `Tony; delete 30 days after successful S4`
+- Immutable SQL-archive owner/deadline:
+  `Tony; retain 90 days after successful S4`
+
+The schedule interprets the owner's “Saturday 12 PM” as the nearest Saturday,
+2026-08-01, in daylight-aware Pacific Time. Any different Saturday requires this
+record to be updated before authorization.
 
 ## S0 preflight
 
+- [x] Convex production was reconfirmed inert with zero functions and zero
+      environment-variable names.
+- [x] The current successful public, admin, and recording GitHub Production
+      deployments are identified.
+- [x] The owner-completed Vercel login establishes authoritative project IDs/slugs and
+      a value-free Production environment-name census for both primary apps.
 - [ ] Final SQL source fingerprint matches the approved run manifest.
 - [ ] Every SQL writer and direct integration is inventoried and has a tested freeze.
 - [ ] Convex, Clerk, Vercel, pipeline, recording, and rollback credentials pass
@@ -71,12 +98,13 @@ new go/no-go.
       including an unlinked identity, and the three non-writing actor-specific
       `WRITE_DISABLED` probes. A nonempty staging target is a stop condition, not
       permission to reset it.
-- [ ] Two approved Clerk smoke identities exist: one administrator and one ordinary
-      member.
+- [x] Two approved Clerk smoke identities are selected privately: reuse the rehearsed
+      administrator and ordinary-member identities.
 - [ ] Ordinary identity linking remains disabled.
-- [ ] Legacy SQL/NextAuth variables remain available to both Vercel projects for S2
-      rollback.
-- [ ] Maintenance communication is scheduled and acknowledged.
+- [x] All currently required legacy SQL/NextAuth variables remain available to both
+      Vercel projects for S2 rollback; only documented optional/defaulted names are
+      absent.
+- [x] Maintenance communication is scheduled and acknowledged.
 - [x] T15 identity-rehearsal policy is resolved in writing.
 - [x] The authenticated admin/member/pipeline performance harness passes on the
       approved identity-bearing target.
@@ -169,14 +197,15 @@ is Convex restore or forward fix; SQL must not be reopened as an application wri
 - [ ] Side-effect queues are empty or within approved bounds.
 - [ ] Vercel legacy SQL/NextAuth variables are removed.
 - [ ] SQL and retired integration credentials are revoked only after evidence capture.
-- [ ] Private clone/extract/archive retention deadline is recorded.
+- [x] Private backup and immutable SQL-archive retention deadlines are recorded.
 - [ ] Final documentation and incident contacts are published.
 
 ## Approvals
 
 - T15 identity-rehearsal decision: `strict identity-bearing third rehearsal completed;
   owner approved 2026-07-27`
-- 30/15/45-minute deadlines approved by / at: `TBD`
+- 30/15/45-minute deadlines approved by / at:
+  `Tony / 2026-07-30 08:40 PDT`
 - S0→S1 production approval by / at: `TBD`
 - S2 acceptance signed by / at: `TBD`
 - S2→S3 explicit approval by / at: `TBD`

@@ -48,7 +48,7 @@ test("rejects a valid key for the wrong deployment without leaking it", () => {
       }),
     (error) => {
       assert.ok(error instanceof Error);
-      assert.match(error.message, /does not target the expected staging/u);
+      assert.match(error.message, /does not target the expected Convex/u);
       assert.doesNotMatch(error.message, new RegExp(secretSuffix, "u"));
       assert.doesNotMatch(error.message, new RegExp(productionDeployment, "u"));
       return true;

@@ -1,7 +1,7 @@
 # BBPC Convex Production Readiness Audit — 2026-07-27
 
-Status: **local release candidates identified; production remains unchanged and
-not authorized**
+Status: **backend staging accepted; read-only production preflight complete;
+production remains unchanged and not authorized**
 
 This is a value-free, read-only inventory for T16. It records commit IDs,
 deployment metadata, configuration-name presence, and release prerequisites.
@@ -12,7 +12,7 @@ paths, or SQL connection details.
 
 | Repository | Local candidate | Publication state | Current production state |
 | --- | --- | --- | --- |
-| `bbpc-convex` | Current local `master`; record the exact final SHA immediately before an authorized push | No Git remote; `tonyisup/bbpc-convex` does not yet exist | Convex production `determined-wombat-872` has zero functions and zero environment variables |
+| `bbpc-convex` | `920beecaa31763471d143dfe793dc20e9b5d08d2`, staging accepted | Private `tonyisup/bbpc-convex`; local and `origin/master` matched at inspection | Convex production `determined-wombat-872` has zero functions and zero environment variables |
 | `bbpc` | `4c0eab43293699e19ca81f06579f650f88b94418` on `master` | 31 commits ahead of `origin/master`; the only working-tree change is the owner-owned `public/sw.js`, which is excluded from the candidate | Latest successful Vercel production deployment uses `1dfd9991a794b2cf75e17c3ad765e9cd525f3ebd` |
 | `bbpc-admin` | `b2e57dc3648d44248ddb2f9aa32755599eb2bdbc` on `master` | Clean; 37 commits ahead of `origin/master` | Latest successful Vercel production deployment uses `93e22442b40190def3edb91cbde851fe9fb6470f` |
 | `bbpc-pipeline` | `5dd3fe527cd452fbd7f6dd244387f0e25e8cab5e` on `main` | Clean; no Git remote; `tonyisup/bbpc-pipeline` does not yet exist | No automatic deployment was discovered; the documented execution model is local/manual |
@@ -110,9 +110,9 @@ misconfigured. Tokens are neither logged nor retained by the verifier.
 ## Staging publication result — 2026-07-28
 
 - Private repository: `tonyisup/bbpc-convex`
-- Accepted backend commit: `3c3852baede0cbafea8048213d12d85a9f08062c`
-- Independent CI run: `30374676292`, passed
-- Staging deployment run: `30374676241`, passed
+- Accepted backend commit: `920beecaa31763471d143dfe793dc20e9b5d08d2`
+- Independent CI run: `30375886853`, passed
+- Staging deployment run: `30375887288`, passed
 - Deployment target: `merry-shepherd-928`
 - Target/environment, source/package, live invariant, and semantic public-contract
   gates: passed
@@ -146,9 +146,49 @@ Presence/equality checks, without printing values, establish that:
 - the pipeline has both its Clerk machine credential and M2M audience; and
 - every local environment file containing credentials is mode `0600`.
 
-This proves only the local rehearsal configuration. Vercel production
-environment settings and Convex production Clerk/provider settings are still
-unverified.
+This proves only the local rehearsal configuration. The 2026-07-28 read-only
+production preflight independently reconfirmed that Convex production has zero
+functions and zero environment-variable names. It also completed the Vercel
+Production name-only census: both primary projects preserve the currently required
+SQL rollback contract and have none of the four Convex/Clerk cutover names installed.
+Convex production Clerk/provider settings remain unconfigured.
+
+## Read-only production preflight — 2026-07-28
+
+The owner authorized a value-free production preflight without configuration,
+deployment, push, or state changes.
+
+- Convex production was queried through the project production selector: function
+  count `0`, environment-variable name count `0`.
+- GitHub deployment metadata confirms successful current Vercel Production bindings
+  for `bbpc`, `bbpc-admin`, and `bbpc-recording`, using the deployment IDs, commits,
+  and hosts recorded in `PRODUCTION_PREFLIGHT_PACKET_2026-07-28.md`.
+- No checkout contains a local `.vercel/project.json` binding.
+- The owner approved the exact temporary-credential protocol. Vercel CLI `58.1.0`
+  identified account `tonyisup`, scope `tonyisups-projects`, and the exact `bbpc`,
+  `bbpc-admin`, and `bbpc-recording` project IDs and canonical Production URLs.
+- Production name-only listings found 18 names for `bbpc` and 22 for `bbpc-admin`.
+  No values were fetched or printed.
+- All four required Convex/Clerk cutover names are absent from both primary projects.
+  All 15 currently required public and all 20 currently required admin S2 rollback
+  names are present. Optional `NEXTAUTH_URL_INTERNAL` is absent from both;
+  optional/defaulted public `MAX_RECORDING_TIME` is also absent.
+- Source reconciliation identified deployed admin names `AUDIO_UPOLOADER_URL` and
+  `GOOGLE_API_KEY` as unreferenced by the current candidate; they are added to the S4
+  cleanup inventory.
+- Vercel logout succeeded, and local checks found no remaining `auth.json` credential.
+- A local-only authorization guard now pins the future inert production operation to
+  the exact production target, reviewed commit, clean worktree, production
+  environment, and explicit approval marker. Regression tests prove that it can
+  execute only read-only `git rev-parse` and `git status`; it has no Convex,
+  deployment, import, initialization, environment-write, or file-write capability.
+- The deployment-environment checker now accepts an explicit `production`
+  expectation in addition to `staging`, while regression tests restrict its Convex
+  calls to environment-name listing and reads of the two known non-secret values.
+
+The signed operator/deadline form, exact name-only census, verified cloud metadata,
+and next authorization wording are in
+`PRODUCTION_PREFLIGHT_PACKET_2026-07-28.md`.
 
 ## Pre-publication security census
 
@@ -234,18 +274,25 @@ No step below grants authority for a later step.
 9. **S4:** pass the deployed canary, retire legacy credentials, then deploy
    recording and enable the admin recording handoff.
 
-## Owner-only inputs still required
+## Owner decisions and remaining authorization
 
-The remaining inputs cannot be inferred safely from local state:
+On 2026-07-30 Tony assigned himself as both primary and backup for every operator
+role, approved the 30/15/45-minute limits, named himself as communication and
+retention owner, and selected the same rehearsed administrator/member identities for
+production smoke testing. The single-person assignment provides no personnel
+redundancy; Tony's unavailability is a no-go condition.
 
-1. four short-lived staging JWTs, if they cannot be acquired through the configured
-   Clerk test sessions and M2M application without owner interaction;
-2. confirmation or inspectable access for the public/admin Vercel production
-   variable names and backend selectors;
-3. named operators/backups, approved 30/15/45-minute deadlines, maintenance
-   window, and communication owner; and
-4. later, a separate production S0→S1 authorization. S2→S3 remains a second,
-   independent approval after acceptance.
+On 2026-07-30 the owner scheduled the window for the nearest Saturday,
+2026-08-01 at 12:00 PDT (`America/Los_Angeles`), approved the proposed start,
+abort/rollback, and completion messages, and selected this Codex task as the operator
+log plus the existing in-app read-only messaging as the user-facing channel. No
+separate external broadcast is required. Tony owns deletion of the portable backup
+30 days after successful S4 and retention of the immutable SQL archive for 90 days
+after successful S4.
+
+The owner-input packet is complete. A separate inert-backend deployment
+authorization is still required, followed later by an independent production S0→S1
+authorization. S2→S3 remains a second, independent approval after acceptance.
 
 Throughout staging publication, the correct production state remains: production SQL
 serving traffic, Convex production inert, local rehearsals retained privately, and no

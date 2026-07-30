@@ -41,6 +41,7 @@
     "contract:compare": "node scripts/compare-public-contract.mjs",
     "contract:generate": "convex-helpers ts-api-spec --output-file contracts/convexApi.ts",
     "deploy:environment:check": "node scripts/check-deployment-environment.mjs",
+    "deploy:production:authorization:check": "node scripts/check-production-deploy-authorization.mjs",
     "deploy:staging:verify-authenticated": "node scripts/verify-authenticated-staging.mjs",
     "deploy:staging:verify": "node scripts/verify-staging-deployment.mjs",
     "deploy:target:check": "node scripts/check-deploy-target.mjs",

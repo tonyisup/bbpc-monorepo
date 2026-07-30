@@ -128,6 +128,8 @@ removal list absent while generating all 659 pages.
 - `NEXT_PUBLIC_PUSHER_CLUSTER`
 - `AZURE_STORAGE_ACCOUNT_CONNECTION_STRING`
 - `UPLOADTHING_TOKEN`
+- `AUDIO_UPOLOADER_URL` (deployed legacy misspelling; no current source reference)
+- `GOOGLE_API_KEY` (deployed but no current admin source reference)
 
 The Convex production build has been verified with all variables in this
 removal list absent while generating all 28 pages.

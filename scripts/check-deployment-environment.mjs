@@ -17,6 +17,7 @@ const requiredEnvironmentNames = [
   "CLERK_JWT_ISSUER_DOMAIN",
   "CLERK_M2M_AUDIENCE",
 ];
+const allowedEnvironments = new Set(["production", "staging"]);
 
 export function parseEnvironmentNames(output) {
   return new Set(
@@ -47,7 +48,15 @@ export function assertExpectedEnvironmentValue({
   expectedValue,
 }) {
   if (actualValue.trim() !== expectedValue) {
-    throw new Error(`${name} does not match the expected staging value.`);
+    throw new Error(`${name} does not match the expected deployment value.`);
+  }
+}
+
+export function assertSupportedEnvironment(expectedEnvironment) {
+  if (!allowedEnvironments.has(expectedEnvironment)) {
+    throw new Error(
+      "BBPC_EXPECTED_ENVIRONMENT must be exactly staging or production.",
+    );
   }
 }
 
@@ -62,11 +71,7 @@ function runConvex(args, env) {
 
 export function main(env = process.env) {
   const expectedEnvironment = env.BBPC_EXPECTED_ENVIRONMENT;
-  if (expectedEnvironment !== "staging") {
-    throw new Error(
-      "BBPC_EXPECTED_ENVIRONMENT must be exactly staging for this workflow.",
-    );
-  }
+  assertSupportedEnvironment(expectedEnvironment);
 
   const packageJson = JSON.parse(
     fs.readFileSync(path.join(root, "package.json"), "utf8"),

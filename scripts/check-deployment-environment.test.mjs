@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   assertExpectedEnvironmentValue,
   assertRequiredEnvironmentNames,
+  assertSupportedEnvironment,
   parseEnvironmentNames,
 } from "./check-deployment-environment.mjs";
 
@@ -33,7 +34,7 @@ test("parses environment names without accepting values or status text", () => {
   );
 });
 
-test("requires the complete staging environment-name contract", () => {
+test("requires the complete deployment environment-name contract", () => {
   assert.doesNotThrow(() =>
     assertRequiredEnvironmentNames(new Set(requiredNames), requiredNames),
   );
@@ -62,8 +63,44 @@ test("compares known non-secret environment values exactly", () => {
         actualValue: "production\n",
         expectedValue: "staging",
       }),
-    /does not match the expected staging value/u,
+    /does not match the expected deployment value/u,
   );
+});
+
+test("supports only explicit staging and production environments", () => {
+  assert.doesNotThrow(() => assertSupportedEnvironment("staging"));
+  assert.doesNotThrow(() => assertSupportedEnvironment("production"));
+  assert.throws(
+    () => assertSupportedEnvironment("development"),
+    /must be exactly staging or production/u,
+  );
+  assert.throws(
+    () => assertSupportedEnvironment(undefined),
+    /must be exactly staging or production/u,
+  );
+});
+
+test("environment checker has read-only Convex capability", () => {
+  const source = fs.readFileSync(
+    path.join(
+      import.meta.dirname,
+      "check-deployment-environment.mjs",
+    ),
+    "utf8",
+  );
+  const convexCalls = [
+    ...source.matchAll(
+      /runConvex\(\s*\[\s*"([^"]+)"\s*,\s*"([^"]+)"/gu,
+    ),
+  ].map((match) => [match[1], match[2]]);
+
+  assert.deepEqual(convexCalls, [
+    ["env", "list"],
+    ["env", "get"],
+    ["env", "get"],
+  ]);
+  assert.doesNotMatch(source, /\[\s*"env"\s*,\s*"set"/u);
+  assert.doesNotMatch(source, /\[\s*"(?:deploy|import|data)"/u);
 });
 
 test("workflow checks staging environment before deployment", () => {

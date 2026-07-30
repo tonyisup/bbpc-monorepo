@@ -58,7 +58,7 @@ export function assertDeployTarget({
   const target = parseDeployKeyTarget(deployKey);
   if (target.deployment !== expectedDeployment) {
     throw new Error(
-      "CONVEX_DEPLOY_KEY does not target the expected staging deployment.",
+      "CONVEX_DEPLOY_KEY does not target the expected Convex deployment.",
     );
   }
   if (
