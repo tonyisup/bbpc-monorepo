@@ -144,9 +144,12 @@ Vercel variable that was removed:
   90-day retention period; it must never be restored to an application consumer.
 - Retain `TMDB_API_KEY` until the Convex catalog integration and its production
   environment are verified independently.
-- Review the retired OAuth, Discord, email, Pusher, chapterizer-webhook, and
-  Google API credentials with their source-system owners. Rotate or revoke only
-  after proving that no other project consumes them.
+- Retain the active Google OAuth client and its Clerk custom credential. Before
+  disabling either Google client secret, prove which one Clerk currently uses
+  and whether the older secret has any remaining consumer.
+- Review the retired Discord OAuth, email, Pusher, chapterizer-webhook, and Google
+  API credentials with their source-system owners. Rotate or revoke only after
+  proving that no other project consumes them.
 
 The value-free disposition record belongs in the cutover evidence. Never copy a
 secret value into that record.
@@ -201,3 +204,9 @@ Production closure evidence is stored privately under
 need a separate Convex development/staging selector and Clerk development keys;
 production credentials must not be copied into Preview or Development to make
 those builds pass.
+
+The production Clerk instance uses one Google social connection for the public
+and admin consumers. Its Google OAuth client redirects through
+`https://clerk.badboyspodcast.com/v1/oauth_callback`; authenticated Google
+round-trips from both production domains passed on 2026-08-02. Google consent
+branding is submitted for review with the public About, Privacy, and Terms pages.
