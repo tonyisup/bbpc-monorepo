@@ -621,6 +621,175 @@ describe("guess API", () => {
     );
   });
 
+  test("fails closed on corrupt or excessive host relationships", async () => {
+    const submit = async (
+      t: TestBackend,
+      assignmentId: Id<"assignments">,
+      hostId: Id<"users">,
+      ratingId: Id<"ratings">,
+    ) =>
+      await t.withIdentity(MEMBER_IDENTITY).mutation(
+        api.games.guesses.submit,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          assignmentId,
+          hostId,
+          ratingId,
+          today: "2026-07-24",
+        },
+      );
+
+    const missingRoleBackend = createTestBackend();
+    const missingRoleActors = await seedActors(missingRoleBackend);
+    const missingRoleFoundation = await seedGameFoundation(
+      missingRoleBackend,
+    );
+    const missingRoleRound = await seedAssignmentRound(
+      missingRoleBackend,
+      {
+        ownerId: missingRoleActors.adminId,
+        hostIds: [missingRoleActors.hostId],
+        ratingId: missingRoleFoundation.highRatingId,
+        suffix: "21",
+      },
+    );
+    await missingRoleBackend.run(async (ctx) => {
+      const membership = await ctx.db
+        .query("userRoles")
+        .withIndex("by_userId", (index) =>
+          index.eq("userId", missingRoleActors.hostId),
+        )
+        .unique();
+      if (membership === null) throw new Error("Expected host role");
+      await ctx.db.delete("roles", membership.roleId);
+    });
+    await advanceToS3(missingRoleBackend);
+    await expectDomainError(
+      submit(
+        missingRoleBackend,
+        missingRoleRound.assignmentId,
+        missingRoleActors.hostId,
+        missingRoleFoundation.highRatingId,
+      ),
+      "CONFLICT",
+    );
+
+    const excessiveRolesBackend = createTestBackend();
+    const excessiveRolesActors = await seedActors(excessiveRolesBackend);
+    const excessiveRolesFoundation = await seedGameFoundation(
+      excessiveRolesBackend,
+    );
+    const excessiveRolesRound = await seedAssignmentRound(
+      excessiveRolesBackend,
+      {
+        ownerId: excessiveRolesActors.adminId,
+        hostIds: [excessiveRolesActors.hostId],
+        ratingId: excessiveRolesFoundation.highRatingId,
+        suffix: "22",
+      },
+    );
+    await excessiveRolesBackend.run(async (ctx) => {
+      for (let index = 0; index < 50; index += 1) {
+        const roleId = await ctx.db.insert("roles", {
+          name: `Host role ${String(index)}`,
+          normalizedName: `host role ${String(index)}`,
+          description: "Coverage fixture",
+          admin: false,
+          permissions: [],
+          createdAt: index + 2,
+          updatedAt: index + 2,
+        });
+        await ctx.db.insert("userRoles", {
+          userId: excessiveRolesActors.hostId,
+          roleId,
+          assignedAt: index + 2,
+        });
+      }
+    });
+    await advanceToS3(excessiveRolesBackend);
+    await expectDomainError(
+      submit(
+        excessiveRolesBackend,
+        excessiveRolesRound.assignmentId,
+        excessiveRolesActors.hostId,
+        excessiveRolesFoundation.highRatingId,
+      ),
+      "CONFLICT",
+    );
+
+    const excessiveReviewsBackend = createTestBackend();
+    const excessiveReviewsActors = await seedActors(
+      excessiveReviewsBackend,
+    );
+    const excessiveReviewsFoundation = await seedGameFoundation(
+      excessiveReviewsBackend,
+    );
+    const excessiveReviewsRound = await seedAssignmentRound(
+      excessiveReviewsBackend,
+      {
+        ownerId: excessiveReviewsActors.adminId,
+        hostIds: [excessiveReviewsActors.hostId],
+        ratingId: excessiveReviewsFoundation.highRatingId,
+        suffix: "23",
+        createHostReviews: false,
+      },
+    );
+    await excessiveReviewsBackend.run(async (ctx) => {
+      for (let index = 0; index < 26; index += 1) {
+        await ctx.db.insert("reviews", {
+          userId: excessiveReviewsActors.hostId,
+          movieId: excessiveReviewsRound.movieId,
+        });
+      }
+    });
+    await advanceToS3(excessiveReviewsBackend);
+    await expectDomainError(
+      submit(
+        excessiveReviewsBackend,
+        excessiveReviewsRound.assignmentId,
+        excessiveReviewsActors.hostId,
+        excessiveReviewsFoundation.highRatingId,
+      ),
+      "CONFLICT",
+    );
+
+    const duplicateLinksBackend = createTestBackend();
+    const duplicateLinksActors = await seedActors(duplicateLinksBackend);
+    const duplicateLinksFoundation = await seedGameFoundation(
+      duplicateLinksBackend,
+    );
+    const duplicateLinksRound = await seedAssignmentRound(
+      duplicateLinksBackend,
+      {
+        ownerId: duplicateLinksActors.adminId,
+        hostIds: [duplicateLinksActors.hostId],
+        ratingId: duplicateLinksFoundation.highRatingId,
+        suffix: "24",
+      },
+    );
+    await duplicateLinksBackend.run(async (ctx) => {
+      const reviewId = await ctx.db.insert("reviews", {
+        userId: duplicateLinksActors.hostId,
+        movieId: duplicateLinksRound.movieId,
+      });
+      await ctx.db.insert("assignmentReviews", {
+        assignmentId: duplicateLinksRound.assignmentId,
+        reviewId,
+      });
+    });
+    await advanceToS3(duplicateLinksBackend);
+    await expectDomainError(
+      submit(
+        duplicateLinksBackend,
+        duplicateLinksRound.assignmentId,
+        duplicateLinksActors.hostId,
+        duplicateLinksFoundation.highRatingId,
+      ),
+      "CONFLICT",
+      { reason: "INVALID_HOST" },
+    );
+  });
+
   test("supports administrator creation, batch upserts, pagination, and rating updates", async () => {
     const t = createTestBackend();
     const { adminId, memberId, hostId } = await seedActors(t);

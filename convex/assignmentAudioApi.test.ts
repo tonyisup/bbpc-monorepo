@@ -164,6 +164,16 @@ describe("assignment audio API", () => {
         },
       ),
     ).resolves.toEqual({ id: created.id });
+    await expectDomainError(
+      t.withIdentity(OTHER_IDENTITY).mutation(
+        api.assignments.public.deleteMyAudioMessage,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: created.id,
+        },
+      ),
+      "NOT_FOUND",
+    );
     await expect(
       t.withIdentity(USER_IDENTITY).mutation(
         api.assignments.public.deleteMyAudioMessage,
@@ -241,6 +251,167 @@ describe("assignment audio API", () => {
         },
       ),
       "VALIDATION_FAILED",
+    );
+  });
+
+  test("rejects conflicting adoption metadata and an active-upload discard", async () => {
+    const t = createTestBackend();
+    const { assignmentId } = await seedEnabledFixture(t);
+    const input = {
+      clientApiVersion: BBPC_API_VERSION,
+      assignmentId,
+      url: "https://utfs.io/f/conflicting-audio-key",
+      fileKey: "conflicting-audio-key",
+      createdAt: 200,
+    };
+    await t
+      .withIdentity(USER_IDENTITY)
+      .mutation(api.assignments.public.createMyAudioMessage, input);
+    await expectDomainError(
+      t.withIdentity(USER_IDENTITY).mutation(
+        api.assignments.public.createMyAudioMessage,
+        { ...input, url: "https://utfs.io/f/different-url" },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.withIdentity(USER_IDENTITY).mutation(
+        api.assignments.public.createMyAudioMessage,
+        { ...input, createdAt: 201 },
+      ),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      t.withIdentity(USER_IDENTITY).mutation(
+        api.assignments.public.discardMyAudioUpload,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          assignmentId,
+          fileKey: input.fileKey,
+          uploadId: "active-upload-id-1234",
+        },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("covers validation boundaries and unavailable assignments", async () => {
+    const t = createTestBackend();
+    const { assignmentId } = await seedEnabledFixture(t);
+    const baseInput = {
+      clientApiVersion: BBPC_API_VERSION,
+      assignmentId,
+      url: "https://utfs.io/f/validation-audio-key",
+      fileKey: "validation-audio-key",
+      createdAt: 300,
+    };
+    const invalidInputs = [
+      { ...baseInput, createdAt: 300.5 },
+      { ...baseInput, fileKey: " " },
+      { ...baseInput, fileKey: "x".repeat(1_025) },
+      { ...baseInput, url: " " },
+      { ...baseInput, url: `https://example.test/${"x".repeat(2_048)}` },
+      { ...baseInput, url: "not a URL" },
+    ];
+    for (const input of invalidInputs) {
+      await expectDomainError(
+        t
+          .withIdentity(USER_IDENTITY)
+          .mutation(api.assignments.public.createMyAudioMessage, input),
+        "VALIDATION_FAILED",
+      );
+    }
+    await t.run(async (ctx) => {
+      await ctx.db.delete("assignments", assignmentId);
+    });
+    await expectDomainError(
+      t.withIdentity(USER_IDENTITY).query(
+        api.assignments.public.listMyAudioMessages,
+        { assignmentId },
+      ),
+      "NOT_FOUND",
+    );
+  });
+
+  test("deletes legacy keyless audio without queuing provider cleanup", async () => {
+    const t = createTestBackend();
+    const { assignmentId, userId } = await seedEnabledFixture(t);
+    const id = await t.run(async (ctx) =>
+      await ctx.db.insert("assignmentAudioMessages", {
+        assignmentId,
+        userId,
+        url: "https://example.test/legacy-audio.webm",
+        createdAt: 400,
+      }),
+    );
+    await expect(
+      t.withIdentity(USER_IDENTITY).query(
+        api.assignments.public.listMyAudioMessages,
+        { assignmentId },
+      ),
+    ).resolves.toEqual([
+      {
+        id,
+        url: "https://example.test/legacy-audio.webm",
+        createdAt: 400,
+        fileKey: null,
+      },
+    ]);
+    await expect(
+      t.withIdentity(USER_IDENTITY).mutation(
+        api.assignments.public.deleteMyAudioMessage,
+        { clientApiVersion: BBPC_API_VERSION, id },
+      ),
+    ).resolves.toEqual({ id });
+    const snapshot = await t.run(async (ctx) => ({
+      message: await ctx.db.get("assignmentAudioMessages", id),
+      intents: await ctx.db.query("sideEffectIntents").collect(),
+    }));
+    expect(snapshot).toEqual({ message: null, intents: [] });
+  });
+
+  test("enforces the per-assignment audio-message limits", async () => {
+    const t = createTestBackend();
+    const { assignmentId, userId } = await seedEnabledFixture(t);
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 50; index += 1) {
+        await ctx.db.insert("assignmentAudioMessages", {
+          assignmentId,
+          userId,
+          url: `https://example.test/audio-${String(index)}.webm`,
+          fileKey: `audio-${String(index)}`,
+          createdAt: index,
+        });
+      }
+    });
+    await expectDomainError(
+      t.withIdentity(USER_IDENTITY).mutation(
+        api.assignments.public.createMyAudioMessage,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          assignmentId,
+          url: "https://example.test/audio-50.webm",
+          fileKey: "audio-50",
+          createdAt: 50,
+        },
+      ),
+      "CONFLICT",
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.insert("assignmentAudioMessages", {
+        assignmentId,
+        userId,
+        url: "https://example.test/audio-50.webm",
+        fileKey: "audio-50",
+        createdAt: 50,
+      });
+    });
+    await expectDomainError(
+      t.withIdentity(USER_IDENTITY).query(
+        api.assignments.public.listMyAudioMessages,
+        { assignmentId },
+      ),
+      "CONFLICT",
     );
   });
 });
