@@ -1,6 +1,6 @@
 # BBPC Consumer Cutover Runbook
 
-Status: **prepared, not executed**
+Status: **production cutover complete; post-S4 credential disposition in progress**
 
 This runbook coordinates the Vercel deployments for `bbpc` and `bbpc-admin`
 with the S0–S4 backend state machine. Both applications deploy automatically
@@ -134,9 +134,22 @@ removal list absent while generating all 659 pages.
 The Convex production build has been verified with all variables in this
 removal list absent while generating all 28 pages.
 
-Removing a credential from Vercel is not revocation. After both S4 deployments
-pass their canaries, rotate or revoke the retired database, OAuth, email,
-Pusher, Azure, UploadThing, and webhook credentials at their source systems.
+Removing a credential from Vercel is not revocation. Source-system disposition
+must be based on the credential's remaining consumers rather than the name of the
+Vercel variable that was removed:
+
+- Retain the Azure storage credential because `bbpc-recording` still uses it.
+- Retain `UPLOADTHING_TOKEN` because the public profile-image flow still uses it.
+- Retain the SQL credential only for the immutable archive during its approved
+  90-day retention period; it must never be restored to an application consumer.
+- Retain `TMDB_API_KEY` until the Convex catalog integration and its production
+  environment are verified independently.
+- Review the retired OAuth, Discord, email, Pusher, chapterizer-webhook, and
+  Google API credentials with their source-system owners. Rotate or revoke only
+  after proving that no other project consumes them.
+
+The value-free disposition record belongs in the cutover evidence. Never copy a
+secret value into that record.
 
 ## Recording consumer handoff
 
@@ -174,3 +187,17 @@ URL. If the variable is absent, `/record` remains fail-closed.
   application telemetry.
 - The admin recording link reaches the consolidated consumer, and a linked
   Host/Administrator can create a session only after S3/S4 writes are enabled.
+
+## Production completion record
+
+Run `prod-cutover-20260802-01` reached S4 on 2026-08-02. The final public and
+admin deployments build without `DATABASE_URL`, the retired Vercel variables are
+absent, `record.badboyspodcast.com` is attached to the consolidated recording
+consumer, and the authenticated create/end recording canary passed. SQL remains
+permanently frozen after the first successful Convex application write.
+
+Production closure evidence is stored privately under
+`.local-migration/prod-cutover-20260802-01/`. Non-production Vercel targets still
+need a separate Convex development/staging selector and Clerk development keys;
+production credentials must not be copied into Preview or Development to make
+those builds pass.

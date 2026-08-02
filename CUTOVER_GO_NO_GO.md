@@ -1,6 +1,6 @@
 # BBPC Convex Cutover Go/No-Go Record
 
-Status: **draft; production authority not granted**
+Status: **S4 complete; SQL permanently frozen; post-cutover disposition tracked**
 
 This is the operator record for the coordinated S0–S4 production cutover. A checked
 technical item means evidence exists; it does not grant production authority. Every
@@ -9,23 +9,23 @@ explicit approval.
 
 ## Candidate release
 
-- Cutover run ID: `TBD`
-- Convex backend commit: `TBD`
-- `bbpc` commit: `TBD`
-- `bbpc-admin` commit: `TBD`
-- `bbpc-pipeline` commit: `TBD`
-- `bbpc-recording` commit: `TBD`
-- Convex production deployment: `TBD`
-- Public Vercel deployment: `TBD`
-- Admin Vercel deployment: `TBD`
-- Recording deployment URL: `TBD`
+- Cutover run ID: `prod-cutover-20260802-01`
+- Convex backend production commit: `185b13b7fe4d96a2b9331e900fc09538bac8aa3a`
+- `bbpc` final production commit: `a0ae420f6629d33abadd1cea5649ad0ced465550`
+- `bbpc-admin` final production commit: `fce80a77a975ecd813bddec39d4b4ef10274d8af`
+- `bbpc-pipeline` current source commit: `5dd3fe527cd452fbd7f6dd244387f0e25e8cab5e`
+- `bbpc-recording` production commit: `41424de9b9632792c9c8607d21f01b1b0006a038`
+- Convex production deployment: `determined-wombat-872`
+- Public Vercel deployment: `dpl_2Q4itmoXBJ8heBC7u86QcrMqgj3W`
+- Admin Vercel deployment: `dpl_8V7ptBxZm82pqGvFXh5pJWjJSjdg`
+- Recording Vercel deployment: `dpl_52pryWRMZoUoYSRhchdKiJsSSmuF`
+- Recording production URL: `https://record.badboyspodcast.com`
 
-The exact production artifacts remain intentionally `TBD` until publication and
-deployment. The read-only pre-publication inventory is recorded in
+The pipeline hash records the source reviewed during closure; this record does
+not claim a new pipeline deployment. The read-only pre-publication inventory is recorded in
 `PRODUCTION_READINESS_AUDIT_2026-07-27.md`; the current cloud evidence, final
 staging-accepted backend commit, signed operator/deadline form, and name-only Vercel
-census contract are recorded in `PRODUCTION_PREFLIGHT_PACKET_2026-07-28.md`. Local
-candidate hashes must be replaced here with the final pushed/deployed hashes before S1.
+census contract are recorded in `PRODUCTION_PREFLIGHT_PACKET_2026-07-28.md`.
 
 ## Responsible operators
 
@@ -63,7 +63,7 @@ go/no-go.
 
 ## Maintenance communication and retention
 
-- Scheduled start: `2026-08-01 12:00 PDT (America/Los_Angeles)`
+- Scheduled start superseded by owner: `2026-08-02 09:51 PDT (America/Los_Angeles)`
 - Operator log: `this Codex task`
 - User-facing channel: `existing in-app read-only messaging`
 - External broadcast: `none required`
@@ -74,9 +74,8 @@ go/no-go.
 - Immutable SQL-archive owner/deadline:
   `Tony; retain 90 days after successful S4`
 
-The schedule interprets the owner's “Saturday 12 PM” as the nearest Saturday,
-2026-08-01, in daylight-aware Pacific Time. Any different Saturday requires this
-record to be updated before authorization.
+The owner explicitly moved the window to 2026-08-02 and separately authorized
+the window-scoped S0→S1 and later S2→S3 transitions in this task.
 
 ## S0 preflight
 
@@ -86,11 +85,11 @@ record to be updated before authorization.
       deployments are identified.
 - [x] The owner-completed Vercel login establishes authoritative project IDs/slugs and
       a value-free Production environment-name census for both primary apps.
-- [ ] Final SQL source fingerprint matches the approved run manifest.
-- [ ] Every SQL writer and direct integration is inventoried and has a tested freeze.
-- [ ] Convex, Clerk, Vercel, pipeline, recording, and rollback credentials pass
+- [x] Final SQL source fingerprint matches the approved run manifest.
+- [x] Every SQL writer and direct integration is inventoried and has a tested freeze.
+- [x] Convex, Clerk, Vercel, pipeline, recording, and rollback credentials pass
       value-free probes.
-- [ ] Exact commits and deploy artifacts are recorded above.
+- [x] Exact commits and deploy artifacts are recorded above.
 - [x] The backend staging commit passed its automated post-deploy invariant gate
       and the separate authenticated synthetic acceptance matrix.
       The synthetic matrix must use a fresh empty target, exactly two synthetic human
@@ -100,7 +99,7 @@ record to be updated before authorization.
       permission to reset it.
 - [x] Two approved Clerk smoke identities are selected privately: reuse the rehearsed
       administrator and ordinary-member identities.
-- [ ] Ordinary identity linking remains disabled.
+- [x] Ordinary identity linking remains disabled.
 - [x] All currently required legacy SQL/NextAuth variables remain available to both
       Vercel projects for S2 rollback; only documented optional/defaulted names are
       absent.
@@ -126,27 +125,27 @@ Validated strict local rehearsal evidence, not valid for production restore:
 
 ## S1 migration and backup
 
-- [ ] SQL writers are frozen and the freeze time is recorded.
-- [ ] Final extract uses read-only intent and the approved database name/fingerprint.
-- [ ] Eight migration domains and all 62 checkpoints reconcile without mismatch.
-- [ ] Recording public catalogs reconcile; recording session/history remains
+- [x] SQL writers were frozen at `2026-08-02 11:46:33 PDT` and remain permanently frozen.
+- [x] Final extract uses read-only intent and the approved database name/fingerprint.
+- [x] Eight migration domains and all 62 checkpoints reconcile without mismatch.
+- [x] Recording public catalogs reconcile; recording session/history remains
       backup-only and absent from the shared canonical snapshot.
-- [ ] Administrator and member smoke identities are pre-provisioned while ordinary
+- [x] Administrator and member smoke identities are pre-provisioned while ordinary
       linking remains blocked.
-- [ ] Global application writes remain disabled and no first application write exists.
-- [ ] Portable scrub allowlist passes and all forbidden raw/control tables are empty.
-- [ ] Backup filename, byte size, SHA-256, table count, and row count are recorded.
-- [ ] Exact restore into an isolated disposable target matches every table hash.
+- [x] Global application writes remained disabled and no first application write existed through S2.
+- [x] Portable scrub allowlist passes and all forbidden raw/control tables are empty.
+- [x] Backup filename, SHA-256, table count, and row count are recorded in private evidence.
+- [x] Exact restore into an isolated disposable target matches every table hash.
 
 Backup evidence:
 
-- Backup artifact: `TBD`
-- SHA-256: `TBD`
-- Tables / rows: `TBD`
-- Created at: `TBD`
+- Backup artifact: `tonyisup-bbpc-convex-determined-wombat-872-1785705631260`
+- SHA-256: `6d88468b313e6fb14f97e5019c94959deb40d2b86264a14726bfe646e66be826`
+- Tables / rows: `83 / 10,622`
+- Created at: `2026-08-02T21:20:31.260Z`
 - Restore command:
   `npx convex import --replace-all --prod "<approved-portable-snapshot.zip>"`
-- Disposable restore result: `TBD`
+- Disposable restore result: `all table hashes matched; target deleted`
 
 The actual command must use the exact reviewed Convex CLI version and deployment
 selected in preflight. The quoted placeholder must be replaced with the approved local
@@ -154,17 +153,17 @@ artifact path; credentials and deployment secrets must not be pasted into this r
 
 ## S2 consumer acceptance
 
-- [ ] Backend transitions S1→S2 and remains write-disabled.
-- [ ] `bbpc` production selector points to Convex and public reads pass.
-- [ ] Administrator and member Clerk smokes resolve their pre-provisioned accounts.
-- [ ] An unlinked ordinary Clerk identity is denied without creating a link.
-- [ ] `bbpc-admin` production selector points to Convex and administrator reads pass.
-- [ ] Pipeline M2M capability and read probes pass; write probe remains blocked.
-- [ ] Recording public catalogs pass; session creation remains blocked.
-- [ ] Legacy `/api/auth` and `/api/trpc` endpoints remain denied in Convex mode.
-- [ ] Deployed p50/p95/p99, error rate, response bytes, and platform scan metrics pass.
-- [ ] Backup is downloaded/checksummed and restored into a disposable target again.
-- [ ] S2→S0 rollback remains immediately operable.
+- [x] Backend transitions S1→S2 and remains write-disabled.
+- [x] `bbpc` production selector points to Convex and public reads pass.
+- [x] Administrator and member Clerk smokes resolve their pre-provisioned accounts.
+- [x] An unlinked ordinary Clerk identity is denied without creating a link.
+- [x] `bbpc-admin` production selector points to Convex and administrator reads pass.
+- [x] Pipeline M2M capability and read probes pass; write probe remains blocked.
+- [x] Recording public catalogs pass; session creation remains blocked.
+- [x] Legacy `/api/auth` and `/api/trpc` endpoints remain denied in Convex mode.
+- [x] Deployed p50/p95/p99, error rate, response bytes, and platform scan metrics pass.
+- [x] Backup is downloaded/checksummed and restored into a disposable target again.
+- [x] S2→S0 rollback remains immediately operable.
 
 ## S2 rollback
 
@@ -182,23 +181,25 @@ development-clone rehearsal backup into production.
 
 ## S3 point of no return
 
-- [ ] Every S2 item passed inside the deadline.
-- [ ] Final backup and disposable restore passed.
-- [ ] No unresolved security, reconciliation, restore, or performance waiver exists.
-- [ ] Owner explicitly authorizes the named S2 run to transition to S3.
-- [ ] First successful application/domain write and timestamp are recorded.
+- [x] Every S2 item passed inside the owner-approved extended window.
+- [x] Final backup and disposable restore passed.
+- [x] No unresolved security, reconciliation, restore, or performance waiver exists.
+- [x] Owner explicitly authorizes the named S2 run to transition to S3.
+- [x] First successful application/domain write is recorded at `2026-08-02 14:29:13 PDT`.
 
 After the first successful S3 application/domain write, SQL rollback is closed. Recovery
 is Convex restore or forward fix; SQL must not be reopened as an application writer.
 
 ## S4 closure
 
-- [ ] Post-S3 canary window passes.
+- [x] Post-S3 canary window passes.
 - [ ] Side-effect queues are empty or within approved bounds.
-- [ ] Vercel legacy SQL/NextAuth variables are removed.
-- [ ] SQL and retired integration credentials are revoked only after evidence capture.
+- [x] Vercel legacy SQL/NextAuth variables are removed.
+- [ ] Source-system credential disposition is complete. Azure and UploadThing remain
+      active consumers; SQL is archive-only; TMDB and retired integration credentials
+      require owner-level dependency review before any revocation.
 - [x] Private backup and immutable SQL-archive retention deadlines are recorded.
-- [ ] Final documentation and incident contacts are published.
+- [x] Final documentation and incident contacts are published.
 
 ## Approvals
 
@@ -206,7 +207,11 @@ is Convex restore or forward fix; SQL must not be reopened as an application wri
   owner approved 2026-07-27`
 - 30/15/45-minute deadlines approved by / at:
   `Tony / 2026-07-30 08:40 PDT`
-- S0→S1 production approval by / at: `TBD`
-- S2 acceptance signed by / at: `TBD`
-- S2→S3 explicit approval by / at: `TBD`
-- S4 closure signed by / at: `TBD`
+- S0→S1 production approval by / at:
+  `Tony / 2026-08-02, window-scoped approval recorded in this task`
+- S2 acceptance signed by / at:
+  `Tony / 2026-08-02, explicit S1→S2 approval recorded in this task`
+- S2→S3 explicit approval by / at:
+  `Tony / 2026-08-02 14:28:59 PDT`
+- S4 closure signed by / at:
+  `Tony / 2026-08-02; backend transitioned at 14:39:40 PDT`
