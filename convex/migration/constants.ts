@@ -1,5 +1,5 @@
 export const SOURCE_SCHEMA_FINGERPRINT =
-  "5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a";
+  "8dd315bd8141fe7c011481c6c5d4840e10cd0e81be8dcfaf7eb325654d023d18";
 
 export const IDENTITY_OPERATIONS = {
   start: "identity.start",

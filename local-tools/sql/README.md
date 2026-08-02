@@ -23,46 +23,58 @@ product-facing archive query.
 Before an approved rehearsal:
 
 1. Regenerate the guarded database census against database `dev`.
-2. Confirm the source fingerprint still matches the mapping draft.
+2. Confirm the stable schema fingerprint still matches the reviewed mapping and record
+   the fresh count-bound `sourceFingerprint` from that census as the approved frozen
+   snapshot fingerprint.
 3. Choose a cutover run ID that will also initialize the local Convex deployment.
 4. Run:
 
    ```sh
    npm run migration:extract:identity -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:catalog -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:episodes -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:assignments -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:reviews -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:games -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:rankings -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
 
    npm run migration:extract:archive -- \
      --run-id <cutover-run-id> \
+     --source-fingerprint <approved-census-source-fingerprint> \
      --ack-production-derived-local-only
    ```
 
 The extractor requires a census less than 15 minutes old, verifies that the configured
-SQL server matches the census fingerprint, opens the connection with read-only intent
+SQL server matches the census fingerprint, requires the explicitly supplied snapshot
+fingerprint, independently pins the stable reviewed schema fingerprint, opens the
+connection with read-only intent
 and UTC date handling, verifies `DB_NAME()` again inside a serializable read-only
 transaction, and refuses count drift or output overwrite. It writes private JSONL files
 plus a checksummed manifest with filesystem mode `0600`. Domain outputs are immutable
@@ -82,6 +94,7 @@ After the approval gate and extraction, stage one verified domain at a time:
 ```sh
 npm run migration:stage:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --domain <identity|catalog|episodes|assignments|reviews|games|rankings|archive> \
   --ack-production-derived-local-only \
   --ack-replace-local-raw-staging
@@ -108,6 +121,7 @@ stages all domains, and executes the tested 86-step transform/reconciliation DAG
 ```sh
 npm run migration:rehearse:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --batch-size 50 \
   --ack-production-derived-local-only \
   --ack-initialize-empty-local-deployment \

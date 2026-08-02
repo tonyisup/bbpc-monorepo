@@ -29,7 +29,11 @@ import {
   portableCountsFromRawCounts,
 } from "./portable-backup-plan.mjs";
 import { buildLocalImportSpec } from "./stage-import.mjs";
-import { verifyDomainManifest } from "./manifest.mjs";
+import {
+  assertSingleSourceCensus,
+  verifyDomainManifest,
+} from "./manifest.mjs";
+import { sourceFingerprintFromArguments } from "./source-census.mjs";
 import {
   readRecordingCatalogManifest,
 } from "../recording/catalog-manifest.mjs";
@@ -57,6 +61,7 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:restore:local -- --run-id <id> " +
+      "--source-fingerprint <sha256> " +
       "[--batch-size <1..100>] [--cloud-port <port>] " +
       "[--site-port <port>] [--validate-s2-rollback] " +
       "[--dry-run] " +
@@ -150,6 +155,7 @@ function parseArguments(argv) {
   }
   return {
     runId,
+    sourceFingerprint: sourceFingerprintFromArguments(argv),
     batchSize,
     cloudPort,
     sitePort,
@@ -430,6 +436,7 @@ function assertRestoreEvidence(evidence, totalRows) {
 
 const {
   runId,
+  sourceFingerprint,
   batchSize,
   cloudPort,
   sitePort,
@@ -442,9 +449,15 @@ const restoreActor = validateS2Rollback
 const verifiedDomains = Object.fromEntries(
   REHEARSAL_DOMAINS.map((domain) => [
     domain,
-    verifyDomainManifest({ projectRoot, runId, domain }),
+    verifyDomainManifest({
+      projectRoot,
+      runId,
+      domain,
+      sourceSnapshotFingerprint: sourceFingerprint,
+    }),
   ]),
 );
+const sourceCensus = assertSingleSourceCensus(verifiedDomains);
 const rawCounts = countsFromVerifiedManifests(verifiedDomains);
 const { manifest: recordingCatalogManifest } =
   readRecordingCatalogManifest({
@@ -551,6 +564,14 @@ const sourceSnapshot = inspectPortableSnapshot({
 });
 if (
   backupManifest.runId !== runId ||
+  backupManifest.sourceSchemaFingerprint !==
+    sourceCensus.sourceSchemaFingerprint ||
+  backupManifest.sourceSnapshotFingerprint !==
+    sourceCensus.sourceSnapshotFingerprint ||
+  backupManifest.sourceServerFingerprint !==
+    sourceCensus.sourceServerFingerprint ||
+  backupManifest.sourceCensusGeneratedAt !==
+    sourceCensus.censusGeneratedAt ||
   backupManifest.canonicalRows !== totalRows ||
   backupManifest.portableRows !== portableRows ||
   backupManifest.snapshotRows !== portableRows ||

@@ -1,7 +1,7 @@
 # Local Production-Derived Migration Rehearsal
 
-Status: **three production-scale local rehearsals, private backups, disposable
-restores, strict identity acceptance, and S2 rollback validated 2026-07-27**
+Status: **four production-scale local rehearsals, private backups, disposable
+restores, strict identity acceptance, and S2 rollback validated through 2026-08-02**
 
 This runbook exercises the full offline data milestone on an approved encrypted
 development machine. It never writes SQL, never targets cloud staging or production,
@@ -31,6 +31,7 @@ This reads and verifies the local manifests but does not change Convex:
 ```sh
 npm run migration:rehearse:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --dry-run \
   --ack-production-derived-local-only
 ```
@@ -44,6 +45,7 @@ ordering that breaks the assignment/review/game dependency cycle.
 ```sh
 npm run migration:rehearse:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --batch-size 50 \
   --ack-production-derived-local-only \
   --ack-initialize-empty-local-deployment \
@@ -71,6 +73,7 @@ has a resumable S0/S1 control record. Resume with:
 ```sh
 npm run migration:rehearse:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --resume \
   --batch-size 50 \
   --ack-production-derived-local-only \
@@ -119,6 +122,7 @@ Inspect the prepared one-way plan without changing Convex:
 ```sh
 npm run migration:backup:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --dry-run \
   --ack-production-derived-local-only
 ```
@@ -128,6 +132,7 @@ After explicit owner approval, execute:
 ```sh
 npm run migration:backup:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --batch-size 100 \
   --ack-production-derived-local-only \
   --ack-one-way-portable-scrub \
@@ -160,6 +165,7 @@ After the portable backup succeeds:
 ```sh
 npm run migration:restore:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --batch-size 100 \
   --ack-production-derived-local-only \
   --ack-private-restore-validation \
@@ -190,12 +196,21 @@ rejected an unlinked identity, validated pipeline disable/re-enable, and passed 
 SQL-baseline p50/p95/p99 workload comparisons. Aggregate evidence is recorded in
 `MIGRATION_REHEARSAL_RESULT_2026-07-27-03.md`.
 
+The fourth run `dev-rehearsal-20260802-04` validated the separated stable-schema and
+count-bound frozen-snapshot guards against a refreshed clone containing 54 additional
+mapped rows. All eight domains reconciled 9,337 SQL-derived rows, authenticated S1
+acceptance passed, and the 10,615-row private snapshot matched all 45 table hashes. The
+restore replay reused every migrated row with zero inserts, preserved all 828 recording
+catalog rows, passed S2→S0 rollback, and deleted the disposable target. Aggregate
+evidence is recorded in `MIGRATION_REHEARSAL_RESULT_2026-08-02-04.md`.
+
 For an approved rehearsal that also needs S2 rollback evidence, add the separately
 guarded rollback flags:
 
 ```sh
 npm run migration:restore:local -- \
   --run-id <cutover-run-id> \
+  --source-fingerprint <approved-census-source-fingerprint> \
   --batch-size 100 \
   --validate-s2-rollback \
   --ack-production-derived-local-only \

@@ -19,7 +19,11 @@ import {
   portableCountsFromRawCounts,
 } from "./portable-backup-plan.mjs";
 import { inspectPortableSnapshot } from "./portable-snapshot.mjs";
-import { verifyDomainManifest } from "./manifest.mjs";
+import {
+  assertSingleSourceCensus,
+  verifyDomainManifest,
+} from "./manifest.mjs";
+import { sourceFingerprintFromArguments } from "./source-census.mjs";
 import {
   readRecordingCatalogManifest,
 } from "../recording/catalog-manifest.mjs";
@@ -34,6 +38,7 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:backup:local -- --run-id <id> " +
+      "--source-fingerprint <sha256> " +
       "[--batch-size <1..100>] [--dry-run] " +
       `${SOURCE_ACK}`,
     `  execute: ${SCRUB_ACK} ${BACKUP_ACK}`,
@@ -78,7 +83,12 @@ function parseArguments(argv) {
       );
     }
   }
-  return { runId, batchSize, dryRun };
+  return {
+    runId,
+    sourceFingerprint: sourceFingerprintFromArguments(argv),
+    batchSize,
+    dryRun,
+  };
 }
 
 function commandName(name) {
@@ -183,6 +193,12 @@ function writeOrVerifyManifest(manifestPath, manifest) {
         existing.runId !== manifest.runId ||
         existing.sourceSchemaFingerprint !==
           manifest.sourceSchemaFingerprint ||
+        existing.sourceSnapshotFingerprint !==
+          manifest.sourceSnapshotFingerprint ||
+        existing.sourceServerFingerprint !==
+          manifest.sourceServerFingerprint ||
+        existing.sourceCensusGeneratedAt !==
+          manifest.sourceCensusGeneratedAt ||
         existing.apiVersion !== manifest.apiVersion ||
         existing.snapshotSha256 !==
           manifest.snapshotSha256 ||
@@ -217,15 +233,20 @@ function writeOrVerifyManifest(manifestPath, manifest) {
   );
 }
 
-const { runId, batchSize, dryRun } = parseArguments(
-  process.argv.slice(2),
-);
+const { runId, sourceFingerprint, batchSize, dryRun } =
+  parseArguments(process.argv.slice(2));
 const verifiedDomains = Object.fromEntries(
   REHEARSAL_DOMAINS.map((domain) => [
     domain,
-    verifyDomainManifest({ projectRoot, runId, domain }),
+    verifyDomainManifest({
+      projectRoot,
+      runId,
+      domain,
+      sourceSnapshotFingerprint: sourceFingerprint,
+    }),
   ]),
 );
+const sourceCensus = assertSingleSourceCensus(verifiedDomains);
 const rawCounts = countsFromVerifiedManifests(verifiedDomains);
 const { manifest: recordingCatalogManifest } =
   readRecordingCatalogManifest({
@@ -389,6 +410,10 @@ const manifest = {
   runId,
   createdAt: new Date().toISOString(),
   sourceSchemaFingerprint: SOURCE_SCHEMA_FINGERPRINT,
+  sourceSnapshotFingerprint:
+    sourceCensus.sourceSnapshotFingerprint,
+  sourceServerFingerprint: sourceCensus.sourceServerFingerprint,
+  sourceCensusGeneratedAt: sourceCensus.censusGeneratedAt,
   apiVersion: BBPC_API_VERSION,
   backendCommit,
   manifestContainsRowValues: false,

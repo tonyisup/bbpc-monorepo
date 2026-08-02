@@ -12,6 +12,11 @@ import {
   transformRatingRow,
   transformReviewRow,
 } from "./review-rows.mjs";
+import {
+  EXPECTED_SOURCE_SCHEMA_FINGERPRINT,
+  loadRecentSourceCensus,
+  sourceFingerprintFromArguments,
+} from "./source-census.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(toolDirectory, "../..");
@@ -23,9 +28,6 @@ const sql = requireFromAdmin("mssql");
 const { config: loadEnv } = requireFromAdmin("dotenv");
 
 const EXPECTED_DATABASE = "dev";
-const EXPECTED_SOURCE_FINGERPRINT =
-  "5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a";
-const MAX_CENSUS_AGE_MS = 15 * 60 * 1000;
 const REQUIRED_ACKNOWLEDGEMENT =
   "--ack-production-derived-local-only";
 
@@ -33,6 +35,7 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:extract:reviews -- --run-id <id> " +
+      "--source-fingerprint <sha256> " +
       REQUIRED_ACKNOWLEDGEMENT,
     "",
     "Requires a database census generated within the previous 15 minutes.",
@@ -57,7 +60,10 @@ function parseArguments(argv) {
       `Explicit ${REQUIRED_ACKNOWLEDGEMENT} acknowledgement is required`,
     );
   }
-  return { runId };
+  return {
+    runId,
+    sourceFingerprint: sourceFingerprintFromArguments(argv),
+  };
 }
 
 function requiredEnvironment(name) {
@@ -66,43 +72,6 @@ function requiredEnvironment(name) {
     throw new Error(`Missing required environment variable ${name}`);
   }
   return value;
-}
-
-function loadRecentCensus() {
-  const censusPath = path.join(
-    workspaceRoot,
-    "bbpc-db/census/artifacts/database-census.json",
-  );
-  const census = JSON.parse(fs.readFileSync(censusPath, "utf8"));
-  const generatedAt = Date.parse(census.generatedAt);
-  if (
-    !Number.isFinite(generatedAt) ||
-    Date.now() - generatedAt > MAX_CENSUS_AGE_MS
-  ) {
-    throw new Error(
-      "The guarded database census must be regenerated within the previous 15 minutes",
-    );
-  }
-  if (
-    census.safety?.verifiedDatabase !== EXPECTED_DATABASE ||
-    census.safety?.containsRowValues !== false ||
-    census.safety?.sourceFingerprint !== EXPECTED_SOURCE_FINGERPRINT
-  ) {
-    throw new Error(
-      "The recent census does not match the approved dev source fingerprint",
-    );
-  }
-  const expectedCounts = new Map(
-    census.metadata.tableSizes.map((table) => [
-      `${table.schemaName}.${table.tableName}`,
-      Number(table.rowCount),
-    ]),
-  );
-  return {
-    generatedAt: census.generatedAt,
-    serverFingerprint: census.safety.serverFingerprint,
-    expectedCounts,
-  };
 }
 
 function assertExpectedCount(actual, expectedCounts, table) {
@@ -122,8 +91,13 @@ function writePrivateFile(filePath, contents) {
   });
 }
 
-const { runId } = parseArguments(process.argv.slice(2));
-const census = loadRecentCensus();
+const { runId, sourceFingerprint } = parseArguments(
+  process.argv.slice(2),
+);
+const census = loadRecentSourceCensus({
+  workspaceRoot,
+  approvedSourceFingerprint: sourceFingerprint,
+});
 
 loadEnv({
   path: path.join(workspaceRoot, "bbpc-pipeline/.env"),
@@ -323,7 +297,8 @@ try {
     generatedAt: new Date().toISOString(),
     runId,
     sourceDatabase: EXPECTED_DATABASE,
-    sourceSchemaFingerprint: EXPECTED_SOURCE_FINGERPRINT,
+    sourceSchemaFingerprint: EXPECTED_SOURCE_SCHEMA_FINGERPRINT,
+    sourceSnapshotFingerprint: census.sourceFingerprint,
     sourceServerFingerprint: census.serverFingerprint,
     censusGeneratedAt: census.generatedAt,
     containsProductionDerivedRowValues: true,

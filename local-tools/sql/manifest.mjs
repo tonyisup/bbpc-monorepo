@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
+import { EXPECTED_SOURCE_SCHEMA_FINGERPRINT } from "./source-census.mjs";
+
 export const EXPECTED_SOURCE_FINGERPRINT =
-  "5b15b1933b626c3f084dcb0c795033032cf8a9a1f228933a7e74ddd5a9080a2a";
+  EXPECTED_SOURCE_SCHEMA_FINGERPRINT;
 
 const DOMAIN_TABLES = {
   identity: [
@@ -552,8 +554,17 @@ export function verifyDomainManifest({
   projectRoot,
   runId,
   domain,
+  sourceSnapshotFingerprint,
 }) {
   assertSafeRunId(runId);
+  if (
+    typeof sourceSnapshotFingerprint !== "string" ||
+    !/^[0-9a-f]{64}$/u.test(sourceSnapshotFingerprint)
+  ) {
+    throw new Error(
+      "An approved source snapshot fingerprint is required",
+    );
+  }
   const expectedTables = tablesForDomain(domain);
   const runDirectory = path.join(
     projectRoot,
@@ -576,6 +587,8 @@ export function verifyDomainManifest({
     manifest.sourceDatabase !== "dev" ||
     manifest.sourceSchemaFingerprint !==
       EXPECTED_SOURCE_FINGERPRINT ||
+    manifest.sourceSnapshotFingerprint !==
+      sourceSnapshotFingerprint ||
     manifest.containsProductionDerivedRowValues !== true ||
     manifest.localOnly !== true
   ) {
@@ -660,6 +673,38 @@ export function verifyDomainManifest({
     domain,
     runId,
     sourceSchemaFingerprint: EXPECTED_SOURCE_FINGERPRINT,
+    sourceSnapshotFingerprint,
+    sourceServerFingerprint: manifest.sourceServerFingerprint,
+    censusGeneratedAt: manifest.censusGeneratedAt,
     files: Object.freeze(files),
+  });
+}
+
+export function assertSingleSourceCensus(verifiedDomains) {
+  const manifests = Object.values(verifiedDomains);
+  if (manifests.length === 0) {
+    throw new Error("At least one verified domain manifest is required");
+  }
+  const unique = (field) =>
+    new Set(manifests.map((manifest) => manifest[field]));
+  for (const field of [
+    "sourceSchemaFingerprint",
+    "sourceSnapshotFingerprint",
+    "sourceServerFingerprint",
+    "censusGeneratedAt",
+  ]) {
+    if (unique(field).size !== 1) {
+      throw new Error(
+        `Migration manifests do not share one ${field}`,
+      );
+    }
+  }
+  const first = manifests[0];
+  return Object.freeze({
+    sourceSchemaFingerprint: first.sourceSchemaFingerprint,
+    sourceSnapshotFingerprint:
+      first.sourceSnapshotFingerprint,
+    sourceServerFingerprint: first.sourceServerFingerprint,
+    censusGeneratedAt: first.censusGeneratedAt,
   });
 }

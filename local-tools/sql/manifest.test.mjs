@@ -6,12 +6,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertSingleSourceCensus,
   EXPECTED_SOURCE_FINGERPRINT,
   tablesForDomain,
   verifyDomainManifest,
 } from "./manifest.mjs";
 
 const RUN_ID = "synthetic-manifest-run";
+const SOURCE_SNAPSHOT_FINGERPRINT = "b".repeat(64);
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -90,6 +92,7 @@ function createIdentityFixture() {
     runId: RUN_ID,
     sourceDatabase: "dev",
     sourceSchemaFingerprint: EXPECTED_SOURCE_FINGERPRINT,
+    sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
     sourceServerFingerprint: "a".repeat(64),
     censusGeneratedAt: "2026-07-22T23:59:00.000Z",
     containsProductionDerivedRowValues: true,
@@ -119,8 +122,14 @@ test("verifies a private immutable domain manifest", () => {
       projectRoot: fixture.projectRoot,
       runId: RUN_ID,
       domain: "identity",
+      sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
     });
     assert.equal(verified.runId, RUN_ID);
+    assert.equal(
+      assertSingleSourceCensus({ identity: verified })
+        .sourceSnapshotFingerprint,
+      SOURCE_SNAPSHOT_FINGERPRINT,
+    );
     assert.deepEqual(
       verified.files.map((file) => file.table),
       tablesForDomain("identity"),
@@ -184,6 +193,7 @@ test("rejects checksum and source-row-hash drift", () => {
           projectRoot: checksumFixture.projectRoot,
           runId: RUN_ID,
           domain: "identity",
+          sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
         }),
       /checksum/u,
     );
@@ -217,6 +227,7 @@ test("rejects checksum and source-row-hash drift", () => {
           projectRoot: rowHashFixture.projectRoot,
           runId: RUN_ID,
           domain: "identity",
+          sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
         }),
       /source row hash/u,
     );
@@ -252,6 +263,7 @@ test("rejects forbidden fields and duplicate legacy IDs", () => {
           projectRoot: forbiddenFixture.projectRoot,
           runId: RUN_ID,
           domain: "identity",
+          sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
         }),
       /forbidden field/u,
     );
@@ -284,6 +296,7 @@ test("rejects forbidden fields and duplicate legacy IDs", () => {
           projectRoot: duplicateFixture.projectRoot,
           runId: RUN_ID,
           domain: "identity",
+          sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
         }),
       /duplicate legacy ID/u,
     );
@@ -308,6 +321,7 @@ test("rejects unsafe permissions and domain table drift", () => {
           projectRoot: permissionsFixture.projectRoot,
           runId: RUN_ID,
           domain: "identity",
+          sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
         }),
       /permissions/u,
     );
@@ -329,6 +343,7 @@ test("rejects unsafe permissions and domain table drift", () => {
           projectRoot: tablesFixture.projectRoot,
           runId: RUN_ID,
           domain: "identity",
+          sourceSnapshotFingerprint: SOURCE_SNAPSHOT_FINGERPRINT,
         }),
       /allowlist/u,
     );

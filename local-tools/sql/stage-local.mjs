@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { verifyDomainManifest } from "./manifest.mjs";
+import { sourceFingerprintFromArguments } from "./source-census.mjs";
 import { buildLocalImportSpec } from "./stage-import.mjs";
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,7 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:stage:local -- --run-id <id> " +
+      "--source-fingerprint <sha256> " +
       "--domain <identity|catalog|episodes|assignments|reviews|games|rankings|archive> " +
       `${REQUIRED_SOURCE_ACK} ${REQUIRED_REPLACE_ACK}`,
     "",
@@ -66,14 +68,21 @@ function parseArguments(argv) {
       `Explicit ${REQUIRED_REPLACE_ACK} acknowledgement is required`,
     );
   }
-  return { runId, domain };
+  return {
+    runId,
+    domain,
+    sourceFingerprint: sourceFingerprintFromArguments(argv),
+  };
 }
 
-const { runId, domain } = parseArguments(process.argv.slice(2));
+const { runId, domain, sourceFingerprint } = parseArguments(
+  process.argv.slice(2),
+);
 const verified = verifyDomainManifest({
   projectRoot,
   runId,
   domain,
+  sourceSnapshotFingerprint: sourceFingerprint,
 });
 
 process.stdout.write(

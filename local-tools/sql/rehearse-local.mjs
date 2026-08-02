@@ -5,9 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import { BBPC_API_VERSION } from "../../contracts/index.js";
 import {
+  assertSingleSourceCensus,
   EXPECTED_SOURCE_FINGERPRINT,
   verifyDomainManifest,
 } from "./manifest.mjs";
+import { sourceFingerprintFromArguments } from "./source-census.mjs";
 import {
   buildRehearsalPlan,
   countsFromVerifiedManifests,
@@ -32,6 +34,7 @@ function usage() {
   return [
     "Usage:",
     "  npm run migration:rehearse:local -- --run-id <id> " +
+      "--source-fingerprint <sha256> " +
       "[--batch-size <1..100>] [--dry-run|--resume] " +
       `${REQUIRED_SOURCE_ACK}`,
     `  fresh:  ${REQUIRED_FRESH_ACK} ${REQUIRED_REPLACE_ACK}`,
@@ -87,6 +90,7 @@ function parseArguments(argv) {
   }
   return {
     runId,
+    sourceFingerprint: sourceFingerprintFromArguments(argv),
     batchSize,
     dryRun,
     resume,
@@ -140,15 +144,25 @@ function runConvex(functionName, args) {
   }
 }
 
-const { runId, batchSize, dryRun, resume } = parseArguments(
-  process.argv.slice(2),
-);
+const {
+  runId,
+  sourceFingerprint,
+  batchSize,
+  dryRun,
+  resume,
+} = parseArguments(process.argv.slice(2));
 const verifiedDomains = Object.fromEntries(
   REHEARSAL_DOMAINS.map((domain) => [
     domain,
-    verifyDomainManifest({ projectRoot, runId, domain }),
+    verifyDomainManifest({
+      projectRoot,
+      runId,
+      domain,
+      sourceSnapshotFingerprint: sourceFingerprint,
+    }),
   ]),
 );
+assertSingleSourceCensus(verifiedDomains);
 const counts = countsFromVerifiedManifests(verifiedDomains);
 const steps = buildRehearsalPlan(counts);
 
@@ -243,6 +257,8 @@ if (stageRawTables) {
         path.join(toolDirectory, "stage-local.mjs"),
         "--run-id",
         runId,
+        "--source-fingerprint",
+        sourceFingerprint,
         "--domain",
         domain,
         REQUIRED_SOURCE_ACK,
