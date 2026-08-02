@@ -122,6 +122,7 @@ async function seedActors(t: TestBackend) {
   const hostId = await seedUser(t, {
     identity: HOST_IDENTITY,
     name: "Guess Host",
+    admin: true,
   });
   return { adminId, memberId, otherId, hostId };
 }
@@ -216,6 +217,7 @@ async function seedAssignmentRound(
     suffix: string;
     playable?: boolean;
     episodeStatus?: string;
+    createHostReviews?: boolean;
   },
 ) {
   return await t.run(async (ctx) => {
@@ -243,19 +245,21 @@ async function seedAssignmentRound(
       normalizedSlug: `assignment-${input.suffix}`,
     });
     const assignmentReviewIds = [];
-    for (const hostId of input.hostIds) {
-      const reviewId = await ctx.db.insert("reviews", {
-        userId: hostId,
-        movieId,
-        ratingId: input.ratingId,
-        reviewedAt: 1,
-      });
-      assignmentReviewIds.push(
-        await ctx.db.insert("assignmentReviews", {
-          assignmentId,
-          reviewId,
-        }),
-      );
+    if (input.createHostReviews !== false) {
+      for (const hostId of input.hostIds) {
+        const reviewId = await ctx.db.insert("reviews", {
+          userId: hostId,
+          movieId,
+          ratingId: input.ratingId,
+          reviewedAt: 1,
+        });
+        assignmentReviewIds.push(
+          await ctx.db.insert("assignmentReviews", {
+            assignmentId,
+            reviewId,
+          }),
+        );
+      }
     }
     return {
       assignmentId,
@@ -302,6 +306,71 @@ function requirePresent<T>(
 }
 
 describe("guess API", () => {
+  test("creates a valid host assignment review on the first pick", async () => {
+    const t = createTestBackend();
+    const { adminId, memberId, hostId } = await seedActors(t);
+    const { highRatingId, lowRatingId } =
+      await seedGameFoundation(t);
+    const round = await seedAssignmentRound(t, {
+      ownerId: adminId,
+      hostIds: [hostId],
+      ratingId: highRatingId,
+      suffix: "11",
+      createHostReviews: false,
+    });
+    await advanceToS3(t);
+
+    const created = await t.withIdentity(MEMBER_IDENTITY).mutation(
+      api.games.guesses.submit,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        hostId,
+        ratingId: highRatingId,
+        today: "2026-07-24",
+        createdAt: 100,
+      },
+    );
+    const updated = await t.withIdentity(MEMBER_IDENTITY).mutation(
+      api.games.guesses.submit,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        hostId,
+        ratingId: lowRatingId,
+        today: "2026-07-24",
+        createdAt: 200,
+      },
+    );
+
+    expect(created).toMatchObject({
+      user: { id: memberId },
+      assignmentReview: { review: { user: { id: hostId } } },
+    });
+    expect(updated.id).toBe(created.id);
+    await t.run(async (ctx) => {
+      const reviews = await ctx.db
+        .query("reviews")
+        .withIndex("by_userId_and_movieId", (index) =>
+          index.eq("userId", hostId).eq("movieId", round.movieId),
+        )
+        .collect();
+      expect(reviews).toHaveLength(1);
+      expect(reviews[0]).toMatchObject({
+        userId: hostId,
+        movieId: round.movieId,
+      });
+      expect(reviews[0]?.ratingId).toBeUndefined();
+      const links = await ctx.db
+        .query("assignmentReviews")
+        .withIndex("by_assignmentId", (index) =>
+          index.eq("assignmentId", round.assignmentId),
+        )
+        .collect();
+      expect(links).toHaveLength(1);
+    });
+  });
+
   test("derives ownership, gates writes, and idempotently updates a member submission", async () => {
     const t = createTestBackend();
     const { adminId, memberId, hostId } =
@@ -452,7 +521,7 @@ describe("guess API", () => {
 
   test("rejects locked rounds, invalid hosts, invalid timestamps, and dates without a season", async () => {
     const t = createTestBackend();
-    const { adminId, hostId } = await seedActors(t);
+    const { adminId, hostId, otherId } = await seedActors(t);
     const { highRatingId } = await seedGameFoundation(t);
     const openRound = await seedAssignmentRound(t, {
       ownerId: adminId,
@@ -515,7 +584,7 @@ describe("guess API", () => {
         {
           clientApiVersion: BBPC_API_VERSION,
           assignmentId: openRound.assignmentId,
-          hostId: adminId,
+          hostId: otherId,
           ratingId: highRatingId,
           today: "2026-07-24",
         },
@@ -554,8 +623,7 @@ describe("guess API", () => {
 
   test("supports administrator creation, batch upserts, pagination, and rating updates", async () => {
     const t = createTestBackend();
-    const { adminId, memberId, otherId, hostId } =
-      await seedActors(t);
+    const { adminId, memberId, hostId } = await seedActors(t);
     const {
       seasonId,
       highRatingId,
@@ -563,7 +631,7 @@ describe("guess API", () => {
     } = await seedGameFoundation(t);
     const round = await seedAssignmentRound(t, {
       ownerId: adminId,
-      hostIds: [hostId, otherId],
+      hostIds: [hostId, adminId],
       ratingId: highRatingId,
       suffix: "4",
     });
@@ -612,7 +680,7 @@ describe("guess API", () => {
         today: "2026-07-24",
         guesses: [
           { hostId, ratingId: highRatingId },
-          { hostId: otherId, ratingId: lowRatingId },
+          { hostId: adminId, ratingId: lowRatingId },
         ],
         createdAt: 200,
       },

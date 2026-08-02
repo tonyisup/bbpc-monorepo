@@ -25,7 +25,7 @@ import {
   requireGuess,
 } from "./guessReadModel.js";
 import {
-  findHostAssignmentReview,
+  getOrCreateHostAssignmentReview,
   requireAssignmentReview,
   requireGuessRating,
   requireOpenPredictionAssignment,
@@ -144,7 +144,7 @@ export const submit = authenticatedMutation({
       requireGuessRating(ctx, args.ratingId),
       resolveGuessSeason(ctx, args.today),
     ]);
-    const assignmentReview = await findHostAssignmentReview(
+    const assignmentReview = await getOrCreateHostAssignmentReview(
       ctx,
       assignment,
       args.hostId,
@@ -371,7 +371,11 @@ export const upsertForUser = adminMutation({
     const results = [];
     for (const input of args.guesses) {
       const [assignmentReview, rating] = await Promise.all([
-        findHostAssignmentReview(ctx, assignment, input.hostId),
+        getOrCreateHostAssignmentReview(
+          ctx,
+          assignment,
+          input.hostId,
+        ),
         requireGuessRating(ctx, input.ratingId),
       ]);
       results.push(

@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "../_generated/server.js";
+import { MAX_ROLES_PER_USER } from "../identity/limits.js";
 import { domainError } from "../lib/errors.js";
 import { MAX_HOST_GUESSES_PER_BATCH } from "./limits.js";
 import { requireGuess } from "./guessReadModel.js";
@@ -77,12 +78,45 @@ export async function requireOpenPredictionAssignment(
   return assignment;
 }
 
-export async function findHostAssignmentReview(
+async function requireActiveHost(
+  ctx: GuessReadContext,
+  hostId: Id<"users">,
+): Promise<void> {
+  const user = await requirePointUser(ctx, hostId);
+  const memberships = await ctx.db
+    .query("userRoles")
+    .withIndex("by_userId", (index) => index.eq("userId", hostId))
+    .take(MAX_ROLES_PER_USER + 1);
+  if (memberships.length > MAX_ROLES_PER_USER) {
+    domainError(
+      "CONFLICT",
+      "Host role memberships exceed the supported lookup limit.",
+      { details: { limit: MAX_ROLES_PER_USER } },
+    );
+  }
+  let isHost = false;
+  for (const membership of memberships) {
+    const role = await ctx.db.get("roles", membership.roleId);
+    if (role === null) {
+      domainError(
+        "CONFLICT",
+        "A host role membership references a missing role.",
+      );
+    }
+    isHost ||= role.admin;
+  }
+  if (user.status !== "active" || !isHost) {
+    domainError("VALIDATION_FAILED", "Host is invalid for this round.", {
+      details: { reason: "INVALID_HOST" },
+    });
+  }
+}
+
+async function findExistingHostAssignmentReview(
   ctx: GuessReadContext,
   assignment: Doc<"assignments">,
   hostId: Id<"users">,
-): Promise<Doc<"assignmentReviews">> {
-  await requirePointUser(ctx, hostId);
+): Promise<Doc<"assignmentReviews"> | null> {
   const reviews = await ctx.db
     .query("reviews")
     .withIndex("by_userId_and_movieId", (index) =>
@@ -119,10 +153,62 @@ export async function findHostAssignmentReview(
       match = assignmentReview;
     }
   }
+  return match;
+}
+
+export async function findHostAssignmentReview(
+  ctx: GuessReadContext,
+  assignment: Doc<"assignments">,
+  hostId: Id<"users">,
+): Promise<Doc<"assignmentReviews">> {
+  await requireActiveHost(ctx, hostId);
+  const match = await findExistingHostAssignmentReview(
+    ctx,
+    assignment,
+    hostId,
+  );
   if (match === null) {
     domainError("VALIDATION_FAILED", "Host is invalid for this round.", {
       details: { reason: "INVALID_HOST" },
     });
+  }
+  return match;
+}
+
+export async function getOrCreateHostAssignmentReview(
+  ctx: GuessWriteContext,
+  assignment: Doc<"assignments">,
+  hostId: Id<"users">,
+): Promise<Doc<"assignmentReviews">> {
+  await requireActiveHost(ctx, hostId);
+  const match = await findExistingHostAssignmentReview(
+    ctx,
+    assignment,
+    hostId,
+  );
+  if (match === null) {
+    const reviewId = await ctx.db.insert("reviews", {
+      userId: hostId,
+      movieId: assignment.movieId,
+    });
+    const assignmentReviewId = await ctx.db.insert(
+      "assignmentReviews",
+      {
+        assignmentId: assignment._id,
+        reviewId,
+      },
+    );
+    const created = await ctx.db.get(
+      "assignmentReviews",
+      assignmentReviewId,
+    );
+    if (created === null) {
+      domainError(
+        "INTERNAL_ERROR",
+        "The host assignment review could not be created.",
+      );
+    }
+    return created;
   }
   return match;
 }
