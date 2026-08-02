@@ -1,6 +1,14 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
-export default clerkMiddleware();
+const vercelDeploymentOrigin = process.env.VERCEL_URL
+  ? [`https://${process.env.VERCEL_URL}`]
+  : [];
+const authorizedParties =
+  process.env.NODE_ENV === 'production'
+    ? ['https://record.badboyspodcast.com', ...vercelDeploymentOrigin]
+    : ['http://localhost:3000'];
+
+export default clerkMiddleware({ authorizedParties });
 
 export const config = {
   matcher: [
