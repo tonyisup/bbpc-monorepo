@@ -135,7 +135,7 @@ test("every observed Vercel Production name has an explicit S4 disposition", () 
       between(
         runbook,
         "### `bbpc-admin` variables removed in S4",
-        "## Recording consumer handoff",
+        "Removing a credential from Vercel is not revocation.",
       ),
     ),
     "bbpc-admin removed inventory",
@@ -214,7 +214,7 @@ test("owner decisions stay aligned across production operator records", () => {
   );
   assert.match(
     goNoGo,
-    /Scheduled start: `2026-08-01 12:00 PDT \(America\/Los_Angeles\)`/u,
+    /Scheduled start superseded by owner: `2026-08-02 09:51 PDT \(America\/Los_Angeles\)`/u,
   );
   assert.match(
     goNoGo,
