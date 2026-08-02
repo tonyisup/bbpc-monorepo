@@ -492,6 +492,33 @@ export type PublicApiType = {
             }>;
         };
         public: {
+            createMyAudioMessage: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                createdAt: number;
+                fileKey: string;
+                url: string;
+            }, {
+                createdAt: number;
+                fileKey: string | null;
+                id: Id<"assignmentAudioMessages">;
+                url: string;
+            }>;
+            deleteMyAudioMessage: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"assignmentAudioMessages">;
+            }, {
+                id: Id<"assignmentAudioMessages">;
+            }>;
+            discardMyAudioUpload: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                fileKey: string;
+                uploadId: string;
+            }, {
+                intentId: Id<"sideEffectIntents">;
+                queued: true;
+            }>;
             getByLegacyId: FunctionReference<"query", "public", {
                 legacyId: string;
             }, {
@@ -548,6 +575,14 @@ export type PublicApiType = {
                     name: string | null;
                 };
             } | null>;
+            listMyAudioMessages: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+            }, Array<{
+                createdAt: number;
+                fileKey: string | null;
+                id: Id<"assignmentAudioMessages">;
+                url: string;
+            }>>;
         };
     };
     catalog: {
