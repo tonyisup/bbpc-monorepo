@@ -100,14 +100,17 @@ disposable backend and its production-derived data directory were deleted.
 While creating the fresh local runtime, the interactive Convex CLI also created the
 empty project record `bbpc-convex-e59b7`. The run was stopped before its first function
 deployment, and no application data was imported to a cloud deployment. The rehearsal
-continued against its local deployment only. Removing that empty external project
-record is a separate destructive control-plane action and remains pending owner
-authorization.
+continued against its local deployment only. After separate owner authorization, an
+authenticated Management API preflight confirmed exact project ID `2702398`, team ID
+`47848`, and zero cloud deployments. The empty project was deleted successfully; the
+subsequent project lookup returned 404. A separate lookup reconfirmed that production
+deployment `determined-wombat-872` still exists under project ID `2644545`.
 
 ## Result
 
 The stable-schema/count-bound-snapshot remediation is validated at the refreshed
-production scale. The private backup and restore evidence are complete, but the code
-has not been committed, pushed, or deployed, and production Convex remains
-uninitialized. Production publication and a new cutover window remain separately
-gated.
+production scale. The private backup and restore evidence are complete. The remediation
+and this evidence were published to private `origin/master` as commit
+`59bda341fd8840e732252447f280976fe08a2942`; its CI and staging deployment both passed.
+Production Convex remains uninitialized. Production publication and a new cutover
+window remain separately gated.
