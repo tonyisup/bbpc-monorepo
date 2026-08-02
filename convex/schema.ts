@@ -344,7 +344,12 @@ export default defineSchema({
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_assignmentId", ["assignmentId"])
-    .index("by_userId", ["userId"]),
+    .index("by_userId", ["userId"])
+    .index("by_userId_and_assignmentId_and_createdAt", [
+      "userId",
+      "assignmentId",
+      "createdAt",
+    ]),
 
   assignmentPointLinks: defineTable({
     legacyId: v.optional(v.string()),

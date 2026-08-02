@@ -129,6 +129,7 @@ async function seedActors(t: TestBackend) {
   const hostId = await seedUser(t, {
     identity: HOST_IDENTITY,
     name: "Gambling Host",
+    admin: true,
   });
   return { adminId, memberId, otherId, hostId };
 }
