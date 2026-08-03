@@ -15,6 +15,7 @@ const requiredNames = [
   "BBPC_ENVIRONMENT",
   "CLERK_JWT_ISSUER_DOMAIN",
   "CLERK_M2M_AUDIENCE",
+  "TMDB_API_KEY",
 ];
 
 test("parses environment names without accepting values or status text", () => {
@@ -44,7 +45,17 @@ test("requires the complete deployment environment-name contract", () => {
         new Set(requiredNames.slice(0, -1)),
         requiredNames,
       ),
-    /CLERK_M2M_AUDIENCE/u,
+    /TMDB_API_KEY/u,
+  );
+});
+
+test("the default deployment contract requires TMDB search configuration", () => {
+  assert.throws(
+    () =>
+      assertRequiredEnvironmentNames(
+        new Set(requiredNames.filter((name) => name !== "TMDB_API_KEY")),
+      ),
+    /TMDB_API_KEY/u,
   );
 });
 

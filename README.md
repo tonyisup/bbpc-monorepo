@@ -36,8 +36,9 @@ The staging deployment is synthetic-data-only. It uses a deployment-scoped key n
 1. Use Node 22 and run `npm ci`.
 2. Copy `.env.example` to `.env.local` or configure a Convex local deployment.
 3. Set `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_M2M_AUDIENCE`,
-   `BBPC_ENVIRONMENT`, and `BBPC_API_VERSION` on that deployment. The M2M
-   audience is the Clerk machine ID for the scoped `BBPC Convex` receiver.
+   `BBPC_ENVIRONMENT`, `BBPC_API_VERSION`, and `TMDB_API_KEY` on that
+   deployment. The M2M audience is the Clerk machine ID for the scoped
+   `BBPC Convex` receiver.
 4. Run `npm run check && npm run package:check`.
 
 Useful commands:

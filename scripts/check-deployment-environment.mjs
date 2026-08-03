@@ -16,6 +16,7 @@ const requiredEnvironmentNames = [
   "BBPC_ENVIRONMENT",
   "CLERK_JWT_ISSUER_DOMAIN",
   "CLERK_M2M_AUDIENCE",
+  "TMDB_API_KEY",
 ];
 const allowedEnvironments = new Set(["production", "staging"]);
 
