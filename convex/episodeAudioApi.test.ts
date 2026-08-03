@@ -223,6 +223,96 @@ describe("owner-scoped episode audio API", () => {
     });
   });
 
+  test("creates an owned message idempotently and writes audit evidence", async () => {
+    const t = createTestBackend();
+    await seedUser(t, OWNER_IDENTITY);
+    const episodeId = await seedEpisode(t, 1);
+    await advanceToS3(t);
+    const input = {
+      clientApiVersion: BBPC_API_VERSION,
+      episodeId,
+      url: " https://audio.example/new.webm ",
+      fileKey: "audio/new.webm",
+      createdAt: 1_786_000_000_000,
+      notes: " Play during extras ",
+    };
+
+    const created = await t
+      .withIdentity(OWNER_IDENTITY)
+      .mutation(api.episodes.audio.createMine, input);
+    const repeated = await t
+      .withIdentity(OWNER_IDENTITY)
+      .mutation(api.episodes.audio.createMine, input);
+
+    expect(repeated).toEqual(created);
+    expect(created).toMatchObject({
+      episodeId,
+      url: "https://audio.example/new.webm",
+      fileKey: "audio/new.webm",
+      notes: "Play during extras",
+    });
+    const snapshot = await t.run(async (ctx) => ({
+      messages: await ctx.db.query("episodeAudioMessages").collect(),
+      audits: await ctx.db
+        .query("auditEvents")
+        .withIndex("by_createdAt")
+        .collect(),
+    }));
+    expect(snapshot.messages).toHaveLength(1);
+    expect(
+      snapshot.audits.filter(
+        (audit) => audit.action === "episodes.audioMessage.created",
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("validates new audio uploads and requires an existing episode", async () => {
+    const t = createTestBackend();
+    await seedUser(t, OWNER_IDENTITY);
+    const episodeId = await seedEpisode(t, 1);
+    const missingEpisodeId = await seedEpisode(t, 2);
+    await t.run(async (ctx) => {
+      await ctx.db.delete("episodes", missingEpisodeId);
+    });
+    await advanceToS3(t);
+
+    for (const input of [
+      { url: "http://audio.example/a.webm", fileKey: "audio/a", createdAt: 1 },
+      { url: "not-a-url", fileKey: "audio/a", createdAt: 1 },
+      { url: "https://audio.example/a.webm", fileKey: " ", createdAt: 1 },
+      {
+        url: "https://audio.example/a.webm",
+        fileKey: "audio/a",
+        createdAt: 1.5,
+      },
+    ]) {
+      await expectDomainError(
+        t.withIdentity(OWNER_IDENTITY).mutation(
+          api.episodes.audio.createMine,
+          {
+            clientApiVersion: BBPC_API_VERSION,
+            episodeId,
+            ...input,
+          },
+        ),
+        "VALIDATION_FAILED",
+      );
+    }
+    await expectDomainError(
+      t.withIdentity(OWNER_IDENTITY).mutation(
+        api.episodes.audio.createMine,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          episodeId: missingEpisodeId,
+          url: "https://audio.example/a.webm",
+          fileKey: "audio/a",
+          createdAt: 1,
+        },
+      ),
+      "NOT_FOUND",
+    );
+  });
+
   test("blocks owner mutations while application writes are disabled", async () => {
     const t = createTestBackend();
     const ownerId = await seedUser(t, OWNER_IDENTITY);
@@ -242,6 +332,19 @@ describe("owner-scoped episode audio API", () => {
           id: messageId,
           episodeId,
           fileKey: "audio/updated.webm",
+        },
+      ),
+      "WRITE_DISABLED",
+    );
+    await expectDomainError(
+      t.withIdentity(OWNER_IDENTITY).mutation(
+        api.episodes.audio.createMine,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          episodeId,
+          url: "https://audio.example/new.webm",
+          fileKey: "audio/new.webm",
+          createdAt: 2,
         },
       ),
       "WRITE_DISABLED",
@@ -423,6 +526,56 @@ describe("owner-scoped episode audio API", () => {
     expect(snapshot.message).toBeNull();
     expect(snapshot.audits.map((audit) => audit.action)).toContain(
       "episodes.audioMessage.deleted",
+    );
+  });
+
+  test("queues cleanup for an unadopted upload and rejects active files", async () => {
+    const t = createTestBackend();
+    const ownerId = await seedUser(t, OWNER_IDENTITY);
+    const episodeId = await seedEpisode(t, 1);
+    const activeId = await seedMessage(t, {
+      userId: ownerId,
+      episodeId,
+      createdAt: 1,
+    });
+    await advanceToS3(t);
+
+    await expectDomainError(
+      t.withIdentity(OWNER_IDENTITY).mutation(
+        api.episodes.audio.discardMyUpload,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          episodeId,
+          fileKey: "audio/1.webm",
+          uploadId: "upload_active_1234",
+        },
+      ),
+      "CONFLICT",
+    );
+
+    const discarded = await t
+      .withIdentity(OWNER_IDENTITY)
+      .mutation(api.episodes.audio.discardMyUpload, {
+        clientApiVersion: BBPC_API_VERSION,
+        episodeId,
+        fileKey: "audio/orphan.webm",
+        uploadId: "upload_orphan_1234",
+      });
+    expect(discarded.queued).toBe(true);
+    const snapshot = await t.run(async (ctx) => ({
+      active: await ctx.db.get("episodeAudioMessages", activeId),
+      intent: await ctx.db.get("sideEffectIntents", discarded.intentId),
+      audits: await ctx.db.query("auditEvents").collect(),
+    }));
+    expect(snapshot.active).not.toBeNull();
+    expect(snapshot.intent).toMatchObject({
+      operation: "uploadthing.deleteFile",
+      providerKey: "audio/orphan.webm",
+      resourceType: "episodeAudioMessage",
+      resourceId: "upload_orphan_1234",
+    });
+    expect(snapshot.audits.map((audit) => audit.action)).toContain(
+      "episodes.audioMessage.uploadDiscarded",
     );
   });
 

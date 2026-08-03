@@ -21,6 +21,8 @@ import { MAX_AUDIO_MESSAGES_PER_USER_EPISODE } from "./limits.js";
 
 const MAX_FILE_KEY_LENGTH = 1024;
 const MAX_NOTES_LENGTH = 5000;
+const MAX_AUDIO_URL_LENGTH = 2048;
+const MAX_UPLOAD_ID_LENGTH = 100;
 
 function toAudioMessage(message: Doc<"episodeAudioMessages">) {
   return {
@@ -63,6 +65,48 @@ function validateUpdateInput(
       "VALIDATION_FAILED",
       `Notes cannot exceed ${String(MAX_NOTES_LENGTH)} characters.`,
     );
+  }
+}
+
+function validateAudioUpload(input: {
+  url: string;
+  fileKey: string;
+  createdAt: number;
+  notes?: string;
+}): void {
+  validateUpdateInput(input.fileKey, input.notes);
+  if (!Number.isSafeInteger(input.createdAt)) {
+    domainError(
+      "VALIDATION_FAILED",
+      "Audio-message creation time must be an integer epoch-millisecond value.",
+    );
+  }
+  const url = input.url.trim();
+  if (url.length < 1 || url.length > MAX_AUDIO_URL_LENGTH) {
+    domainError(
+      "VALIDATION_FAILED",
+      `Audio URLs must contain 1 through ${String(MAX_AUDIO_URL_LENGTH)} characters.`,
+    );
+  }
+  try {
+    if (new URL(url).protocol !== "https:") {
+      domainError("VALIDATION_FAILED", "Audio URLs must use HTTPS.");
+    }
+  } catch {
+    domainError(
+      "VALIDATION_FAILED",
+      "Audio URLs must be valid HTTPS URLs.",
+    );
+  }
+}
+
+function validateUploadId(uploadId: string): void {
+  if (
+    uploadId.length < 16 ||
+    uploadId.length > MAX_UPLOAD_ID_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/u.test(uploadId)
+  ) {
+    domainError("VALIDATION_FAILED", "Audio upload IDs are invalid.");
   }
 }
 
@@ -129,6 +173,153 @@ export const usageForEpisode = authenticatedQuery({
         messages.length <
         MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
     };
+  },
+});
+
+export const createMine = authenticatedMutation({
+  args: {
+    episodeId: v.id("episodes"),
+    url: v.string(),
+    fileKey: v.string(),
+    createdAt: v.number(),
+    notes: v.optional(v.string()),
+  },
+  returns: episodeAudioMessageValidator,
+  handler: async (ctx, args) => {
+    validateAudioUpload(args);
+    const episode = await ctx.db.get("episodes", args.episodeId);
+    if (episode === null) {
+      domainError("NOT_FOUND", "The episode is unavailable.");
+    }
+    const messages = await ctx.db
+      .query("episodeAudioMessages")
+      .withIndex(
+        "by_userId_and_episodeId_and_createdAt",
+        (index) =>
+          index
+            .eq("userId", ctx.actor.user._id)
+            .eq("episodeId", args.episodeId),
+      )
+      .order("desc")
+      .take(MAX_AUDIO_MESSAGES_PER_USER_EPISODE + 1);
+    if (messages.length > MAX_AUDIO_MESSAGES_PER_USER_EPISODE) {
+      domainError(
+        "CONFLICT",
+        "Audio-message usage exceeds the supported per-episode limit.",
+        { details: { limit: MAX_AUDIO_MESSAGES_PER_USER_EPISODE } },
+      );
+    }
+    const url = args.url.trim();
+    const trimmedNotes = args.notes?.trim();
+    const notes = trimmedNotes === "" ? undefined : trimmedNotes;
+    const existing = messages.find(
+      (message) => message.fileKey === args.fileKey,
+    );
+    if (existing !== undefined) {
+      if (
+        existing.url !== url ||
+        existing.createdAt !== args.createdAt ||
+        existing.notes !== notes
+      ) {
+        domainError(
+          "CONFLICT",
+          "The audio upload is already linked with different metadata.",
+        );
+      }
+      return toAudioMessage(existing);
+    }
+    if (messages.length >= MAX_AUDIO_MESSAGES_PER_USER_EPISODE) {
+      domainError(
+        "CONFLICT",
+        "The episode audio-message limit has been reached.",
+        { details: { limit: MAX_AUDIO_MESSAGES_PER_USER_EPISODE } },
+      );
+    }
+    const id = await ctx.db.insert("episodeAudioMessages", {
+      episodeId: args.episodeId,
+      userId: ctx.actor.user._id,
+      url,
+      fileKey: args.fileKey,
+      createdAt: args.createdAt,
+      ...(notes === undefined ? {} : { notes }),
+    });
+    const message = await ctx.db.get("episodeAudioMessages", id);
+    if (message === null) {
+      domainError(
+        "INTERNAL_ERROR",
+        "The episode audio message could not be created.",
+      );
+    }
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "episodes.audioMessage.created",
+      targetType: "episodeAudioMessage",
+      targetId: id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: { episodeId: args.episodeId },
+    });
+    return toAudioMessage(message);
+  },
+});
+
+export const discardMyUpload = authenticatedMutation({
+  args: {
+    episodeId: v.id("episodes"),
+    fileKey: v.string(),
+    uploadId: v.string(),
+  },
+  returns: v.object({
+    queued: v.literal(true),
+    intentId: v.id("sideEffectIntents"),
+  }),
+  handler: async (ctx, args) => {
+    validateUploadId(args.uploadId);
+    validateAudioUpload({
+      url: "https://example.invalid/audio",
+      fileKey: args.fileKey,
+      createdAt: 0,
+    });
+    if ((await ctx.db.get("episodes", args.episodeId)) === null) {
+      domainError("NOT_FOUND", "The episode is unavailable.");
+    }
+    const messages = await ctx.db
+      .query("episodeAudioMessages")
+      .withIndex(
+        "by_userId_and_episodeId_and_createdAt",
+        (index) =>
+          index
+            .eq("userId", ctx.actor.user._id)
+            .eq("episodeId", args.episodeId),
+      )
+      .take(MAX_AUDIO_MESSAGES_PER_USER_EPISODE + 1);
+    if (messages.length > MAX_AUDIO_MESSAGES_PER_USER_EPISODE) {
+      domainError(
+        "CONFLICT",
+        "Audio-message usage exceeds the supported per-episode limit.",
+        { details: { limit: MAX_AUDIO_MESSAGES_PER_USER_EPISODE } },
+      );
+    }
+    if (messages.some((message) => message.fileKey === args.fileKey)) {
+      domainError("CONFLICT", "The active audio upload cannot be discarded.");
+    }
+    const cleanup = await enqueueUploadThingDelete(ctx, {
+      resourceType: "episodeAudioMessage",
+      resourceId: args.uploadId,
+      providerKey: args.fileKey,
+      requestedByUserId: ctx.actor.authenticatedUser._id,
+      effectiveUserId: ctx.actor.user._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      clientApiVersion: ctx.systemState.apiVersion,
+    });
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "episodes.audioMessage.uploadDiscarded",
+      targetType: "episode",
+      targetId: args.episodeId,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: { sideEffectIntentId: cleanup.intent._id },
+    });
+    return { queued: true as const, intentId: cleanup.intent._id };
   },
 });
 
