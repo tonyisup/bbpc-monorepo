@@ -1406,11 +1406,42 @@ export type PublicApiType = {
       >;
     };
     audio: {
+      createMine: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          createdAt: number;
+          episodeId: Id<"episodes">;
+          fileKey: string;
+          notes?: string;
+          url: string;
+        },
+        {
+          createdAt: number;
+          episodeId: Id<"episodes"> | null;
+          fileKey: string | null;
+          id: Id<"episodeAudioMessages">;
+          notes: string | null;
+          url: string;
+        }
+      >;
       deleteMine: FunctionReference<
         "mutation",
         "public",
         { clientApiVersion: string; id: Id<"episodeAudioMessages"> },
         { id: Id<"episodeAudioMessages"> }
+      >;
+      discardMyUpload: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          episodeId: Id<"episodes">;
+          fileKey: string;
+          uploadId: string;
+        },
+        { intentId: Id<"sideEffectIntents">; queued: true }
       >;
       listMine: FunctionReference<
         "query",
