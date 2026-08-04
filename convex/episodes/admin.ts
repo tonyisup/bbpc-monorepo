@@ -31,6 +31,7 @@ import {
 import {
   MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
   validateEpisodeAudioPageSize,
+  validateEpisodePageSize,
 } from "./limits.js";
 import { hydrateAdminEpisode } from "./readModel.js";
 import {
@@ -137,6 +138,27 @@ export const getByNumber = adminQuery({
     return episode === null
       ? null
       : await hydrateAdminEpisode(ctx, episode);
+  },
+});
+
+export const listPage = adminQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(episodeAdminDetailValidator),
+  handler: async (ctx, args) => {
+    validateEpisodePageSize(args.paginationOpts.numItems);
+    const result = await ctx.db
+      .query("episodes")
+      .withIndex("by_number")
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map((episode) =>
+          hydrateAdminEpisode(ctx, episode),
+        ),
+      ),
+    };
   },
 });
 

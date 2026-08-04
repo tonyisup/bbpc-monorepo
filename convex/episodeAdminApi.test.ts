@@ -185,6 +185,52 @@ async function seedGamblingEntry(
 }
 
 describe("administrator episode API", () => {
+  test("paginates every episode status in descending episode-number order", async () => {
+    const t = createTestBackend();
+    await seedAdmin(t);
+    await seedEpisode(t, {
+      number: 801,
+      title: "Published Episode",
+      status: "published",
+    });
+    await seedEpisode(t, {
+      number: 803,
+      title: "Pending Episode",
+      status: "pending",
+    });
+    await seedEpisode(t, {
+      number: 802,
+      title: "Recording Episode",
+      status: "recording",
+    });
+
+    const firstPage = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.episodes.admin.listPage,
+      { paginationOpts: { cursor: null, numItems: 2 } },
+    );
+    expect(firstPage.page.map((episode) => episode.number)).toEqual([
+      803,
+      802,
+    ]);
+    expect(firstPage.page.map((episode) => episode.status)).toEqual([
+      "pending",
+      "recording",
+    ]);
+    expect(firstPage.isDone).toBe(false);
+
+    const secondPage = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.episodes.admin.listPage,
+      {
+        paginationOpts: {
+          cursor: firstPage.continueCursor,
+          numItems: 2,
+        },
+      },
+    );
+    expect(secondPage.page.map((episode) => episode.number)).toEqual([801]);
+    expect(secondPage.page[0]?.status).toBe("published");
+  });
+
   test("requires administrator access and the application write gate", async () => {
     const t = createTestBackend();
     await seedAdmin(t);
@@ -206,6 +252,19 @@ describe("administrator episode API", () => {
       t.withIdentity(MEMBER_IDENTITY).query(
         api.episodes.admin.getById,
         { id: episodeId },
+      ),
+      "FORBIDDEN",
+    );
+    await expectDomainError(
+      t.query(api.episodes.admin.listPage, {
+        paginationOpts: { cursor: null, numItems: 20 },
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.episodes.admin.listPage,
+        { paginationOpts: { cursor: null, numItems: 20 } },
       ),
       "FORBIDDEN",
     );
