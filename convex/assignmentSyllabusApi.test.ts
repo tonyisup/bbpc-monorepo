@@ -450,6 +450,45 @@ describe("assignment and syllabus API", () => {
       },
     );
     expect(page.page).toHaveLength(1);
+    const atomicIdentity = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.assignments.admin.updateIdentity, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: first.id,
+        type: "EXTRA_CREDIT",
+        playable: false,
+        slug: "atomic-identity",
+        expected: {
+          type: "BONUS",
+          playable: true,
+          slug: regenerated.slug,
+        },
+      });
+    expect(atomicIdentity).toMatchObject({
+      type: "EXTRA_CREDIT",
+      playable: false,
+      slug: "atomic-identity",
+    });
+    const identityAudit = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("auditEvents")
+        .filter((query) =>
+          query.eq(
+            query.field("action"),
+            "assignments.admin.identityUpdated",
+          ),
+        )
+        .unique();
+    });
+    expect(identityAudit).toMatchObject({
+      targetId: first.id,
+      metadata: {
+        type: "EXTRA_CREDIT",
+        playable: false,
+        slug: "atomic-identity",
+        regenerated: false,
+      },
+    });
   });
 
   test("validates assignment parents, types, slugs, and bounded episode reads", async () => {
@@ -547,6 +586,12 @@ describe("assignment and syllabus API", () => {
       movieId,
       episodeId,
       slug: "assignment-workbench",
+    });
+    await seedAssignment(t, {
+      userId: otherId,
+      movieId,
+      episodeId,
+      slug: "identity-conflict",
     });
     const [
       manualAudioId,
@@ -680,6 +725,28 @@ describe("assignment and syllabus API", () => {
       "NOT_FOUND",
     );
 
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.updateIdentity, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        type: "BONUS",
+        playable: true,
+        slug: "identity-conflict",
+        expected: {
+          type: "HOMEWORK",
+          playable: false,
+          slug: "assignment-workbench",
+        },
+      }),
+      "CONFLICT",
+    );
+    await expect(
+      admin.query(api.assignments.admin.getById, { id: assignmentId }),
+    ).resolves.toMatchObject({
+      type: "HOMEWORK",
+      playable: false,
+      slug: "assignment-workbench",
+    });
     await expectDomainError(
       admin.mutation(api.assignments.admin.updateSlug, {
         clientApiVersion: BBPC_API_VERSION,

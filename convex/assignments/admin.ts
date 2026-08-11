@@ -444,6 +444,80 @@ export const create = adminMutation({
   },
 });
 
+export const updateIdentity = adminMutation({
+  args: {
+    id: v.id("assignments"),
+    type: v.string(),
+    playable: v.boolean(),
+    slug: v.string(),
+    expected: v.object({
+      type: assignmentTypeValidator,
+      playable: v.boolean(),
+      slug: v.union(v.string(), v.null()),
+    }),
+  },
+  returns: assignmentDetailValidator,
+  handler: async (ctx, args) => {
+    const assignment = await requireAssignment(ctx, args.id);
+    if (
+      assignment.type !== args.expected.type ||
+      assignment.playable !== args.expected.playable ||
+      nullable(assignment.slug) !== args.expected.slug
+    ) {
+      domainError(
+        "CONFLICT",
+        "The assignment identity changed after it was loaded.",
+      );
+    }
+    const type = validateAssignmentType(args.type);
+    const parents = await requireAssignmentParents(ctx, assignment);
+    const slug =
+      args.slug.length === 0
+        ? await allocateAssignmentSlug(ctx, {
+            ...parents,
+            assignmentType: type,
+            excludeId: assignment._id,
+          })
+        : await validateRequestedAssignmentSlug(
+            ctx,
+            args.slug,
+            assignment._id,
+          );
+    const updated = {
+      ...assignment,
+      ...slug,
+      type,
+      playable: args.playable,
+    };
+    if (
+      assignment.type === updated.type &&
+      assignment.playable === updated.playable &&
+      nullable(assignment.slug) === updated.slug
+    ) {
+      return await hydrateAssignment(ctx, assignment);
+    }
+    await ctx.db.patch("assignments", assignment._id, {
+      ...slug,
+      type,
+      playable: args.playable,
+    });
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "assignments.admin.identityUpdated",
+      targetType: "assignment",
+      targetId: assignment._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: {
+        type,
+        playable: args.playable,
+        slug: updated.slug,
+        regenerated: args.slug.length === 0,
+      },
+    });
+    return await hydrateAssignment(ctx, updated);
+  },
+});
+
 export const updateSlug = adminMutation({
   args: {
     id: v.id("assignments"),

@@ -491,6 +491,44 @@ export type PublicApiType = {
                     status: "active" | "disabled";
                 };
             }>;
+            updateIdentity: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected: {
+                    playable: boolean;
+                    slug: string | null;
+                    type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                };
+                id: Id<"assignments">;
+                playable: boolean;
+                slug: string;
+                type: string;
+            }, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"assignments">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                playable: boolean;
+                slug: string | null;
+                type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
+            }>;
             updateSlug: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
                 expectedSlug?: string | null;
