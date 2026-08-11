@@ -300,16 +300,17 @@ describe("assignment and syllabus API", () => {
     );
     const second = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.assignments.admin.create,
-      createArgs,
+      { ...createArgs, playable: false },
     );
     expect(first).toMatchObject({
       type: "HOMEWORK",
-      playable: false,
+      playable: true,
       slug: "episode-12-syllabus-member-homework-movie-alpha",
     });
-    expect(second.slug).toBe(
-      "episode-12-syllabus-member-homework-movie-alpha-2",
-    );
+    expect(second).toMatchObject({
+      playable: false,
+      slug: "episode-12-syllabus-member-homework-movie-alpha-2",
+    });
 
     const manual = await t.withIdentity(ADMIN_IDENTITY).mutation(
       api.assignments.admin.updateSlug,
@@ -350,6 +351,61 @@ describe("assignment and syllabus API", () => {
         type: "bonus",
       });
     expect(updatedType.type).toBe("BONUS");
+    const updatedPlayable = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.assignments.admin.setPlayable, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: first.id,
+        playable: false,
+        expectedPlayable: true,
+      });
+    expect(updatedPlayable.playable).toBe(false);
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.assignments.admin.setPlayable,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: first.id,
+          playable: false,
+          expectedPlayable: false,
+        },
+      ),
+    ).resolves.toMatchObject({ playable: false });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.assignments.admin.setPlayable,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          id: first.id,
+          playable: true,
+        },
+      ),
+    ).resolves.toMatchObject({ playable: true });
+    const playableAuditEvents = await t.run(async (ctx) => {
+      const events = await ctx.db.query("auditEvents").collect();
+      return events.filter(
+        (event) =>
+          event.targetId === first.id &&
+          (event.action === "assignments.admin.created" ||
+            event.action === "assignments.admin.playableUpdated"),
+      );
+    });
+    expect(playableAuditEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "assignments.admin.created",
+          metadata: expect.objectContaining({ playable: true }),
+        }),
+        expect.objectContaining({
+          action: "assignments.admin.playableUpdated",
+          metadata: expect.objectContaining({ playable: false }),
+        }),
+        expect.objectContaining({
+          action: "assignments.admin.playableUpdated",
+          metadata: expect.objectContaining({ playable: true }),
+        }),
+      ]),
+    );
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.assignments.admin.setType,
@@ -639,6 +695,15 @@ describe("assignment and syllabus API", () => {
         id: assignmentId,
         type: "BONUS",
         expectedType: "EXTRA_CREDIT",
+      }),
+      "CONFLICT",
+    );
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.setPlayable, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        playable: true,
+        expectedPlayable: true,
       }),
       "CONFLICT",
     );
