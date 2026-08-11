@@ -411,6 +411,7 @@ export const create = adminMutation({
     movieId: v.id("movies"),
     episodeId: v.id("episodes"),
     type: v.string(),
+    playable: v.optional(v.boolean()),
   },
   returns: assignmentDetailValidator,
   handler: async (ctx, args) => {
@@ -425,7 +426,7 @@ export const create = adminMutation({
       movieId: parents.movie._id,
       episodeId: parents.episode._id,
       type,
-      playable: false,
+      playable: args.playable ?? true,
       ...slug,
     });
     await writeAuditEvent(ctx, {
@@ -434,7 +435,7 @@ export const create = adminMutation({
       targetType: "assignment",
       targetId: assignmentId,
       cutoverRunId: ctx.systemState.cutoverRunId,
-      metadata: { type },
+      metadata: { type, playable: args.playable ?? true },
     });
     return await hydrateAssignment(
       ctx,
@@ -522,6 +523,45 @@ export const setType = adminMutation({
       metadata: { type },
     });
     return await hydrateAssignment(ctx, { ...assignment, type });
+  },
+});
+
+export const setPlayable = adminMutation({
+  args: {
+    id: v.id("assignments"),
+    playable: v.boolean(),
+    expectedPlayable: v.optional(v.boolean()),
+  },
+  returns: assignmentDetailValidator,
+  handler: async (ctx, args) => {
+    const assignment = await requireAssignment(ctx, args.id);
+    if (
+      args.expectedPlayable !== undefined &&
+      assignment.playable !== args.expectedPlayable
+    ) {
+      domainError(
+        "CONFLICT",
+        "The assignment playable setting changed after it was loaded.",
+      );
+    }
+    if (assignment.playable === args.playable) {
+      return await hydrateAssignment(ctx, assignment);
+    }
+    await ctx.db.patch("assignments", assignment._id, {
+      playable: args.playable,
+    });
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "assignments.admin.playableUpdated",
+      targetType: "assignment",
+      targetId: assignment._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: { playable: args.playable },
+    });
+    return await hydrateAssignment(ctx, {
+      ...assignment,
+      playable: args.playable,
+    });
   },
 });
 

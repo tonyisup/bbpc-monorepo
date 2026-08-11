@@ -154,6 +154,7 @@ export type PublicApiType = {
                 clientApiVersion: string;
                 episodeId: Id<"episodes">;
                 movieId: Id<"movies">;
+                playable?: boolean;
                 type: string;
                 userId: Id<"users">;
             }, {
@@ -425,6 +426,38 @@ export type PublicApiType = {
                 id: Id<"assignments">;
             }, {
                 id: Id<"assignments">;
+            }>;
+            setPlayable: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedPlayable?: boolean;
+                id: Id<"assignments">;
+                playable: boolean;
+            }, {
+                episode: {
+                    id: Id<"episodes">;
+                    number: number;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                id: Id<"assignments">;
+                movie: {
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    tmdbId: number | null;
+                    url: string;
+                    year: number;
+                };
+                playable: boolean;
+                slug: string | null;
+                type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+                user: {
+                    id: Id<"users">;
+                    image: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                };
             }>;
             setType: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
