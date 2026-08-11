@@ -57,7 +57,7 @@ export default async function HomePage() {
           </h2>
         </div>
         <Suspense fallback={<EpisodeSkeleton />}>
-          {nextEpisode && <Episode episode={nextEpisode} allowGuesses />}
+          {nextEpisode && <Episode episode={nextEpisode} allowGuesses={true} />}
         </Suspense>
       </section>
     </div>
