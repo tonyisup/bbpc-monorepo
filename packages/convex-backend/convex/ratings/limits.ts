@@ -1,0 +1,2 @@
+export const MAX_RATING_CATALOG_SIZE = 100;
+export const MAX_RATING_TEXT_LENGTH = 1000;

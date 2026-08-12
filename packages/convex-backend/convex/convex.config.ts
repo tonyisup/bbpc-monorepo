@@ -1,0 +1,17 @@
+import { defineApp } from "convex/server";
+import { v } from "convex/values";
+
+export default defineApp({
+  env: {
+    CLERK_JWT_ISSUER_DOMAIN: v.string(),
+    CLERK_M2M_AUDIENCE: v.string(),
+    BBPC_ENVIRONMENT: v.union(
+      v.literal("development"),
+      v.literal("staging"),
+      v.literal("production"),
+    ),
+    BBPC_API_VERSION: v.string(),
+    TMDB_API_KEY: v.optional(v.string()),
+    UPLOADTHING_TOKEN: v.optional(v.string()),
+  },
+});

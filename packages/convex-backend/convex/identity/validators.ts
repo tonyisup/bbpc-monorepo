@@ -1,0 +1,92 @@
+import { v } from "convex/values";
+
+const nullableStringValidator = v.union(v.string(), v.null());
+const nullableNumberValidator = v.union(v.number(), v.null());
+
+export const identityUserStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("disabled"),
+);
+
+export const identityRoleValidator = v.object({
+  id: v.id("roles"),
+  legacyId: nullableNumberValidator,
+  name: v.string(),
+  description: v.string(),
+  admin: v.boolean(),
+  permissions: v.array(v.string()),
+});
+
+export const identityRoleMembershipValidator = v.object({
+  id: v.id("userRoles"),
+  assignedAt: nullableNumberValidator,
+  assignedBy: v.union(v.id("users"), v.null()),
+  role: identityRoleValidator,
+});
+
+export const identityRoleSummaryValidator = identityRoleValidator.extend({
+  userCount: v.number(),
+  userCountIsExact: v.boolean(),
+});
+
+export const identityProfileValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  image: nullableStringValidator,
+  isAdmin: v.boolean(),
+  isHost: v.boolean(),
+});
+
+export const identityPublicHostValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+  image: nullableStringValidator,
+});
+
+export const identityLinkResultValidator = identityProfileValidator.extend({
+  linkMode: v.union(
+    v.literal("alreadyLinked"),
+    v.literal("existingUser"),
+    v.literal("newUser"),
+  ),
+});
+
+export const identityAdminUserValidator = v.object({
+  id: v.id("users"),
+  legacyId: nullableStringValidator,
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  image: nullableStringValidator,
+  status: identityUserStatusValidator,
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  isAdmin: v.boolean(),
+  roles: v.array(identityRoleMembershipValidator),
+  nextSyllabus: v.union(
+    v.object({
+      id: v.id("syllabusEntries"),
+      order: v.number(),
+      notes: nullableStringValidator,
+      movie: v.object({
+        id: v.id("movies"),
+        title: v.string(),
+      }),
+    }),
+    v.null(),
+  ),
+});
+
+export const identityAdminUserSnapshotValidator = v.object({
+  name: nullableStringValidator,
+  email: nullableStringValidator,
+  status: identityUserStatusValidator,
+  updatedAt: v.number(),
+});
+
+export const identityRoleMembershipSnapshotValidator = v.object({
+  userId: v.id("users"),
+  roleId: v.id("roles"),
+  assignedAt: nullableNumberValidator,
+  assignedBy: v.union(v.id("users"), v.null()),
+});
