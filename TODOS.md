@@ -25,7 +25,7 @@ design.
 
 ### Consolidate BBPC into a monorepo after Convex migration stability
 
-**Status:** Completed 2026-08-12. All four histories now live in the private
+**Status:** Completed 2026-08-12. All four histories now live in the public
 `tonyisup/bbpc-monorepo` pnpm workspace. Root CI and guarded Convex staging deployment
 are green, the three Vercel production projects are cut over and healthy, and the three
 superseded application repositories are archived. The production Convex deployment was
