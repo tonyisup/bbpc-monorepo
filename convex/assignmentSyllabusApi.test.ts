@@ -390,22 +390,20 @@ describe("assignment and syllabus API", () => {
             event.action === "assignments.admin.playableUpdated"),
       );
     });
-    expect(playableAuditEvents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          action: "assignments.admin.created",
-          metadata: expect.objectContaining({ playable: true }),
-        }),
-        expect.objectContaining({
-          action: "assignments.admin.playableUpdated",
-          metadata: expect.objectContaining({ playable: false }),
-        }),
-        expect.objectContaining({
-          action: "assignments.admin.playableUpdated",
-          metadata: expect.objectContaining({ playable: true }),
-        }),
-      ]),
+    const createdAuditEvent = playableAuditEvents.find(
+      (event) => event.action === "assignments.admin.created",
     );
+    const playableUpdatedAuditEvents = playableAuditEvents.filter(
+      (event) => event.action === "assignments.admin.playableUpdated",
+    );
+    expect(createdAuditEvent?.metadata).toMatchObject({ playable: true });
+    expect(playableUpdatedAuditEvents).toHaveLength(2);
+    expect(
+      playableUpdatedAuditEvents.map((event) => event.metadata?.playable),
+    ).toContain(false);
+    expect(
+      playableUpdatedAuditEvents.map((event) => event.metadata?.playable),
+    ).toContain(true);
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.assignments.admin.setType,
