@@ -3,6 +3,640 @@ import { type GenericId as Id } from "convex/values";
 export declare const api: PublicApiType;
 export declare const internal: InternalApiType;
 export type PublicApiType = {
+    identity: {
+        profile: {
+            actionGateProbe: FunctionReference<"action", "public", {
+                clientApiVersion: string;
+            }, {
+                allowed: true;
+                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
+                isAdmin: boolean;
+            }>;
+            administratorMe: FunctionReference<"query", "public", Record<string, never>, {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                isHost: boolean;
+                name: string | null;
+            }>;
+            discardMyProfileImageUpload: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                fileKey: string;
+                uploadId: string;
+            }, {
+                intentId: Id<"sideEffectIntents">;
+                queued: true;
+            }>;
+            me: FunctionReference<"query", "public", Record<string, never>, {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                isHost: boolean;
+                name: string | null;
+            }>;
+            updateMyName: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                name: string;
+            }, {
+                name: string;
+                updatedAt: number;
+            }>;
+            updateMyProfileWithImage: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expectedImage: string | null;
+                fileKey: string;
+                image: string;
+                name: string;
+                uploadId: string;
+            }, {
+                image: string;
+                name: string;
+                updatedAt: number;
+            }>;
+        };
+        admin: {
+            assignRole: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                roleId: Id<"roles">;
+                userId: Id<"users">;
+            }, {
+                assignedAt: number | null;
+                assignedBy: Id<"users"> | null;
+                id: Id<"userRoles">;
+                role: {
+                    admin: boolean;
+                    description: string;
+                    id: Id<"roles">;
+                    legacyId: number | null;
+                    name: string;
+                    permissions: Array<string>;
+                };
+            }>;
+            createRole: FunctionReference<"mutation", "public", {
+                admin: boolean;
+                clientApiVersion: string;
+                description: string;
+                name: string;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+            }>;
+            createUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                email: string;
+                name: string;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+            deleteRole: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"roles">;
+            }, {
+                id: Id<"roles">;
+            }>;
+            getRole: FunctionReference<"query", "public", {
+                id: Id<"roles">;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+                userCount: number;
+                userCountIsExact: boolean;
+            } | null>;
+            getUser: FunctionReference<"query", "public", {
+                id: Id<"users">;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            } | null>;
+            listRoles: FunctionReference<"query", "public", Record<string, never>, Array<{
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+                userCount: number;
+                userCountIsExact: boolean;
+            }>>;
+            listUsersPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    createdAt: number;
+                    email: string | null;
+                    id: Id<"users">;
+                    image: string | null;
+                    isAdmin: boolean;
+                    legacyId: string | null;
+                    name: string | null;
+                    nextSyllabus: {
+                        id: Id<"syllabusEntries">;
+                        movie: {
+                            id: Id<"movies">;
+                            title: string;
+                        };
+                        notes: string | null;
+                        order: number;
+                    } | null;
+                    roles: Array<{
+                        assignedAt: number | null;
+                        assignedBy: Id<"users"> | null;
+                        id: Id<"userRoles">;
+                        role: {
+                            admin: boolean;
+                            description: string;
+                            id: Id<"roles">;
+                            legacyId: number | null;
+                            name: string;
+                            permissions: Array<string>;
+                        };
+                    }>;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            removeRoleMembership: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    roleId: Id<"roles">;
+                    userId: Id<"users">;
+                };
+                id: Id<"userRoles">;
+            }, {
+                id: Id<"userRoles">;
+            }>;
+            setUserStatus: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected?: {
+                    email: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                };
+                id: Id<"users">;
+                status: "active" | "disabled";
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+            updateRole: FunctionReference<"mutation", "public", {
+                admin: boolean;
+                clientApiVersion: string;
+                description: string;
+                id: Id<"roles">;
+                name: string;
+            }, {
+                admin: boolean;
+                description: string;
+                id: Id<"roles">;
+                legacyId: number | null;
+                name: string;
+                permissions: Array<string>;
+            }>;
+            updateUser: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                email: string;
+                expected?: {
+                    email: string | null;
+                    name: string | null;
+                    status: "active" | "disabled";
+                    updatedAt: number;
+                };
+                id: Id<"users">;
+                name: string;
+            }, {
+                createdAt: number;
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                legacyId: string | null;
+                name: string | null;
+                nextSyllabus: {
+                    id: Id<"syllabusEntries">;
+                    movie: {
+                        id: Id<"movies">;
+                        title: string;
+                    };
+                    notes: string | null;
+                    order: number;
+                } | null;
+                roles: Array<{
+                    assignedAt: number | null;
+                    assignedBy: Id<"users"> | null;
+                    id: Id<"userRoles">;
+                    role: {
+                        admin: boolean;
+                        description: string;
+                        id: Id<"roles">;
+                        legacyId: number | null;
+                        name: string;
+                        permissions: Array<string>;
+                    };
+                }>;
+                status: "active" | "disabled";
+                updatedAt: number;
+            }>;
+        };
+        impersonation: {
+            current: FunctionReference<"query", "public", Record<string, never>, {
+                endsAt: number;
+                id: Id<"impersonationSessions">;
+                reason: string;
+                startedAt: number;
+                targetName: string | null;
+                targetUserId: Id<"users">;
+            } | null>;
+            revoke: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                sessionId: Id<"impersonationSessions">;
+            }, {
+                revoked: boolean;
+                revokedAt: number | null;
+            }>;
+            start: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                durationMinutes: number;
+                reason: string;
+                targetUserId: Id<"users">;
+            }, {
+                endsAt: number;
+                id: Id<"impersonationSessions">;
+                reason: string;
+                startedAt: number;
+                targetName: string | null;
+                targetUserId: Id<"users">;
+            }>;
+        };
+        linking: {
+            linkOrCreateMe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                isAdmin: boolean;
+                isHost: boolean;
+                linkMode: "alreadyLinked" | "existingUser" | "newUser";
+                name: string | null;
+            }>;
+        };
+        public: {
+            listHosts: FunctionReference<"query", "public", Record<string, never>, Array<{
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+            }>>;
+        };
+        roles: {
+            mine: FunctionReference<"query", "public", Record<string, never>, Array<{
+                assignedAt: number | null;
+                assignedBy: Id<"users"> | null;
+                id: Id<"userRoles">;
+                role: {
+                    admin: boolean;
+                    description: string;
+                    id: Id<"roles">;
+                    legacyId: number | null;
+                    name: string;
+                    permissions: Array<string>;
+                };
+            }>>;
+        };
+    };
+    pipeline: {
+        status: {
+            actionGateProbe: FunctionReference<"action", "public", {
+                clientApiVersion: string;
+                requiredPermission: string;
+            }, {
+                allowed: true;
+                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
+            }>;
+            capabilities: FunctionReference<"query", "public", Record<string, never>, {
+                name: string;
+                permissions: Array<string>;
+                servicePrincipalId: Id<"servicePrincipals">;
+            }>;
+            heartbeat: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                requiredPermission: string;
+            }, {
+                lastSeenAt: number;
+            }>;
+        };
+        content: {
+            getEpisodeByDate: FunctionReference<"query", "public", {
+                date: string;
+            }, {
+                date: string | null;
+                description: string | null;
+                id: Id<"episodes">;
+                notes: string | null;
+                number: number;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+                slug: string | null;
+                status: string | null;
+                title: string;
+            } | null>;
+            getEpisodeContextByDate: FunctionReference<"query", "public", {
+                date: string;
+            }, {
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                movies: Array<{
+                    assignmentType: string | null;
+                    id: Id<"movies">;
+                    poster: string | null;
+                    source: "assignment" | "extra_review";
+                    title: string;
+                    year: number;
+                }>;
+            } | null>;
+            getEpisodeContextById: FunctionReference<"query", "public", {
+                id: Id<"episodes">;
+            }, {
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+                movies: Array<{
+                    assignmentType: string | null;
+                    id: Id<"movies">;
+                    poster: string | null;
+                    source: "assignment" | "extra_review";
+                    title: string;
+                    year: number;
+                }>;
+            } | null>;
+            getMoviePosters: FunctionReference<"query", "public", {
+                movieIds: Array<Id<"movies">>;
+            }, Array<{
+                id: Id<"movies">;
+                poster: string;
+            }>>;
+            listEpisodeDatesPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    date: string;
+                    id: Id<"episodes">;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listMovieCatalogPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    id: Id<"movies">;
+                    poster: string | null;
+                    title: string;
+                    year: number;
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            publishEpisodeSeo: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                date: string;
+                expected: {
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                };
+                operationId: string;
+                seoDescription: string | null;
+                seoKeywords: string | null;
+                seoTitle: string | null;
+            }, {
+                changed: boolean;
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+            }>;
+            upsertEpisodeFromAudio: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                date: string;
+                number: number;
+                operationId: string;
+                title: string;
+            }, {
+                created: boolean;
+                episode: {
+                    date: string | null;
+                    description: string | null;
+                    id: Id<"episodes">;
+                    notes: string | null;
+                    number: number;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
+                };
+            }>;
+        };
+    };
+    system: {
+        cutover: {
+            getStatus: FunctionReference<"query", "public", Record<string, never>, {
+                applicationWriteMode: "disabled";
+                initialized: false;
+            } | {
+                apiVersion: string;
+                applicationWriteMode: "disabled" | "enabled";
+                cutoverRunId: string;
+                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
+                firstApplicationWriteAt: number | null;
+                initialized: true;
+                updatedAt: number;
+            }>;
+        };
+        health: {
+            administratorWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            applicationWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            memberWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            pipelineWriteGateProbe: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+            readiness: FunctionReference<"query", "public", Record<string, never>, {
+                apiVersion: string;
+                applicationWritesEnabled: boolean;
+                cutoverStage: "uninitialized" | "S0" | "S1" | "S2" | "S3" | "S4";
+                firstApplicationWriteRecorded: boolean;
+                initialized: boolean;
+            }>;
+        };
+    };
     admin: {
         dashboard: {
             overview: FunctionReference<"query", "public", Record<string, never>, {
@@ -1265,6 +1899,80 @@ export type PublicApiType = {
                         name: string | null;
                         status: "active" | "disabled";
                     };
+                }>;
+                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+                splitCursor?: string | null;
+            }>;
+            listPage: FunctionReference<"query", "public", {
+                paginationOpts: {
+                    cursor: string | null;
+                    endCursor?: string | null;
+                    id?: number;
+                    maximumBytesRead?: number;
+                    maximumRowsRead?: number;
+                    numItems: number;
+                };
+            }, {
+                continueCursor: string;
+                isDone: boolean;
+                page: Array<{
+                    assignments: Array<{
+                        id: Id<"assignments">;
+                        movie: {
+                            id: Id<"movies">;
+                            poster: string | null;
+                            title: string;
+                            tmdbId: number | null;
+                            url: string;
+                            year: number;
+                        };
+                        playable: boolean;
+                        slug: string | null;
+                        type: string;
+                        user: {
+                            id: Id<"users">;
+                            image: string | null;
+                            name: string | null;
+                        };
+                    }>;
+                    date: string | null;
+                    description: string | null;
+                    extras: Array<{
+                        id: Id<"extraReviews">;
+                        review: {
+                            id: Id<"reviews">;
+                            movie: {
+                                id: Id<"movies">;
+                                poster: string | null;
+                                title: string;
+                                tmdbId: number | null;
+                                url: string;
+                                year: number;
+                            } | null;
+                            show: {
+                                id: Id<"shows">;
+                                poster: string | null;
+                                title: string;
+                                url: string;
+                                year: number;
+                            } | null;
+                        };
+                    }>;
+                    id: Id<"episodes">;
+                    links: Array<{
+                        id: Id<"episodeLinks">;
+                        text: string;
+                        url: string;
+                    }>;
+                    notes: string | null;
+                    number: number;
+                    recording: string | null;
+                    seoDescription: string | null;
+                    seoKeywords: string | null;
+                    seoTitle: string | null;
+                    slug: string | null;
+                    status: string | null;
+                    title: string;
                 }>;
                 pageStatus?: "SplitRecommended" | "SplitRequired" | null;
                 splitCursor?: string | null;
@@ -7165,603 +7873,6 @@ export type PublicApiType = {
             }>;
         };
     };
-    identity: {
-        admin: {
-            assignRole: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                roleId: Id<"roles">;
-                userId: Id<"users">;
-            }, {
-                assignedAt: number | null;
-                assignedBy: Id<"users"> | null;
-                id: Id<"userRoles">;
-                role: {
-                    admin: boolean;
-                    description: string;
-                    id: Id<"roles">;
-                    legacyId: number | null;
-                    name: string;
-                    permissions: Array<string>;
-                };
-            }>;
-            createRole: FunctionReference<"mutation", "public", {
-                admin: boolean;
-                clientApiVersion: string;
-                description: string;
-                name: string;
-            }, {
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-            }>;
-            createUser: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                email: string;
-                name: string;
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            }>;
-            deleteRole: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                id: Id<"roles">;
-            }, {
-                id: Id<"roles">;
-            }>;
-            getRole: FunctionReference<"query", "public", {
-                id: Id<"roles">;
-            }, {
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-                userCount: number;
-                userCountIsExact: boolean;
-            } | null>;
-            getUser: FunctionReference<"query", "public", {
-                id: Id<"users">;
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            } | null>;
-            listRoles: FunctionReference<"query", "public", Record<string, never>, Array<{
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-                userCount: number;
-                userCountIsExact: boolean;
-            }>>;
-            listUsersPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    createdAt: number;
-                    email: string | null;
-                    id: Id<"users">;
-                    image: string | null;
-                    isAdmin: boolean;
-                    legacyId: string | null;
-                    name: string | null;
-                    nextSyllabus: {
-                        id: Id<"syllabusEntries">;
-                        movie: {
-                            id: Id<"movies">;
-                            title: string;
-                        };
-                        notes: string | null;
-                        order: number;
-                    } | null;
-                    roles: Array<{
-                        assignedAt: number | null;
-                        assignedBy: Id<"users"> | null;
-                        id: Id<"userRoles">;
-                        role: {
-                            admin: boolean;
-                            description: string;
-                            id: Id<"roles">;
-                            legacyId: number | null;
-                            name: string;
-                            permissions: Array<string>;
-                        };
-                    }>;
-                    status: "active" | "disabled";
-                    updatedAt: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            removeRoleMembership: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    roleId: Id<"roles">;
-                    userId: Id<"users">;
-                };
-                id: Id<"userRoles">;
-            }, {
-                id: Id<"userRoles">;
-            }>;
-            setUserStatus: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expected?: {
-                    email: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                    updatedAt: number;
-                };
-                id: Id<"users">;
-                status: "active" | "disabled";
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            }>;
-            updateRole: FunctionReference<"mutation", "public", {
-                admin: boolean;
-                clientApiVersion: string;
-                description: string;
-                id: Id<"roles">;
-                name: string;
-            }, {
-                admin: boolean;
-                description: string;
-                id: Id<"roles">;
-                legacyId: number | null;
-                name: string;
-                permissions: Array<string>;
-            }>;
-            updateUser: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                email: string;
-                expected?: {
-                    email: string | null;
-                    name: string | null;
-                    status: "active" | "disabled";
-                    updatedAt: number;
-                };
-                id: Id<"users">;
-                name: string;
-            }, {
-                createdAt: number;
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                legacyId: string | null;
-                name: string | null;
-                nextSyllabus: {
-                    id: Id<"syllabusEntries">;
-                    movie: {
-                        id: Id<"movies">;
-                        title: string;
-                    };
-                    notes: string | null;
-                    order: number;
-                } | null;
-                roles: Array<{
-                    assignedAt: number | null;
-                    assignedBy: Id<"users"> | null;
-                    id: Id<"userRoles">;
-                    role: {
-                        admin: boolean;
-                        description: string;
-                        id: Id<"roles">;
-                        legacyId: number | null;
-                        name: string;
-                        permissions: Array<string>;
-                    };
-                }>;
-                status: "active" | "disabled";
-                updatedAt: number;
-            }>;
-        };
-        impersonation: {
-            current: FunctionReference<"query", "public", Record<string, never>, {
-                endsAt: number;
-                id: Id<"impersonationSessions">;
-                reason: string;
-                startedAt: number;
-                targetName: string | null;
-                targetUserId: Id<"users">;
-            } | null>;
-            revoke: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                sessionId: Id<"impersonationSessions">;
-            }, {
-                revoked: boolean;
-                revokedAt: number | null;
-            }>;
-            start: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                durationMinutes: number;
-                reason: string;
-                targetUserId: Id<"users">;
-            }, {
-                endsAt: number;
-                id: Id<"impersonationSessions">;
-                reason: string;
-                startedAt: number;
-                targetName: string | null;
-                targetUserId: Id<"users">;
-            }>;
-        };
-        linking: {
-            linkOrCreateMe: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-            }, {
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                isHost: boolean;
-                linkMode: "alreadyLinked" | "existingUser" | "newUser";
-                name: string | null;
-            }>;
-        };
-        profile: {
-            actionGateProbe: FunctionReference<"action", "public", {
-                clientApiVersion: string;
-            }, {
-                allowed: true;
-                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
-                isAdmin: boolean;
-            }>;
-            administratorMe: FunctionReference<"query", "public", Record<string, never>, {
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                isHost: boolean;
-                name: string | null;
-            }>;
-            discardMyProfileImageUpload: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                fileKey: string;
-                uploadId: string;
-            }, {
-                intentId: Id<"sideEffectIntents">;
-                queued: true;
-            }>;
-            me: FunctionReference<"query", "public", Record<string, never>, {
-                email: string | null;
-                id: Id<"users">;
-                image: string | null;
-                isAdmin: boolean;
-                isHost: boolean;
-                name: string | null;
-            }>;
-            updateMyName: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                name: string;
-            }, {
-                name: string;
-                updatedAt: number;
-            }>;
-            updateMyProfileWithImage: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                expectedImage: string | null;
-                fileKey: string;
-                image: string;
-                name: string;
-                uploadId: string;
-            }, {
-                image: string;
-                name: string;
-                updatedAt: number;
-            }>;
-        };
-        public: {
-            listHosts: FunctionReference<"query", "public", Record<string, never>, Array<{
-                id: Id<"users">;
-                image: string | null;
-                name: string | null;
-            }>>;
-        };
-        roles: {
-            mine: FunctionReference<"query", "public", Record<string, never>, Array<{
-                assignedAt: number | null;
-                assignedBy: Id<"users"> | null;
-                id: Id<"userRoles">;
-                role: {
-                    admin: boolean;
-                    description: string;
-                    id: Id<"roles">;
-                    legacyId: number | null;
-                    name: string;
-                    permissions: Array<string>;
-                };
-            }>>;
-        };
-    };
-    pipeline: {
-        content: {
-            getEpisodeByDate: FunctionReference<"query", "public", {
-                date: string;
-            }, {
-                date: string | null;
-                description: string | null;
-                id: Id<"episodes">;
-                notes: string | null;
-                number: number;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-                slug: string | null;
-                status: string | null;
-                title: string;
-            } | null>;
-            getEpisodeContextByDate: FunctionReference<"query", "public", {
-                date: string;
-            }, {
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                movies: Array<{
-                    assignmentType: string | null;
-                    id: Id<"movies">;
-                    poster: string | null;
-                    source: "assignment" | "extra_review";
-                    title: string;
-                    year: number;
-                }>;
-            } | null>;
-            getEpisodeContextById: FunctionReference<"query", "public", {
-                id: Id<"episodes">;
-            }, {
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-                movies: Array<{
-                    assignmentType: string | null;
-                    id: Id<"movies">;
-                    poster: string | null;
-                    source: "assignment" | "extra_review";
-                    title: string;
-                    year: number;
-                }>;
-            } | null>;
-            getMoviePosters: FunctionReference<"query", "public", {
-                movieIds: Array<Id<"movies">>;
-            }, Array<{
-                id: Id<"movies">;
-                poster: string;
-            }>>;
-            listEpisodeDatesPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    date: string;
-                    id: Id<"episodes">;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            listMovieCatalogPage: FunctionReference<"query", "public", {
-                paginationOpts: {
-                    cursor: string | null;
-                    endCursor?: string | null;
-                    id?: number;
-                    maximumBytesRead?: number;
-                    maximumRowsRead?: number;
-                    numItems: number;
-                };
-            }, {
-                continueCursor: string;
-                isDone: boolean;
-                page: Array<{
-                    id: Id<"movies">;
-                    poster: string | null;
-                    title: string;
-                    year: number;
-                }>;
-                pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-                splitCursor?: string | null;
-            }>;
-            publishEpisodeSeo: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                date: string;
-                expected: {
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                };
-                operationId: string;
-                seoDescription: string | null;
-                seoKeywords: string | null;
-                seoTitle: string | null;
-            }, {
-                changed: boolean;
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-            }>;
-            upsertEpisodeFromAudio: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                date: string;
-                number: number;
-                operationId: string;
-                title: string;
-            }, {
-                created: boolean;
-                episode: {
-                    date: string | null;
-                    description: string | null;
-                    id: Id<"episodes">;
-                    notes: string | null;
-                    number: number;
-                    seoDescription: string | null;
-                    seoKeywords: string | null;
-                    seoTitle: string | null;
-                    slug: string | null;
-                    status: string | null;
-                    title: string;
-                };
-            }>;
-        };
-        status: {
-            actionGateProbe: FunctionReference<"action", "public", {
-                clientApiVersion: string;
-                requiredPermission: string;
-            }, {
-                allowed: true;
-                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
-            }>;
-            capabilities: FunctionReference<"query", "public", Record<string, never>, {
-                name: string;
-                permissions: Array<string>;
-                servicePrincipalId: Id<"servicePrincipals">;
-            }>;
-            heartbeat: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-                requiredPermission: string;
-            }, {
-                lastSeenAt: number;
-            }>;
-        };
-    };
     rankings: {
         items: {
             move: FunctionReference<"mutation", "public", {
@@ -10105,43 +10216,6 @@ export type PublicApiType = {
                 };
                 notes: string | null;
                 order: number;
-            }>;
-        };
-    };
-    system: {
-        cutover: {
-            getStatus: FunctionReference<"query", "public", Record<string, never>, {
-                applicationWriteMode: "disabled";
-                initialized: false;
-            } | {
-                apiVersion: string;
-                applicationWriteMode: "disabled" | "enabled";
-                cutoverRunId: string;
-                cutoverStage: "S0" | "S1" | "S2" | "S3" | "S4";
-                firstApplicationWriteAt: number | null;
-                initialized: true;
-                updatedAt: number;
-            }>;
-        };
-        health: {
-            administratorWriteGateProbe: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-            }, null>;
-            applicationWriteGateProbe: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-            }, null>;
-            memberWriteGateProbe: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-            }, null>;
-            pipelineWriteGateProbe: FunctionReference<"mutation", "public", {
-                clientApiVersion: string;
-            }, null>;
-            readiness: FunctionReference<"query", "public", Record<string, never>, {
-                apiVersion: string;
-                applicationWritesEnabled: boolean;
-                cutoverStage: "uninitialized" | "S0" | "S1" | "S2" | "S3" | "S4";
-                firstApplicationWriteRecorded: boolean;
-                initialized: boolean;
             }>;
         };
     };
