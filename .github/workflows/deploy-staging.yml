@@ -74,4 +74,4 @@ jobs:
       - name: Verify deployed public contract
         run: |
           npx convex-helpers ts-api-spec --output-file "$RUNNER_TEMP/convexApi.deployed.ts"
-          pnpm run contract:compare -- contracts/convexApi.ts "$RUNNER_TEMP/convexApi.deployed.ts"
+          pnpm run contract:compare contracts/convexApi.ts "$RUNNER_TEMP/convexApi.deployed.ts"

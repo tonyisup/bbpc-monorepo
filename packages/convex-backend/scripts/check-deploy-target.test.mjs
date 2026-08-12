@@ -132,6 +132,6 @@ test("staging workflow pins and verifies the key target before deployment", () =
     workflow,
     /npx convex-helpers ts-api-spec --output-file/u,
   );
-  assert.match(workflow, /pnpm run contract:compare --/u);
+  assert.match(workflow, /pnpm run contract:compare contracts\/convexApi\.ts/u);
   assert.doesNotMatch(workflow, /ts-api-spec[^\n]*--prod/u);
 });
