@@ -51,9 +51,14 @@ branch remains available as a rollback source.
 
 ## CI and deployment ownership
 
-The canonical private repository is
+The canonical public repository is
 [`tonyisup/bbpc-monorepo`](https://github.com/tonyisup/bbpc-monorepo), with `main` as
 its default branch.
+
+The `main` branch requires the GitHub Actions `verify` check on an up-to-date branch,
+one approving code-owner review, dismissal of stale approvals, and resolution of review
+conversations. Force pushes and branch deletion are disabled. Administrator bypass
+remains available so the single-owner repository cannot deadlock on self-approval.
 
 `@tonyisup` owns the root lockfile, workspace manifest, application directories,
 backend package, workflow files, and deployment checker scripts through `CODEOWNERS`.
@@ -99,13 +104,11 @@ modified during this rollout.
 - [x] Establish the root pnpm workspace and internal contract dependency.
 - [x] Move CI, staging deployment, and ownership controls to repository scope.
 - [x] Leave the production Convex schema and public function API unchanged.
-- [x] Create the canonical private GitHub repository and push `main`.
+- [x] Create the canonical GitHub repository and push `main`.
 - [x] Preserve the protected `staging` environment and its existing secret on that
   repository.
 - [x] Install root CI and `CODEOWNERS` on `main`.
-- [ ] Enforce required CI and owner review if the GitHub account gains private-repository
-  branch protection. GitHub rejected this setting on the current plan; repository
-  privacy was not weakened to obtain it.
+- [x] Enforce required CI and code-owner review on `main` with branch protection.
 - [x] Point the three Vercel projects at the monorepo roots and verify production.
 - [x] Verify a backend-only change performs the guarded staging deployment.
 - [x] Observe all production applications, then archive the three superseded application
