@@ -1,0 +1,29 @@
+
+> bbpc-admin@0.1.0 dev
+> next dev --port 3001
+
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+  ▲ Next.js 13.5.11
+  - Local:        http://localhost:3001
+
+ ✓ Ready in 2s
+ ○ Compiling /lists ...
+ ✓ Compiled /lists in 7.5s (663 modules)
+ ✓ Compiled /api/auth/[...nextauth] in 2.6s (228 modules)
+ ⨯ Error: Invalid port number: //bbpc.database.windows.net
+    at parseConnectionString (file:///app/node_modules/@prisma/adapter-mssql/dist/index.mjs:57:13)
+    at new PrismaMssqlAdapterFactory (file:///app/node_modules/@prisma/adapter-mssql/dist/index.mjs:718:22)
+    at eval (webpack-internal:///(api)/./src/server/db/client.ts:19:17)
+ ✓ Compiled /_error in 1843ms (692 modules)
+ ○ Compiling /episode/[id] ...
+ ✓ Compiled /episode/[id] in 3.7s (929 modules)
+ ⨯ Error: Invalid port number: //bbpc.database.windows.net
+    at parseConnectionString (file:///app/node_modules/@prisma/adapter-mssql/dist/index.mjs:57:13)
+    at new PrismaMssqlAdapterFactory (file:///app/node_modules/@prisma/adapter-mssql/dist/index.mjs:718:22)
+    at eval (webpack-internal:///./src/server/db/client.ts:19:17) {
+  page: '/episode/1'
+}
