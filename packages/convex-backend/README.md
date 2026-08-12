@@ -1,7 +1,7 @@
 # BBPC Convex
 
-Shared Convex backend and pinned multi-repository API contract for `bbpc`,
-`bbpc-admin`, `bbpc-pipeline`, and `bbpc-recording`.
+Shared Convex backend and workspace API contract for `bbpc`, `bbpc-admin`, and
+`bbpc-recording`. `bbpc-pipeline` consumes the deployed service API.
 
 The guarded SQL production clone remains the migration source of truth until cutover.
 Production-derived extracts, staging rows, backups, checkpoints, and reconciliation
@@ -33,33 +33,33 @@ The staging deployment is synthetic-data-only. It uses a deployment-scoped key n
 
 ## Local development
 
-1. Use Node 22 and run `npm ci`.
+1. Use Node 22 and run `pnpm install --frozen-lockfile` at the monorepo root.
 2. Copy `.env.example` to `.env.local` or configure a Convex local deployment.
 3. Set `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_M2M_AUDIENCE`,
    `BBPC_ENVIRONMENT`, `BBPC_API_VERSION`, and `TMDB_API_KEY` on that
    deployment. The M2M audience is the Clerk machine ID for the scoped
    `BBPC Convex` receiver.
-4. Run `npm run check && npm run package:check`.
+4. Run `pnpm run check && pnpm run package:check`.
 
 Useful commands:
 
 ```sh
-npm run dev
-npm run check
-npm run package:check
-npm run migration:test:extractor
-npm run migration:rehearse:local -- --help
-npm run migration:backup:local -- --help
-npm run migration:restore:local -- --help
-npm run performance:benchmark:public
-npm run performance:benchmark:authenticated -- \
+pnpm run dev
+pnpm run check
+pnpm run package:check
+pnpm run migration:test:extractor
+pnpm run migration:rehearse:local -- --help
+pnpm run migration:backup:local -- --help
+pnpm run migration:restore:local -- --help
+pnpm run performance:benchmark:public
+pnpm run performance:benchmark:authenticated -- \
   --local-config .convex/local/default/config.json \
   --admin-identity .local-migration/performance/admin-identity.json \
   --member-identity .local-migration/performance/member-identity.json \
   --pipeline-identity .local-migration/performance/pipeline-identity.json
-npm run staging:test
-npm run contract:generate
-npm run contract:build
+pnpm run staging:test
+pnpm run contract:generate
+pnpm run contract:build
 ```
 
 `contract:generate` uses Convex’s beta multi-repository API generator and excludes
@@ -544,9 +544,9 @@ capabilities and must never be imported into shared Convex.
 local backend, compares every canonical table hash, deletes that backend, and retains
 only value-free restore evidence.
 
-## Package consumers
+## Workspace consumers
 
-TypeScript consumers pin an exact GitHub Packages release:
+TypeScript consumers use the private pnpm workspace package:
 
 ```ts
 import { api } from "@tonyisup/bbpc-convex-api";
@@ -556,12 +556,12 @@ import {
 } from "@tonyisup/bbpc-convex-api/contracts";
 ```
 
-The release tag must exactly match `v<package.json version>`. Staging deploy CI verifies
-that the deployed public contract is semantically identical to the committed artifact
-before a tag may publish it. The comparison canonicalizes generated property and union
-ordering because Convex can return equivalent function metadata in a different order
-across deployments. Signature changes still fail closed. Previous compatible backend
-functions remain deployed until every consumer has moved off the prior package.
+The workspace dependency version must exactly match `package.json`. Staging deploy CI
+verifies that the deployed public contract is semantically identical to the committed
+artifact. The comparison canonicalizes generated property and union ordering because
+Convex can return equivalent function metadata in a different order across deployments.
+Signature changes still fail closed. Previous compatible backend functions remain
+deployed until every consumer has moved off the prior contract.
 
 ## Deployment safety
 

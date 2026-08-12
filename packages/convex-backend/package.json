@@ -3,18 +3,10 @@
   "version": "0.1.0",
   "description": "Shared Convex backend and generated API contract for BBPC",
   "license": "UNLICENSED",
-  "private": false,
+  "private": true,
   "type": "module",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tonyisup/bbpc-convex.git"
-  },
   "engines": {
     "node": ">=22"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
   },
   "files": [
     "contracts/index.d.ts",
@@ -46,7 +38,6 @@
     "deploy:staging:verify": "node scripts/verify-staging-deployment.mjs",
     "deploy:target:check": "node scripts/check-deploy-target.mjs",
     "deployment:test": "node --test scripts/*.test.mjs",
-    "release:check": "node scripts/check-release-version.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:queries": "node scripts/check-convex-queries.mjs",
@@ -77,8 +68,8 @@
     "performance:test": "node --test local-tools/performance/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "npm run typecheck && npm run lint && npm run lint:queries && npm run lint:access && npm run deployment:test && npm run migration:test:extractor && npm run migration:test:recording && npm run staging:test && npm run performance:test && npm run test:coverage",
-    "package:check": "npm run contract:build && node scripts/check-package.mjs"
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:queries && pnpm run lint:access && pnpm run deployment:test && pnpm run migration:test:extractor && pnpm run migration:test:recording && pnpm run staging:test && pnpm run performance:test && pnpm run test:coverage",
+    "package:check": "pnpm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {
     "@noble/hashes": "2.2.0",
@@ -96,9 +87,5 @@
     "typescript-eslint": "8.65.0",
     "vite": "8.1.5",
     "vitest": "4.1.10"
-  },
-  "allowScripts": {
-    "esbuild@0.27.0": true,
-    "fsevents": false
   }
 }

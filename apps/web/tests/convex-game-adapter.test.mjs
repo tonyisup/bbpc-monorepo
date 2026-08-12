@@ -41,7 +41,11 @@ test("Clerk subjects never become legacy application-data identifiers", () => {
   assert.match(identity, /identity\/profile:me/u);
   assert.match(identity, /IDENTITY_NOT_LINKED/u);
   assert.match(identity, /identity\/linking:linkOrCreateMe/u);
-  assert.match(identity, /BBPC_CLIENT_API_VERSION = "0\.1\.0"/u);
+  assert.match(
+    identity,
+    /BBPC_API_VERSION.*@tonyisup\/bbpc-convex-api\/contracts/u
+  );
+  assert.match(identity, /BBPC_CLIENT_API_VERSION = BBPC_API_VERSION/u);
   assert.ok(
     identity.indexOf('!== "IDENTITY_NOT_LINKED"') <
       identity.indexOf("client.mutation")

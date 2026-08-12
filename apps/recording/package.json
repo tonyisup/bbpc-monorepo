@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "merge-session": "node scripts/merge-session-bundle.mjs"
   },
   "dependencies": {
+    "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "@azure/storage-blob": "^12.32.0",
     "@clerk/nextjs": "6.39.6",
     "convex": "1.42.3",
@@ -31,8 +33,5 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.8"
-  },
-  "overrides": {
-    "postcss": "^8.5.10"
   }
 }

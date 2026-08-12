@@ -23,6 +23,11 @@ design.
 
 ### Consolidate BBPC into a monorepo after Convex migration stability
 
+**Status:** In progress. The local pnpm workspace, preserved histories, internal
+contract dependency, and repository-level CI/deployment controls were assembled and
+verified on 2026-08-12. Canonical GitHub and Vercel cutover steps remain; see
+[`docs/monorepo-rollout.md`](docs/monorepo-rollout.md).
+
 **What:** Move `bbpc`, `bbpc-admin`, `bbpc-convex`, shared contracts, and optionally
 `bbpc-recording` into one workspace after the migration has stabilized.
 

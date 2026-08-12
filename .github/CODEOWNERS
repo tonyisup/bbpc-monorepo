@@ -1,0 +1,13 @@
+# Repository, workspace, and deployment controls.
+/.github/CODEOWNERS @tonyisup
+/.github/workflows/ @tonyisup
+/package.json @tonyisup
+/pnpm-lock.yaml @tonyisup
+/pnpm-workspace.yaml @tonyisup
+/packages/convex-backend/ @tonyisup
+/packages/convex-backend/scripts/check-*.mjs @tonyisup
+
+# Existing application deployment ownership.
+/apps/web/ @tonyisup
+/apps/admin/ @tonyisup
+/apps/recording/ @tonyisup

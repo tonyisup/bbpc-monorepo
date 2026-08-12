@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-const repositoryRoot = path.resolve(import.meta.dirname, "..");
+const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
 const workflowsDirectory = path.join(repositoryRoot, ".github", "workflows");
 const immutableGitHubActionReference = /^[^@\s]+@[0-9a-f]{40}$/u;
 
@@ -43,5 +43,8 @@ test("publication and deployment controls have an explicit owner", () => {
 
   assert.match(codeowners, /^\/\.github\/CODEOWNERS @tonyisup$/mu);
   assert.match(codeowners, /^\/\.github\/workflows\/ @tonyisup$/mu);
-  assert.match(codeowners, /^\/scripts\/check-\*\.mjs @tonyisup$/mu);
+  assert.match(
+    codeowners,
+    /^\/packages\/convex-backend\/scripts\/check-\*\.mjs @tonyisup$/mu,
+  );
 });

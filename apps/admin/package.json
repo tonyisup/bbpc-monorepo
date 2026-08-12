@@ -7,9 +7,11 @@
     "dev": "next dev --port 3001",
     "lint": "next lint",
     "start": "next start",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "@clerk/nextjs": "6.39.6",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -58,15 +60,6 @@
     "tailwindcss": "^3.2.0",
     "typescript": "^5.9.3",
     "vitest": "3.2.7"
-  },
-  "overrides": {
-    "effect": "3.22.1",
-    "fast-xml-parser": "5.10.1",
-    "form-data": "4.0.6",
-    "lodash": "4.18.1",
-    "postcss": "8.5.25",
-    "preact": "10.29.8",
-    "sharp": "0.35.0"
   },
   "ct3aMetadata": {
     "initVersion": "6.11.3"

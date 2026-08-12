@@ -245,16 +245,16 @@ test("staging workflow runs invariant verification after deployment", () => {
   const workflow = fs.readFileSync(
     path.resolve(
       import.meta.dirname,
-      "../.github/workflows/deploy-staging.yml",
+      "../../../.github/workflows/deploy-staging.yml",
     ),
     "utf8",
   );
   const deployIndex = workflow.indexOf("npx convex deploy");
   const invariantIndex = workflow.indexOf(
-    "npm run deploy:staging:verify",
+    "pnpm run deploy:staging:verify",
   );
   const contractIndex = workflow.indexOf(
-    "npm run contract:compare",
+    "pnpm run contract:compare",
   );
 
   assert.ok(deployIndex >= 0);

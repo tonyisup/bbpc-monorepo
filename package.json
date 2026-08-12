@@ -1,0 +1,24 @@
+{
+  "name": "bbpc-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BBPC applications and shared Convex backend",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "build": "pnpm run build:contracts && pnpm run build:apps",
+    "build:apps": "pnpm --filter bbpc run build && pnpm --filter bbpc-admin run build && pnpm --filter bbpc-recording run build",
+    "build:contracts": "pnpm --filter @tonyisup/bbpc-convex-api run contract:build",
+    "check": "pnpm run check:backend && pnpm run check:apps",
+    "check:apps": "pnpm --filter bbpc run typecheck && pnpm --filter bbpc run test && pnpm --filter bbpc-admin run typecheck && pnpm --filter bbpc-admin run test && pnpm --filter bbpc-recording run typecheck && pnpm --filter bbpc-recording run test",
+    "check:backend": "pnpm --filter @tonyisup/bbpc-convex-api run check",
+    "dev:admin": "pnpm --filter bbpc-admin run dev",
+    "dev:backend": "pnpm --filter @tonyisup/bbpc-convex-api run dev",
+    "dev:recording": "pnpm --filter bbpc-recording run dev",
+    "dev:web": "pnpm --filter bbpc run dev",
+    "test": "pnpm --filter './apps/*' run test && pnpm --filter @tonyisup/bbpc-convex-api run test",
+    "typecheck": "pnpm -r run typecheck"
+  }
+}

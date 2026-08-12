@@ -2,13 +2,15 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { z } from "zod";
 
+import { BBPC_API_VERSION } from "@tonyisup/bbpc-convex-api/contracts";
+
 import {
   fetchActionForSignedInUser,
   publicActionReference,
 } from "@/server/convex/client";
 
 const f = createUploadthing();
-const BBPC_CLIENT_API_VERSION = "0.1.0";
+const BBPC_CLIENT_API_VERSION = BBPC_API_VERSION;
 
 const actionGateReference = publicActionReference<{
   clientApiVersion: string;

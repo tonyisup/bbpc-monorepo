@@ -116,11 +116,14 @@ test("environment checker has read-only Convex capability", () => {
 
 test("workflow checks staging environment before deployment", () => {
   const workflow = fs.readFileSync(
-    path.resolve(import.meta.dirname, "../.github/workflows/deploy-staging.yml"),
+    path.resolve(
+      import.meta.dirname,
+      "../../../.github/workflows/deploy-staging.yml",
+    ),
     "utf8",
   );
   const environmentCheckIndex = workflow.indexOf(
-    "npm run deploy:environment:check",
+    "pnpm run deploy:environment:check",
   );
   const deployIndex = workflow.indexOf("npx convex deploy");
 

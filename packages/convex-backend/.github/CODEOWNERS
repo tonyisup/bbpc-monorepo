@@ -1,4 +1,0 @@
-# Protect the controls that can publish packages or deploy the backend.
-/.github/CODEOWNERS @tonyisup
-/.github/workflows/ @tonyisup
-/scripts/check-*.mjs @tonyisup

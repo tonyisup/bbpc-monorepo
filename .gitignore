@@ -9,13 +9,17 @@
 /audacity/
 /bbpc-admin-og/
 /bbpc-autoresearch/
+/bbpc-cleanup/
 /bbpc-db/
 /bbpc-pipeline/
 
 # Root workspace artifacts.
 /node_modules/
+/.pnpm-store/
 /coverage/
 /.turbo/
+/.local-migration/
+/.vscode/
 /.DS_Store
 npm-debug.log*
 *.tsbuildinfo

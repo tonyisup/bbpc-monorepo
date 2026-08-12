@@ -1,5 +1,7 @@
 import { makeFunctionReference } from 'convex/server';
 
+import { BBPC_API_VERSION } from '@tonyisup/bbpc-convex-api/contracts';
+
 import type {
   Manifest,
   RecordingUploadMetadata,
@@ -15,7 +17,7 @@ import type {
   SessionParticipant,
 } from '@/lib/sessions/types';
 
-export const BBPC_CLIENT_API_VERSION = '0.1.0';
+export const BBPC_CLIENT_API_VERSION = BBPC_API_VERSION;
 
 type CapabilityArgs = {
   publicSessionId: string;

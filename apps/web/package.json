@@ -6,10 +6,12 @@
     "build": "next build",
     "dev": "next dev --port 3000",
     "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "start": "next start"
   },
   "dependencies": {
+    "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "@clerk/nextjs": "6.39.6",
     "@ducanh2912/next-pwa": "10.2.9",
     "@headlessui/react": "^1.7.7",
@@ -72,14 +74,6 @@
     "prettier-plugin-tailwindcss": "^0.2.1",
     "tailwindcss": "^3.2.0",
     "typescript": "^5.9.3"
-  },
-  "overrides": {
-    "effect": "3.22.1",
-    "lodash": "4.18.1",
-    "postcss": "8.5.25",
-    "preact": "10.29.8",
-    "serialize-javascript": "7.0.5",
-    "sharp": "0.35.0"
   },
   "ct3aMetadata": {
     "initVersion": "6.12.0"

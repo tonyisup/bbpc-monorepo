@@ -1,0 +1,24 @@
+packages:
+  - apps/*
+  - packages/*
+
+overrides:
+  effect: 3.22.1
+  fast-xml-parser: 5.10.1
+  form-data: 4.0.6
+  lodash: 4.18.1
+  postcss: 8.5.25
+  preact: 10.29.8
+  serialize-javascript: 7.0.5
+  sharp: 0.35.0
+
+onlyBuiltDependencies:
+  - '@clerk/shared'
+  - esbuild
+  - msgpackr-extract
+  - sharp
+  - unrs-resolver
+
+ignoredBuiltDependencies:
+  - core-js
+  - fsevents

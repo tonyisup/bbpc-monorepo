@@ -99,10 +99,13 @@ test("CLI failure output never includes the deploy-key secret", () => {
 
 test("staging workflow pins and verifies the key target before deployment", () => {
   const workflow = fs.readFileSync(
-    path.resolve(import.meta.dirname, "../.github/workflows/deploy-staging.yml"),
+    path.resolve(
+      import.meta.dirname,
+      "../../../.github/workflows/deploy-staging.yml",
+    ),
     "utf8",
   );
-  const checkIndex = workflow.indexOf("npm run deploy:target:check");
+  const checkIndex = workflow.indexOf("pnpm run deploy:target:check");
   const deployIndex = workflow.indexOf("npx convex deploy");
 
   assert.match(
@@ -129,6 +132,6 @@ test("staging workflow pins and verifies the key target before deployment", () =
     workflow,
     /npx convex-helpers ts-api-spec --output-file/u,
   );
-  assert.match(workflow, /npm run contract:compare --/u);
+  assert.match(workflow, /pnpm run contract:compare --/u);
   assert.doesNotMatch(workflow, /ts-api-spec[^\n]*--prod/u);
 });

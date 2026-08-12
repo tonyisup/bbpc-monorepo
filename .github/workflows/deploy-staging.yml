@@ -1,9 +1,15 @@
-name: Deploy staging
+name: Deploy Convex staging
 
 on:
   push:
     branches:
-      - master
+      - main
+    paths:
+      - ".github/workflows/deploy-staging.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "packages/convex-backend/**"
   workflow_dispatch:
 
 permissions:
@@ -18,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
+    defaults:
+      run:
+        working-directory: packages/convex-backend
     env:
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_STAGING_DEPLOY_KEY }}
       BBPC_EXPECTED_CONVEX_DEPLOYMENT: merry-shepherd-928
@@ -32,21 +41,26 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
 
       - name: Verify staging deploy target
-        run: npm run deploy:target:check
+        run: pnpm run deploy:target:check
 
       - name: Verify staging environment
-        run: npm run deploy:environment:check
+        run: pnpm run deploy:environment:check
 
-      - name: Verify source and package
+      - name: Verify source and workspace contract
         run: |
-          npm run check
-          npm run package:check
+          pnpm run check
+          pnpm run package:check
 
       - name: Deploy backward-compatible backend
         run: >-
@@ -55,9 +69,9 @@ jobs:
           --message "GitHub staging ${GITHUB_SHA}"
 
       - name: Verify deployed staging invariants
-        run: npm run deploy:staging:verify
+        run: pnpm run deploy:staging:verify
 
       - name: Verify deployed public contract
         run: |
           npx convex-helpers ts-api-spec --output-file "$RUNNER_TEMP/convexApi.deployed.ts"
-          npm run contract:compare -- contracts/convexApi.ts "$RUNNER_TEMP/convexApi.deployed.ts"
+          pnpm run contract:compare -- contracts/convexApi.ts "$RUNNER_TEMP/convexApi.deployed.ts"

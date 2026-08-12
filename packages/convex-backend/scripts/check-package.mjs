@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
 const root = path.resolve(import.meta.dirname, "..");
+const require = createRequire(import.meta.url);
 const temporaryRoot = fs.mkdtempSync(
   path.join(os.tmpdir(), "bbpc-convex-package-"),
 );
@@ -16,6 +18,21 @@ function run(command, args, options = {}) {
     stdio: ["ignore", "pipe", "pipe"],
     ...options,
   });
+}
+
+function installedPackageRoot(packageName) {
+  let candidate = path.dirname(require.resolve(packageName));
+  while (candidate !== path.dirname(candidate)) {
+    const manifestPath = path.join(candidate, "package.json");
+    if (fs.existsSync(manifestPath)) {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      if (manifest.name === packageName) {
+        return candidate;
+      }
+    }
+    candidate = path.dirname(candidate);
+  }
+  throw new Error(`Could not locate installed package ${packageName}`);
 }
 
 try {
@@ -81,7 +98,7 @@ try {
   );
   for (const dependency of ["convex", "convex-helpers"]) {
     fs.symlinkSync(
-      path.join(root, "node_modules", dependency),
+      installedPackageRoot(dependency),
       path.join(consumerRoot, "node_modules", dependency),
       "dir",
     );
@@ -346,7 +363,7 @@ try {
   run(
     process.execPath,
     [
-      path.join(root, "node_modules", "typescript", "bin", "tsc"),
+      require.resolve("typescript/bin/tsc"),
       "--project",
       consumerRoot,
     ],

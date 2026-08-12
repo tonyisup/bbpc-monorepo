@@ -5,18 +5,20 @@ Browser-based podcast recording for one host plus invited guests. Session state 
 ## Development
 
 ```bash
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev:recording
 ```
+
+Run these commands from the monorepo root.
 
 Open `http://localhost:3000`.
 
 Useful commands:
 
 ```bash
-npm run lint
-npm test
-npm run build
+pnpm run lint
+pnpm test
+pnpm run build
 ```
 
 Copy `.env.example` to `.env.local`. Point `NEXT_PUBLIC_CONVEX_URL` at the
@@ -53,16 +55,16 @@ After a recording session, use the app's `Download Merge Bundle` button. The bun
 To merge locally:
 
 ```bash
-npm run merge-session -- --bundle ./EP-merge-bundle.json --out ./merged/EP
+pnpm run merge-session -- --bundle ./EP-merge-bundle.json --out ./merged/EP
 ```
 
 Options:
 
 ```bash
-npm run merge-session -- --help
-npm run merge-session -- --bundle ./EP-merge-bundle.json --format=mp3
-npm run merge-session -- --bundle ./EP-merge-bundle.json --sounders=reconstruct
-npm run merge-session -- --bundle ./EP-merge-bundle.json --dry-run
+pnpm run merge-session -- --help
+pnpm run merge-session -- --bundle ./EP-merge-bundle.json --format=mp3
+pnpm run merge-session -- --bundle ./EP-merge-bundle.json --sounders=reconstruct
+pnpm run merge-session -- --dry-run
 ```
 
 Sounder modes:

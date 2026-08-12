@@ -3,7 +3,9 @@ import { makeFunctionReference } from "convex/server";
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 
-export const BBPC_CLIENT_API_VERSION = "0.1.0";
+import { BBPC_API_VERSION } from "@tonyisup/bbpc-convex-api/contracts";
+
+export const BBPC_CLIENT_API_VERSION = BBPC_API_VERSION;
 
 const identityProfileSchema = z.object({
   id: z.string().min(1),
