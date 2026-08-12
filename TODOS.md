@@ -21,28 +21,18 @@ may conclude that no migration is appropriate.
 **Depends on:** Stable core cutover, observed media costs, and the recording migration
 design.
 
+## Completed
+
 ### Consolidate BBPC into a monorepo after Convex migration stability
 
-**Status:** In progress. The local pnpm workspace, preserved histories, internal
-contract dependency, and repository-level CI/deployment controls were assembled and
-verified on 2026-08-12. Canonical GitHub and Vercel cutover steps remain; see
-[`docs/monorepo-rollout.md`](docs/monorepo-rollout.md).
+**Status:** Completed 2026-08-12. All four histories now live in the private
+`tonyisup/bbpc-monorepo` pnpm workspace. Root CI and guarded Convex staging deployment
+are green, the three Vercel production projects are cut over and healthy, and the three
+superseded application repositories are archived. The production Convex deployment was
+not changed. See [`docs/monorepo-rollout.md`](docs/monorepo-rollout.md).
 
-**What:** Move `bbpc`, `bbpc-admin`, `bbpc-convex`, shared contracts, and optionally
+**What:** Move `bbpc`, `bbpc-admin`, `bbpc-convex`, shared contracts, and
 `bbpc-recording` into one workspace after the migration has stabilized.
 
 **Why:** Remove the temporary package-publication hop and simplify atomic cross-project
 changes without mixing repository restructuring into the database cutover.
-
-**Context:** The shared backend is deliberately being built as a standalone sibling.
-Its function names, DTOs, deployment ownership, and generated client contract must remain
-portable to `packages/convex-backend`. Start by choosing a workspace/build system,
-preserving repository history, and translating existing CI/deployment ownership without
-changing the production Convex schema or API.
-
-**Effort:** L
-**Priority:** P3
-**Depends on:** Stable post-cutover backend, substantial tRPC retirement, and a settled
-recording migration.
-
-## Completed

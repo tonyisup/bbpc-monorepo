@@ -44,11 +44,16 @@ original commits.
 | `packages/convex-backend` | `tonyisup/bbpc-convex` | `afd5d7c7596d9dba9e9b29e1ec4ccd28dbe01fc4` |
 | `apps/recording` | `tonyisup/bbpc-recording` | `41424de9b9632792c9c8607d21f01b1b0006a038` |
 
-The original sibling checkouts remain untouched during rollout. Archive them only
-after the canonical remote, CI, staging deployment, and three application deployments
-have all been verified.
+The original sibling checkouts remain untouched as local rollback sources. The three
+superseded application repositories are archived on GitHub after verification. The
+former backend repository became the canonical monorepo, and its legacy `master`
+branch remains available as a rollback source.
 
 ## CI and deployment ownership
+
+The canonical private repository is
+[`tonyisup/bbpc-monorepo`](https://github.com/tonyisup/bbpc-monorepo), with `main` as
+its default branch.
 
 `@tonyisup` owns the root lockfile, workspace manifest, application directories,
 backend package, workflow files, and deployment checker scripts through `CODEOWNERS`.
@@ -64,17 +69,29 @@ deployment, and S2 invariant. It runs backend commands from
 `packages/convex-backend` and is triggered only by backend or workspace dependency
 changes.
 
-Keep the existing Vercel projects and change only their repository and root directory:
+The existing Vercel projects retain their environment variables and domains. They now
+use the canonical repository with these roots:
 
-| Vercel project | Root directory |
-|---|---|
-| Public web | `apps/web` |
-| Admin | `apps/admin` |
-| Recording | `apps/recording` |
+| Vercel project | Root directory | Production domain |
+|---|---|---|
+| `bbpc` | `apps/web` | `badboyspodcast.com` |
+| `bbpc-admin` | `apps/admin` | `admin.badboyspodcast.com` |
+| `bbpc-recording` | `apps/recording` | `record.badboyspodcast.com` |
 
-Preserve each project's existing environment variables, domains, build settings, and
-deployment protection. Preview all three applications from the monorepo before changing
-their production branch.
+All three projects enable Corepack through `ENABLE_EXPERIMENTAL_COREPACK=1`, so Vercel
+honors the repository's pinned pnpm version. They also skip deployments when neither
+their root nor a dependency changed.
+
+## Production verification
+
+Application commit `18cfbb4` produced ready production deployments for all three Vercel
+projects. Each production domain returned HTTP 200 with the expected application, and
+Vercel reported no runtime errors during the post-deploy observation window.
+
+Root CI and the guarded Convex staging workflow passed. The staging workflow deployed
+only to `merry-shepherd-928`, preserved its S2 invariant, and verified the public API
+contract. The production Convex deployment `determined-wombat-872` was not deployed or
+modified during this rollout.
 
 ## Rollout checklist
 
@@ -82,20 +99,24 @@ their production branch.
 - [x] Establish the root pnpm workspace and internal contract dependency.
 - [x] Move CI, staging deployment, and ownership controls to repository scope.
 - [x] Leave the production Convex schema and public function API unchanged.
-- [ ] Create or select the canonical private GitHub repository and push `main`.
-- [ ] Recreate the protected `staging` environment and its existing secret on that
+- [x] Create the canonical private GitHub repository and push `main`.
+- [x] Preserve the protected `staging` environment and its existing secret on that
   repository.
-- [ ] Require the root CI check and owner review on `main`.
-- [ ] Point the three Vercel projects at the monorepo roots and verify previews.
-- [ ] Verify a backend-only change performs the guarded staging deployment.
-- [ ] Switch production branches, observe all applications, then archive the four
-  legacy repositories as read-only.
+- [x] Install root CI and `CODEOWNERS` on `main`.
+- [ ] Enforce required CI and owner review if the GitHub account gains private-repository
+  branch protection. GitHub rejected this setting on the current plan; repository
+  privacy was not weakened to obtain it.
+- [x] Point the three Vercel projects at the monorepo roots and verify production.
+- [x] Verify a backend-only change performs the guarded staging deployment.
+- [x] Observe all production applications, then archive the three superseded application
+  repositories as read-only.
 
 ## Rollback
 
 Repository consolidation does not alter production data or deploy the Convex schema.
-Before production project pointers change, rollback is simply to keep using the four
-legacy repositories. After a Vercel project is repointed, restore its former repository
-and production commit. If the staging workflow is misconfigured, disable it and restore
-the former backend repository; never substitute a production deploy key. The imported
-tip table above identifies the exact pre-consolidation source state.
+To roll an application back, unarchive its former GitHub repository and reconnect its
+Vercel project to the prior production commit. For the backend, the canonical repository
+retains the legacy `master` branch and the untouched sibling checkout. If the staging
+workflow is misconfigured, disable it and restore the former workflow; never substitute
+a production deploy key. The imported-tip table above identifies the exact
+pre-consolidation source state.
