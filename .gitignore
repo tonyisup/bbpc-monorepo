@@ -1,0 +1,27 @@
+# Legacy source repositories retained during the monorepo transition.
+# Their full histories are imported under apps/ and packages/.
+/bbpc/
+/bbpc-admin/
+/bbpc-convex/
+/bbpc-recording/
+
+# Other sibling projects are outside this monorepo's current scope.
+/audacity/
+/bbpc-admin-og/
+/bbpc-autoresearch/
+/bbpc-db/
+/bbpc-pipeline/
+
+# Root workspace artifacts.
+/node_modules/
+/coverage/
+/.turbo/
+/.DS_Store
+npm-debug.log*
+*.tsbuildinfo
+
+# Local configuration and deployment metadata.
+.env
+.env*.local
+.vercel/
+.gstack/
