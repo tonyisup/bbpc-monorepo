@@ -165,6 +165,26 @@ describe("recording management model", () => {
     ).toBe(nextEpisode);
   });
 
+  it("selects the latest next episode regardless of catalog order", () => {
+    const olderNextEpisode = {
+      id: "episode-11",
+      number: 11,
+      status: "next",
+    };
+    const latestNextEpisode = {
+      id: "episode-12",
+      number: 12,
+      status: "next",
+    };
+
+    expect(
+      selectRecordingManagementEpisode([
+        olderNextEpisode,
+        latestNextEpisode,
+      ])
+    ).toBe(latestNextEpisode);
+  });
+
   it("falls back to the recording episode when no next episode exists", () => {
     const recordingEpisode = {
       id: "episode-11",

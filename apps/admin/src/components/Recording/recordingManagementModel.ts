@@ -31,18 +31,30 @@ interface RecordingUserPage {
 }
 
 export function selectRecordingManagementEpisode<
-  T extends { status: string | null },
+  T extends { number: number; status: string | null },
 >(episodes: readonly T[]): T | null {
-  return (
-    episodes.find(
-      (episode) => episode.status?.toLowerCase() === "next"
-    ) ??
-    episodes.find(
-      (episode) => episode.status?.toLowerCase() === "recording"
-    ) ??
-    episodes[0] ??
-    null
-  );
+  const priority = (candidate: T) => {
+    switch (candidate.status?.toLowerCase()) {
+      case "next":
+        return 2;
+      case "recording":
+        return 1;
+      default:
+        return 0;
+    }
+  };
+  return episodes.reduce<T | null>((selected, episode) => {
+    if (selected === null) {
+      return episode;
+    }
+    const episodePriority = priority(episode);
+    const selectedPriority = priority(selected);
+    return episodePriority > selectedPriority ||
+      (episodePriority === selectedPriority &&
+        episode.number > selected.number)
+      ? episode
+      : selected;
+  }, null);
 }
 
 export async function collectAllRecordingUsers(
