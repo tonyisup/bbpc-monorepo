@@ -22,7 +22,9 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import {
+  type ConvexAssignmentReview,
   loadConvexAssignmentWorkbenchById,
+  updateConvexAssignmentReviewRating,
 } from "../../convex/assignmentDetails";
 import {
   type ConvexAdminEpisode,
@@ -40,6 +42,10 @@ import {
   loadConvexAdminQuoteSubmissions,
   snapshotConvexQuoteAwards,
 } from "../../convex/quotabunga";
+import {
+  type ConvexAdminRating,
+  loadConvexAdminRatings,
+} from "../../convex/ratings";
 import {
   type ConvexAdminSeasonGamblingEntry,
   type ConvexAdminSeasonGuess,
@@ -140,6 +146,8 @@ interface RecordingManagementData {
   wagers: ConvexAdminSeasonGamblingEntry[];
   assignmentPoints: AssignmentPointTotal[];
   disclosures: Record<string, AssignmentRecordingDisclosure>;
+  reviews: Record<string, ConvexAssignmentReview[]>;
+  ratings: ConvexAdminRating[];
   users: ConvexAdminUser[];
   submissions: ConvexAdminQuoteSubmission[];
 }
@@ -199,10 +207,11 @@ async function loadAssignmentGames(
 async function loadRecordingManagementData(
   client: ConvexReactClient
 ): Promise<RecordingManagementData> {
-  const [quoteEpisodes, seasonPage, users] = await Promise.all([
+  const [quoteEpisodes, seasonPage, users, ratings] = await Promise.all([
     loadConvexAdminQuoteEpisodes(client),
     loadConvexAdminSeasonsPage(client, null),
     loadAllSupportedUsers(client),
+    loadConvexAdminRatings(client),
   ]);
   const episodeCandidate = selectRecordingManagementEpisode(quoteEpisodes);
   const episode =
@@ -256,6 +265,17 @@ async function loadRecordingManagementData(
       ];
     })
   );
+  const reviews = Object.fromEntries(
+    workbenches.map((workbench, index) => {
+      const assignmentId = assignmentIds[index];
+      if (workbench === null || assignmentId === undefined) {
+        throw new Error(
+          "An episode assignment became unavailable while loading recording management."
+        );
+      }
+      return [assignmentId, workbench.reviews];
+    })
+  );
 
   return {
     episode,
@@ -265,6 +285,8 @@ async function loadRecordingManagementData(
     wagers: games.wagers,
     assignmentPoints,
     disclosures,
+    reviews,
+    ratings,
     users,
     submissions,
   };
@@ -288,13 +310,13 @@ function writeFailureMessage(error: unknown): string {
     case "CONFLICT":
       return "The game changed after it loaded. Refresh before trying again.";
     case "VALIDATION_FAILED":
-      return "That point or game result is not valid for this episode.";
+      return "That rating, point, or game result is not valid for this episode.";
     case "WRITE_DISABLED":
       return "Game changes are paused in this environment.";
     case "STALE_CLIENT":
       return "This admin client is out of date. Refresh before trying again.";
     default:
-      return "The game result could not be saved.";
+      return "The recording change could not be saved.";
   }
 }
 
@@ -634,6 +656,9 @@ function AssignmentGameCard({
   guesses,
   onAwardGuess,
   onResolveWager,
+  onSetReviewRating,
+  ratings,
+  reviews,
   savingKey,
   wagers,
 }: {
@@ -645,9 +670,27 @@ function AssignmentGameCard({
     wager: ConvexAdminSeasonGamblingEntry,
     status: "won" | "lost" | "rejected"
   ) => void;
+  onSetReviewRating: (
+    review: ConvexAssignmentReview,
+    ratingId: string | null
+  ) => void;
+  ratings: ConvexAdminRating[];
+  reviews: ConvexAssignmentReview[];
   savingKey: string | null;
   wagers: ConvexAdminSeasonGamblingEntry[];
 }) {
+  const sortedRatings = useMemo(
+    () => [...ratings].sort((left, right) => right.value - left.value),
+    [ratings]
+  );
+  const sortedReviews = useMemo(
+    () =>
+      [...reviews].sort((left, right) =>
+        (left.reviewer?.name ?? "").localeCompare(right.reviewer?.name ?? "")
+      ),
+    [reviews]
+  );
+
   return (
     <Card>
       <CardHeader>
@@ -670,6 +713,71 @@ function AssignmentGameCard({
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 xl:grid-cols-2">
+        <div className="space-y-3 xl:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 font-black">
+              <Star className="h-4 w-4" /> Host ratings
+            </h3>
+            <Badge variant={disclosure.allHostsRated ? "secondary" : "outline"}>
+              {disclosure.ratedHostCount} of {disclosure.activeHostCount} active hosts rated
+            </Badge>
+          </div>
+          {sortedReviews.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No host reviews are attached to this assignment.
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {sortedReviews.map((review) => {
+                const reviewerName = review.reviewer?.name ?? "Unknown host";
+                const saving = savingKey === `review-rating-${review.id}`;
+                return (
+                  <div
+                    className="flex items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3"
+                    key={review.id}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-bold">{reviewerName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {review.rating === null
+                          ? "Not rated"
+                          : `${review.rating.name} (${review.rating.value})`}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <RatingIcon value={review.rating?.value} />
+                      )}
+                      <select
+                        aria-label={`Rating for ${reviewerName} on ${assignment.movie.title}`}
+                        className="h-9 rounded-md border bg-background px-3 text-sm"
+                        disabled={savingKey !== null}
+                        onChange={(event) =>
+                          onSetReviewRating(
+                            review,
+                            event.target.value === "none"
+                              ? null
+                              : event.target.value
+                          )
+                        }
+                        value={review.rating?.id ?? "none"}
+                      >
+                        <option value="none">No rating</option>
+                        {sortedRatings.map((rating) => (
+                          <option key={rating.id} value={rating.id}>
+                            {rating.name} ({rating.value})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div className="space-y-3">
           <h3 className="flex items-center gap-2 font-black">
             <Target className="h-4 w-4" /> Guesses
@@ -863,6 +971,19 @@ export function ConvexRecordingManagementPage() {
     );
   };
 
+  const setReviewRating = (
+    review: ConvexAssignmentReview,
+    ratingId: string | null
+  ) => {
+    runWrite(
+      `review-rating-${review.id}`,
+      () => updateConvexAssignmentReviewRating(client, review, ratingId),
+      ratingId === null
+        ? `Cleared ${review.reviewer?.name ?? "the host"}'s rating.`
+        : `Updated ${review.reviewer?.name ?? "the host"}'s rating.`
+    );
+  };
+
   if (data === null && loadError === null) {
     return <div className="flex min-h-[420px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -960,7 +1081,7 @@ export function ConvexRecordingManagementPage() {
             <section className="space-y-4">
               <div>
                 <h2 className="text-2xl font-black">Episode games</h2>
-                <p className="text-sm text-muted-foreground">Resolve wagers and award correct predictions. Open an assignment for rating and guess edits.</p>
+                <p className="text-sm text-muted-foreground">Set each host rating, resolve wagers, and award correct predictions.</p>
               </div>
               {episode.assignments.length === 0 ? (
                 <Card className="border-dashed"><CardContent className="p-6 text-sm text-muted-foreground">This episode has no assignments.</CardContent></Card>
@@ -977,6 +1098,9 @@ export function ConvexRecordingManagementPage() {
                     key={assignment.id}
                     onAwardGuess={awardGuess}
                     onResolveWager={resolveWager}
+                    onSetReviewRating={setReviewRating}
+                    ratings={data.ratings}
+                    reviews={data.reviews[assignment.id] ?? []}
                     savingKey={savingKey}
                     wagers={data.wagers.filter((wager) => wager.assignment?.id === assignment.id)}
                   />
