@@ -55,6 +55,8 @@ import {
   SelectValue,
 } from "../ui/select";
 
+import { replaceAssignmentMovieSearchResults } from "./assignmentMovieSearch";
+
 type CatalogKind = "movie" | "show";
 type CatalogSelection = Pick<
   ConvexAdminMovie | ConvexAdminShow,
@@ -314,8 +316,10 @@ function TmdbMoviePicker({
     }
     setLoading(true);
     setSearched(true);
-    void searchConvexAdminAssignmentMovies(convex, normalized)
-      .then((items) => setResults(items))
+    void replaceAssignmentMovieSearchResults(
+      () => searchConvexAdminAssignmentMovies(convex, normalized),
+      setResults
+    )
       .catch((error: unknown) =>
         toast.error(assignmentMovieSearchMessage(error))
       )
