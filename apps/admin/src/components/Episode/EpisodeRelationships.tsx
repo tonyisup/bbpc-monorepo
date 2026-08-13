@@ -7,15 +7,17 @@ import { toast } from "sonner";
 import {
   type ConvexAdminMovie,
   type ConvexAdminShow,
+  type ConvexTmdbTitle,
   searchConvexCatalogMovies,
   searchConvexCatalogShows,
 } from "@/convex/catalog";
 import {
   type ConvexAdminEpisodeAssignmentType,
   type ConvexAdminEpisodeDetail,
-  addConvexAdminEpisodeAssignment,
+  addConvexAdminEpisodeAssignmentFromTmdb,
   addConvexAdminEpisodeExtra,
   removeConvexAdminEpisodeAssignment,
+  searchConvexAdminAssignmentMovies,
 } from "@/convex/episodeDetails";
 import { getConvexDomainErrorCode } from "@/convex/identity";
 import {
@@ -53,6 +55,8 @@ import {
   SelectValue,
 } from "../ui/select";
 
+import { replaceAssignmentMovieSearchResults } from "./assignmentMovieSearch";
+
 type CatalogKind = "movie" | "show";
 type CatalogSelection = Pick<
   ConvexAdminMovie | ConvexAdminShow,
@@ -72,6 +76,22 @@ function relationshipMessage(error: unknown): string {
     default:
       return "The episode relationship could not be changed.";
   }
+}
+
+function assignmentMovieSearchMessage(error: unknown): string {
+  switch (getConvexDomainErrorCode(error)) {
+    case "AUTHENTICATION_REQUIRED":
+      return "Sign in again before searching TMDB.";
+    case "VALIDATION_FAILED":
+      return "Enter at least three useful search characters.";
+    default:
+      return "TMDB movie search is unavailable in this Convex deployment.";
+  }
+}
+
+function tmdbMovieYear(movie: ConvexTmdbTitle): string {
+  const match = /^(\d{4})-\d{2}-\d{2}$/u.exec(movie.release_date);
+  return match?.[1] ?? "N/A";
 }
 
 function UserPicker({
@@ -275,6 +295,94 @@ function CatalogPicker({
   );
 }
 
+function TmdbMoviePicker({
+  selection,
+  onSelect,
+}: {
+  selection: ConvexTmdbTitle | null;
+  onSelect: (selection: ConvexTmdbTitle) => void;
+}) {
+  const convex = useConvex();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ConvexTmdbTitle[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const search = () => {
+    const normalized = query.trim();
+    if (normalized.length < 3) {
+      toast.error("Enter at least three characters to search TMDB.");
+      return;
+    }
+    setLoading(true);
+    setSearched(true);
+    void replaceAssignmentMovieSearchResults(
+      () => searchConvexAdminAssignmentMovies(convex, normalized),
+      setResults
+    )
+      .catch((error: unknown) =>
+        toast.error(assignmentMovieSearchMessage(error))
+      )
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="episode-assignment-movie-search">Movie</Label>
+      <div className="flex gap-2">
+        <Input
+          id="episode-assignment-movie-search"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              search();
+            }
+          }}
+          placeholder="Search TMDB movies"
+          value={query}
+        />
+        <Button
+          disabled={loading}
+          onClick={search}
+          type="button"
+          variant="outline"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+        </Button>
+      </div>
+      {selection !== null && (
+        <p className="text-sm text-muted-foreground">
+          Selected:{" "}
+          <strong className="text-foreground">{selection.title}</strong> (
+          {tmdbMovieYear(selection)})
+        </p>
+      )}
+      {searched && !loading && (
+        <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
+          {results.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No TMDB movies match this search.
+            </p>
+          ) : (
+            results.map((movie) => (
+              <Button
+                className="h-auto w-full justify-start px-3 py-2 text-left"
+                key={movie.id}
+                onClick={() => onSelect(movie)}
+                type="button"
+                variant={selection?.id === movie.id ? "secondary" : "ghost"}
+              >
+                {movie.title} ({tmdbMovieYear(movie)})
+              </Button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AddAssignmentDialog({
   saving,
   onClose,
@@ -284,13 +392,13 @@ function AddAssignmentDialog({
   onClose: () => void;
   onSave: (input: {
     userId: string;
-    movieId: string;
+    movie: ConvexTmdbTitle;
     type: ConvexAdminEpisodeAssignmentType;
     playable: boolean;
   }) => void;
 }) {
   const [user, setUser] = useState<ConvexAdminUser | null>(null);
-  const [movie, setMovie] = useState<CatalogSelection | null>(null);
+  const [movie, setMovie] = useState<ConvexTmdbTitle | null>(null);
   const [type, setType] =
     useState<ConvexAdminEpisodeAssignmentType>("HOMEWORK");
   const [playable, setPlayable] = useState(true);
@@ -300,12 +408,12 @@ function AddAssignmentDialog({
         <DialogHeader>
           <DialogTitle>Add assignment</DialogTitle>
           <DialogDescription>
-            Choose the assigner, a migrated movie, and the assignment type.
+            Choose the assigner, a movie from TMDB, and the assignment type.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5 py-2">
           <UserPicker selectedId={user?.id ?? null} onSelect={setUser} />
-          <CatalogPicker kind="movie" onSelect={setMovie} selection={movie} />
+          <TmdbMoviePicker onSelect={setMovie} selection={movie} />
           <div className="grid gap-2">
             <Label htmlFor="episode-assignment-type">Assignment type</Label>
             <Select
@@ -353,7 +461,7 @@ function AddAssignmentDialog({
               if (user !== null && movie !== null) {
                 onSave({
                   userId: user.id,
-                  movieId: movie.id,
+                  movie,
                   type,
                   playable,
                 });
@@ -467,7 +575,11 @@ export function EpisodeRelationships({
           onClose={() => setDialog(null)}
           onSave={(input) => {
             setSaving(true);
-            void addConvexAdminEpisodeAssignment(convex, episode.id, input)
+            void addConvexAdminEpisodeAssignmentFromTmdb(
+              convex,
+              episode.id,
+              input
+            )
               .then(() => {
                 toast.success("Assignment added.");
                 setDialog(null);

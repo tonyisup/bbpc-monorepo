@@ -2,6 +2,11 @@ import type { ConvexReactClient } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { z } from "zod";
 
+import {
+  type ConvexTmdbTitle,
+  searchConvexTmdbMovies,
+  upsertConvexAdminMovie,
+} from "./catalog";
 import { adminEpisodeSummarySchema } from "./episodes";
 import { BBPC_CLIENT_API_VERSION } from "./identity";
 
@@ -405,6 +410,32 @@ export async function addConvexAdminEpisodeAssignment(
       playable: input.playable ?? true,
     })
   );
+}
+
+export async function searchConvexAdminAssignmentMovies(
+  client: ConvexReactClient,
+  query: string
+): Promise<ConvexTmdbTitle[]> {
+  return await searchConvexTmdbMovies(client, query);
+}
+
+export async function addConvexAdminEpisodeAssignmentFromTmdb(
+  client: ConvexReactClient,
+  episodeId: string,
+  input: {
+    userId: string;
+    movie: ConvexTmdbTitle;
+    type: ConvexAdminEpisodeAssignmentType;
+    playable?: boolean;
+  }
+): Promise<void> {
+  const movie = await upsertConvexAdminMovie(client, input.movie);
+  await addConvexAdminEpisodeAssignment(client, episodeId, {
+    userId: input.userId,
+    movieId: movie.id,
+    type: input.type,
+    playable: input.playable,
+  });
 }
 
 export async function removeConvexAdminEpisodeAssignment(
