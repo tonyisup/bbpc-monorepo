@@ -6,6 +6,7 @@ import { BBPC_CLIENT_API_VERSION } from "./identity";
 import {
   ADMIN_EPISODE_AUDIO_PAGE_SIZE,
   addConvexAdminEpisodeAssignment,
+  addConvexAdminEpisodeAssignmentFromTmdb,
   addConvexAdminEpisodeAudio,
   addConvexAdminEpisodeExtra,
   addConvexAdminEpisodeLink,
@@ -15,6 +16,7 @@ import {
   removeConvexAdminEpisodeAudio,
   removeConvexAdminEpisodeAssignment,
   removeConvexAdminEpisodeLink,
+  searchConvexAdminAssignmentMovies,
   updateConvexAdminEpisode,
 } from "./episodeDetails";
 
@@ -50,6 +52,22 @@ const audioMessage = {
     image: null,
     status: "active" as const,
   },
+};
+
+const tmdbMovie = {
+  id: 329865,
+  title: "Arrival",
+  backdrop_path: null,
+  poster_path: "/arrival.jpg",
+  overview: "First contact.",
+  release_date: "2016-11-11",
+  first_air_date: null,
+  vote_average: 7.6,
+  vote_count: 18_000,
+  popularity: 25,
+  media_type: "movie",
+  imdb_id: "tt2543164",
+  imdb_path: "https://www.imdb.com/title/tt2543164",
 };
 
 describe("Convex episode detail adapter", () => {
@@ -244,15 +262,70 @@ describe("Convex episode detail adapter", () => {
       userId: assignment.user.id,
       showId: "show-1",
     });
-    expect(
-      mutation.mock.calls.map((call) => getFunctionName(call[0]))
-    ).toEqual([
-      "assignments/admin:create",
-      "assignments/admin:create",
-      "assignments/admin:removeIfUnreferenced",
-      "reviews/admin:createExtra",
-      "reviews/admin:createExtra",
-    ]);
+    expect(mutation.mock.calls.map((call) => getFunctionName(call[0]))).toEqual(
+      [
+        "assignments/admin:create",
+        "assignments/admin:create",
+        "assignments/admin:removeIfUnreferenced",
+        "reviews/admin:createExtra",
+        "reviews/admin:createExtra",
+      ]
+    );
+  });
+
+  test("searches TMDB and saves its movie before creating an assignment", async () => {
+    const action = vi.fn().mockResolvedValue({
+      page: 1,
+      results: [tmdbMovie],
+    });
+    const mutation = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "movie-arrival",
+        title: tmdbMovie.title,
+        year: 2016,
+        poster: "https://image.tmdb.org/t/p/w500/arrival.jpg",
+        url: `https://www.themoviedb.org/movie/${String(tmdbMovie.id)}`,
+        tmdbId: tmdbMovie.id,
+      })
+      .mockResolvedValueOnce({ id: "assignment-arrival" });
+    const client = { action, mutation } as unknown as ConvexReactClient;
+
+    await expect(
+      searchConvexAdminAssignmentMovies(client, "arrival")
+    ).resolves.toEqual([tmdbMovie]);
+    await addConvexAdminEpisodeAssignmentFromTmdb(client, episode.id, {
+      userId: "user-1",
+      movie: tmdbMovie,
+      type: "HOMEWORK",
+      playable: true,
+    });
+
+    expect(action).toHaveBeenCalledWith(expect.anything(), {
+      query: "arrival",
+      page: 1,
+    });
+    expect(mutation.mock.calls.map((call) => getFunctionName(call[0]))).toEqual(
+      ["catalog/write:upsertMovieByUrl", "assignments/admin:create"]
+    );
+    expect(mutation).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        clientApiVersion: BBPC_CLIENT_API_VERSION,
+        tmdbId: tmdbMovie.id,
+        title: tmdbMovie.title,
+        year: 2016,
+      })
+    );
+    expect(mutation).toHaveBeenNthCalledWith(2, expect.anything(), {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      episodeId: episode.id,
+      userId: "user-1",
+      movieId: "movie-arrival",
+      type: "HOMEWORK",
+      playable: true,
+    });
   });
 
   test("rejects slug drift and cross-episode audio", async () => {
