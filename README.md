@@ -47,6 +47,8 @@ private and is no longer published to GitHub Packages.
   client contract from one lockfile.
 - Only backend changes trigger the guarded Convex staging workflow. Production Convex
   deployment remains an explicitly authorized manual operation.
+- Vercel Preview deployments for all three applications use the synthetic, writable S3
+  Convex staging deployment. Their Production selectors remain separate and unchanged.
 
 See [the rollout record](docs/monorepo-rollout.md) for history provenance, external
 project settings, and rollback guidance.

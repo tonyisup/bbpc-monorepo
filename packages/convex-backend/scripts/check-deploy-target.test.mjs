@@ -126,7 +126,7 @@ test("staging workflow pins and verifies the key target before deployment", () =
   assert.ok(deployIndex > checkIndex);
   assert.match(
     workflow,
-    /BBPC_EXPECTED_STAGING_STATE: S2/u,
+    /BBPC_EXPECTED_STAGING_STATE: S3/u,
   );
   assert.match(
     workflow,

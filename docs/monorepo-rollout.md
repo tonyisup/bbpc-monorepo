@@ -70,9 +70,10 @@ The root CI workflow installs the single lockfile and runs:
 
 The Convex staging workflow keeps the existing `staging` GitHub environment,
 `CONVEX_STAGING_DEPLOY_KEY` secret, expected staging deployment, forbidden production
-deployment, and S2 invariant. It runs backend commands from
+deployment, and explicit lifecycle invariant. It runs backend commands from
 `packages/convex-backend` and is triggered only by backend or workspace dependency
-changes.
+changes. The invariant was S2 during rollout and is S3 after the separately authorized
+writable-preview activation recorded below.
 
 The existing Vercel projects retain their environment variables and domains. They now
 use the canonical repository with these roots:
@@ -97,6 +98,14 @@ Root CI and the guarded Convex staging workflow passed. The staging workflow dep
 only to `merry-shepherd-928`, preserved its S2 invariant, and verified the public API
 contract. The production Convex deployment `determined-wombat-872` was not deployed or
 modified during this rollout.
+
+## Writable preview testing
+
+On 2026-08-13, staging was separately authorized for PR testing after the rollout had
+completed. A checksummed S2 backup was retained in private operator storage before
+`merry-shepherd-928` transitioned to writable S3. The three Vercel projects use that
+deployment only for Preview; their Production Convex selectors were not changed. The
+staging workflow now verifies the S3 write gate after every backend deployment.
 
 ## Rollout checklist
 

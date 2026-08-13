@@ -104,3 +104,22 @@ tokens. Remove the short-lived token files after recording the result.
 Record the backend commit, workflow run, deployed target, aggregate acceptance result,
 and any stop condition. Do not proceed to production configuration, consumer pushes,
 Vercel selector changes, SQL freeze, or S3 without their separate authorizations.
+
+## 6. Activate writable PR previews after separate authorization
+
+This is a post-acceptance operation, not part of the write-disabled acceptance above.
+After receiving explicit authorization for staging S3 and Vercel Preview changes:
+
+1. Export a complete S2 backup, including file storage, into ignored private storage.
+   Record its stable name and SHA-256 checksum.
+2. Re-run the exact staging target and environment checks. Refuse any target other than
+   `merry-shepherd-928`, and continue to forbid `determined-wombat-872`.
+3. Transition the existing cutover run from S2 to S3 with the recorded backup name and
+   checksum. Do not initialize a new run or alter production.
+4. Scope `NEXT_PUBLIC_CONVEX_URL=https://merry-shepherd-928.convex.cloud` to Preview in
+   each of `bbpc`, `bbpc-admin`, and `bbpc-recording`. Keep every Production selector
+   on its existing value, then redeploy the affected previews so the build-time public
+   selector is refreshed.
+5. Run the staging invariant verifier with `BBPC_EXPECTED_STAGING_STATE=S3`. The
+   non-writing mutation probe must reach its handler and return `VALIDATION_FAILED`,
+   proving the global write gate is open without committing a test write.
