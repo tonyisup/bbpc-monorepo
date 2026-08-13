@@ -135,6 +135,9 @@ describe("Convex-only admin scaffold", () => {
     expect(management).toMatch(/NEXT_PUBLIC_BBPC_RECORDING_URL/u);
     expect(management).toMatch(/isRecordingGuessRevealed/u);
     expect(management).toMatch(/allHostsRated/u);
+    expect(management).toMatch(/loadConvexAdminRatings/u);
+    expect(management).toMatch(/updateConvexAssignmentReviewRating/u);
+    expect(management).toMatch(/Host ratings/u);
     expect(managementModel).toMatch(/collectAllRecordingUsers/u);
     expect(managementModel).toMatch(/chunkRecordingValues/u);
     expect(management).not.toMatch(/exceeds the 100-user/u);
