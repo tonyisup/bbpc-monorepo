@@ -51,40 +51,45 @@ export function assertExpectedStagingState(
   apiVersion,
   expectedState,
 ) {
-  if (!["uninitialized", "S2"].includes(expectedState)) {
+  if (!["uninitialized", "S2", "S3"].includes(expectedState)) {
     throw new Error(
-      "Expected staging state must be exactly uninitialized or S2.",
+      "Expected staging state must be exactly uninitialized, S2, or S3.",
     );
   }
+  const expected = {
+    uninitialized: {
+      initialized: false,
+      applicationWritesEnabled: false,
+      cutoverStage: "uninitialized",
+      requireNoFirstApplicationWrite: true,
+    },
+    S2: {
+      initialized: true,
+      applicationWritesEnabled: false,
+      cutoverStage: "S2",
+      requireNoFirstApplicationWrite: true,
+    },
+    S3: {
+      initialized: true,
+      applicationWritesEnabled: true,
+      cutoverStage: "S3",
+      requireNoFirstApplicationWrite: false,
+    },
+  }[expectedState];
   if (
     typeof readiness !== "object" ||
     readiness === null ||
     readiness.apiVersion !== apiVersion ||
-    readiness.applicationWritesEnabled !== false
+    readiness.initialized !== expected.initialized ||
+    readiness.applicationWritesEnabled !==
+      expected.applicationWritesEnabled ||
+    readiness.cutoverStage !== expected.cutoverStage ||
+    typeof readiness.firstApplicationWriteRecorded !== "boolean" ||
+    (expected.requireNoFirstApplicationWrite &&
+      readiness.firstApplicationWriteRecorded !== false)
   ) {
     throw new Error(
-      "Staging readiness must be write-disabled and on the expected API version.",
-    );
-  }
-  if (expectedState === "uninitialized") {
-    if (
-      readiness.initialized !== false ||
-      readiness.cutoverStage !== "uninitialized" ||
-      readiness.firstApplicationWriteRecorded !== false
-    ) {
-      throw new Error(
-        "Staging must match the expected uninitialized state.",
-      );
-    }
-    return;
-  }
-  if (
-    readiness.initialized !== true ||
-    readiness.cutoverStage !== "S2" ||
-    readiness.firstApplicationWriteRecorded !== false
-  ) {
-    throw new Error(
-      "Staging must match the expected write-disabled S2 state.",
+      "Staging readiness does not match the expected lifecycle state and API version.",
     );
   }
 }
@@ -187,12 +192,16 @@ export async function verifyStagingDeployment({
     ),
   };
 
-  const blockedRecordingWrite = await expectDomainFailure(
+  const expectedWriteGateCode =
+    expectedState === "S3"
+      ? "VALIDATION_FAILED"
+      : "WRITE_DISABLED";
+  const recordingWriteGateProbe = await expectDomainFailure(
     () =>
       client.mutation(recordingWriteReference, {
         clientApiVersion: apiVersion,
       }),
-    "WRITE_DISABLED",
+    expectedWriteGateCode,
     "Recording write-gate probe",
   );
 
@@ -212,7 +221,7 @@ export async function verifyStagingDeployment({
       templates: templates.length,
     },
     anonymousDenials,
-    blockedRecordingWrite,
+    recordingWriteGateProbe,
   };
 }
 
@@ -240,10 +249,10 @@ export async function main(env = process.env) {
       `apiVersion=${result.readiness.apiVersion}`,
       `expectedState=${result.expectedState}`,
       `initialized=${String(result.readiness.initialized)}`,
-      "applicationWritesEnabled=false",
+      `applicationWritesEnabled=${String(result.readiness.applicationWritesEnabled)}`,
       "anonymousReads=3",
       "anonymousCatalogReads=2",
-      "blockedWrites=1",
+      `writeGateProbe=${result.recordingWriteGateProbe}`,
       `sounders=${String(result.publicCatalogCounts.sounders)}`,
       `templates=${String(result.publicCatalogCounts.templates)}`,
       "",

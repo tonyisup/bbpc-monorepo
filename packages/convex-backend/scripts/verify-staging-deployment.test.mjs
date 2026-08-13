@@ -56,6 +56,21 @@ test("requires the explicitly expected safe staging lifecycle state", () => {
       "S2",
     ),
   );
+  for (const firstApplicationWriteRecorded of [false, true]) {
+    assert.doesNotThrow(() =>
+      assertExpectedStagingState(
+        {
+          apiVersion,
+          initialized: true,
+          applicationWritesEnabled: true,
+          cutoverStage: "S3",
+          firstApplicationWriteRecorded,
+        },
+        apiVersion,
+        "S3",
+      ),
+    );
+  }
   for (const [readiness, expectedState] of [
     {
       readiness: {
@@ -102,8 +117,8 @@ test("requires the explicitly expected safe staging lifecycle state", () => {
     );
   }
   assert.throws(
-    () => assertExpectedStagingState({}, apiVersion, "S3"),
-    /exactly uninitialized or S2/u,
+    () => assertExpectedStagingState({}, apiVersion, "S4"),
+    /exactly uninitialized, S2, or S3/u,
   );
 });
 
@@ -207,10 +222,61 @@ test("verifies aggregate public, denial, and write-gate invariants", async () =>
           administrator: "AUTHENTICATION_REQUIRED",
           pipeline: "AUTHENTICATION_REQUIRED",
         },
-        blockedRecordingWrite: "WRITE_DISABLED",
+        recordingWriteGateProbe: "WRITE_DISABLED",
       },
     );
   });
+  assert.equal(queryCount, 6);
+  assert.equal(mutationCount, 1);
+});
+
+test("verifies the writable S3 gate without committing a probe write", async () => {
+  let queryCount = 0;
+  let mutationCount = 0;
+  const client = {
+    async query() {
+      queryCount += 1;
+      if (queryCount === 1) {
+        return {
+          apiVersion,
+          initialized: true,
+          applicationWritesEnabled: true,
+          cutoverStage: "S3",
+          firstApplicationWriteRecorded: false,
+        };
+      }
+      if (queryCount === 2 || queryCount === 3) {
+        return [];
+      }
+      throw new ConvexError({
+        code: "AUTHENTICATION_REQUIRED",
+        message: "Authentication is required.",
+        retryable: false,
+      });
+    },
+    async mutation(_reference, args) {
+      mutationCount += 1;
+      assert.equal(args.clientApiVersion, apiVersion);
+      throw new ConvexError({
+        code: "VALIDATION_FAILED",
+        message: "The non-writing probe reached its handler.",
+        retryable: false,
+      });
+    },
+  };
+
+  const result = await verifyStagingDeployment({
+    client,
+    apiVersion,
+    expectedState: "S3",
+  });
+
+  assert.equal(result.readiness.applicationWritesEnabled, true);
+  assert.equal(result.readiness.cutoverStage, "S3");
+  assert.equal(
+    result.recordingWriteGateProbe,
+    "VALIDATION_FAILED",
+  );
   assert.equal(queryCount, 6);
   assert.equal(mutationCount, 1);
 });
