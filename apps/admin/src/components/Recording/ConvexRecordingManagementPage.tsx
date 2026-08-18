@@ -203,7 +203,6 @@ interface RecordingManagementData {
   users: ConvexAdminUser[];
   submissions: ConvexAdminQuoteSubmission[];
   episodeAudioMessages: ConvexAdminEpisodeAudioMessage[];
-  assignmentAudioMessages: Record<string, ConvexAssignmentAudioMessage[]>;
 }
 
 async function loadAllSupportedUsers(
@@ -304,7 +303,6 @@ async function loadRecordingManagementData(
     assignmentPoints,
     workbenches,
     episodeAudioMessages,
-    assignmentAudioEntries,
   ] = await Promise.all([
     loadAssignmentGames(client, assignmentIds),
     season === null
@@ -324,17 +322,6 @@ async function loadRecordingManagementData(
       : collectAllRecordingAudioMessages((cursor) =>
           loadConvexAdminEpisodeAudioPage(client, episode.id, cursor)
         ),
-    Promise.all(
-      assignmentIds.map(
-        async (assignmentId) =>
-          [
-            assignmentId,
-            await collectAllRecordingAudioMessages((cursor) =>
-              loadConvexAssignmentAudioPage(client, assignmentId, cursor)
-            ),
-          ] as const
-      )
-    ),
   ]);
   const disclosures = Object.fromEntries(
     workbenches.map((workbench, index) => {
@@ -361,8 +348,6 @@ async function loadRecordingManagementData(
       return [assignmentId, workbench.reviews];
     })
   );
-  const assignmentAudioMessages = Object.fromEntries(assignmentAudioEntries);
-
   return {
     episode,
     season,
@@ -377,7 +362,6 @@ async function loadRecordingManagementData(
     users,
     submissions,
     episodeAudioMessages,
-    assignmentAudioMessages,
   };
 }
 
@@ -495,6 +479,90 @@ function RecordingAudioMessages({
             );
           })}
         </div>
+      )}
+    </section>
+  );
+}
+
+function AssignmentAudioMessages({
+  assignmentId,
+  revision,
+}: {
+  assignmentId: string;
+  revision: number;
+}) {
+  const client = useConvex();
+  const [expanded, setExpanded] = useState(false);
+  const [messages, setMessages] = useState<
+    ConvexAssignmentAudioMessage[] | null
+  >(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryRevision, setRetryRevision] = useState(0);
+
+  useEffect(() => {
+    if (!expanded) {
+      return;
+    }
+    let active = true;
+    setMessages(null);
+    setLoadError(null);
+    void collectAllRecordingAudioMessages((cursor) =>
+      loadConvexAssignmentAudioPage(client, assignmentId, cursor)
+    )
+      .then((loaded) => {
+        if (active) {
+          setMessages(loaded);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Assignment audio messages could not be loaded."
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [assignmentId, client, expanded, retryRevision, revision]);
+
+  return (
+    <section className="space-y-3">
+      <Button
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        size="sm"
+        variant="outline"
+      >
+        <Headphones className="mr-2 h-4 w-4" />
+        {expanded ? "Hide assignment audio" : "Load assignment audio"}
+      </Button>
+      {expanded && messages === null && loadError === null && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading assignment audio…
+        </p>
+      )}
+      {expanded && loadError !== null && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 p-4 text-sm">
+          <p className="text-destructive">{loadError}</p>
+          <Button
+            onClick={() => setRetryRevision((value) => value + 1)}
+            size="sm"
+            variant="outline"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+      {expanded && messages !== null && (
+        <RecordingAudioMessages
+          description="Messages submitted specifically for this assignment."
+          emptyMessage="No assignment audio messages have been submitted."
+          messages={messages}
+          title="Assignment audio messages"
+        />
       )}
     </section>
   );
@@ -892,7 +960,7 @@ export function QuotabungaRecordingRound({
 
 function AssignmentGameCard({
   assignment,
-  audioMessages,
+  audioRevision,
   disclosure,
   guesses,
   onAwardGuess,
@@ -906,7 +974,7 @@ function AssignmentGameCard({
   wagers,
 }: {
   assignment: EpisodeAssignment;
-  audioMessages: ConvexAssignmentAudioMessage[];
+  audioRevision: number;
   disclosure: AssignmentRecordingDisclosure;
   guesses: ConvexAdminSeasonGuess[];
   onAwardGuess: (guess: ConvexAdminSeasonGuess) => void;
@@ -976,11 +1044,9 @@ function AssignmentGameCard({
       </CardHeader>
       <CardContent className="grid gap-6 xl:grid-cols-2">
         <div className="xl:col-span-2">
-          <RecordingAudioMessages
-            description="Messages submitted specifically for this assignment."
-            emptyMessage="No assignment audio messages have been submitted."
-            messages={audioMessages}
-            title="Assignment audio messages"
+          <AssignmentAudioMessages
+            assignmentId={assignment.id}
+            revision={audioRevision}
           />
         </div>
         <div className="space-y-3 xl:col-span-2">
@@ -1116,7 +1182,10 @@ function AssignmentGameCard({
                         </Badge>
                       )}
                       <Button
-                        disabled={!preview.eligible || savingKey !== null}
+                        disabled={
+                          (settlement === undefined && !preview.eligible) ||
+                          savingKey !== null
+                        }
                         onClick={() => onSettleGuesses(group.user.id)}
                         size="sm"
                         variant={
@@ -1565,9 +1634,7 @@ export function ConvexRecordingManagementPage() {
                 episode.assignments.map((assignment) => (
                   <AssignmentGameCard
                     assignment={assignment}
-                    audioMessages={
-                      data.assignmentAudioMessages[assignment.id] ?? []
-                    }
+                    audioRevision={revision}
                     disclosure={
                       data.disclosures[assignment.id] ?? {
                         activeHostCount: 0,

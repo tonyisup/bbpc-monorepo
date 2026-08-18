@@ -54,6 +54,40 @@ interface RecordingAudioPage<T> {
   continueCursor: string;
 }
 
+interface RecordingPage {
+  isDone: boolean;
+  continueCursor: string;
+}
+
+async function collectAllRecordingPages<T, TPage extends RecordingPage>(
+  loadPage: (cursor: string | null) => Promise<TPage>,
+  getItems: (page: TPage) => T[],
+  catalogName: string
+): Promise<T[]> {
+  const items: T[] = [];
+  const visitedCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  for (;;) {
+    const page = await loadPage(cursor);
+    items.push(...getItems(page));
+    if (page.isDone) {
+      return items;
+    }
+    if (
+      page.continueCursor.length === 0 ||
+      page.continueCursor === cursor ||
+      visitedCursors.has(page.continueCursor)
+    ) {
+      throw new Error(
+        `The ${catalogName} returned a repeated pagination cursor.`
+      );
+    }
+    visitedCursors.add(page.continueCursor);
+    cursor = page.continueCursor;
+  }
+}
+
 export function selectRecordingManagementEpisode<
   T extends { number: number; status: string | null }
 >(episodes: readonly T[]): T | null {
@@ -83,55 +117,21 @@ export function selectRecordingManagementEpisode<
 export async function collectAllRecordingUsers(
   loadPage: (cursor: string | null) => Promise<RecordingUserPage>
 ): Promise<ConvexAdminUser[]> {
-  const users: ConvexAdminUser[] = [];
-  const visitedCursors = new Set<string>();
-  let cursor: string | null = null;
-
-  for (;;) {
-    const page = await loadPage(cursor);
-    users.push(...page.users);
-    if (page.isDone) {
-      return users;
-    }
-    if (
-      page.continueCursor.length === 0 ||
-      page.continueCursor === cursor ||
-      visitedCursors.has(page.continueCursor)
-    ) {
-      throw new Error(
-        "The user catalog returned a repeated pagination cursor."
-      );
-    }
-    visitedCursors.add(page.continueCursor);
-    cursor = page.continueCursor;
-  }
+  return collectAllRecordingPages(
+    loadPage,
+    (page) => page.users,
+    "user catalog"
+  );
 }
 
 export async function collectAllRecordingAudioMessages<T>(
   loadPage: (cursor: string | null) => Promise<RecordingAudioPage<T>>
 ): Promise<T[]> {
-  const messages: T[] = [];
-  const visitedCursors = new Set<string>();
-  let cursor: string | null = null;
-
-  for (;;) {
-    const page = await loadPage(cursor);
-    messages.push(...page.messages);
-    if (page.isDone) {
-      return messages;
-    }
-    if (
-      page.continueCursor.length === 0 ||
-      page.continueCursor === cursor ||
-      visitedCursors.has(page.continueCursor)
-    ) {
-      throw new Error(
-        "The audio catalog returned a repeated pagination cursor."
-      );
-    }
-    visitedCursors.add(page.continueCursor);
-    cursor = page.continueCursor;
-  }
+  return collectAllRecordingPages(
+    loadPage,
+    (page) => page.messages,
+    "audio catalog"
+  );
 }
 
 export function chunkRecordingValues<T>(values: T[], chunkSize: number): T[][] {

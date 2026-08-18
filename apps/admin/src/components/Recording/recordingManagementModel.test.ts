@@ -405,6 +405,29 @@ describe("recording management model", () => {
       eligible: false,
       message: "2 of 3 guesses recorded",
     });
+    expect(
+      getRecordingGuessSettlementPreview([
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-3", hostRated: true }),
+      ])
+    ).toMatchObject({
+      eligible: false,
+      message: "Guesses must target 3 distinct hosts",
+    });
+    expect(
+      getRecordingGuessSettlementPreview([
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-2", hostRated: true }),
+        {
+          ...guess("listener", { hostId: "host-3", hostRated: true }),
+          season: { ...season, id: "other-season" },
+        },
+      ])
+    ).toMatchObject({
+      eligible: false,
+      message: "Guesses must belong to the same season",
+    });
   });
 
   it("keeps episode point sources separate and sorts by exact total", () => {

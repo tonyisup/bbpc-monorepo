@@ -64,7 +64,7 @@ const GROUP_POINT_LOOKUPS = new Set([
   "all-incorrect",
 ]);
 
-type GuessWriteContext = Pick<MutationCtx, "db">;
+type GuessWriteContext = MutationCtx;
 type GuessSettlementOutcome =
   | "allcorrect"
   | "all-incorrect"
@@ -115,6 +115,7 @@ async function readGroupAwardPoints(
   ctx: GuessWriteContext,
   assignmentId: Id<"assignments">,
   userId: Id<"users">,
+  seasonId: Id<"seasons">,
 ): Promise<GroupAwardPoint[]> {
   const links = await ctx.db
     .query("assignmentPointLinks")
@@ -135,6 +136,10 @@ async function readGroupAwardPoints(
   const seenPointIds = new Set<Id<"points">>();
   const groupPoints: GroupAwardPoint[] = [];
   for (const link of links) {
+    const point = await requirePoint(ctx, link.pointId);
+    if (point.seasonId !== seasonId) {
+      continue;
+    }
     if (seenPointIds.has(link.pointId)) {
       domainError(
         "CONFLICT",
@@ -142,7 +147,6 @@ async function readGroupAwardPoints(
       );
     }
     seenPointIds.add(link.pointId);
-    const point = await requirePoint(ctx, link.pointId);
     if (point.userId !== userId) {
       domainError(
         "CONFLICT",
@@ -253,18 +257,51 @@ async function clearGuessSettlements(
   if (settlements.length === 0) {
     return 0;
   }
-  const groupPoints = await readGroupAwardPoints(
-    ctx,
-    assignmentId,
-    userId,
-  );
-  for (const candidate of groupPoints) {
-    await deletePointAndClearRelationships(ctx, candidate.point);
-  }
+
+  const settlementsBySeason = new Map<
+    Id<"seasons">,
+    Array<Doc<"guessSettlements">>
+  >();
   for (const settlement of settlements) {
-    await ctx.db.delete("guessSettlements", settlement._id);
+    const seasonSettlements =
+      settlementsBySeason.get(settlement.seasonId) ?? [];
+    seasonSettlements.push(settlement);
+    settlementsBySeason.set(settlement.seasonId, seasonSettlements);
   }
-  return groupPoints.length;
+
+  const [guesses, guessPointType] = await Promise.all([
+    readGuessesForAssignmentUser(ctx, assignmentId, userId),
+    resolveGamePointTypeByLookup(ctx, "guess"),
+  ]);
+  let deletedPoints = 0;
+  for (const [seasonId, seasonSettlements] of settlementsBySeason) {
+    for (const guess of guesses) {
+      if (guess.seasonId !== seasonId || guess.pointId === undefined) {
+        continue;
+      }
+      const point = await requireCanonicalGuessPoint(
+        ctx,
+        guess,
+        guessPointType._id,
+      );
+      await deletePointAndClearRelationships(ctx, point);
+      deletedPoints += 1;
+    }
+    const groupPoints = await readGroupAwardPoints(
+      ctx,
+      assignmentId,
+      userId,
+      seasonId,
+    );
+    for (const candidate of groupPoints) {
+      await deletePointAndClearRelationships(ctx, candidate.point);
+      deletedPoints += 1;
+    }
+    for (const settlement of seasonSettlements) {
+      await ctx.db.delete("guessSettlements", settlement._id);
+    }
+  }
+  return deletedPoints;
 }
 
 export const mineForAssignment = authenticatedQuery({
@@ -548,6 +585,10 @@ export const settleForAssignmentUser = adminMutation({
     }
 
     const hostIds = new Set<Id<"users">>();
+    const evaluatedGuesses: Array<{
+      guess: Doc<"guesses">;
+      reviewRatingId: Id<"ratings">;
+    }> = [];
     let correctCount = 0;
     for (const guess of guesses) {
       const assignmentReview = await ctx.db.get(
@@ -573,13 +614,15 @@ export const settleForAssignmentUser = adminMutation({
         );
       }
       hostIds.add(review.userId);
-      if (review.ratingId === undefined) {
+      const reviewRatingId = review.ratingId;
+      if (reviewRatingId === undefined) {
         domainError(
           "CONFLICT",
           "All three hosts must rate before guesses can be settled.",
         );
       }
-      if (review.ratingId === guess.ratingId) {
+      evaluatedGuesses.push({ guess, reviewRatingId });
+      if (reviewRatingId === guess.ratingId) {
         correctCount += 1;
       }
     }
@@ -610,22 +653,8 @@ export const settleForAssignmentUser = adminMutation({
 
     let individualPointsCreated = 0;
     let individualPointsRemoved = 0;
-    for (const guess of guesses) {
-      const assignmentReview = await ctx.db.get(
-        "assignmentReviews",
-        guess.assignmentReviewId,
-      );
-      if (assignmentReview === null) {
-        domainError("CONFLICT", "A settlement review disappeared.");
-      }
-      const review = await ctx.db.get(
-        "reviews",
-        assignmentReview.reviewId,
-      );
-      if (review?.ratingId === undefined) {
-        domainError("CONFLICT", "A settlement host rating disappeared.");
-      }
-      const correct = review.ratingId === guess.ratingId;
+    for (const { guess, reviewRatingId } of evaluatedGuesses) {
+      const correct = reviewRatingId === guess.ratingId;
       if (correct && guess.pointId === undefined) {
         const point = await insertPoint(ctx, {
           userId: guess.userId,
@@ -660,15 +689,8 @@ export const settleForAssignmentUser = adminMutation({
       ctx,
       args.assignmentId,
       args.userId,
+      seasonId,
     );
-    for (const candidate of existingGroupPoints) {
-      if (candidate.point.seasonId !== seasonId) {
-        domainError(
-          "CONFLICT",
-          "A settlement point belongs to a different season.",
-        );
-      }
-    }
     const desiredLookup = outcome === "mixed" ? null : outcome;
     const matchingGroupPoint =
       desiredLookup === null
@@ -1047,7 +1069,7 @@ export const remove = adminMutation({
         "The guess changed after deletion was requested.",
       );
     }
-    const deletedSettlementPoints = await clearGuessSettlements(
+    const deletedPoints = await clearGuessSettlements(
       ctx,
       assignmentReview.assignmentId,
       guess.userId,
@@ -1059,7 +1081,7 @@ export const remove = adminMutation({
       targetType: "guess",
       targetId: guess._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
-      metadata: { deletedSettlementPoints },
+      metadata: { deletedPoints },
     });
     return { id: guess._id };
   },
@@ -1079,12 +1101,12 @@ export const removeForAssignmentUser = adminMutation({
       requirePointAssignment(ctx, args.assignmentId),
       requirePointUser(ctx, args.userId),
     ]);
-    const guesses = await readGuessesForAssignmentUser(
+    let deletedPoints = await clearGuessSettlements(
       ctx,
       args.assignmentId,
       args.userId,
     );
-    let deletedPoints = await clearGuessSettlements(
+    const guesses = await readGuessesForAssignmentUser(
       ctx,
       args.assignmentId,
       args.userId,

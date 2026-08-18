@@ -3570,20 +3570,6 @@ export type PublicApiType = {
           user: { id: Id<"users">; image: string | null; name: string | null };
         }>
       >;
-      listSettlementsForAssignment: FunctionReference<
-        "query",
-        "public",
-        { assignmentId: Id<"assignments"> },
-        Array<{
-          assignmentId: Id<"assignments">;
-          correctCount: number;
-          id: Id<"guessSettlements">;
-          outcome: "allcorrect" | "all-incorrect" | "mixed";
-          seasonId: Id<"seasons">;
-          settledAt: number;
-          userId: Id<"users">;
-        }>
-      >;
       listForSeasonPage: FunctionReference<
         "query",
         "public",
@@ -5761,6 +5747,20 @@ export type PublicApiType = {
           pageStatus?: "SplitRecommended" | "SplitRequired" | null;
           splitCursor?: string | null;
         }
+      >;
+      listSettlementsForAssignment: FunctionReference<
+        "query",
+        "public",
+        { assignmentId: Id<"assignments"> },
+        Array<{
+          assignmentId: Id<"assignments">;
+          correctCount: number;
+          id: Id<"guessSettlements">;
+          outcome: "allcorrect" | "all-incorrect" | "mixed";
+          seasonId: Id<"seasons">;
+          settledAt: number;
+          userId: Id<"users">;
+        }>
       >;
       mineForAssignment: FunctionReference<
         "query",
