@@ -415,6 +415,12 @@ describe("recording management model", () => {
       [wager(listenerB.id, -4)],
       [
         {
+          user: listenerB,
+          point: { adjustment: 10 },
+        },
+      ],
+      [
+        {
           userId: listenerA.id,
           assignmentId: "assignment",
           total: 3,
@@ -425,18 +431,20 @@ describe("recording management model", () => {
 
     expect(rows).toMatchObject([
       {
-        user: { id: listenerA.id },
-        guessPoints: 2,
-        gamblingPoints: 0,
-        bonusPoints: 3,
-        total: 5,
-      },
-      {
         user: { id: listenerB.id },
         guessPoints: 0,
         gamblingPoints: -4,
+        quotabungaPoints: 10,
         bonusPoints: 0,
-        total: -4,
+        total: 6,
+      },
+      {
+        user: { id: listenerA.id },
+        guessPoints: 2,
+        gamblingPoints: 0,
+        quotabungaPoints: 0,
+        bonusPoints: 3,
+        total: 5,
       },
     ]);
   });

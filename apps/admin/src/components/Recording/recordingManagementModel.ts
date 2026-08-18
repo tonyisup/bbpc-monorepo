@@ -14,8 +14,14 @@ export interface EpisodePointRow {
   user: { id: string; name: string | null; image: string | null };
   guessPoints: number;
   gamblingPoints: number;
+  quotabungaPoints: number;
   bonusPoints: number;
   total: number;
+}
+
+export interface EpisodeQuoteAward {
+  user: { id: string; name: string | null; image: string | null };
+  point: { adjustment: number | null } | null;
 }
 
 export interface AssignmentRecordingDisclosure {
@@ -254,6 +260,7 @@ export function getRecordingGuessSettlementPreview(
 export function summarizeEpisodePoints(
   guesses: ConvexAdminSeasonGuess[],
   wagers: ConvexAdminSeasonGamblingEntry[],
+  quoteAwards: EpisodeQuoteAward[],
   assignmentPoints: AssignmentPointTotal[],
   users: ConvexAdminUser[]
 ): EpisodePointRow[] {
@@ -272,6 +279,7 @@ export function summarizeEpisodePoints(
       user,
       guessPoints: 0,
       gamblingPoints: 0,
+      quotabungaPoints: 0,
       bonusPoints: 0,
       total: 0,
     };
@@ -294,6 +302,15 @@ export function summarizeEpisodePoints(
     const row = rowFor(wager.user);
     row.gamblingPoints += wager.awardPoint.total;
     row.total += wager.awardPoint.total;
+  });
+  quoteAwards.forEach((award) => {
+    const adjustment = award.point?.adjustment;
+    if (adjustment === undefined || adjustment === null) {
+      return;
+    }
+    const row = rowFor(award.user);
+    row.quotabungaPoints += adjustment;
+    row.total += adjustment;
   });
   assignmentPoints.forEach((pointTotal) => {
     const user = userCatalog.get(pointTotal.userId);

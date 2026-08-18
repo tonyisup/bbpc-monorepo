@@ -588,17 +588,26 @@ export function SeasonLeaderboard({
 export function EpisodePointsSummary({
   assignmentPoints,
   guesses,
+  submissions,
   users,
   wagers,
 }: {
   assignmentPoints: AssignmentPointTotal[];
   guesses: ConvexAdminSeasonGuess[];
+  submissions: ConvexAdminQuoteSubmission[];
   users: ConvexAdminUser[];
   wagers: ConvexAdminSeasonGamblingEntry[];
 }) {
   const rows = useMemo(
-    () => summarizeEpisodePoints(guesses, wagers, assignmentPoints, users),
-    [assignmentPoints, guesses, users, wagers]
+    () =>
+      summarizeEpisodePoints(
+        guesses,
+        wagers,
+        submissions,
+        assignmentPoints,
+        users
+      ),
+    [assignmentPoints, guesses, submissions, users, wagers]
   );
   return (
     <Card className="w-full border-amber-500/20 bg-amber-500/5">
@@ -651,6 +660,11 @@ export function EpisodePointsSummary({
                     icon={Coins}
                     label="Gambling"
                     value={row.gamblingPoints}
+                  />
+                  <PointBreakdown
+                    icon={Quote}
+                    label="Quotabunga"
+                    value={row.quotabungaPoints}
                   />
                   <PointBreakdown
                     icon={Star}
@@ -1589,6 +1603,7 @@ export function ConvexRecordingManagementPage() {
             <EpisodePointsSummary
               assignmentPoints={data.assignmentPoints}
               guesses={data.guesses}
+              submissions={data.submissions}
               users={data.users}
               wagers={data.wagers}
             />
