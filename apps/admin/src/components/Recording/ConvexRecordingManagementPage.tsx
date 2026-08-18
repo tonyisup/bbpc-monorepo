@@ -115,7 +115,12 @@ const assignmentPointTotalsReference = makeFunctionReference<
 
 const awardGuessPointReference = makeFunctionReference<
   "mutation",
-  { id: string; adjustment: number; reason: string },
+  {
+    clientApiVersion: string;
+    id: string;
+    adjustment: number;
+    reason: string;
+  },
   unknown
 >("games/guesses:awardPoint");
 
@@ -943,6 +948,7 @@ export function ConvexRecordingManagementPage() {
       async () =>
         adminGuessSchema.parse(
           await client.mutation(awardGuessPointReference, {
+            clientApiVersion: BBPC_CLIENT_API_VERSION,
             id: guess.id,
             adjustment: 0,
             reason: "Correct prediction",
