@@ -304,6 +304,30 @@ export const assignmentGuessGroupValidator = v.object({
   guesses: v.array(guessValidator),
 });
 
+export const guessSettlementOutcomeValidator = v.union(
+  v.literal("allcorrect"),
+  v.literal("all-incorrect"),
+  v.literal("mixed"),
+);
+
+export const guessSettlementValidator = v.object({
+  id: v.id("guessSettlements"),
+  assignmentId: v.id("assignments"),
+  userId: v.id("users"),
+  seasonId: v.id("seasons"),
+  outcome: guessSettlementOutcomeValidator,
+  correctCount: v.number(),
+  settledAt: v.number(),
+});
+
+export const guessSettlementResultValidator =
+  guessSettlementValidator.extend({
+    guessCount: v.number(),
+    individualPointsCreated: v.number(),
+    individualPointsRemoved: v.number(),
+    groupPointChanged: v.boolean(),
+  });
+
 export const gamblingStatusValidator = v.union(
   v.literal("pending"),
   v.literal("locked"),

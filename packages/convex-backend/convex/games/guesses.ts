@@ -5,6 +5,7 @@ import {
 import { v } from "convex/values";
 
 import type { Doc, Id } from "../_generated/dataModel.js";
+import type { MutationCtx } from "../_generated/server.js";
 import {
   adminMutation,
   adminQuery,
@@ -15,8 +16,10 @@ import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import {
   MAX_ASSIGNMENTS_FOR_GUESS_READ,
+  MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT,
   MAX_GUESSES_PER_ASSIGNMENT,
   MAX_HOST_GUESSES_PER_BATCH,
+  MAX_POINT_RELATIONSHIPS,
   validateGuessPageSize,
 } from "./limits.js";
 import {
@@ -49,9 +52,28 @@ import {
 } from "./pointWriteModel.js";
 import {
   assignmentGuessGroupValidator,
+  guessSettlementResultValidator,
+  guessSettlementValidator,
   guessValidator,
   pointSeasonSelectorValidator,
 } from "./validators.js";
+
+const SETTLEMENT_GUESS_COUNT = 3;
+const GROUP_POINT_LOOKUPS = new Set([
+  "allcorrect",
+  "all-incorrect",
+]);
+
+type GuessWriteContext = Pick<MutationCtx, "db">;
+type GuessSettlementOutcome =
+  | "allcorrect"
+  | "all-incorrect"
+  | "mixed";
+
+interface GroupAwardPoint {
+  point: Doc<"points">;
+  lookupId: "allcorrect" | "all-incorrect";
+}
 
 function validateAssignmentIds(
   assignmentIds: Array<Id<"assignments">>,
@@ -87,6 +109,162 @@ async function resolveSelectedSeasonId(
   return selector.kind === "all"
     ? null
     : (await resolvePointSeason(ctx, selector))._id;
+}
+
+async function readGroupAwardPoints(
+  ctx: GuessWriteContext,
+  assignmentId: Id<"assignments">,
+  userId: Id<"users">,
+): Promise<GroupAwardPoint[]> {
+  const links = await ctx.db
+    .query("assignmentPointLinks")
+    .withIndex("by_assignmentId_and_userId", (index) =>
+      index
+        .eq("assignmentId", assignmentId)
+        .eq("userId", userId),
+    )
+    .take(MAX_POINT_RELATIONSHIPS + 1);
+  if (links.length > MAX_POINT_RELATIONSHIPS) {
+    domainError(
+      "CONFLICT",
+      "Assignment points exceed the supported settlement limit.",
+      { details: { limit: MAX_POINT_RELATIONSHIPS } },
+    );
+  }
+
+  const seenPointIds = new Set<Id<"points">>();
+  const groupPoints: GroupAwardPoint[] = [];
+  for (const link of links) {
+    if (seenPointIds.has(link.pointId)) {
+      domainError(
+        "CONFLICT",
+        "A settlement point is linked to the assignment more than once.",
+      );
+    }
+    seenPointIds.add(link.pointId);
+    const point = await requirePoint(ctx, link.pointId);
+    if (point.userId !== userId) {
+      domainError(
+        "CONFLICT",
+        "Assignment settlement point user does not match its link.",
+      );
+    }
+    if (point.gamePointTypeId === undefined) {
+      continue;
+    }
+    const pointType = await ctx.db.get(
+      "gamePointTypes",
+      point.gamePointTypeId,
+    );
+    if (pointType === null) {
+      domainError(
+        "CONFLICT",
+        "Assignment settlement point has a missing point type.",
+      );
+    }
+    if (!GROUP_POINT_LOOKUPS.has(pointType.normalizedLookupId)) {
+      continue;
+    }
+    const pointLinks = await ctx.db
+      .query("assignmentPointLinks")
+      .withIndex("by_pointId", (index) =>
+        index.eq("pointId", point._id),
+      )
+      .take(2);
+    if (pointLinks.length !== 1) {
+      domainError(
+        "CONFLICT",
+        "A settlement point must belong to exactly one assignment.",
+      );
+    }
+    groupPoints.push({
+      point,
+      lookupId: pointType.normalizedLookupId as GroupAwardPoint["lookupId"],
+    });
+  }
+  for (const lookupId of GROUP_POINT_LOOKUPS) {
+    let matchingCount = 0;
+    for (const candidate of groupPoints) {
+      if (candidate.lookupId === lookupId) {
+        matchingCount += 1;
+      }
+    }
+    if (matchingCount > 1) {
+      domainError(
+        "CONFLICT",
+        `The listener has duplicate ${lookupId} assignment points.`,
+      );
+    }
+  }
+  return groupPoints;
+}
+
+async function requireCanonicalGuessPoint(
+  ctx: GuessWriteContext,
+  guess: Doc<"guesses">,
+  pointTypeId: Id<"gamePointTypes">,
+): Promise<Doc<"points">> {
+  if (guess.pointId === undefined) {
+    domainError("CONFLICT", "The guess has no award point.");
+  }
+  const point = await requirePoint(ctx, guess.pointId);
+  if (
+    point.userId !== guess.userId ||
+    point.seasonId !== guess.seasonId ||
+    point.gamePointTypeId !== pointTypeId
+  ) {
+    domainError(
+      "CONFLICT",
+      "The guess has a non-standard award point that must be reviewed manually.",
+      { details: { guessId: guess._id } },
+    );
+  }
+  return point;
+}
+
+async function clearGuessSettlements(
+  ctx: GuessWriteContext,
+  assignmentId: Id<"assignments">,
+  userId: Id<"users">,
+): Promise<number> {
+  const settlements = await ctx.db
+    .query("guessSettlements")
+    .withIndex(
+      "by_assignmentId_and_userId_and_seasonId",
+      (index) =>
+        index
+          .eq("assignmentId", assignmentId)
+          .eq("userId", userId),
+    )
+    .take(MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT + 1);
+  if (
+    settlements.length > MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT
+  ) {
+    domainError(
+      "CONFLICT",
+      "Guess settlements exceed the supported cleanup limit.",
+      {
+        details: {
+          limit: MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT,
+        },
+      },
+    );
+  }
+  if (settlements.length === 0) {
+    return 0;
+  }
+  const groupPoints = await readGroupAwardPoints(
+    ctx,
+    assignmentId,
+    userId,
+  );
+  for (const candidate of groupPoints) {
+    await deletePointAndClearRelationships(ctx, candidate.point);
+  }
+  for (const settlement of settlements) {
+    await ctx.db.delete("guessSettlements", settlement._id);
+  }
+  return groupPoints.length;
 }
 
 export const mineForAssignment = authenticatedQuery({
@@ -289,6 +467,324 @@ export const listForAssignment = adminQuery({
       }
     }
     return await hydrateGuesses(ctx, guesses);
+  },
+});
+
+export const listSettlementsForAssignment = adminQuery({
+  args: { assignmentId: v.id("assignments") },
+  returns: v.array(guessSettlementValidator),
+  handler: async (ctx, args) => {
+    await requirePointAssignment(ctx, args.assignmentId);
+    const settlements = await ctx.db
+      .query("guessSettlements")
+      .withIndex("by_assignmentId", (index) =>
+        index.eq("assignmentId", args.assignmentId),
+      )
+      .take(MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT + 1);
+    if (
+      settlements.length > MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT
+    ) {
+      domainError(
+        "CONFLICT",
+        "Guess settlements exceed the supported assignment limit.",
+        {
+          details: {
+            limit: MAX_GUESS_SETTLEMENTS_PER_ASSIGNMENT,
+          },
+        },
+      );
+    }
+    return settlements.map((settlement) => ({
+      id: settlement._id,
+      assignmentId: settlement.assignmentId,
+      userId: settlement.userId,
+      seasonId: settlement.seasonId,
+      outcome: settlement.outcome,
+      correctCount: settlement.correctCount,
+      settledAt: settlement.settledAt,
+    }));
+  },
+});
+
+export const settleForAssignmentUser = adminMutation({
+  args: {
+    assignmentId: v.id("assignments"),
+    userId: v.id("users"),
+    earnedAt: v.optional(v.number()),
+  },
+  returns: guessSettlementResultValidator,
+  handler: async (ctx, args) => {
+    await Promise.all([
+      requirePointAssignment(ctx, args.assignmentId),
+      requirePointUser(ctx, args.userId),
+    ]);
+    const guesses = await readGuessesForAssignmentUser(
+      ctx,
+      args.assignmentId,
+      args.userId,
+    );
+    if (guesses.length !== SETTLEMENT_GUESS_COUNT) {
+      domainError(
+        "VALIDATION_FAILED",
+        `A listener settlement requires exactly ${String(SETTLEMENT_GUESS_COUNT)} guesses.`,
+        { details: { guessCount: guesses.length } },
+      );
+    }
+    const seasonIds = new Set(guesses.map((guess) => guess.seasonId));
+    if (seasonIds.size !== 1) {
+      domainError(
+        "CONFLICT",
+        "A listener's three guesses must belong to the same season.",
+      );
+    }
+    const firstGuess = guesses.at(0);
+    if (firstGuess === undefined) {
+      domainError("CONFLICT", "The settlement has no guesses.");
+    }
+    const seasonId = firstGuess.seasonId;
+    const season = await ctx.db.get("seasons", seasonId);
+    if (season === null) {
+      domainError("CONFLICT", "The settlement season is unavailable.");
+    }
+
+    const hostIds = new Set<Id<"users">>();
+    let correctCount = 0;
+    for (const guess of guesses) {
+      const assignmentReview = await ctx.db.get(
+        "assignmentReviews",
+        guess.assignmentReviewId,
+      );
+      if (assignmentReview?.assignmentId !== args.assignmentId) {
+        domainError(
+          "CONFLICT",
+          "A settlement guess has an invalid assignment review.",
+          { details: { guessId: guess._id } },
+        );
+      }
+      const review = await ctx.db.get(
+        "reviews",
+        assignmentReview.reviewId,
+      );
+      if (review?.userId === undefined) {
+        domainError(
+          "CONFLICT",
+          "A settlement guess does not target a host review.",
+          { details: { guessId: guess._id } },
+        );
+      }
+      hostIds.add(review.userId);
+      if (review.ratingId === undefined) {
+        domainError(
+          "CONFLICT",
+          "All three hosts must rate before guesses can be settled.",
+        );
+      }
+      if (review.ratingId === guess.ratingId) {
+        correctCount += 1;
+      }
+    }
+    if (hostIds.size !== SETTLEMENT_GUESS_COUNT) {
+      domainError(
+        "VALIDATION_FAILED",
+        "A listener settlement requires guesses for three distinct hosts.",
+      );
+    }
+
+    const outcome: GuessSettlementOutcome =
+      correctCount === SETTLEMENT_GUESS_COUNT
+        ? "allcorrect"
+        : correctCount === 0
+          ? "all-incorrect"
+          : "mixed";
+    const earnedAt = validateEarnedAt(args.earnedAt ?? Date.now());
+    const guessPointType = await resolveGamePointTypeByLookup(
+      ctx,
+      "guess",
+    );
+    if (guessPointType.gameTypeId !== season.gameTypeId) {
+      domainError(
+        "CONFLICT",
+        "The guess point type does not belong to the settlement season's game.",
+      );
+    }
+
+    let individualPointsCreated = 0;
+    let individualPointsRemoved = 0;
+    for (const guess of guesses) {
+      const assignmentReview = await ctx.db.get(
+        "assignmentReviews",
+        guess.assignmentReviewId,
+      );
+      if (assignmentReview === null) {
+        domainError("CONFLICT", "A settlement review disappeared.");
+      }
+      const review = await ctx.db.get(
+        "reviews",
+        assignmentReview.reviewId,
+      );
+      if (review?.ratingId === undefined) {
+        domainError("CONFLICT", "A settlement host rating disappeared.");
+      }
+      const correct = review.ratingId === guess.ratingId;
+      if (correct && guess.pointId === undefined) {
+        const point = await insertPoint(ctx, {
+          userId: guess.userId,
+          seasonId: guess.seasonId,
+          adjustment: 0,
+          reason: "Correct prediction",
+          gamePointTypeId: guessPointType._id,
+          earnedAt,
+        });
+        await ctx.db.patch("guesses", guess._id, {
+          pointId: point._id,
+        });
+        individualPointsCreated += 1;
+      } else if (correct) {
+        await requireCanonicalGuessPoint(
+          ctx,
+          guess,
+          guessPointType._id,
+        );
+      } else if (guess.pointId !== undefined) {
+        const point = await requireCanonicalGuessPoint(
+          ctx,
+          guess,
+          guessPointType._id,
+        );
+        await deletePointAndClearRelationships(ctx, point);
+        individualPointsRemoved += 1;
+      }
+    }
+
+    const existingGroupPoints = await readGroupAwardPoints(
+      ctx,
+      args.assignmentId,
+      args.userId,
+    );
+    for (const candidate of existingGroupPoints) {
+      if (candidate.point.seasonId !== seasonId) {
+        domainError(
+          "CONFLICT",
+          "A settlement point belongs to a different season.",
+        );
+      }
+    }
+    const desiredLookup = outcome === "mixed" ? null : outcome;
+    const matchingGroupPoint =
+      desiredLookup === null
+        ? undefined
+        : existingGroupPoints.find(
+            (candidate) => candidate.lookupId === desiredLookup,
+          );
+    let groupPointChanged = false;
+    for (const candidate of existingGroupPoints) {
+      if (candidate !== matchingGroupPoint) {
+        await deletePointAndClearRelationships(ctx, candidate.point);
+        groupPointChanged = true;
+      }
+    }
+    if (desiredLookup !== null) {
+      const groupPointType = await resolveGamePointTypeByLookup(
+        ctx,
+        desiredLookup,
+      );
+      if (groupPointType.gameTypeId !== season.gameTypeId) {
+        domainError(
+          "CONFLICT",
+          "The settlement point type does not belong to the settlement season's game.",
+        );
+      }
+      const reason =
+        desiredLookup === "allcorrect"
+          ? "All three predictions correct"
+          : "All three predictions incorrect";
+      if (matchingGroupPoint === undefined) {
+        const point = await insertPoint(ctx, {
+          userId: args.userId,
+          seasonId,
+          adjustment: 0,
+          reason,
+          gamePointTypeId: groupPointType._id,
+          earnedAt,
+        });
+        await ctx.db.insert("assignmentPointLinks", {
+          assignmentId: args.assignmentId,
+          userId: args.userId,
+          pointId: point._id,
+        });
+        groupPointChanged = true;
+      } else if (
+        matchingGroupPoint.point.gamePointTypeId !==
+          groupPointType._id ||
+        matchingGroupPoint.point.adjustment !== 0 ||
+        matchingGroupPoint.point.reason !== reason
+      ) {
+        await ctx.db.patch("points", matchingGroupPoint.point._id, {
+          adjustment: 0,
+          reason,
+          gamePointTypeId: groupPointType._id,
+        });
+        groupPointChanged = true;
+      }
+    }
+
+    const existingSettlement = await ctx.db
+      .query("guessSettlements")
+      .withIndex(
+        "by_assignmentId_and_userId_and_seasonId",
+        (index) =>
+          index
+            .eq("assignmentId", args.assignmentId)
+            .eq("userId", args.userId)
+            .eq("seasonId", seasonId),
+      )
+      .unique();
+    const settlementId =
+      existingSettlement === null
+        ? await ctx.db.insert("guessSettlements", {
+            assignmentId: args.assignmentId,
+            userId: args.userId,
+            seasonId,
+            outcome,
+            correctCount,
+            settledAt: earnedAt,
+          })
+        : existingSettlement._id;
+    if (existingSettlement !== null) {
+      await ctx.db.patch("guessSettlements", settlementId, {
+        outcome,
+        correctCount,
+        settledAt: earnedAt,
+      });
+    }
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "games.admin.guessesSettled",
+      targetType: "assignment",
+      targetId: args.assignmentId,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: {
+        userId: args.userId,
+        outcome,
+        correctCount,
+        individualPointsCreated,
+        individualPointsRemoved,
+        groupPointChanged,
+      },
+    });
+    return {
+      id: settlementId,
+      assignmentId: args.assignmentId,
+      userId: args.userId,
+      seasonId,
+      outcome,
+      correctCount,
+      settledAt: earnedAt,
+      guessCount: guesses.length,
+      individualPointsCreated,
+      individualPointsRemoved,
+      groupPointChanged,
+    };
   },
 });
 
@@ -526,6 +1022,16 @@ export const remove = adminMutation({
   returns: v.object({ id: v.id("guesses") }),
   handler: async (ctx, args) => {
     const guess = await requireGuess(ctx, args.id);
+    const assignmentReview = await ctx.db.get(
+      "assignmentReviews",
+      guess.assignmentReviewId,
+    );
+    if (assignmentReview === null) {
+      domainError(
+        "CONFLICT",
+        "The guess has a missing assignment review.",
+      );
+    }
     if (
       args.expected !== undefined &&
       (guess.userId !== args.expected.userId ||
@@ -541,6 +1047,11 @@ export const remove = adminMutation({
         "The guess changed after deletion was requested.",
       );
     }
+    const deletedSettlementPoints = await clearGuessSettlements(
+      ctx,
+      assignmentReview.assignmentId,
+      guess.userId,
+    );
     await ctx.db.delete("guesses", guess._id);
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
@@ -548,6 +1059,7 @@ export const remove = adminMutation({
       targetType: "guess",
       targetId: guess._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: { deletedSettlementPoints },
     });
     return { id: guess._id };
   },
@@ -572,6 +1084,11 @@ export const removeForAssignmentUser = adminMutation({
       args.assignmentId,
       args.userId,
     );
+    let deletedPoints = await clearGuessSettlements(
+      ctx,
+      args.assignmentId,
+      args.userId,
+    );
     const pointIds = new Map<Id<"points">, Id<"points">>();
     for (const guess of guesses) {
       if (guess.pointId !== undefined) {
@@ -579,7 +1096,6 @@ export const removeForAssignmentUser = adminMutation({
       }
       await ctx.db.delete("guesses", guess._id);
     }
-    let deletedPoints = 0;
     for (const pointId of pointIds.values()) {
       const remainingGuess = await ctx.db
         .query("guesses")

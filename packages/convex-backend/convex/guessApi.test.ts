@@ -31,6 +31,16 @@ const HOST_IDENTITY = {
   issuer: "https://issuer.example.test",
   subject: "guess-host",
 };
+const HOST_TWO_IDENTITY = {
+  tokenIdentifier: "https://issuer.example.test|guess-host-two",
+  issuer: "https://issuer.example.test",
+  subject: "guess-host-two",
+};
+const HOST_THREE_IDENTITY = {
+  tokenIdentifier: "https://issuer.example.test|guess-host-three",
+  issuer: "https://issuer.example.test",
+  subject: "guess-host-three",
+};
 
 function createTestBackend() {
   return convexTest(schema, modules);
@@ -177,6 +187,26 @@ async function seedGameFoundation(t: TestBackend) {
       points: 10,
       gameTypeId,
     });
+    const allCorrectPointTypeId = await ctx.db.insert(
+      "gamePointTypes",
+      {
+        title: "All correct",
+        lookupId: "allcorrect",
+        normalizedLookupId: "allcorrect",
+        points: 5,
+        gameTypeId,
+      },
+    );
+    const allIncorrectPointTypeId = await ctx.db.insert(
+      "gamePointTypes",
+      {
+        title: "All incorrect",
+        lookupId: "all-incorrect",
+        normalizedLookupId: "all-incorrect",
+        points: -2,
+        gameTypeId,
+      },
+    );
     const seasonId = await ctx.db.insert("seasons", {
       title: "Active season",
       gameTypeId,
@@ -200,6 +230,8 @@ async function seedGameFoundation(t: TestBackend) {
     return {
       gameTypeId,
       pointTypeId,
+      allCorrectPointTypeId,
+      allIncorrectPointTypeId,
       seasonId,
       otherSeasonId,
       highRatingId,
@@ -985,6 +1017,225 @@ describe("guess API", () => {
         { id: updated.id },
       ),
     ).resolves.toMatchObject({ id: updated.id });
+  });
+
+  test("idempotently settles all-correct, all-incorrect, and mixed listener rounds", async () => {
+    const t = createTestBackend();
+    const { adminId, memberId, hostId } = await seedActors(t);
+    const hostTwoId = await seedUser(t, {
+      identity: HOST_TWO_IDENTITY,
+      name: "Guess Host Two",
+    });
+    const hostThreeId = await seedUser(t, {
+      identity: HOST_THREE_IDENTITY,
+      name: "Guess Host Three",
+    });
+    const {
+      seasonId,
+      highRatingId,
+      lowRatingId,
+      pointTypeId,
+      allCorrectPointTypeId,
+      allIncorrectPointTypeId,
+    } = await seedGameFoundation(t);
+    const round = await seedAssignmentRound(t, {
+      ownerId: adminId,
+      hostIds: [hostId, hostTwoId, hostThreeId],
+      ratingId: highRatingId,
+      suffix: "51",
+    });
+    await advanceToS3(t);
+
+    for (const assignmentReviewId of round.assignmentReviewIds) {
+      await t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.guesses.create,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          userId: memberId,
+          assignmentReviewId,
+          ratingId: highRatingId,
+          seasonId,
+          createdAt: 100,
+        },
+      );
+    }
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).mutation(
+        api.games.guesses.settleForAssignmentUser,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          assignmentId: round.assignmentId,
+          userId: memberId,
+        },
+      ),
+      "FORBIDDEN",
+    );
+
+    const allCorrect = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.games.guesses.settleForAssignmentUser,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        userId: memberId,
+        earnedAt: 200,
+      },
+    );
+    expect(allCorrect).toMatchObject({
+      outcome: "allcorrect",
+      correctCount: 3,
+      guessCount: 3,
+      individualPointsCreated: 3,
+      individualPointsRemoved: 0,
+      groupPointChanged: true,
+    });
+
+    const repeated = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.games.guesses.settleForAssignmentUser,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        userId: memberId,
+        earnedAt: 201,
+      },
+    );
+    expect(repeated).toMatchObject({
+      outcome: "allcorrect",
+      individualPointsCreated: 0,
+      individualPointsRemoved: 0,
+      groupPointChanged: false,
+    });
+    await t.run(async (ctx) => {
+      const points = await ctx.db.query("points").collect();
+      expect(points).toHaveLength(4);
+      expect(
+        points.filter(
+          (point) => point.gamePointTypeId === pointTypeId,
+        ),
+      ).toHaveLength(3);
+      expect(
+        points.filter(
+          (point) =>
+            point.gamePointTypeId === allCorrectPointTypeId,
+        ),
+      ).toHaveLength(1);
+      expect(
+        await ctx.db.query("assignmentPointLinks").collect(),
+      ).toHaveLength(1);
+    });
+
+    await t.run(async (ctx) => {
+      for (const assignmentReviewId of round.assignmentReviewIds) {
+        const assignmentReview = await ctx.db.get(
+          "assignmentReviews",
+          assignmentReviewId,
+        );
+        if (assignmentReview === null) {
+          throw new Error("Expected assignment review");
+        }
+        await ctx.db.patch("reviews", assignmentReview.reviewId, {
+          ratingId: lowRatingId,
+        });
+      }
+    });
+    const allIncorrect = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.games.guesses.settleForAssignmentUser,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        userId: memberId,
+        earnedAt: 300,
+      },
+    );
+    expect(allIncorrect).toMatchObject({
+      outcome: "all-incorrect",
+      correctCount: 0,
+      individualPointsCreated: 0,
+      individualPointsRemoved: 3,
+      groupPointChanged: true,
+    });
+    await t.run(async (ctx) => {
+      const points = await ctx.db.query("points").collect();
+      expect(points).toHaveLength(1);
+      expect(points[0]?.gamePointTypeId).toBe(
+        allIncorrectPointTypeId,
+      );
+    });
+
+    await t.run(async (ctx) => {
+      const firstAssignmentReviewId = requireFirst(
+        round.assignmentReviewIds,
+        "first assignment review",
+      );
+      const assignmentReview = await ctx.db.get(
+        "assignmentReviews",
+        firstAssignmentReviewId,
+      );
+      if (assignmentReview === null) {
+        throw new Error("Expected assignment review");
+      }
+      await ctx.db.patch("reviews", assignmentReview.reviewId, {
+        ratingId: highRatingId,
+      });
+    });
+    const mixed = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.games.guesses.settleForAssignmentUser,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        userId: memberId,
+        earnedAt: 400,
+      },
+    );
+    expect(mixed).toMatchObject({
+      outcome: "mixed",
+      correctCount: 1,
+      individualPointsCreated: 1,
+      individualPointsRemoved: 0,
+      groupPointChanged: true,
+    });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).query(
+        api.games.guesses.listSettlementsForAssignment,
+        { assignmentId: round.assignmentId },
+      ),
+    ).resolves.toMatchObject([
+      {
+        assignmentId: round.assignmentId,
+        userId: memberId,
+        seasonId,
+        outcome: "mixed",
+        correctCount: 1,
+        settledAt: 400,
+      },
+    ]);
+    await t.run(async (ctx) => {
+      const points = await ctx.db.query("points").collect();
+      expect(points).toHaveLength(1);
+      expect(points[0]?.gamePointTypeId).toBe(pointTypeId);
+      expect(
+        await ctx.db.query("assignmentPointLinks").collect(),
+      ).toEqual([]);
+      expect(
+        await ctx.db.query("guessSettlements").collect(),
+      ).toHaveLength(1);
+    });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.guesses.removeForAssignmentUser,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          assignmentId: round.assignmentId,
+          userId: memberId,
+        },
+      ),
+    ).resolves.toEqual({ deletedGuesses: 3, deletedPoints: 1 });
+    await t.run(async (ctx) => {
+      expect(await ctx.db.query("points").collect()).toEqual([]);
+      expect(await ctx.db.query("guesses").collect()).toEqual([]);
+      expect(
+        await ctx.db.query("guessSettlements").collect(),
+      ).toEqual([]);
+    });
   });
 
   test("awards, validates, clears, and preserves points on single-guess deletion", async () => {

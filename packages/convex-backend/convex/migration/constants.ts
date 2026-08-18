@@ -257,6 +257,7 @@ export const PORTABLE_BACKUP_TABLES = [
   "seasons",
   "points",
   "guesses",
+  "guessSettlements",
   "gamblingTypes",
   "gamblingEntries",
   "tagVotes",

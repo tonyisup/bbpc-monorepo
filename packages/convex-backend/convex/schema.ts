@@ -538,6 +538,25 @@ export default defineSchema({
       "assignmentReviewId",
     ]),
 
+  guessSettlements: defineTable({
+    assignmentId: v.id("assignments"),
+    userId: v.id("users"),
+    seasonId: v.id("seasons"),
+    outcome: v.union(
+      v.literal("allcorrect"),
+      v.literal("all-incorrect"),
+      v.literal("mixed"),
+    ),
+    correctCount: v.number(),
+    settledAt: v.number(),
+  })
+    .index("by_assignmentId", ["assignmentId"])
+    .index("by_assignmentId_and_userId_and_seasonId", [
+      "assignmentId",
+      "userId",
+      "seasonId",
+    ]),
+
   gamblingTypes: defineTable({
     legacyId: v.optional(v.string()),
     lookupId: v.string(),

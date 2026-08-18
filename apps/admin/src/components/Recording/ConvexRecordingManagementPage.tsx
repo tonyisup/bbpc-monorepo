@@ -90,6 +90,8 @@ import {
   chunkRecordingValues,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getRecordingGuessSettlementPreview,
+  groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
@@ -106,6 +108,12 @@ const listGamblingForAssignmentReference = makeFunctionReference<
   { assignmentId: string },
   unknown
 >("games/gambling:listForAssignment");
+
+const listGuessSettlementsForAssignmentReference = makeFunctionReference<
+  "query",
+  { assignmentId: string },
+  unknown
+>("games/guesses:listSettlementsForAssignment");
 
 const assignmentPointTotalsReference = makeFunctionReference<
   "query",
@@ -124,6 +132,16 @@ const awardGuessPointReference = makeFunctionReference<
   unknown
 >("games/guesses:awardPoint");
 
+const settleGuessesForAssignmentUserReference = makeFunctionReference<
+  "mutation",
+  {
+    clientApiVersion: string;
+    assignmentId: string;
+    userId: string;
+  },
+  unknown
+>("games/guesses:settleForAssignmentUser");
+
 const updateWagerStatusReference = makeFunctionReference<
   "mutation",
   {
@@ -141,13 +159,38 @@ const assignmentPointTotalSchema = z.object({
   total: z.number(),
 });
 
+const guessSettlementOutcomeSchema = z.enum([
+  "allcorrect",
+  "all-incorrect",
+  "mixed",
+]);
+
+const guessSettlementSchema = z.object({
+  id: z.string().min(1),
+  assignmentId: z.string().min(1),
+  userId: z.string().min(1),
+  seasonId: z.string().min(1),
+  outcome: guessSettlementOutcomeSchema,
+  correctCount: z.number().int().min(0).max(3),
+  settledAt: z.number(),
+});
+
+const guessSettlementResultSchema = guessSettlementSchema.extend({
+  guessCount: z.literal(3),
+  individualPointsCreated: z.number().int().nonnegative(),
+  individualPointsRemoved: z.number().int().nonnegative(),
+  groupPointChanged: z.boolean(),
+});
+
 type EpisodeAssignment = ConvexAdminEpisode["assignments"][number];
+type RecordingGuessSettlement = z.infer<typeof guessSettlementSchema>;
 
 interface RecordingManagementData {
   episode: ConvexAdminEpisode | null;
   season: ConvexAdminSeason | null;
   performance: ConvexAdminSeasonPerformance | null;
   guesses: ConvexAdminSeasonGuess[];
+  guessSettlements: RecordingGuessSettlement[];
   wagers: ConvexAdminSeasonGamblingEntry[];
   assignmentPoints: AssignmentPointTotal[];
   disclosures: Record<string, AssignmentRecordingDisclosure>;
@@ -189,22 +232,30 @@ async function loadAssignmentGames(
   assignmentIds: string[]
 ): Promise<{
   guesses: ConvexAdminSeasonGuess[];
+  guessSettlements: RecordingGuessSettlement[];
   wagers: ConvexAdminSeasonGamblingEntry[];
 }> {
   const rows = await Promise.all(
     assignmentIds.map(async (assignmentId) => {
-      const [guesses, wagers] = await Promise.all([
+      const [guesses, guessSettlements, wagers] = await Promise.all([
         client.query(listGuessesForAssignmentReference, { assignmentId }),
+        client.query(listGuessSettlementsForAssignmentReference, {
+          assignmentId,
+        }),
         client.query(listGamblingForAssignmentReference, { assignmentId }),
       ]);
       return {
         guesses: z.array(adminGuessSchema).parse(guesses),
+        guessSettlements: z
+          .array(guessSettlementSchema)
+          .parse(guessSettlements),
         wagers: z.array(adminGamblingEntrySchema).parse(wagers),
       };
     })
   );
   return {
     guesses: rows.flatMap((row) => row.guesses),
+    guessSettlements: rows.flatMap((row) => row.guessSettlements),
     wagers: rows.flatMap((row) => row.wagers),
   };
 }
@@ -287,6 +338,7 @@ async function loadRecordingManagementData(
     season,
     performance,
     guesses: games.guesses,
+    guessSettlements: games.guessSettlements,
     wagers: games.wagers,
     assignmentPoints,
     disclosures,
@@ -661,10 +713,12 @@ function AssignmentGameCard({
   guesses,
   onAwardGuess,
   onResolveWager,
+  onSettleGuesses,
   onSetReviewRating,
   ratings,
   reviews,
   savingKey,
+  settlements,
   wagers,
 }: {
   assignment: EpisodeAssignment;
@@ -675,6 +729,7 @@ function AssignmentGameCard({
     wager: ConvexAdminSeasonGamblingEntry,
     status: "won" | "lost" | "rejected"
   ) => void;
+  onSettleGuesses: (userId: string) => void;
   onSetReviewRating: (
     review: ConvexAssignmentReview,
     ratingId: string | null
@@ -682,6 +737,7 @@ function AssignmentGameCard({
   ratings: ConvexAdminRating[];
   reviews: ConvexAssignmentReview[];
   savingKey: string | null;
+  settlements: RecordingGuessSettlement[];
   wagers: ConvexAdminSeasonGamblingEntry[];
 }) {
   const sortedRatings = useMemo(
@@ -694,6 +750,20 @@ function AssignmentGameCard({
         (left.reviewer?.name ?? "").localeCompare(right.reviewer?.name ?? "")
       ),
     [reviews]
+  );
+  const groupedGuesses = useMemo(
+    () => groupRecordingGuessesByListener(guesses),
+    [guesses]
+  );
+  const settlementByUserAndSeason = useMemo(
+    () =>
+      new Map(
+        settlements.map((settlement) => [
+          `${settlement.userId}::${settlement.seasonId}`,
+          settlement,
+        ])
+      ),
+    [settlements]
   );
 
   return (
@@ -788,47 +858,143 @@ function AssignmentGameCard({
             <Target className="h-4 w-4" /> Guesses
           </h3>
           {guesses.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No guesses recorded.</p>
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No guesses recorded.
+            </p>
           ) : (
-            guesses.map((guess) => {
-              const actual = guess.assignmentReview.review.rating;
-              const revealed = isRecordingGuessRevealed(guess);
-              const correct = actual?.id === guess.rating.id;
+            groupedGuesses.map((group) => {
+              const preview = getRecordingGuessSettlementPreview(group.guesses);
+              const settlement = settlementByUserAndSeason.get(
+                `${group.user.id}::${group.guesses[0]?.season.id ?? ""}`
+              );
+              const settlementMatches =
+                preview.eligible &&
+                settlement?.outcome === preview.outcome &&
+                settlement?.correctCount === preview.correctCount;
+              const saving =
+                savingKey ===
+                `guess-settlement-${assignment.id}-${group.user.id}`;
               return (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3" key={guess.id}>
-                  <div>
-                    <p className="font-bold">{guess.user.name ?? "Unnamed listener"}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{guess.assignmentReview.review.user?.name ?? "Host"}</span>
-                      {revealed ? (
-                        <>
-                          <span>· Guess</span><RatingIcon value={guess.rating.value} />
-                          <span>· Actual</span><RatingIcon value={actual?.value ?? 0} />
-                        </>
-                      ) : (
-                        <span>· Prediction hidden until this host rates</span>
+                <div
+                  className="overflow-hidden rounded-lg border"
+                  key={group.user.id}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
+                    <div>
+                      <p className="font-bold">
+                        {group.user.name ?? "Unnamed listener"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {preview.message}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">
+                        {group.guesses.length} guess
+                        {group.guesses.length === 1 ? "" : "es"}
+                      </Badge>
+                      {preview.eligible && (
+                        <Badge
+                          variant={
+                            preview.outcome === "allcorrect"
+                              ? "default"
+                              : preview.outcome === "all-incorrect"
+                              ? "destructive"
+                              : "outline"
+                          }
+                        >
+                          {preview.outcome === "allcorrect"
+                            ? "All correct"
+                            : preview.outcome === "all-incorrect"
+                            ? "All incorrect"
+                            : "Mixed"}
+                        </Badge>
                       )}
+                      {settlement !== undefined && (
+                        <Badge
+                          variant={
+                            settlementMatches ? "secondary" : "destructive"
+                          }
+                        >
+                          {settlementMatches ? "Settled" : "Needs resettlement"}
+                        </Badge>
+                      )}
+                      <Button
+                        disabled={!preview.eligible || savingKey !== null}
+                        onClick={() => onSettleGuesses(group.user.id)}
+                        size="sm"
+                        variant={
+                          preview.outcome === "all-incorrect"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {saving && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        {settlement === undefined
+                          ? "Settle listener"
+                          : "Reconcile"}
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!revealed ? (
-                      <Badge variant="outline">Hidden</Badge>
-                    ) : (
-                      <>
-                        <Badge variant={correct ? "default" : "outline"}>{correct ? "Correct" : "No award"}</Badge>
-                        {guess.point !== null ? (
-                          <Badge variant="secondary">{guess.point.total} pts awarded</Badge>
-                        ) : correct ? (
-                          <Button
-                            disabled={savingKey !== null}
-                            onClick={() => onAwardGuess(guess)}
-                            size="sm"
-                          >
-                            Award point
-                          </Button>
-                        ) : null}
-                      </>
-                    )}
+                  <div className="divide-y">
+                    {group.guesses.map((guess) => {
+                      const actual = guess.assignmentReview.review.rating;
+                      const revealed = isRecordingGuessRevealed(guess);
+                      const correct = actual?.id === guess.rating.id;
+                      return (
+                        <div
+                          className="flex flex-wrap items-center justify-between gap-3 p-3"
+                          key={guess.id}
+                        >
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-semibold text-foreground">
+                              {guess.assignmentReview.review.user?.name ??
+                                "Host"}
+                            </span>
+                            {revealed ? (
+                              <>
+                                <span>· Guess</span>
+                                <RatingIcon value={guess.rating.value} />
+                                <span>· Actual</span>
+                                <RatingIcon value={actual?.value ?? 0} />
+                              </>
+                            ) : (
+                              <span>
+                                · Prediction hidden until this host rates
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!revealed ? (
+                              <Badge variant="outline">Hidden</Badge>
+                            ) : (
+                              <>
+                                <Badge
+                                  variant={correct ? "default" : "outline"}
+                                >
+                                  {correct ? "Correct" : "No award"}
+                                </Badge>
+                                {guess.point !== null ? (
+                                  <Badge variant="secondary">
+                                    {guess.point.total} pts awarded
+                                  </Badge>
+                                ) : correct ? (
+                                  <Button
+                                    disabled={savingKey !== null}
+                                    onClick={() => onAwardGuess(guess)}
+                                    size="sm"
+                                  >
+                                    Award point
+                                  </Button>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -955,6 +1121,21 @@ export function ConvexRecordingManagementPage() {
           })
         ),
       `Awarded a point to ${guess.user.name ?? "the listener"}.`
+    );
+  };
+
+  const settleGuesses = (assignmentId: string, userId: string) => {
+    runWrite(
+      `guess-settlement-${assignmentId}-${userId}`,
+      async () =>
+        guessSettlementResultSchema.parse(
+          await client.mutation(settleGuessesForAssignmentUserReference, {
+            clientApiVersion: BBPC_CLIENT_API_VERSION,
+            assignmentId,
+            userId,
+          })
+        ),
+      "Settled the listener's three guesses."
     );
   };
 
@@ -1104,10 +1285,17 @@ export function ConvexRecordingManagementPage() {
                     key={assignment.id}
                     onAwardGuess={awardGuess}
                     onResolveWager={resolveWager}
+                    onSettleGuesses={(userId) =>
+                      settleGuesses(assignment.id, userId)
+                    }
                     onSetReviewRating={setReviewRating}
                     ratings={data.ratings}
                     reviews={data.reviews[assignment.id] ?? []}
                     savingKey={savingKey}
+                    settlements={data.guessSettlements.filter(
+                      (settlement) =>
+                        settlement.assignmentId === assignment.id
+                    )}
                     wagers={data.wagers.filter((wager) => wager.assignment?.id === assignment.id)}
                   />
                 ))

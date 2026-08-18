@@ -223,6 +223,12 @@ export async function assertAssignmentUnreferenced(
         index.eq("assignmentId", assignmentId),
       )
       .first(),
+    ctx.db
+      .query("guessSettlements")
+      .withIndex("by_assignmentId", (index) =>
+        index.eq("assignmentId", assignmentId),
+      )
+      .first(),
   ]);
   const relationship = [
     "audio message",
@@ -230,6 +236,7 @@ export async function assertAssignmentUnreferenced(
     "syllabus entry",
     "assignment review",
     "gambling entry",
+    "guess settlement",
   ].find((_, index) => references[index] !== null);
   if (relationship !== undefined) {
     domainError(

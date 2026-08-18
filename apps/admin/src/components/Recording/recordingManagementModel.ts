@@ -24,6 +24,18 @@ export interface AssignmentRecordingDisclosure {
   allHostsRated: boolean;
 }
 
+export interface RecordingGuessGroup {
+  user: ConvexAdminSeasonGuess["user"];
+  guesses: ConvexAdminSeasonGuess[];
+}
+
+export interface RecordingGuessSettlementPreview {
+  eligible: boolean;
+  correctCount: number | null;
+  outcome: "allcorrect" | "all-incorrect" | "mixed" | null;
+  message: string;
+}
+
 interface RecordingUserPage {
   users: ConvexAdminUser[];
   isDone: boolean;
@@ -128,6 +140,87 @@ export function isRecordingGuessRevealed(
   guess: ConvexAdminSeasonGuess
 ): boolean {
   return guess.assignmentReview.review.rating !== null;
+}
+
+export function groupRecordingGuessesByListener(
+  guesses: ConvexAdminSeasonGuess[]
+): RecordingGuessGroup[] {
+  const groups = new Map<string, RecordingGuessGroup>();
+
+  guesses.forEach((guess) => {
+    const group = groups.get(guess.user.id);
+    if (group === undefined) {
+      groups.set(guess.user.id, {
+        user: guess.user,
+        guesses: [guess],
+      });
+      return;
+    }
+    group.guesses.push(guess);
+  });
+
+  return [...groups.values()];
+}
+
+export function getRecordingGuessSettlementPreview(
+  guesses: ConvexAdminSeasonGuess[]
+): RecordingGuessSettlementPreview {
+  if (guesses.length !== 3) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: `${guesses.length} of 3 guesses recorded`,
+    };
+  }
+  const hostIds = guesses.flatMap((guess) =>
+    guess.assignmentReview.review.user === null
+      ? []
+      : [guess.assignmentReview.review.user.id]
+  );
+  if (hostIds.length !== 3 || new Set(hostIds).size !== 3) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: "Guesses must target 3 distinct hosts",
+    };
+  }
+  if (new Set(guesses.map((guess) => guess.season.id)).size !== 1) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: "Guesses must belong to the same season",
+    };
+  }
+  if (
+    guesses.some(
+      (guess) => guess.assignmentReview.review.rating === null
+    )
+  ) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: "Waiting for all 3 host ratings",
+    };
+  }
+  const correctCount = guesses.filter(
+    (guess) =>
+      guess.assignmentReview.review.rating?.id === guess.rating.id
+  ).length;
+  return {
+    eligible: true,
+    correctCount,
+    outcome:
+      correctCount === 3
+        ? "allcorrect"
+        : correctCount === 0
+          ? "all-incorrect"
+          : "mixed",
+    message: `${correctCount} of 3 correct`,
+  };
 }
 
 export function summarizeEpisodePoints(
