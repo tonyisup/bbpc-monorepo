@@ -337,6 +337,259 @@ function requirePresent<T>(
   return value;
 }
 
+async function seedThreeGuessSettlement(
+  t: TestBackend,
+  suffix: string,
+) {
+  const { adminId, memberId, otherId, hostId } =
+    await seedActors(t);
+  const hostTwoId = await seedUser(t, {
+    identity: HOST_TWO_IDENTITY,
+    name: "Guess Host Two",
+  });
+  const hostThreeId = await seedUser(t, {
+    identity: HOST_THREE_IDENTITY,
+    name: "Guess Host Three",
+  });
+  const foundation = await seedGameFoundation(t);
+  const round = await seedAssignmentRound(t, {
+    ownerId: adminId,
+    hostIds: [hostId, hostTwoId, hostThreeId],
+    ratingId: foundation.highRatingId,
+    suffix,
+  });
+  await advanceToS3(t);
+  const guesses = [];
+  for (const [index, assignmentReviewId] of
+    round.assignmentReviewIds.entries()) {
+    guesses.push(
+      await t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.guesses.create,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          userId: memberId,
+          assignmentReviewId,
+          ratingId: foundation.highRatingId,
+          seasonId: foundation.seasonId,
+          createdAt: 100 + index,
+        },
+      ),
+    );
+  }
+  return {
+    t,
+    adminId,
+    memberId,
+    otherId,
+    hostId,
+    round,
+    guesses,
+    ...foundation,
+  };
+}
+
+type ThreeGuessSettlementFixture = Awaited<
+  ReturnType<typeof seedThreeGuessSettlement>
+>;
+
+async function settleThreeGuessFixture(
+  fixture: ThreeGuessSettlementFixture,
+  earnedAt?: number,
+) {
+  return await fixture.t.withIdentity(ADMIN_IDENTITY).mutation(
+    api.games.guesses.settleForAssignmentUser,
+    {
+      clientApiVersion: BBPC_API_VERSION,
+      assignmentId: fixture.round.assignmentId,
+      userId: fixture.memberId,
+      ...(earnedAt === undefined ? {} : { earnedAt }),
+    },
+  );
+}
+
+const settlementConflictCases: Array<{
+  name: string;
+  arrange: (fixture: ThreeGuessSettlementFixture) => Promise<void>;
+}> = [
+  {
+    name: "an unavailable season",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        await ctx.db.delete("seasons", fixture.seasonId);
+      });
+    },
+  },
+  {
+    name: "a host review without a user",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        const assignmentReview = await ctx.db.get(
+          "assignmentReviews",
+          requireFirst(
+            fixture.round.assignmentReviewIds,
+            "host assignment review",
+          ),
+        );
+        if (assignmentReview === null) {
+          throw new Error("Expected host assignment review");
+        }
+        await ctx.db.patch("reviews", assignmentReview.reviewId, {
+          userId: undefined,
+        });
+      });
+    },
+  },
+  {
+    name: "a guess point type from another game",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        const gameTypeId = await ctx.db.insert("gameTypes", {
+          title: "Other game",
+          lookupId: "other-game",
+          normalizedLookupId: "other-game",
+        });
+        await ctx.db.patch("gamePointTypes", fixture.pointTypeId, {
+          gameTypeId,
+        });
+      });
+    },
+  },
+  {
+    name: "a group point type from another game",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        const gameTypeId = await ctx.db.insert("gameTypes", {
+          title: "Other game",
+          lookupId: "other-game",
+          normalizedLookupId: "other-game",
+        });
+        await ctx.db.patch(
+          "gamePointTypes",
+          fixture.allCorrectPointTypeId,
+          { gameTypeId },
+        );
+      });
+    },
+  },
+  {
+    name: "a linked group point owned by another user",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        const pointId = await ctx.db.insert("points", {
+          userId: fixture.otherId,
+          seasonId: fixture.seasonId,
+          gamePointTypeId: fixture.allCorrectPointTypeId,
+          adjustment: 0,
+          earnedAt: 1,
+        });
+        await ctx.db.insert("assignmentPointLinks", {
+          assignmentId: fixture.round.assignmentId,
+          userId: fixture.memberId,
+          pointId,
+        });
+      });
+    },
+  },
+  {
+    name: "a linked point with a missing point type",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        const pointTypeId = await ctx.db.insert("gamePointTypes", {
+          title: "Temporary settlement type",
+          lookupId: "temporary-settlement",
+          normalizedLookupId: "temporary-settlement",
+          points: 1,
+          gameTypeId: fixture.gameTypeId,
+        });
+        const pointId = await ctx.db.insert("points", {
+          userId: fixture.memberId,
+          seasonId: fixture.seasonId,
+          gamePointTypeId: pointTypeId,
+          adjustment: 0,
+          earnedAt: 1,
+        });
+        await ctx.db.insert("assignmentPointLinks", {
+          assignmentId: fixture.round.assignmentId,
+          userId: fixture.memberId,
+          pointId,
+        });
+        await ctx.db.delete("gamePointTypes", pointTypeId);
+      });
+    },
+  },
+  {
+    name: "duplicate assignment links for one point",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        const pointId = await ctx.db.insert("points", {
+          userId: fixture.memberId,
+          seasonId: fixture.seasonId,
+          adjustment: 0,
+          earnedAt: 1,
+        });
+        for (let index = 0; index < 2; index += 1) {
+          await ctx.db.insert("assignmentPointLinks", {
+            assignmentId: fixture.round.assignmentId,
+            userId: fixture.memberId,
+            pointId,
+          });
+        }
+      });
+    },
+  },
+  {
+    name: "a group point linked to multiple assignments",
+    arrange: async (fixture) => {
+      const otherRound = await seedAssignmentRound(fixture.t, {
+        ownerId: fixture.adminId,
+        hostIds: [fixture.hostId],
+        ratingId: fixture.highRatingId,
+        suffix: "67",
+      });
+      await fixture.t.run(async (ctx) => {
+        const pointId = await ctx.db.insert("points", {
+          userId: fixture.memberId,
+          seasonId: fixture.seasonId,
+          gamePointTypeId: fixture.allCorrectPointTypeId,
+          adjustment: 0,
+          earnedAt: 1,
+        });
+        for (const assignmentId of [
+          fixture.round.assignmentId,
+          otherRound.assignmentId,
+        ]) {
+          await ctx.db.insert("assignmentPointLinks", {
+            assignmentId,
+            userId: fixture.memberId,
+            pointId,
+          });
+        }
+      });
+    },
+  },
+  {
+    name: "duplicate all-correct group points",
+    arrange: async (fixture) => {
+      await fixture.t.run(async (ctx) => {
+        for (let index = 0; index < 2; index += 1) {
+          const pointId = await ctx.db.insert("points", {
+            userId: fixture.memberId,
+            seasonId: fixture.seasonId,
+            gamePointTypeId: fixture.allCorrectPointTypeId,
+            adjustment: 0,
+            earnedAt: index + 1,
+          });
+          await ctx.db.insert("assignmentPointLinks", {
+            assignmentId: fixture.round.assignmentId,
+            userId: fixture.memberId,
+            pointId,
+          });
+        }
+      });
+    },
+  },
+];
+
 describe("guess API", () => {
   test("creates a valid host assignment review on the first pick", async () => {
     const t = createTestBackend();
@@ -1390,6 +1643,59 @@ describe("guess API", () => {
       ).toEqual([]);
     });
   });
+
+  test("settles without an explicit timestamp while ignoring unrelated linked points", async () => {
+    const fixture = await seedThreeGuessSettlement(
+      createTestBackend(),
+      "66",
+    );
+    await fixture.t.run(async (ctx) => {
+      const untypedPointId = await ctx.db.insert("points", {
+        userId: fixture.memberId,
+        seasonId: fixture.seasonId,
+        adjustment: 0,
+        earnedAt: 1,
+      });
+      const guessTypePointId = await ctx.db.insert("points", {
+        userId: fixture.memberId,
+        seasonId: fixture.seasonId,
+        gamePointTypeId: fixture.pointTypeId,
+        adjustment: 0,
+        earnedAt: 2,
+      });
+      for (const pointId of [untypedPointId, guessTypePointId]) {
+        await ctx.db.insert("assignmentPointLinks", {
+          assignmentId: fixture.round.assignmentId,
+          userId: fixture.memberId,
+          pointId,
+        });
+      }
+    });
+
+    const result = await settleThreeGuessFixture(fixture);
+    expect(result).toMatchObject({
+      outcome: "allcorrect",
+      correctCount: 3,
+      individualPointsCreated: 3,
+      groupPointChanged: true,
+    });
+    expect(result.settledAt).toBeGreaterThan(0);
+  });
+
+  test.each(settlementConflictCases)(
+    "rejects a settlement with $name",
+    async ({ arrange }) => {
+      const fixture = await seedThreeGuessSettlement(
+        createTestBackend(),
+        "66",
+      );
+      await arrange(fixture);
+      await expectDomainError(
+        settleThreeGuessFixture(fixture, 200),
+        "CONFLICT",
+      );
+    },
+  );
 
   test("single deletion clears a settlement without touching another season", async () => {
     const t = createTestBackend();
