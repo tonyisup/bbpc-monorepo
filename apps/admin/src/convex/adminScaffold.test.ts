@@ -138,6 +138,9 @@ describe("Convex-only admin scaffold", () => {
     expect(management).toMatch(/loadConvexAdminRatings/u);
     expect(management).toMatch(/updateConvexAssignmentReviewRating/u);
     expect(management).toMatch(/Host ratings/u);
+    expect(management).toMatch(
+      /client\.mutation\(awardGuessPointReference, \{\s*clientApiVersion: BBPC_CLIENT_API_VERSION,/u
+    );
     expect(managementModel).toMatch(/collectAllRecordingUsers/u);
     expect(managementModel).toMatch(/chunkRecordingValues/u);
     expect(management).not.toMatch(/exceeds the 100-user/u);
