@@ -14,8 +14,14 @@ export interface EpisodePointRow {
   user: { id: string; name: string | null; image: string | null };
   guessPoints: number;
   gamblingPoints: number;
+  quotabungaPoints: number;
   bonusPoints: number;
   total: number;
+}
+
+export interface EpisodeQuoteAward {
+  user: { id: string; name: string | null; image: string | null };
+  point: { adjustment: number | null } | null;
 }
 
 export interface AssignmentRecordingDisclosure {
@@ -24,14 +30,66 @@ export interface AssignmentRecordingDisclosure {
   allHostsRated: boolean;
 }
 
+export interface RecordingGuessGroup {
+  user: ConvexAdminSeasonGuess["user"];
+  guesses: ConvexAdminSeasonGuess[];
+}
+
+export interface RecordingGuessSettlementPreview {
+  eligible: boolean;
+  correctCount: number | null;
+  outcome: "allcorrect" | "all-incorrect" | "mixed" | null;
+  message: string;
+}
+
 interface RecordingUserPage {
   users: ConvexAdminUser[];
   isDone: boolean;
   continueCursor: string;
 }
 
+interface RecordingAudioPage<T> {
+  messages: T[];
+  isDone: boolean;
+  continueCursor: string;
+}
+
+interface RecordingPage {
+  isDone: boolean;
+  continueCursor: string;
+}
+
+async function collectAllRecordingPages<T, TPage extends RecordingPage>(
+  loadPage: (cursor: string | null) => Promise<TPage>,
+  getItems: (page: TPage) => T[],
+  catalogName: string
+): Promise<T[]> {
+  const items: T[] = [];
+  const visitedCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  for (;;) {
+    const page = await loadPage(cursor);
+    items.push(...getItems(page));
+    if (page.isDone) {
+      return items;
+    }
+    if (
+      page.continueCursor.length === 0 ||
+      page.continueCursor === cursor ||
+      visitedCursors.has(page.continueCursor)
+    ) {
+      throw new Error(
+        `The ${catalogName} returned a repeated pagination cursor.`
+      );
+    }
+    visitedCursors.add(page.continueCursor);
+    cursor = page.continueCursor;
+  }
+}
+
 export function selectRecordingManagementEpisode<
-  T extends { number: number; status: string | null },
+  T extends { number: number; status: string | null }
 >(episodes: readonly T[]): T | null {
   const priority = (candidate: T) => {
     switch (candidate.status?.toLowerCase()) {
@@ -50,8 +108,7 @@ export function selectRecordingManagementEpisode<
     const episodePriority = priority(episode);
     const selectedPriority = priority(selected);
     return episodePriority > selectedPriority ||
-      (episodePriority === selectedPriority &&
-        episode.number > selected.number)
+      (episodePriority === selectedPriority && episode.number > selected.number)
       ? episode
       : selected;
   }, null);
@@ -60,34 +117,28 @@ export function selectRecordingManagementEpisode<
 export async function collectAllRecordingUsers(
   loadPage: (cursor: string | null) => Promise<RecordingUserPage>
 ): Promise<ConvexAdminUser[]> {
-  const users: ConvexAdminUser[] = [];
-  const visitedCursors = new Set<string>();
-  let cursor: string | null = null;
-
-  for (;;) {
-    const page = await loadPage(cursor);
-    users.push(...page.users);
-    if (page.isDone) {
-      return users;
-    }
-    if (
-      page.continueCursor.length === 0 ||
-      page.continueCursor === cursor ||
-      visitedCursors.has(page.continueCursor)
-    ) {
-      throw new Error("The user catalog returned a repeated pagination cursor.");
-    }
-    visitedCursors.add(page.continueCursor);
-    cursor = page.continueCursor;
-  }
+  return collectAllRecordingPages(
+    loadPage,
+    (page) => page.users,
+    "user catalog"
+  );
 }
 
-export function chunkRecordingValues<T>(
-  values: T[],
-  chunkSize: number
-): T[][] {
+export async function collectAllRecordingAudioMessages<T>(
+  loadPage: (cursor: string | null) => Promise<RecordingAudioPage<T>>
+): Promise<T[]> {
+  return collectAllRecordingPages(
+    loadPage,
+    (page) => page.messages,
+    "audio catalog"
+  );
+}
+
+export function chunkRecordingValues<T>(values: T[], chunkSize: number): T[][] {
   if (!Number.isSafeInteger(chunkSize) || chunkSize < 1) {
-    throw new Error("Recording management chunk size must be a positive integer.");
+    throw new Error(
+      "Recording management chunk size must be a positive integer."
+    );
   }
   const chunks: T[][] = [];
   for (let index = 0; index < values.length; index += chunkSize) {
@@ -130,9 +181,86 @@ export function isRecordingGuessRevealed(
   return guess.assignmentReview.review.rating !== null;
 }
 
+export function groupRecordingGuessesByListener(
+  guesses: ConvexAdminSeasonGuess[]
+): RecordingGuessGroup[] {
+  const groups = new Map<string, RecordingGuessGroup>();
+
+  guesses.forEach((guess) => {
+    const group = groups.get(guess.user.id);
+    if (group === undefined) {
+      groups.set(guess.user.id, {
+        user: guess.user,
+        guesses: [guess],
+      });
+      return;
+    }
+    group.guesses.push(guess);
+  });
+
+  return [...groups.values()];
+}
+
+export function getRecordingGuessSettlementPreview(
+  guesses: ConvexAdminSeasonGuess[]
+): RecordingGuessSettlementPreview {
+  if (guesses.length !== 3) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: `${guesses.length} of 3 guesses recorded`,
+    };
+  }
+  const hostIds = guesses.flatMap((guess) =>
+    guess.assignmentReview.review.user === null
+      ? []
+      : [guess.assignmentReview.review.user.id]
+  );
+  if (hostIds.length !== 3 || new Set(hostIds).size !== 3) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: "Guesses must target 3 distinct hosts",
+    };
+  }
+  if (new Set(guesses.map((guess) => guess.season.id)).size !== 1) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: "Guesses must belong to the same season",
+    };
+  }
+  if (guesses.some((guess) => guess.assignmentReview.review.rating === null)) {
+    return {
+      eligible: false,
+      correctCount: null,
+      outcome: null,
+      message: "Waiting for all 3 host ratings",
+    };
+  }
+  const correctCount = guesses.filter(
+    (guess) => guess.assignmentReview.review.rating?.id === guess.rating.id
+  ).length;
+  return {
+    eligible: true,
+    correctCount,
+    outcome:
+      correctCount === 3
+        ? "allcorrect"
+        : correctCount === 0
+        ? "all-incorrect"
+        : "mixed",
+    message: `${correctCount} of 3 correct`,
+  };
+}
+
 export function summarizeEpisodePoints(
   guesses: ConvexAdminSeasonGuess[],
   wagers: ConvexAdminSeasonGamblingEntry[],
+  quoteAwards: EpisodeQuoteAward[],
   assignmentPoints: AssignmentPointTotal[],
   users: ConvexAdminUser[]
 ): EpisodePointRow[] {
@@ -151,6 +279,7 @@ export function summarizeEpisodePoints(
       user,
       guessPoints: 0,
       gamblingPoints: 0,
+      quotabungaPoints: 0,
       bonusPoints: 0,
       total: 0,
     };
@@ -173,6 +302,15 @@ export function summarizeEpisodePoints(
     const row = rowFor(wager.user);
     row.gamblingPoints += wager.awardPoint.total;
     row.total += wager.awardPoint.total;
+  });
+  quoteAwards.forEach((award) => {
+    const adjustment = award.point?.adjustment;
+    if (adjustment === undefined || adjustment === null) {
+      return;
+    }
+    const row = rowFor(award.user);
+    row.quotabungaPoints += adjustment;
+    row.total += adjustment;
   });
   assignmentPoints.forEach((pointTotal) => {
     const user = userCatalog.get(pointTotal.userId);

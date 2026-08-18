@@ -6,6 +6,7 @@ import {
   Coins,
   ExternalLink,
   Gamepad2,
+  Headphones,
   Loader2,
   Mic2,
   Quote,
@@ -22,14 +23,18 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import {
+  type ConvexAssignmentAudioMessage,
   type ConvexAssignmentReview,
+  loadConvexAssignmentAudioPage,
   loadConvexAssignmentWorkbenchById,
   updateConvexAssignmentReviewRating,
 } from "../../convex/assignmentDetails";
+import { type ConvexAdminEpisode } from "../../convex/episodes";
 import {
-  type ConvexAdminEpisode,
-} from "../../convex/episodes";
-import { loadConvexAdminEpisodeByNumber } from "../../convex/episodeDetails";
+  type ConvexAdminEpisodeAudioMessage,
+  loadConvexAdminEpisodeAudioPage,
+  loadConvexAdminEpisodeByNumber,
+} from "../../convex/episodeDetails";
 import {
   BBPC_CLIENT_API_VERSION,
   getConvexDomainErrorCode,
@@ -63,13 +68,11 @@ import {
   loadConvexAdminUsersPage,
 } from "../../convex/users";
 import {
+  formatInstantLocal,
   formatPlainDate,
   getPacificTodayPlainDate,
 } from "../../lib/dates";
-import {
-  getAdminAssignmentPath,
-  getAdminEpisodePath,
-} from "../../lib/routes";
+import { getAdminAssignmentPath, getAdminEpisodePath } from "../../lib/routes";
 import { cn } from "../../lib/utils";
 
 import RatingIcon from "../Review/RatingIcon";
@@ -88,8 +91,11 @@ import {
   type AssignmentPointTotal,
   type AssignmentRecordingDisclosure,
   chunkRecordingValues,
+  collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getRecordingGuessSettlementPreview,
+  groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
@@ -106,6 +112,12 @@ const listGamblingForAssignmentReference = makeFunctionReference<
   { assignmentId: string },
   unknown
 >("games/gambling:listForAssignment");
+
+const listGuessSettlementsForAssignmentReference = makeFunctionReference<
+  "query",
+  { assignmentId: string },
+  unknown
+>("games/guesses:listSettlementsForAssignment");
 
 const assignmentPointTotalsReference = makeFunctionReference<
   "query",
@@ -124,6 +136,16 @@ const awardGuessPointReference = makeFunctionReference<
   unknown
 >("games/guesses:awardPoint");
 
+const settleGuessesForAssignmentUserReference = makeFunctionReference<
+  "mutation",
+  {
+    clientApiVersion: string;
+    assignmentId: string;
+    userId: string;
+  },
+  unknown
+>("games/guesses:settleForAssignmentUser");
+
 const updateWagerStatusReference = makeFunctionReference<
   "mutation",
   {
@@ -141,13 +163,38 @@ const assignmentPointTotalSchema = z.object({
   total: z.number(),
 });
 
+const guessSettlementOutcomeSchema = z.enum([
+  "allcorrect",
+  "all-incorrect",
+  "mixed",
+]);
+
+const guessSettlementSchema = z.object({
+  id: z.string().min(1),
+  assignmentId: z.string().min(1),
+  userId: z.string().min(1),
+  seasonId: z.string().min(1),
+  outcome: guessSettlementOutcomeSchema,
+  correctCount: z.number().int().min(0).max(3),
+  settledAt: z.number(),
+});
+
+const guessSettlementResultSchema = guessSettlementSchema.extend({
+  guessCount: z.literal(3),
+  individualPointsCreated: z.number().int().nonnegative(),
+  individualPointsRemoved: z.number().int().nonnegative(),
+  groupPointChanged: z.boolean(),
+});
+
 type EpisodeAssignment = ConvexAdminEpisode["assignments"][number];
+type RecordingGuessSettlement = z.infer<typeof guessSettlementSchema>;
 
 interface RecordingManagementData {
   episode: ConvexAdminEpisode | null;
   season: ConvexAdminSeason | null;
   performance: ConvexAdminSeasonPerformance | null;
   guesses: ConvexAdminSeasonGuess[];
+  guessSettlements: RecordingGuessSettlement[];
   wagers: ConvexAdminSeasonGamblingEntry[];
   assignmentPoints: AssignmentPointTotal[];
   disclosures: Record<string, AssignmentRecordingDisclosure>;
@@ -155,6 +202,7 @@ interface RecordingManagementData {
   ratings: ConvexAdminRating[];
   users: ConvexAdminUser[];
   submissions: ConvexAdminQuoteSubmission[];
+  episodeAudioMessages: ConvexAdminEpisodeAudioMessage[];
 }
 
 async function loadAllSupportedUsers(
@@ -189,22 +237,30 @@ async function loadAssignmentGames(
   assignmentIds: string[]
 ): Promise<{
   guesses: ConvexAdminSeasonGuess[];
+  guessSettlements: RecordingGuessSettlement[];
   wagers: ConvexAdminSeasonGamblingEntry[];
 }> {
   const rows = await Promise.all(
     assignmentIds.map(async (assignmentId) => {
-      const [guesses, wagers] = await Promise.all([
+      const [guesses, guessSettlements, wagers] = await Promise.all([
         client.query(listGuessesForAssignmentReference, { assignmentId }),
+        client.query(listGuessSettlementsForAssignmentReference, {
+          assignmentId,
+        }),
         client.query(listGamblingForAssignmentReference, { assignmentId }),
       ]);
       return {
         guesses: z.array(adminGuessSchema).parse(guesses),
+        guessSettlements: z
+          .array(guessSettlementSchema)
+          .parse(guessSettlements),
         wagers: z.array(adminGamblingEntrySchema).parse(wagers),
       };
     })
   );
   return {
     guesses: rows.flatMap((row) => row.guesses),
+    guessSettlements: rows.flatMap((row) => row.guessSettlements),
     wagers: rows.flatMap((row) => row.wagers),
   };
 }
@@ -240,22 +296,33 @@ async function loadRecordingManagementData(
     );
   }
 
-  const [games, performance, submissions, assignmentPoints, workbenches] =
-    await Promise.all([
-      loadAssignmentGames(client, assignmentIds),
-      season === null
-        ? Promise.resolve(null)
-        : loadConvexAdminSeasonPerformance(client, season.id),
-      episode === null
-        ? Promise.resolve([])
-        : loadConvexAdminQuoteSubmissions(client, episode.id),
-      loadAssignmentPointTotals(client, users, assignmentIds),
-      Promise.all(
-        assignmentIds.map((assignmentId) =>
-          loadConvexAssignmentWorkbenchById(client, assignmentId)
-        )
-      ),
-    ]);
+  const [
+    games,
+    performance,
+    submissions,
+    assignmentPoints,
+    workbenches,
+    episodeAudioMessages,
+  ] = await Promise.all([
+    loadAssignmentGames(client, assignmentIds),
+    season === null
+      ? Promise.resolve(null)
+      : loadConvexAdminSeasonPerformance(client, season.id),
+    episode === null
+      ? Promise.resolve([])
+      : loadConvexAdminQuoteSubmissions(client, episode.id),
+    loadAssignmentPointTotals(client, users, assignmentIds),
+    Promise.all(
+      assignmentIds.map((assignmentId) =>
+        loadConvexAssignmentWorkbenchById(client, assignmentId)
+      )
+    ),
+    episode === null
+      ? Promise.resolve([])
+      : collectAllRecordingAudioMessages((cursor) =>
+          loadConvexAdminEpisodeAudioPage(client, episode.id, cursor)
+        ),
+  ]);
   const disclosures = Object.fromEntries(
     workbenches.map((workbench, index) => {
       const assignmentId = assignmentIds[index];
@@ -281,12 +348,12 @@ async function loadRecordingManagementData(
       return [assignmentId, workbench.reviews];
     })
   );
-
   return {
     episode,
     season,
     performance,
     guesses: games.guesses,
+    guessSettlements: games.guessSettlements,
     wagers: games.wagers,
     assignmentPoints,
     disclosures,
@@ -294,6 +361,7 @@ async function loadRecordingManagementData(
     ratings,
     users,
     submissions,
+    episodeAudioMessages,
   };
 }
 
@@ -323,6 +391,181 @@ function writeFailureMessage(error: unknown): string {
     default:
       return "The recording change could not be saved.";
   }
+}
+
+interface RecordingAudioMessage {
+  id: string;
+  url: string;
+  createdAt: number;
+  notes?: string | null;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  };
+}
+
+function RecordingAudioMessages({
+  description,
+  emptyMessage,
+  messages,
+  title,
+}: {
+  description: string;
+  emptyMessage: string;
+  messages: RecordingAudioMessage[];
+  title: string;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-black">
+            <Headphones className="h-4 w-4" /> {title}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <Badge variant="outline">
+          {messages.length} message{messages.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+      {messages.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          {emptyMessage}
+        </p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {messages.map((message) => {
+            const submitter =
+              message.user.name ?? message.user.email ?? "Unnamed listener";
+            return (
+              <article
+                className="rounded-lg border bg-muted/20 p-4"
+                key={message.id}
+              >
+                <div className="mb-3 flex min-w-0 items-center gap-3">
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={message.user.image ?? ""} />
+                    <AvatarFallback>
+                      {initials(message.user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{submitter}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatInstantLocal(new Date(message.createdAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <audio
+                  aria-label={`${title} from ${submitter}`}
+                  className="h-10 w-full"
+                  controls
+                  preload="none"
+                  src={message.url}
+                >
+                  <a href={message.url}>Open audio message</a>
+                </audio>
+                {message.notes !== undefined && message.notes !== null && (
+                  <p className="mt-3 border-l-2 pl-3 text-sm text-muted-foreground">
+                    {message.notes}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AssignmentAudioMessages({
+  assignmentId,
+  revision,
+}: {
+  assignmentId: string;
+  revision: number;
+}) {
+  const client = useConvex();
+  const [expanded, setExpanded] = useState(false);
+  const [messages, setMessages] = useState<
+    ConvexAssignmentAudioMessage[] | null
+  >(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryRevision, setRetryRevision] = useState(0);
+
+  useEffect(() => {
+    if (!expanded) {
+      return;
+    }
+    let active = true;
+    setMessages(null);
+    setLoadError(null);
+    void collectAllRecordingAudioMessages((cursor) =>
+      loadConvexAssignmentAudioPage(client, assignmentId, cursor)
+    )
+      .then((loaded) => {
+        if (active) {
+          setMessages(loaded);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Assignment audio messages could not be loaded."
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [assignmentId, client, expanded, retryRevision, revision]);
+
+  return (
+    <section className="space-y-3">
+      <Button
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        size="sm"
+        variant="outline"
+      >
+        <Headphones className="mr-2 h-4 w-4" />
+        {expanded ? "Hide assignment audio" : "Load assignment audio"}
+      </Button>
+      {expanded && messages === null && loadError === null && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading assignment audio…
+        </p>
+      )}
+      {expanded && loadError !== null && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 p-4 text-sm">
+          <p className="text-destructive">{loadError}</p>
+          <Button
+            onClick={() => setRetryRevision((value) => value + 1)}
+            size="sm"
+            variant="outline"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+      {expanded && messages !== null && (
+        <RecordingAudioMessages
+          description="Messages submitted specifically for this assignment."
+          emptyMessage="No assignment audio messages have been submitted."
+          messages={messages}
+          title="Assignment audio messages"
+        />
+      )}
+    </section>
+  );
 }
 
 export function SeasonLeaderboard({
@@ -358,7 +601,9 @@ export function SeasonLeaderboard({
             size="icon"
             variant="ghost"
           >
-            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            <RefreshCw
+              className={cn("h-4 w-4", refreshing && "animate-spin")}
+            />
           </Button>
         </div>
       </CardHeader>
@@ -387,12 +632,17 @@ export function SeasonLeaderboard({
                     {summary.user.name ?? "Unnamed user"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {summary.guessCount} guesses · {summary.gamblingCount} wagers
+                    {summary.guessCount} guesses · {summary.gamblingCount}{" "}
+                    wagers
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-black text-primary">{summary.total}</p>
-                  <p className="text-[10px] uppercase text-muted-foreground">points</p>
+                  <p className="text-xl font-black text-primary">
+                    {summary.total}
+                  </p>
+                  <p className="text-[10px] uppercase text-muted-foreground">
+                    points
+                  </p>
                 </div>
               </Link>
             ))}
@@ -406,17 +656,26 @@ export function SeasonLeaderboard({
 export function EpisodePointsSummary({
   assignmentPoints,
   guesses,
+  submissions,
   users,
   wagers,
 }: {
   assignmentPoints: AssignmentPointTotal[];
   guesses: ConvexAdminSeasonGuess[];
+  submissions: ConvexAdminQuoteSubmission[];
   users: ConvexAdminUser[];
   wagers: ConvexAdminSeasonGamblingEntry[];
 }) {
   const rows = useMemo(
-    () => summarizeEpisodePoints(guesses, wagers, assignmentPoints, users),
-    [assignmentPoints, guesses, users, wagers]
+    () =>
+      summarizeEpisodePoints(
+        guesses,
+        wagers,
+        submissions,
+        assignmentPoints,
+        users
+      ),
+    [assignmentPoints, guesses, submissions, users, wagers]
   );
   return (
     <Card className="w-full border-amber-500/20 bg-amber-500/5">
@@ -437,7 +696,10 @@ export function EpisodePointsSummary({
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((row, index) => (
-              <div className="rounded-2xl border bg-card/70 p-4" key={row.user.id}>
+              <div
+                className="rounded-2xl border bg-card/70 p-4"
+                key={row.user.id}
+              >
                 <div className="mb-4 flex items-center gap-3">
                   <Avatar className="h-11 w-11 border border-amber-500/30">
                     <AvatarImage src={row.user.image ?? ""} />
@@ -448,7 +710,8 @@ export function EpisodePointsSummary({
                       {row.user.name ?? "Unnamed user"}
                     </p>
                     <Badge variant="outline">
-                      {row.total > 0 ? "+" : ""}{row.total} points
+                      {row.total > 0 ? "+" : ""}
+                      {row.total} points
                     </Badge>
                   </div>
                   {index === 0 && row.total > 0 && (
@@ -456,9 +719,26 @@ export function EpisodePointsSummary({
                   )}
                 </div>
                 <div className="space-y-2 text-sm">
-                  <PointBreakdown icon={Target} label="Guesses" value={row.guessPoints} />
-                  <PointBreakdown icon={Coins} label="Gambling" value={row.gamblingPoints} />
-                  <PointBreakdown icon={Star} label="Bonus / manual" value={row.bonusPoints} />
+                  <PointBreakdown
+                    icon={Target}
+                    label="Guesses"
+                    value={row.guessPoints}
+                  />
+                  <PointBreakdown
+                    icon={Coins}
+                    label="Gambling"
+                    value={row.gamblingPoints}
+                  />
+                  <PointBreakdown
+                    icon={Quote}
+                    label="Quotabunga"
+                    value={row.quotabungaPoints}
+                  />
+                  <PointBreakdown
+                    icon={Star}
+                    label="Bonus / manual"
+                    value={row.bonusPoints}
+                  />
                 </div>
               </div>
             ))}
@@ -484,7 +764,8 @@ function PointBreakdown({
         <Icon className="h-3.5 w-3.5" /> {label}
       </span>
       <span className="font-bold text-foreground">
-        {value > 0 ? "+" : ""}{value}
+        {value > 0 ? "+" : ""}
+        {value}
       </span>
     </div>
   );
@@ -563,11 +844,17 @@ export function QuotabungaRecordingRound({
                 <Quote className="h-6 w-6 text-primary" />
                 Quotabunga Recording Round
               </CardTitle>
-              <CardDescription>{included.length} included entries</CardDescription>
+              <CardDescription>
+                {included.length} included entries
+              </CardDescription>
             </div>
             <div className="flex gap-2">
               <Button asChild size="sm" variant="outline">
-                <Link href={`/quotabunga?episodeId=${encodeURIComponent(episodeId)}`}>
+                <Link
+                  href={`/quotabunga?episodeId=${encodeURIComponent(
+                    episodeId
+                  )}`}
+                >
                   Manage round <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -576,7 +863,11 @@ export function QuotabungaRecordingRound({
                 onClick={() => setConfirming(true)}
                 size="sm"
               >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trophy className="mr-2 h-4 w-4" />}
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trophy className="mr-2 h-4 w-4" />
+                )}
                 Award points
               </Button>
             </div>
@@ -590,7 +881,10 @@ export function QuotabungaRecordingRound({
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {included.map((submission) => (
-                <div className="space-y-3 rounded-xl border bg-muted/20 p-4" key={submission.id}>
+                <div
+                  className="space-y-3 rounded-xl border bg-muted/20 p-4"
+                  key={submission.id}
+                >
                   <div className="flex justify-between gap-3 text-xs font-bold uppercase text-muted-foreground">
                     <span>Matchup #{submission.bracketOrder ?? "—"}</span>
                     <span>{submission.user.name ?? submission.user.email}</span>
@@ -612,20 +906,29 @@ export function QuotabungaRecordingRound({
                     </a>
                   )}
                   <select
-                    aria-label={`Placement for ${submission.user.name ?? submission.sourceTitle}`}
+                    aria-label={`Placement for ${
+                      submission.user.name ?? submission.sourceTitle
+                    }`}
                     className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
                     onChange={(event) => {
                       const value = event.target.value;
                       setPlacements((current) => {
                         const next = { ...current };
                         const placement =
-                          value === "" ? null : (Number(value) as ConvexQuotePlacement);
+                          value === ""
+                            ? null
+                            : (Number(value) as ConvexQuotePlacement);
                         if (placement !== null) {
-                          Object.entries(next).forEach(([id, currentPlacement]) => {
-                            if (id !== submission.id && currentPlacement === placement) {
-                              next[id] = null;
+                          Object.entries(next).forEach(
+                            ([id, currentPlacement]) => {
+                              if (
+                                id !== submission.id &&
+                                currentPlacement === placement
+                              ) {
+                                next[id] = null;
+                              }
                             }
-                          });
+                          );
                         }
                         next[submission.id] = placement;
                         return next;
@@ -657,17 +960,21 @@ export function QuotabungaRecordingRound({
 
 function AssignmentGameCard({
   assignment,
+  audioRevision,
   disclosure,
   guesses,
   onAwardGuess,
   onResolveWager,
+  onSettleGuesses,
   onSetReviewRating,
   ratings,
   reviews,
   savingKey,
+  settlements,
   wagers,
 }: {
   assignment: EpisodeAssignment;
+  audioRevision: number;
   disclosure: AssignmentRecordingDisclosure;
   guesses: ConvexAdminSeasonGuess[];
   onAwardGuess: (guess: ConvexAdminSeasonGuess) => void;
@@ -675,6 +982,7 @@ function AssignmentGameCard({
     wager: ConvexAdminSeasonGamblingEntry,
     status: "won" | "lost" | "rejected"
   ) => void;
+  onSettleGuesses: (userId: string) => void;
   onSetReviewRating: (
     review: ConvexAssignmentReview,
     ratingId: string | null
@@ -682,6 +990,7 @@ function AssignmentGameCard({
   ratings: ConvexAdminRating[];
   reviews: ConvexAssignmentReview[];
   savingKey: string | null;
+  settlements: RecordingGuessSettlement[];
   wagers: ConvexAdminSeasonGamblingEntry[];
 }) {
   const sortedRatings = useMemo(
@@ -695,6 +1004,20 @@ function AssignmentGameCard({
       ),
     [reviews]
   );
+  const groupedGuesses = useMemo(
+    () => groupRecordingGuessesByListener(guesses),
+    [guesses]
+  );
+  const settlementByUserAndSeason = useMemo(
+    () =>
+      new Map(
+        settlements.map((settlement) => [
+          `${settlement.userId}::${settlement.seasonId}`,
+          settlement,
+        ])
+      ),
+    [settlements]
+  );
 
   return (
     <Card>
@@ -703,7 +1026,8 @@ function AssignmentGameCard({
           <div>
             <CardTitle>{assignment.movie.title}</CardTitle>
             <CardDescription>
-              {assignment.type.replaceAll("_", " ")} · assigned by {assignment.user.name ?? "Unknown"}
+              {assignment.type.replaceAll("_", " ")} · assigned by{" "}
+              {assignment.user.name ?? "Unknown"}
             </CardDescription>
           </div>
           {assignment.slug === null ? (
@@ -711,20 +1035,28 @@ function AssignmentGameCard({
           ) : (
             <Button asChild size="sm" variant="outline">
               <Link href={getAdminAssignmentPath(assignment.slug)}>
-                Manage ratings & guesses <ArrowUpRight className="ml-2 h-4 w-4" />
+                Manage ratings & guesses{" "}
+                <ArrowUpRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           )}
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 xl:grid-cols-2">
+        <div className="xl:col-span-2">
+          <AssignmentAudioMessages
+            assignmentId={assignment.id}
+            revision={audioRevision}
+          />
+        </div>
         <div className="space-y-3 xl:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 font-black">
               <Star className="h-4 w-4" /> Host ratings
             </h3>
             <Badge variant={disclosure.allHostsRated ? "secondary" : "outline"}>
-              {disclosure.ratedHostCount} of {disclosure.activeHostCount} active hosts rated
+              {disclosure.ratedHostCount} of {disclosure.activeHostCount} active
+              hosts rated
             </Badge>
           </div>
           {sortedReviews.length === 0 ? (
@@ -788,47 +1120,146 @@ function AssignmentGameCard({
             <Target className="h-4 w-4" /> Guesses
           </h3>
           {guesses.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No guesses recorded.</p>
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No guesses recorded.
+            </p>
           ) : (
-            guesses.map((guess) => {
-              const actual = guess.assignmentReview.review.rating;
-              const revealed = isRecordingGuessRevealed(guess);
-              const correct = actual?.id === guess.rating.id;
+            groupedGuesses.map((group) => {
+              const preview = getRecordingGuessSettlementPreview(group.guesses);
+              const settlement = settlementByUserAndSeason.get(
+                `${group.user.id}::${group.guesses[0]?.season.id ?? ""}`
+              );
+              const settlementMatches =
+                preview.eligible &&
+                settlement?.outcome === preview.outcome &&
+                settlement?.correctCount === preview.correctCount;
+              const saving =
+                savingKey ===
+                `guess-settlement-${assignment.id}-${group.user.id}`;
               return (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3" key={guess.id}>
-                  <div>
-                    <p className="font-bold">{guess.user.name ?? "Unnamed listener"}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{guess.assignmentReview.review.user?.name ?? "Host"}</span>
-                      {revealed ? (
-                        <>
-                          <span>· Guess</span><RatingIcon value={guess.rating.value} />
-                          <span>· Actual</span><RatingIcon value={actual?.value ?? 0} />
-                        </>
-                      ) : (
-                        <span>· Prediction hidden until this host rates</span>
+                <div
+                  className="overflow-hidden rounded-lg border"
+                  key={group.user.id}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
+                    <div>
+                      <p className="font-bold">
+                        {group.user.name ?? "Unnamed listener"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {preview.message}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">
+                        {group.guesses.length} guess
+                        {group.guesses.length === 1 ? "" : "es"}
+                      </Badge>
+                      {preview.eligible && (
+                        <Badge
+                          variant={
+                            preview.outcome === "allcorrect"
+                              ? "default"
+                              : preview.outcome === "all-incorrect"
+                              ? "destructive"
+                              : "outline"
+                          }
+                        >
+                          {preview.outcome === "allcorrect"
+                            ? "All correct"
+                            : preview.outcome === "all-incorrect"
+                            ? "All incorrect"
+                            : "Mixed"}
+                        </Badge>
                       )}
+                      {settlement !== undefined && (
+                        <Badge
+                          variant={
+                            settlementMatches ? "secondary" : "destructive"
+                          }
+                        >
+                          {settlementMatches ? "Settled" : "Needs resettlement"}
+                        </Badge>
+                      )}
+                      <Button
+                        disabled={
+                          (settlement === undefined && !preview.eligible) ||
+                          savingKey !== null
+                        }
+                        onClick={() => onSettleGuesses(group.user.id)}
+                        size="sm"
+                        variant={
+                          preview.outcome === "all-incorrect"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {saving && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        {settlement === undefined
+                          ? "Settle listener"
+                          : "Reconcile"}
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!revealed ? (
-                      <Badge variant="outline">Hidden</Badge>
-                    ) : (
-                      <>
-                        <Badge variant={correct ? "default" : "outline"}>{correct ? "Correct" : "No award"}</Badge>
-                        {guess.point !== null ? (
-                          <Badge variant="secondary">{guess.point.total} pts awarded</Badge>
-                        ) : correct ? (
-                          <Button
-                            disabled={savingKey !== null}
-                            onClick={() => onAwardGuess(guess)}
-                            size="sm"
-                          >
-                            Award point
-                          </Button>
-                        ) : null}
-                      </>
-                    )}
+                  <div className="divide-y">
+                    {group.guesses.map((guess) => {
+                      const actual = guess.assignmentReview.review.rating;
+                      const revealed = isRecordingGuessRevealed(guess);
+                      const correct = actual?.id === guess.rating.id;
+                      return (
+                        <div
+                          className="flex flex-wrap items-center justify-between gap-3 p-3"
+                          key={guess.id}
+                        >
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-semibold text-foreground">
+                              {guess.assignmentReview.review.user?.name ??
+                                "Host"}
+                            </span>
+                            {revealed ? (
+                              <>
+                                <span>· Guess</span>
+                                <RatingIcon value={guess.rating.value} />
+                                <span>· Actual</span>
+                                <RatingIcon value={actual?.value ?? 0} />
+                              </>
+                            ) : (
+                              <span>
+                                · Prediction hidden until this host rates
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!revealed ? (
+                              <Badge variant="outline">Hidden</Badge>
+                            ) : (
+                              <>
+                                <Badge
+                                  variant={correct ? "default" : "outline"}
+                                >
+                                  {correct ? "Correct" : "No award"}
+                                </Badge>
+                                {guess.point !== null ? (
+                                  <Badge variant="secondary">
+                                    {guess.point.total} pts awarded
+                                  </Badge>
+                                ) : correct ? (
+                                  <Button
+                                    disabled={savingKey !== null}
+                                    onClick={() => onAwardGuess(guess)}
+                                    size="sm"
+                                  >
+                                    Award point
+                                  </Button>
+                                ) : null}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -840,11 +1271,14 @@ function AssignmentGameCard({
             <Coins className="h-4 w-4" /> Wagers
           </h3>
           {wagers.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No wagers recorded.</p>
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No wagers recorded.
+            </p>
           ) : !disclosure.allHostsRated ? (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
               <p className="font-bold text-amber-700 dark:text-amber-300">
-                {wagers.length} wager{wagers.length === 1 ? "" : "s"} · {wagers.reduce((sum, wager) => sum + wager.points, 0)} point pot
+                {wagers.length} wager{wagers.length === 1 ? "" : "s"} ·{" "}
+                {wagers.reduce((sum, wager) => sum + wager.points, 0)} point pot
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {disclosure.activeHostCount === 0
@@ -854,23 +1288,55 @@ function AssignmentGameCard({
             </div>
           ) : (
             wagers.map((wager) => {
-              const active = wager.status === "pending" || wager.status === "locked";
+              const active =
+                wager.status === "pending" || wager.status === "locked";
               return (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3" key={wager.id}>
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                  key={wager.id}
+                >
                   <div>
-                    <p className="font-bold">{wager.user.name ?? "Unnamed listener"}</p>
+                    <p className="font-bold">
+                      {wager.user.name ?? "Unnamed listener"}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {wager.points} points × {wager.gamblingType.multiplier} · {wager.gamblingType.title}
+                      {wager.points} points × {wager.gamblingType.multiplier} ·{" "}
+                      {wager.gamblingType.title}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{wager.status}</Badge>
-                    {wager.awardPoint !== null && <Badge variant="secondary">{wager.awardPoint.total} pts</Badge>}
+                    {wager.awardPoint !== null && (
+                      <Badge variant="secondary">
+                        {wager.awardPoint.total} pts
+                      </Badge>
+                    )}
                     {active && (
                       <>
-                        <Button disabled={savingKey !== null} onClick={() => onResolveWager(wager, "won")} size="sm" variant="outline">Won</Button>
-                        <Button disabled={savingKey !== null} onClick={() => onResolveWager(wager, "lost")} size="sm" variant="outline">Lost</Button>
-                        <Button disabled={savingKey !== null} onClick={() => onResolveWager(wager, "rejected")} size="sm" variant="ghost">Reject</Button>
+                        <Button
+                          disabled={savingKey !== null}
+                          onClick={() => onResolveWager(wager, "won")}
+                          size="sm"
+                          variant="outline"
+                        >
+                          Won
+                        </Button>
+                        <Button
+                          disabled={savingKey !== null}
+                          onClick={() => onResolveWager(wager, "lost")}
+                          size="sm"
+                          variant="outline"
+                        >
+                          Lost
+                        </Button>
+                        <Button
+                          disabled={savingKey !== null}
+                          onClick={() => onResolveWager(wager, "rejected")}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          Reject
+                        </Button>
                       </>
                     )}
                   </div>
@@ -958,6 +1424,21 @@ export function ConvexRecordingManagementPage() {
     );
   };
 
+  const settleGuesses = (assignmentId: string, userId: string) => {
+    runWrite(
+      `guess-settlement-${assignmentId}-${userId}`,
+      async () =>
+        guessSettlementResultSchema.parse(
+          await client.mutation(settleGuessesForAssignmentUserReference, {
+            clientApiVersion: BBPC_CLIENT_API_VERSION,
+            assignmentId,
+            userId,
+          })
+        ),
+      "Settled the listener's three guesses."
+    );
+  };
+
   const resolveWager = (
     wager: ConvexAdminSeasonGamblingEntry,
     status: "won" | "lost" | "rejected"
@@ -991,7 +1472,11 @@ export function ConvexRecordingManagementPage() {
   };
 
   if (data === null && loadError === null) {
-    return <div className="flex min-h-[420px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   if (loadError !== null) {
@@ -1002,7 +1487,10 @@ export function ConvexRecordingManagementPage() {
           <CardDescription>{loadError}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={refresh}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button>
+          <Button onClick={refresh}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -1015,7 +1503,9 @@ export function ConvexRecordingManagementPage() {
   const { episode } = data;
   return (
     <>
-      <Head><title>Recording Management - BBPC Admin</title></Head>
+      <Head>
+        <title>Recording Management - BBPC Admin</title>
+      </Head>
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
@@ -1023,12 +1513,16 @@ export function ConvexRecordingManagementPage() {
               <Mic2 className="h-8 w-8 text-primary" /> Recording Management
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Run episode games, award points, and watch the season standings while recording.
+              Run episode games, award points, and watch the season standings
+              while recording.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button disabled={refreshing} onClick={refresh} variant="outline">
-              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />Refresh
+              <RefreshCw
+                className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")}
+              />
+              Refresh
             </Button>
             {recordingAppUrl !== undefined && (
               <Button asChild>
@@ -1044,9 +1538,16 @@ export function ConvexRecordingManagementPage() {
           <Card>
             <CardHeader>
               <CardTitle>No episode is ready</CardTitle>
-              <CardDescription>Create or mark an episode as next before opening its recording management tools.</CardDescription>
+              <CardDescription>
+                Create or mark an episode as next before opening its recording
+                management tools.
+              </CardDescription>
             </CardHeader>
-            <CardContent><Button asChild variant="outline"><Link href="/episode">Manage episodes</Link></Button></CardContent>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link href="/episode">Manage episodes</Link>
+              </Button>
+            </CardContent>
           </Card>
         ) : (
           <>
@@ -1056,13 +1557,23 @@ export function ConvexRecordingManagementPage() {
                   <div>
                     <div className="mb-2 flex items-center gap-2">
                       <Badge>{episode.status ?? "unknown"}</Badge>
-                      <span className="text-sm text-muted-foreground">Episode {episode.number}</span>
+                      <span className="text-sm text-muted-foreground">
+                        Episode {episode.number}
+                      </span>
                     </div>
                     <CardTitle className="text-3xl">{episode.title}</CardTitle>
-                    <CardDescription>{episode.description ?? "No episode description."}</CardDescription>
+                    <CardDescription>
+                      {episode.description ?? "No episode description."}
+                    </CardDescription>
                   </div>
                   <Button asChild variant="outline">
-                    <Link href={episode.slug === null ? "/episode" : getAdminEpisodePath(episode.slug)}>
+                    <Link
+                      href={
+                        episode.slug === null
+                          ? "/episode"
+                          : getAdminEpisodePath(episode.slug)
+                      }
+                    >
                       Edit episode <ArrowUpRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
@@ -1071,54 +1582,107 @@ export function ConvexRecordingManagementPage() {
               {data.season !== null && (
                 <CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   <Gamepad2 className="h-4 w-4" />
-                  <span className="font-semibold text-foreground">{data.season.title}</span>
+                  <span className="font-semibold text-foreground">
+                    {data.season.title}
+                  </span>
                   <span>{data.season.gameType.title}</span>
                   <span>
-                    {data.season.startedOn === null ? "TBD" : formatPlainDate(data.season.startedOn)}
+                    {data.season.startedOn === null
+                      ? "TBD"
+                      : formatPlainDate(data.season.startedOn)}
                     {" – "}
-                    {data.season.endedOn === null ? "Present" : formatPlainDate(data.season.endedOn)}
+                    {data.season.endedOn === null
+                      ? "Present"
+                      : formatPlainDate(data.season.endedOn)}
                   </span>
                 </CardContent>
               )}
             </Card>
 
-            <QuotabungaRecordingRound episodeId={episode.id} onRefresh={refresh} submissions={data.submissions} />
+            <Card>
+              <CardContent className="pt-6">
+                <RecordingAudioMessages
+                  description="Messages submitted for the episode as a whole."
+                  emptyMessage="No episode audio messages have been submitted."
+                  messages={data.episodeAudioMessages}
+                  title="Episode audio messages"
+                />
+              </CardContent>
+            </Card>
+
+            <QuotabungaRecordingRound
+              episodeId={episode.id}
+              onRefresh={refresh}
+              submissions={data.submissions}
+            />
 
             <section className="space-y-4">
               <div>
                 <h2 className="text-2xl font-black">Episode games</h2>
-                <p className="text-sm text-muted-foreground">Set each host rating, resolve wagers, and award correct predictions.</p>
+                <p className="text-sm text-muted-foreground">
+                  Set each host rating, resolve wagers, and award correct
+                  predictions.
+                </p>
               </div>
               {episode.assignments.length === 0 ? (
-                <Card className="border-dashed"><CardContent className="p-6 text-sm text-muted-foreground">This episode has no assignments.</CardContent></Card>
+                <Card className="border-dashed">
+                  <CardContent className="p-6 text-sm text-muted-foreground">
+                    This episode has no assignments.
+                  </CardContent>
+                </Card>
               ) : (
                 episode.assignments.map((assignment) => (
                   <AssignmentGameCard
                     assignment={assignment}
-                    disclosure={data.disclosures[assignment.id] ?? {
-                      activeHostCount: 0,
-                      ratedHostCount: 0,
-                      allHostsRated: false,
-                    }}
-                    guesses={data.guesses.filter((guess) => guess.assignmentReview.assignment.id === assignment.id)}
+                    audioRevision={revision}
+                    disclosure={
+                      data.disclosures[assignment.id] ?? {
+                        activeHostCount: 0,
+                        ratedHostCount: 0,
+                        allHostsRated: false,
+                      }
+                    }
+                    guesses={data.guesses.filter(
+                      (guess) =>
+                        guess.assignmentReview.assignment.id === assignment.id
+                    )}
                     key={assignment.id}
                     onAwardGuess={awardGuess}
                     onResolveWager={resolveWager}
+                    onSettleGuesses={(userId) =>
+                      settleGuesses(assignment.id, userId)
+                    }
                     onSetReviewRating={setReviewRating}
                     ratings={data.ratings}
                     reviews={data.reviews[assignment.id] ?? []}
                     savingKey={savingKey}
-                    wagers={data.wagers.filter((wager) => wager.assignment?.id === assignment.id)}
+                    settlements={data.guessSettlements.filter(
+                      (settlement) => settlement.assignmentId === assignment.id
+                    )}
+                    wagers={data.wagers.filter(
+                      (wager) => wager.assignment?.id === assignment.id
+                    )}
                   />
                 ))
               )}
             </section>
 
-            <EpisodePointsSummary assignmentPoints={data.assignmentPoints} guesses={data.guesses} users={data.users} wagers={data.wagers} />
+            <EpisodePointsSummary
+              assignmentPoints={data.assignmentPoints}
+              guesses={data.guesses}
+              submissions={data.submissions}
+              users={data.users}
+              wagers={data.wagers}
+            />
           </>
         )}
 
-        <SeasonLeaderboard performance={data.performance} season={data.season} onRefresh={refresh} refreshing={refreshing} />
+        <SeasonLeaderboard
+          performance={data.performance}
+          season={data.season}
+          onRefresh={refresh}
+          refreshing={refreshing}
+        />
       </main>
     </>
   );

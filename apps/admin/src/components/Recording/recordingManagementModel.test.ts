@@ -7,8 +7,11 @@ import type {
 import type { ConvexAdminUser } from "../../convex/users";
 import {
   chunkRecordingValues,
+  collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getRecordingGuessSettlementPreview,
+  groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
@@ -86,10 +89,16 @@ function point(userId: string, total: number) {
 
 function guess(
   userId: string,
-  options: { hostRated?: boolean; pointTotal?: number } = {}
+  options: {
+    hostRated?: boolean;
+    pointTotal?: number;
+    hostId?: string;
+    correct?: boolean;
+  } = {}
 ): ConvexAdminSeasonGuess {
+  const hostId = options.hostId ?? "host";
   return {
-    id: `guess-${userId}`,
+    id: `guess-${userId}-${hostId}`,
     createdAt: 1,
     user: { id: userId, name: userId, image: null },
     rating,
@@ -104,14 +113,18 @@ function guess(
       review: {
         id: "review",
         user: {
-          id: "host",
-          name: "Host",
+          id: hostId,
+          name: hostId,
           image: null,
           status: "active",
         },
         movie,
         show: null,
-        rating: options.hostRated ? rating : null,
+        rating: options.hostRated
+          ? options.correct === false
+            ? { ...rating, id: "other-rating" }
+            : rating
+          : null,
         reviewedAt: options.hostRated ? 1 : null,
       },
     },
@@ -178,10 +191,7 @@ describe("recording management model", () => {
     };
 
     expect(
-      selectRecordingManagementEpisode([
-        olderNextEpisode,
-        latestNextEpisode,
-      ])
+      selectRecordingManagementEpisode([olderNextEpisode, latestNextEpisode])
     ).toBe(latestNextEpisode);
   });
 
@@ -246,8 +256,38 @@ describe("recording management model", () => {
     ).rejects.toThrow("repeated pagination cursor");
   });
 
+  it("loads every submitted audio message across pages", async () => {
+    const messages = [{ id: "audio-1" }, { id: "audio-2" }, { id: "audio-3" }];
+    const loadPage = vi.fn(async (cursor: string | null) => {
+      const offset = cursor === null ? 0 : Number(cursor);
+      const nextOffset = offset + 2;
+      return {
+        messages: messages.slice(offset, nextOffset),
+        isDone: nextOffset >= messages.length,
+        continueCursor: String(nextOffset),
+      };
+    });
+
+    await expect(collectAllRecordingAudioMessages(loadPage)).resolves.toEqual(
+      messages
+    );
+    expect(loadPage.mock.calls).toEqual([[null], ["2"]]);
+  });
+
+  it("fails closed when audio pagination repeats a cursor", async () => {
+    await expect(
+      collectAllRecordingAudioMessages(async () => ({
+        messages: [],
+        isDone: false,
+        continueCursor: "same",
+      }))
+    ).rejects.toThrow("repeated pagination cursor");
+  });
+
   it("chunks point-total requests to the backend limit", () => {
-    expect(chunkRecordingValues(Array.from({ length: 205 }), 100)).toHaveLength(3);
+    expect(chunkRecordingValues(Array.from({ length: 205 }), 100)).toHaveLength(
+      3
+    );
     expect(
       chunkRecordingValues(Array.from({ length: 205 }), 100).map(
         (chunk) => chunk.length
@@ -287,12 +327,121 @@ describe("recording management model", () => {
     ).toBe(true);
   });
 
+  it("groups guesses by listener while preserving their original order", () => {
+    const listenerAFirst = guess("listener-a");
+    const listenerBGuess = guess("listener-b");
+    const listenerASecond = {
+      ...guess("listener-a", { hostRated: true }),
+      id: "guess-listener-a-second",
+    };
+
+    const groups = groupRecordingGuessesByListener([
+      listenerAFirst,
+      listenerBGuess,
+      listenerASecond,
+    ]);
+
+    expect(groups.map(({ user }) => user.id)).toEqual([
+      "listener-a",
+      "listener-b",
+    ]);
+    expect(groups[0]?.guesses.map(({ id }) => id)).toEqual([
+      listenerAFirst.id,
+      listenerASecond.id,
+    ]);
+    expect(groups[1]?.guesses.map(({ id }) => id)).toEqual([listenerBGuess.id]);
+  });
+
+  it("previews all-correct, all-incorrect, and mixed settlements", () => {
+    const guessesFor = (correct: boolean[]) =>
+      correct.map((isCorrect, index) =>
+        guess("listener", {
+          hostId: `host-${String(index + 1)}`,
+          hostRated: true,
+          correct: isCorrect,
+        })
+      );
+
+    expect(
+      getRecordingGuessSettlementPreview(guessesFor([true, true, true]))
+    ).toMatchObject({
+      eligible: true,
+      correctCount: 3,
+      outcome: "allcorrect",
+    });
+    expect(
+      getRecordingGuessSettlementPreview(guessesFor([false, false, false]))
+    ).toMatchObject({
+      eligible: true,
+      correctCount: 0,
+      outcome: "all-incorrect",
+    });
+    expect(
+      getRecordingGuessSettlementPreview(guessesFor([true, false, true]))
+    ).toMatchObject({
+      eligible: true,
+      correctCount: 2,
+      outcome: "mixed",
+    });
+  });
+
+  it("waits for exactly three distinct rated hosts before settlement", () => {
+    expect(
+      getRecordingGuessSettlementPreview([
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-2" }),
+        guess("listener", { hostId: "host-3", hostRated: true }),
+      ])
+    ).toMatchObject({
+      eligible: false,
+      message: "Waiting for all 3 host ratings",
+    });
+    expect(
+      getRecordingGuessSettlementPreview([
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-2", hostRated: true }),
+      ])
+    ).toMatchObject({
+      eligible: false,
+      message: "2 of 3 guesses recorded",
+    });
+    expect(
+      getRecordingGuessSettlementPreview([
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-3", hostRated: true }),
+      ])
+    ).toMatchObject({
+      eligible: false,
+      message: "Guesses must target 3 distinct hosts",
+    });
+    expect(
+      getRecordingGuessSettlementPreview([
+        guess("listener", { hostId: "host-1", hostRated: true }),
+        guess("listener", { hostId: "host-2", hostRated: true }),
+        {
+          ...guess("listener", { hostId: "host-3", hostRated: true }),
+          season: { ...season, id: "other-season" },
+        },
+      ])
+    ).toMatchObject({
+      eligible: false,
+      message: "Guesses must belong to the same season",
+    });
+  });
+
   it("keeps episode point sources separate and sorts by exact total", () => {
     const listenerA = adminUser("listener-a");
     const listenerB = adminUser("listener-b");
     const rows = summarizeEpisodePoints(
       [guess(listenerA.id, { hostRated: true, pointTotal: 2 })],
       [wager(listenerB.id, -4)],
+      [
+        {
+          user: listenerB,
+          point: { adjustment: 10 },
+        },
+      ],
       [
         {
           userId: listenerA.id,
@@ -305,18 +454,20 @@ describe("recording management model", () => {
 
     expect(rows).toMatchObject([
       {
-        user: { id: listenerA.id },
-        guessPoints: 2,
-        gamblingPoints: 0,
-        bonusPoints: 3,
-        total: 5,
-      },
-      {
         user: { id: listenerB.id },
         guessPoints: 0,
         gamblingPoints: -4,
+        quotabungaPoints: 10,
         bonusPoints: 0,
-        total: -4,
+        total: 6,
+      },
+      {
+        user: { id: listenerA.id },
+        guessPoints: 2,
+        gamblingPoints: 0,
+        quotabungaPoints: 0,
+        bonusPoints: 3,
+        total: 5,
       },
     ]);
   });

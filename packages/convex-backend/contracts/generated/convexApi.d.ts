@@ -5441,6 +5441,17 @@ export type PublicApiType = {
                 pageStatus?: "SplitRecommended" | "SplitRequired" | null;
                 splitCursor?: string | null;
             }>;
+            listSettlementsForAssignment: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+            }, Array<{
+                assignmentId: Id<"assignments">;
+                correctCount: number;
+                id: Id<"guessSettlements">;
+                outcome: "allcorrect" | "all-incorrect" | "mixed";
+                seasonId: Id<"seasons">;
+                settledAt: number;
+                userId: Id<"users">;
+            }>>;
             mineForAssignment: FunctionReference<"query", "public", {
                 assignmentId: Id<"assignments">;
             }, Array<{
@@ -5701,6 +5712,24 @@ export type PublicApiType = {
             }, {
                 deletedGuesses: number;
                 deletedPoints: number;
+            }>;
+            settleForAssignmentUser: FunctionReference<"mutation", "public", {
+                assignmentId: Id<"assignments">;
+                clientApiVersion: string;
+                earnedAt?: number;
+                userId: Id<"users">;
+            }, {
+                assignmentId: Id<"assignments">;
+                correctCount: number;
+                groupPointChanged: boolean;
+                guessCount: number;
+                id: Id<"guessSettlements">;
+                individualPointsCreated: number;
+                individualPointsRemoved: number;
+                outcome: "allcorrect" | "all-incorrect" | "mixed";
+                seasonId: Id<"seasons">;
+                settledAt: number;
+                userId: Id<"users">;
             }>;
             setPoint: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
