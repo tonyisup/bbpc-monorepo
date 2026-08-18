@@ -42,8 +42,14 @@ interface RecordingUserPage {
   continueCursor: string;
 }
 
+interface RecordingAudioPage<T> {
+  messages: T[];
+  isDone: boolean;
+  continueCursor: string;
+}
+
 export function selectRecordingManagementEpisode<
-  T extends { number: number; status: string | null },
+  T extends { number: number; status: string | null }
 >(episodes: readonly T[]): T | null {
   const priority = (candidate: T) => {
     switch (candidate.status?.toLowerCase()) {
@@ -62,8 +68,7 @@ export function selectRecordingManagementEpisode<
     const episodePriority = priority(episode);
     const selectedPriority = priority(selected);
     return episodePriority > selectedPriority ||
-      (episodePriority === selectedPriority &&
-        episode.number > selected.number)
+      (episodePriority === selectedPriority && episode.number > selected.number)
       ? episode
       : selected;
   }, null);
@@ -87,19 +92,47 @@ export async function collectAllRecordingUsers(
       page.continueCursor === cursor ||
       visitedCursors.has(page.continueCursor)
     ) {
-      throw new Error("The user catalog returned a repeated pagination cursor.");
+      throw new Error(
+        "The user catalog returned a repeated pagination cursor."
+      );
     }
     visitedCursors.add(page.continueCursor);
     cursor = page.continueCursor;
   }
 }
 
-export function chunkRecordingValues<T>(
-  values: T[],
-  chunkSize: number
-): T[][] {
+export async function collectAllRecordingAudioMessages<T>(
+  loadPage: (cursor: string | null) => Promise<RecordingAudioPage<T>>
+): Promise<T[]> {
+  const messages: T[] = [];
+  const visitedCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  for (;;) {
+    const page = await loadPage(cursor);
+    messages.push(...page.messages);
+    if (page.isDone) {
+      return messages;
+    }
+    if (
+      page.continueCursor.length === 0 ||
+      page.continueCursor === cursor ||
+      visitedCursors.has(page.continueCursor)
+    ) {
+      throw new Error(
+        "The audio catalog returned a repeated pagination cursor."
+      );
+    }
+    visitedCursors.add(page.continueCursor);
+    cursor = page.continueCursor;
+  }
+}
+
+export function chunkRecordingValues<T>(values: T[], chunkSize: number): T[][] {
   if (!Number.isSafeInteger(chunkSize) || chunkSize < 1) {
-    throw new Error("Recording management chunk size must be a positive integer.");
+    throw new Error(
+      "Recording management chunk size must be a positive integer."
+    );
   }
   const chunks: T[][] = [];
   for (let index = 0; index < values.length; index += chunkSize) {
@@ -194,11 +227,7 @@ export function getRecordingGuessSettlementPreview(
       message: "Guesses must belong to the same season",
     };
   }
-  if (
-    guesses.some(
-      (guess) => guess.assignmentReview.review.rating === null
-    )
-  ) {
+  if (guesses.some((guess) => guess.assignmentReview.review.rating === null)) {
     return {
       eligible: false,
       correctCount: null,
@@ -207,8 +236,7 @@ export function getRecordingGuessSettlementPreview(
     };
   }
   const correctCount = guesses.filter(
-    (guess) =>
-      guess.assignmentReview.review.rating?.id === guess.rating.id
+    (guess) => guess.assignmentReview.review.rating?.id === guess.rating.id
   ).length;
   return {
     eligible: true,
@@ -217,8 +245,8 @@ export function getRecordingGuessSettlementPreview(
       correctCount === 3
         ? "allcorrect"
         : correctCount === 0
-          ? "all-incorrect"
-          : "mixed",
+        ? "all-incorrect"
+        : "mixed",
     message: `${correctCount} of 3 correct`,
   };
 }

@@ -7,6 +7,7 @@ import type {
 import type { ConvexAdminUser } from "../../convex/users";
 import {
   chunkRecordingValues,
+  collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
   getRecordingGuessSettlementPreview,
@@ -190,10 +191,7 @@ describe("recording management model", () => {
     };
 
     expect(
-      selectRecordingManagementEpisode([
-        olderNextEpisode,
-        latestNextEpisode,
-      ])
+      selectRecordingManagementEpisode([olderNextEpisode, latestNextEpisode])
     ).toBe(latestNextEpisode);
   });
 
@@ -258,8 +256,38 @@ describe("recording management model", () => {
     ).rejects.toThrow("repeated pagination cursor");
   });
 
+  it("loads every submitted audio message across pages", async () => {
+    const messages = [{ id: "audio-1" }, { id: "audio-2" }, { id: "audio-3" }];
+    const loadPage = vi.fn(async (cursor: string | null) => {
+      const offset = cursor === null ? 0 : Number(cursor);
+      const nextOffset = offset + 2;
+      return {
+        messages: messages.slice(offset, nextOffset),
+        isDone: nextOffset >= messages.length,
+        continueCursor: String(nextOffset),
+      };
+    });
+
+    await expect(collectAllRecordingAudioMessages(loadPage)).resolves.toEqual(
+      messages
+    );
+    expect(loadPage.mock.calls).toEqual([[null], ["2"]]);
+  });
+
+  it("fails closed when audio pagination repeats a cursor", async () => {
+    await expect(
+      collectAllRecordingAudioMessages(async () => ({
+        messages: [],
+        isDone: false,
+        continueCursor: "same",
+      }))
+    ).rejects.toThrow("repeated pagination cursor");
+  });
+
   it("chunks point-total requests to the backend limit", () => {
-    expect(chunkRecordingValues(Array.from({ length: 205 }), 100)).toHaveLength(3);
+    expect(chunkRecordingValues(Array.from({ length: 205 }), 100)).toHaveLength(
+      3
+    );
     expect(
       chunkRecordingValues(Array.from({ length: 205 }), 100).map(
         (chunk) => chunk.length
@@ -321,9 +349,7 @@ describe("recording management model", () => {
       listenerAFirst.id,
       listenerASecond.id,
     ]);
-    expect(groups[1]?.guesses.map(({ id }) => id)).toEqual([
-      listenerBGuess.id,
-    ]);
+    expect(groups[1]?.guesses.map(({ id }) => id)).toEqual([listenerBGuess.id]);
   });
 
   it("previews all-correct, all-incorrect, and mixed settlements", () => {

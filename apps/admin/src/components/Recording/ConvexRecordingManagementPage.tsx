@@ -6,6 +6,7 @@ import {
   Coins,
   ExternalLink,
   Gamepad2,
+  Headphones,
   Loader2,
   Mic2,
   Quote,
@@ -22,14 +23,18 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import {
+  type ConvexAssignmentAudioMessage,
   type ConvexAssignmentReview,
+  loadConvexAssignmentAudioPage,
   loadConvexAssignmentWorkbenchById,
   updateConvexAssignmentReviewRating,
 } from "../../convex/assignmentDetails";
+import { type ConvexAdminEpisode } from "../../convex/episodes";
 import {
-  type ConvexAdminEpisode,
-} from "../../convex/episodes";
-import { loadConvexAdminEpisodeByNumber } from "../../convex/episodeDetails";
+  type ConvexAdminEpisodeAudioMessage,
+  loadConvexAdminEpisodeAudioPage,
+  loadConvexAdminEpisodeByNumber,
+} from "../../convex/episodeDetails";
 import {
   BBPC_CLIENT_API_VERSION,
   getConvexDomainErrorCode,
@@ -63,13 +68,11 @@ import {
   loadConvexAdminUsersPage,
 } from "../../convex/users";
 import {
+  formatInstantLocal,
   formatPlainDate,
   getPacificTodayPlainDate,
 } from "../../lib/dates";
-import {
-  getAdminAssignmentPath,
-  getAdminEpisodePath,
-} from "../../lib/routes";
+import { getAdminAssignmentPath, getAdminEpisodePath } from "../../lib/routes";
 import { cn } from "../../lib/utils";
 
 import RatingIcon from "../Review/RatingIcon";
@@ -88,6 +91,7 @@ import {
   type AssignmentPointTotal,
   type AssignmentRecordingDisclosure,
   chunkRecordingValues,
+  collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
   getRecordingGuessSettlementPreview,
@@ -198,6 +202,8 @@ interface RecordingManagementData {
   ratings: ConvexAdminRating[];
   users: ConvexAdminUser[];
   submissions: ConvexAdminQuoteSubmission[];
+  episodeAudioMessages: ConvexAdminEpisodeAudioMessage[];
+  assignmentAudioMessages: Record<string, ConvexAssignmentAudioMessage[]>;
 }
 
 async function loadAllSupportedUsers(
@@ -291,22 +297,45 @@ async function loadRecordingManagementData(
     );
   }
 
-  const [games, performance, submissions, assignmentPoints, workbenches] =
-    await Promise.all([
-      loadAssignmentGames(client, assignmentIds),
-      season === null
-        ? Promise.resolve(null)
-        : loadConvexAdminSeasonPerformance(client, season.id),
-      episode === null
-        ? Promise.resolve([])
-        : loadConvexAdminQuoteSubmissions(client, episode.id),
-      loadAssignmentPointTotals(client, users, assignmentIds),
-      Promise.all(
-        assignmentIds.map((assignmentId) =>
-          loadConvexAssignmentWorkbenchById(client, assignmentId)
-        )
-      ),
-    ]);
+  const [
+    games,
+    performance,
+    submissions,
+    assignmentPoints,
+    workbenches,
+    episodeAudioMessages,
+    assignmentAudioEntries,
+  ] = await Promise.all([
+    loadAssignmentGames(client, assignmentIds),
+    season === null
+      ? Promise.resolve(null)
+      : loadConvexAdminSeasonPerformance(client, season.id),
+    episode === null
+      ? Promise.resolve([])
+      : loadConvexAdminQuoteSubmissions(client, episode.id),
+    loadAssignmentPointTotals(client, users, assignmentIds),
+    Promise.all(
+      assignmentIds.map((assignmentId) =>
+        loadConvexAssignmentWorkbenchById(client, assignmentId)
+      )
+    ),
+    episode === null
+      ? Promise.resolve([])
+      : collectAllRecordingAudioMessages((cursor) =>
+          loadConvexAdminEpisodeAudioPage(client, episode.id, cursor)
+        ),
+    Promise.all(
+      assignmentIds.map(
+        async (assignmentId) =>
+          [
+            assignmentId,
+            await collectAllRecordingAudioMessages((cursor) =>
+              loadConvexAssignmentAudioPage(client, assignmentId, cursor)
+            ),
+          ] as const
+      )
+    ),
+  ]);
   const disclosures = Object.fromEntries(
     workbenches.map((workbench, index) => {
       const assignmentId = assignmentIds[index];
@@ -332,6 +361,7 @@ async function loadRecordingManagementData(
       return [assignmentId, workbench.reviews];
     })
   );
+  const assignmentAudioMessages = Object.fromEntries(assignmentAudioEntries);
 
   return {
     episode,
@@ -346,6 +376,8 @@ async function loadRecordingManagementData(
     ratings,
     users,
     submissions,
+    episodeAudioMessages,
+    assignmentAudioMessages,
   };
 }
 
@@ -375,6 +407,97 @@ function writeFailureMessage(error: unknown): string {
     default:
       return "The recording change could not be saved.";
   }
+}
+
+interface RecordingAudioMessage {
+  id: string;
+  url: string;
+  createdAt: number;
+  notes?: string | null;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  };
+}
+
+function RecordingAudioMessages({
+  description,
+  emptyMessage,
+  messages,
+  title,
+}: {
+  description: string;
+  emptyMessage: string;
+  messages: RecordingAudioMessage[];
+  title: string;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-black">
+            <Headphones className="h-4 w-4" /> {title}
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <Badge variant="outline">
+          {messages.length} message{messages.length === 1 ? "" : "s"}
+        </Badge>
+      </div>
+      {messages.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+          {emptyMessage}
+        </p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {messages.map((message) => {
+            const submitter =
+              message.user.name ?? message.user.email ?? "Unnamed listener";
+            return (
+              <article
+                className="rounded-lg border bg-muted/20 p-4"
+                key={message.id}
+              >
+                <div className="mb-3 flex min-w-0 items-center gap-3">
+                  <Avatar className="h-9 w-9">
+                    <AvatarImage src={message.user.image ?? ""} />
+                    <AvatarFallback>
+                      {initials(message.user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{submitter}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatInstantLocal(new Date(message.createdAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <audio
+                  aria-label={`${title} from ${submitter}`}
+                  className="h-10 w-full"
+                  controls
+                  preload="none"
+                  src={message.url}
+                >
+                  <a href={message.url}>Open audio message</a>
+                </audio>
+                {message.notes !== undefined && message.notes !== null && (
+                  <p className="mt-3 border-l-2 pl-3 text-sm text-muted-foreground">
+                    {message.notes}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function SeasonLeaderboard({
@@ -410,7 +533,9 @@ export function SeasonLeaderboard({
             size="icon"
             variant="ghost"
           >
-            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            <RefreshCw
+              className={cn("h-4 w-4", refreshing && "animate-spin")}
+            />
           </Button>
         </div>
       </CardHeader>
@@ -439,12 +564,17 @@ export function SeasonLeaderboard({
                     {summary.user.name ?? "Unnamed user"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {summary.guessCount} guesses · {summary.gamblingCount} wagers
+                    {summary.guessCount} guesses · {summary.gamblingCount}{" "}
+                    wagers
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-black text-primary">{summary.total}</p>
-                  <p className="text-[10px] uppercase text-muted-foreground">points</p>
+                  <p className="text-xl font-black text-primary">
+                    {summary.total}
+                  </p>
+                  <p className="text-[10px] uppercase text-muted-foreground">
+                    points
+                  </p>
                 </div>
               </Link>
             ))}
@@ -489,7 +619,10 @@ export function EpisodePointsSummary({
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((row, index) => (
-              <div className="rounded-2xl border bg-card/70 p-4" key={row.user.id}>
+              <div
+                className="rounded-2xl border bg-card/70 p-4"
+                key={row.user.id}
+              >
                 <div className="mb-4 flex items-center gap-3">
                   <Avatar className="h-11 w-11 border border-amber-500/30">
                     <AvatarImage src={row.user.image ?? ""} />
@@ -500,7 +633,8 @@ export function EpisodePointsSummary({
                       {row.user.name ?? "Unnamed user"}
                     </p>
                     <Badge variant="outline">
-                      {row.total > 0 ? "+" : ""}{row.total} points
+                      {row.total > 0 ? "+" : ""}
+                      {row.total} points
                     </Badge>
                   </div>
                   {index === 0 && row.total > 0 && (
@@ -508,9 +642,21 @@ export function EpisodePointsSummary({
                   )}
                 </div>
                 <div className="space-y-2 text-sm">
-                  <PointBreakdown icon={Target} label="Guesses" value={row.guessPoints} />
-                  <PointBreakdown icon={Coins} label="Gambling" value={row.gamblingPoints} />
-                  <PointBreakdown icon={Star} label="Bonus / manual" value={row.bonusPoints} />
+                  <PointBreakdown
+                    icon={Target}
+                    label="Guesses"
+                    value={row.guessPoints}
+                  />
+                  <PointBreakdown
+                    icon={Coins}
+                    label="Gambling"
+                    value={row.gamblingPoints}
+                  />
+                  <PointBreakdown
+                    icon={Star}
+                    label="Bonus / manual"
+                    value={row.bonusPoints}
+                  />
                 </div>
               </div>
             ))}
@@ -536,7 +682,8 @@ function PointBreakdown({
         <Icon className="h-3.5 w-3.5" /> {label}
       </span>
       <span className="font-bold text-foreground">
-        {value > 0 ? "+" : ""}{value}
+        {value > 0 ? "+" : ""}
+        {value}
       </span>
     </div>
   );
@@ -615,11 +762,17 @@ export function QuotabungaRecordingRound({
                 <Quote className="h-6 w-6 text-primary" />
                 Quotabunga Recording Round
               </CardTitle>
-              <CardDescription>{included.length} included entries</CardDescription>
+              <CardDescription>
+                {included.length} included entries
+              </CardDescription>
             </div>
             <div className="flex gap-2">
               <Button asChild size="sm" variant="outline">
-                <Link href={`/quotabunga?episodeId=${encodeURIComponent(episodeId)}`}>
+                <Link
+                  href={`/quotabunga?episodeId=${encodeURIComponent(
+                    episodeId
+                  )}`}
+                >
                   Manage round <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -628,7 +781,11 @@ export function QuotabungaRecordingRound({
                 onClick={() => setConfirming(true)}
                 size="sm"
               >
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trophy className="mr-2 h-4 w-4" />}
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trophy className="mr-2 h-4 w-4" />
+                )}
                 Award points
               </Button>
             </div>
@@ -642,7 +799,10 @@ export function QuotabungaRecordingRound({
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {included.map((submission) => (
-                <div className="space-y-3 rounded-xl border bg-muted/20 p-4" key={submission.id}>
+                <div
+                  className="space-y-3 rounded-xl border bg-muted/20 p-4"
+                  key={submission.id}
+                >
                   <div className="flex justify-between gap-3 text-xs font-bold uppercase text-muted-foreground">
                     <span>Matchup #{submission.bracketOrder ?? "—"}</span>
                     <span>{submission.user.name ?? submission.user.email}</span>
@@ -664,20 +824,29 @@ export function QuotabungaRecordingRound({
                     </a>
                   )}
                   <select
-                    aria-label={`Placement for ${submission.user.name ?? submission.sourceTitle}`}
+                    aria-label={`Placement for ${
+                      submission.user.name ?? submission.sourceTitle
+                    }`}
                     className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
                     onChange={(event) => {
                       const value = event.target.value;
                       setPlacements((current) => {
                         const next = { ...current };
                         const placement =
-                          value === "" ? null : (Number(value) as ConvexQuotePlacement);
+                          value === ""
+                            ? null
+                            : (Number(value) as ConvexQuotePlacement);
                         if (placement !== null) {
-                          Object.entries(next).forEach(([id, currentPlacement]) => {
-                            if (id !== submission.id && currentPlacement === placement) {
-                              next[id] = null;
+                          Object.entries(next).forEach(
+                            ([id, currentPlacement]) => {
+                              if (
+                                id !== submission.id &&
+                                currentPlacement === placement
+                              ) {
+                                next[id] = null;
+                              }
                             }
-                          });
+                          );
                         }
                         next[submission.id] = placement;
                         return next;
@@ -709,6 +878,7 @@ export function QuotabungaRecordingRound({
 
 function AssignmentGameCard({
   assignment,
+  audioMessages,
   disclosure,
   guesses,
   onAwardGuess,
@@ -722,6 +892,7 @@ function AssignmentGameCard({
   wagers,
 }: {
   assignment: EpisodeAssignment;
+  audioMessages: ConvexAssignmentAudioMessage[];
   disclosure: AssignmentRecordingDisclosure;
   guesses: ConvexAdminSeasonGuess[];
   onAwardGuess: (guess: ConvexAdminSeasonGuess) => void;
@@ -773,7 +944,8 @@ function AssignmentGameCard({
           <div>
             <CardTitle>{assignment.movie.title}</CardTitle>
             <CardDescription>
-              {assignment.type.replaceAll("_", " ")} · assigned by {assignment.user.name ?? "Unknown"}
+              {assignment.type.replaceAll("_", " ")} · assigned by{" "}
+              {assignment.user.name ?? "Unknown"}
             </CardDescription>
           </div>
           {assignment.slug === null ? (
@@ -781,20 +953,30 @@ function AssignmentGameCard({
           ) : (
             <Button asChild size="sm" variant="outline">
               <Link href={getAdminAssignmentPath(assignment.slug)}>
-                Manage ratings & guesses <ArrowUpRight className="ml-2 h-4 w-4" />
+                Manage ratings & guesses{" "}
+                <ArrowUpRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
           )}
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 xl:grid-cols-2">
+        <div className="xl:col-span-2">
+          <RecordingAudioMessages
+            description="Messages submitted specifically for this assignment."
+            emptyMessage="No assignment audio messages have been submitted."
+            messages={audioMessages}
+            title="Assignment audio messages"
+          />
+        </div>
         <div className="space-y-3 xl:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 font-black">
               <Star className="h-4 w-4" /> Host ratings
             </h3>
             <Badge variant={disclosure.allHostsRated ? "secondary" : "outline"}>
-              {disclosure.ratedHostCount} of {disclosure.activeHostCount} active hosts rated
+              {disclosure.ratedHostCount} of {disclosure.activeHostCount} active
+              hosts rated
             </Badge>
           </div>
           {sortedReviews.length === 0 ? (
@@ -1006,11 +1188,14 @@ function AssignmentGameCard({
             <Coins className="h-4 w-4" /> Wagers
           </h3>
           {wagers.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No wagers recorded.</p>
+            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No wagers recorded.
+            </p>
           ) : !disclosure.allHostsRated ? (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
               <p className="font-bold text-amber-700 dark:text-amber-300">
-                {wagers.length} wager{wagers.length === 1 ? "" : "s"} · {wagers.reduce((sum, wager) => sum + wager.points, 0)} point pot
+                {wagers.length} wager{wagers.length === 1 ? "" : "s"} ·{" "}
+                {wagers.reduce((sum, wager) => sum + wager.points, 0)} point pot
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {disclosure.activeHostCount === 0
@@ -1020,23 +1205,55 @@ function AssignmentGameCard({
             </div>
           ) : (
             wagers.map((wager) => {
-              const active = wager.status === "pending" || wager.status === "locked";
+              const active =
+                wager.status === "pending" || wager.status === "locked";
               return (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3" key={wager.id}>
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                  key={wager.id}
+                >
                   <div>
-                    <p className="font-bold">{wager.user.name ?? "Unnamed listener"}</p>
+                    <p className="font-bold">
+                      {wager.user.name ?? "Unnamed listener"}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {wager.points} points × {wager.gamblingType.multiplier} · {wager.gamblingType.title}
+                      {wager.points} points × {wager.gamblingType.multiplier} ·{" "}
+                      {wager.gamblingType.title}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{wager.status}</Badge>
-                    {wager.awardPoint !== null && <Badge variant="secondary">{wager.awardPoint.total} pts</Badge>}
+                    {wager.awardPoint !== null && (
+                      <Badge variant="secondary">
+                        {wager.awardPoint.total} pts
+                      </Badge>
+                    )}
                     {active && (
                       <>
-                        <Button disabled={savingKey !== null} onClick={() => onResolveWager(wager, "won")} size="sm" variant="outline">Won</Button>
-                        <Button disabled={savingKey !== null} onClick={() => onResolveWager(wager, "lost")} size="sm" variant="outline">Lost</Button>
-                        <Button disabled={savingKey !== null} onClick={() => onResolveWager(wager, "rejected")} size="sm" variant="ghost">Reject</Button>
+                        <Button
+                          disabled={savingKey !== null}
+                          onClick={() => onResolveWager(wager, "won")}
+                          size="sm"
+                          variant="outline"
+                        >
+                          Won
+                        </Button>
+                        <Button
+                          disabled={savingKey !== null}
+                          onClick={() => onResolveWager(wager, "lost")}
+                          size="sm"
+                          variant="outline"
+                        >
+                          Lost
+                        </Button>
+                        <Button
+                          disabled={savingKey !== null}
+                          onClick={() => onResolveWager(wager, "rejected")}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          Reject
+                        </Button>
                       </>
                     )}
                   </div>
@@ -1172,7 +1389,11 @@ export function ConvexRecordingManagementPage() {
   };
 
   if (data === null && loadError === null) {
-    return <div className="flex min-h-[420px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   if (loadError !== null) {
@@ -1183,7 +1404,10 @@ export function ConvexRecordingManagementPage() {
           <CardDescription>{loadError}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={refresh}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button>
+          <Button onClick={refresh}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -1196,7 +1420,9 @@ export function ConvexRecordingManagementPage() {
   const { episode } = data;
   return (
     <>
-      <Head><title>Recording Management - BBPC Admin</title></Head>
+      <Head>
+        <title>Recording Management - BBPC Admin</title>
+      </Head>
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
@@ -1204,12 +1430,16 @@ export function ConvexRecordingManagementPage() {
               <Mic2 className="h-8 w-8 text-primary" /> Recording Management
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Run episode games, award points, and watch the season standings while recording.
+              Run episode games, award points, and watch the season standings
+              while recording.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button disabled={refreshing} onClick={refresh} variant="outline">
-              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />Refresh
+              <RefreshCw
+                className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")}
+              />
+              Refresh
             </Button>
             {recordingAppUrl !== undefined && (
               <Button asChild>
@@ -1225,9 +1455,16 @@ export function ConvexRecordingManagementPage() {
           <Card>
             <CardHeader>
               <CardTitle>No episode is ready</CardTitle>
-              <CardDescription>Create or mark an episode as next before opening its recording management tools.</CardDescription>
+              <CardDescription>
+                Create or mark an episode as next before opening its recording
+                management tools.
+              </CardDescription>
             </CardHeader>
-            <CardContent><Button asChild variant="outline"><Link href="/episode">Manage episodes</Link></Button></CardContent>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link href="/episode">Manage episodes</Link>
+              </Button>
+            </CardContent>
           </Card>
         ) : (
           <>
@@ -1237,13 +1474,23 @@ export function ConvexRecordingManagementPage() {
                   <div>
                     <div className="mb-2 flex items-center gap-2">
                       <Badge>{episode.status ?? "unknown"}</Badge>
-                      <span className="text-sm text-muted-foreground">Episode {episode.number}</span>
+                      <span className="text-sm text-muted-foreground">
+                        Episode {episode.number}
+                      </span>
                     </div>
                     <CardTitle className="text-3xl">{episode.title}</CardTitle>
-                    <CardDescription>{episode.description ?? "No episode description."}</CardDescription>
+                    <CardDescription>
+                      {episode.description ?? "No episode description."}
+                    </CardDescription>
                   </div>
                   <Button asChild variant="outline">
-                    <Link href={episode.slug === null ? "/episode" : getAdminEpisodePath(episode.slug)}>
+                    <Link
+                      href={
+                        episode.slug === null
+                          ? "/episode"
+                          : getAdminEpisodePath(episode.slug)
+                      }
+                    >
                       Edit episode <ArrowUpRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
@@ -1252,36 +1499,72 @@ export function ConvexRecordingManagementPage() {
               {data.season !== null && (
                 <CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   <Gamepad2 className="h-4 w-4" />
-                  <span className="font-semibold text-foreground">{data.season.title}</span>
+                  <span className="font-semibold text-foreground">
+                    {data.season.title}
+                  </span>
                   <span>{data.season.gameType.title}</span>
                   <span>
-                    {data.season.startedOn === null ? "TBD" : formatPlainDate(data.season.startedOn)}
+                    {data.season.startedOn === null
+                      ? "TBD"
+                      : formatPlainDate(data.season.startedOn)}
                     {" – "}
-                    {data.season.endedOn === null ? "Present" : formatPlainDate(data.season.endedOn)}
+                    {data.season.endedOn === null
+                      ? "Present"
+                      : formatPlainDate(data.season.endedOn)}
                   </span>
                 </CardContent>
               )}
             </Card>
 
-            <QuotabungaRecordingRound episodeId={episode.id} onRefresh={refresh} submissions={data.submissions} />
+            <Card>
+              <CardContent className="pt-6">
+                <RecordingAudioMessages
+                  description="Messages submitted for the episode as a whole."
+                  emptyMessage="No episode audio messages have been submitted."
+                  messages={data.episodeAudioMessages}
+                  title="Episode audio messages"
+                />
+              </CardContent>
+            </Card>
+
+            <QuotabungaRecordingRound
+              episodeId={episode.id}
+              onRefresh={refresh}
+              submissions={data.submissions}
+            />
 
             <section className="space-y-4">
               <div>
                 <h2 className="text-2xl font-black">Episode games</h2>
-                <p className="text-sm text-muted-foreground">Set each host rating, resolve wagers, and award correct predictions.</p>
+                <p className="text-sm text-muted-foreground">
+                  Set each host rating, resolve wagers, and award correct
+                  predictions.
+                </p>
               </div>
               {episode.assignments.length === 0 ? (
-                <Card className="border-dashed"><CardContent className="p-6 text-sm text-muted-foreground">This episode has no assignments.</CardContent></Card>
+                <Card className="border-dashed">
+                  <CardContent className="p-6 text-sm text-muted-foreground">
+                    This episode has no assignments.
+                  </CardContent>
+                </Card>
               ) : (
                 episode.assignments.map((assignment) => (
                   <AssignmentGameCard
                     assignment={assignment}
-                    disclosure={data.disclosures[assignment.id] ?? {
-                      activeHostCount: 0,
-                      ratedHostCount: 0,
-                      allHostsRated: false,
-                    }}
-                    guesses={data.guesses.filter((guess) => guess.assignmentReview.assignment.id === assignment.id)}
+                    audioMessages={
+                      data.assignmentAudioMessages[assignment.id] ?? []
+                    }
+                    disclosure={
+                      data.disclosures[assignment.id] ?? {
+                        activeHostCount: 0,
+                        ratedHostCount: 0,
+                        allHostsRated: false,
+                      }
+                    }
+                    guesses={data.guesses.filter(
+                      (guess) =>
+                        guess.assignmentReview.assignment.id === assignment.id
+                    )}
                     key={assignment.id}
                     onAwardGuess={awardGuess}
                     onResolveWager={resolveWager}
@@ -1293,20 +1576,31 @@ export function ConvexRecordingManagementPage() {
                     reviews={data.reviews[assignment.id] ?? []}
                     savingKey={savingKey}
                     settlements={data.guessSettlements.filter(
-                      (settlement) =>
-                        settlement.assignmentId === assignment.id
+                      (settlement) => settlement.assignmentId === assignment.id
                     )}
-                    wagers={data.wagers.filter((wager) => wager.assignment?.id === assignment.id)}
+                    wagers={data.wagers.filter(
+                      (wager) => wager.assignment?.id === assignment.id
+                    )}
                   />
                 ))
               )}
             </section>
 
-            <EpisodePointsSummary assignmentPoints={data.assignmentPoints} guesses={data.guesses} users={data.users} wagers={data.wagers} />
+            <EpisodePointsSummary
+              assignmentPoints={data.assignmentPoints}
+              guesses={data.guesses}
+              users={data.users}
+              wagers={data.wagers}
+            />
           </>
         )}
 
-        <SeasonLeaderboard performance={data.performance} season={data.season} onRefresh={refresh} refreshing={refreshing} />
+        <SeasonLeaderboard
+          performance={data.performance}
+          season={data.season}
+          onRefresh={refresh}
+          refreshing={refreshing}
+        />
       </main>
     </>
   );
