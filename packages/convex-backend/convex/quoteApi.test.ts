@@ -255,6 +255,16 @@ async function insertQuote(
 
 describe("Quotabunga workflows", () => {
   test("classifies possible duplicates without treating every shared phrase as a match", () => {
+    expect(quoteSearchAnchors("Tiny")).toEqual([]);
+    expect(quoteSearchAnchors("the and you")).toEqual([
+      "and",
+      "the",
+      "you",
+    ]);
+    expect(quoteSearchAnchors("echo echo alpha")).toEqual([
+      "alpha",
+      "echo",
+    ]);
     expect(
       quoteSearchAnchors(
         "I'm gonna make him an offer he can't refuse.",
@@ -269,6 +279,42 @@ describe("Quotabunga workflows", () => {
         {
           quoteText: "Im going to make him an offer he cannot refuse",
           sourceTitle: "Godfather",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "Rock & roll forever",
+          sourceTitle: "Star Wars",
+        },
+        {
+          quoteText: "Rock and roll forever",
+          sourceTitle: "Star Wars Episode IV",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "May the Force be with you",
+          sourceTitle: "Star Wars New Hope",
+        },
+        {
+          quoteText: "May the Force be with you always",
+          sourceTitle: "Star Wars A New Hope",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "Come with me if you want to live",
+          sourceTitle: "Terminator",
+        },
+        {
+          quoteText: "Come with me if you want to live",
+          sourceTitle: "Terminatr",
         },
       ),
     ).toBe(true);
@@ -299,6 +345,18 @@ describe("Quotabunga workflows", () => {
     expect(
       quotesPossiblyMatch(
         {
+          quoteText: "I'll be back.",
+          sourceTitle: "The Terminator",
+        },
+        {
+          quoteText: "I'll be back.",
+          sourceTitle: "",
+        },
+      ),
+    ).toBe(false);
+    expect(
+      quotesPossiblyMatch(
+        {
           quoteText: "Im going to make him an offer he cannot refuse",
           sourceTitle: "",
         },
@@ -317,6 +375,30 @@ describe("Quotabunga workflows", () => {
         {
           quoteText: "I'm Batman.",
           sourceTitle: "Batman",
+        },
+      ),
+    ).toBe(false);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "Tiny",
+          sourceTitle: "Same source",
+        },
+        {
+          quoteText: "Tiny bit",
+          sourceTitle: "Same source",
+        },
+      ),
+    ).toBe(false);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "Nobody puts Baby in a corner",
+          sourceTitle: "Same source",
+        },
+        {
+          quoteText: "There is no place like home today",
+          sourceTitle: "Same source",
         },
       ),
     ).toBe(false);
@@ -419,6 +501,51 @@ describe("Quotabunga workflows", () => {
         },
       ),
     ).resolves.toEqual({ possibleMatch: false });
+  });
+
+  test("handles short quotes and historical matches without an active round", async () => {
+    const t = createTestBackend();
+    const { otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", foundation.nextEpisodeId, {
+        status: "published",
+      });
+    });
+    await insertQuote(t, {
+      userId: otherId,
+      episodeId: foundation.oldEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "May the Force be with you.",
+      sourceTitle: "Star Wars",
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        { quoteText: "Short", sourceTitle: "" },
+      ),
+    ).resolves.toEqual({ possibleMatch: false });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "May the Force be with you",
+          sourceTitle: "Star Wars",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: true });
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "May the Force be with you",
+          sourceTitle: "x".repeat(501),
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
   });
 
   test("derives member ownership and preserves open-round edit rules", async () => {
