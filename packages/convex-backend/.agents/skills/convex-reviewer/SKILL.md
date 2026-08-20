@@ -11,16 +11,16 @@ Structured review of Convex code for security, authorization, validators, perfor
 
 ## Workflow
 
-1. First pass — Security: verify all public functions check ctx.auth.getUserIdentity(), verify resource ownership before reads/writes, confirm no client-provided user IDs are trusted, confirm scheduled functions target internal.* not api.*.
-2. Second pass — Performance: confirm no .filter() on DB queries (withIndex required), verify all foreign-key fields have indexes, confirm no Date.now() in query handlers, confirm .collect() is not used on unbounded queries.
+1. First pass — Security: determine each public function's intended access policy. Require authentication only for restricted functions and ownership/membership checks only for owner- or tenant-scoped resources; public content may intentionally be anonymous. Never trust client-provided identity for authorization. Review scheduled calls to `api.*` contextually and flag them only when public reachability or authorization creates a real risk; prefer `internal.*` for non-public jobs.
+2. Second pass — Performance/reactivity: flag `.filter()` when it causes a large or unbounded scan with an indexable predicate; require foreign-key indexes only for actual lookup paths at material scale; flag unbounded `.collect()`. Review `Date.now()` in context and flag it only when time-dependent query output creates stale reactive results or cache invalidation issues.
 3. Third pass — Code quality: confirm args and returns validators on every public function, no any types, promises are awaited, arrays in documents are bounded (<8192 elements).
 4. Report findings grouped by severity; explain why each issue matters and suggest a fix.
 
 ## Rules
 
-- Flag missing auth checks as Critical — any unauthenticated public mutation is a data-loss risk.
-- Flag .filter() on DB queries as Important — it is a full table scan.
-- Flag Date.now() in query handlers as Important — it breaks reactivity.
+- Flag a missing auth/ownership check as Critical only when the specific restricted mutation can cause unauthorized access or data loss; intentional public operations are not findings.
+- Flag `.filter()` as Important only for a demonstrated large/unbounded scan or material lookup path; tiny bounded sets may warrant a suggestion or no finding.
+- Assign Date.now() severity from the concrete reactive/caching impact; it is not automatically Important.
 - Flag missing args or returns validators as Important.
-- Flag scheduling to api.* (not internal.*) as Important.
+- Flag scheduling to `api.*` as Important only when the exposed function or missing boundary creates a concrete security/correctness risk; otherwise suggest internalization without overstating severity.
 - Always explain why a change is needed, not just what to change.

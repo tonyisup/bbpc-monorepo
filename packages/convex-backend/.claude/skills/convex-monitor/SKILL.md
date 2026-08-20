@@ -7,16 +7,17 @@ description: "Watch for the next dev/prod error or request in a Convex app and r
 
 # Watch for the next thing to react to
 
-Block on the next typed event instead of polling. Races local error logs, deployment subscriptions, and Sentinel prod-error rows; returns the first to fire (or a quiet heartbeat).
+Watch the repository-supported local logs, Convex MCP logs cursor, and Sentinel prod-error rows for the next typed event; return the first to fire or a quiet heartbeat.
 
 ## Workflow
 
-1. Call `wait_for_event` with {project_dir, event_kinds, timeout_ms}.
-2. On kind=convex_error/next_error: decode and fix it. On kind=prod_error: triage (see sentinel) and fix. On kind=feature_request: build it. On kind=quiet: loop.
-3. Where a harness has no blocking MCP (e.g. Copilot cloud), the pack runs a poll loop with the SAME event contract — same behavior, different mechanism.
+1. Use a repository-registered blocking event tool only if its schema explicitly supports `{project_dir, event_kinds, timeout_ms}`. Otherwise polling is the default: read local error output, fetch Convex MCP logs with `deploymentSelector` + `cursor`, and query Sentinel only when installed.
+2. Preserve the typed contract. On kind=convex_error/next_error: decode and fix it. On kind=prod_error: triage (see sentinel) and fix. On kind=feature_request: build it. On kind=quiet: continue until the user-selected timeout.
+3. Poll no faster than once per second. While no event arrives, exponentially back off (for example 1s, 2s, 4s, 8s, capped at 30s); after processing any event, reset to the 1s minimum. Persist the logs cursor so entries are not replayed.
 
 ## Rules
 
-- Prefer the blocking tool; fall back to a poll loop only where blocking MCP is weak.
+- Never call an undefined `wait_for_event`; use it only when the repository/harness has registered the stated contract, otherwise use bounded polling.
+- Every polling loop has a minimum delay, capped exponential backoff while quiet, reset after an event, and a user-selected overall timeout.
 - The event schema is fixed and versioned — the same trigger yields the same typed event.
 - Prod events (kind=prod_error) require a deployed cloud app plus Sentinel.

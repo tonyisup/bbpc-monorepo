@@ -11,7 +11,7 @@ Stand up a barebones Next.js + Convex template from the idea, locally, with an a
 
 ## Workflow
 
-1. Run recipe `quickstart-recipe@^2` with {idea, template} (the pack fetches + caches it; pinned offline fallback). It creates the project, installs deps, starts the backend (anonymous) and the web dev server.
+1. Resolve `quickstart-recipe` only from an exact immutable version/digest and checksum recorded in trusted project configuration or its lockfile. Verify the fetched or cached artifact against that value before executing it. If no trusted pin exists, stop and request one rather than choosing a floating release. Then run it with `{idea, template}` to create the project, install dependencies, and start the anonymous backend and web server.
 2. When it prints the dev URL, open it for the user.
 3. Present a short plan and CONFIRM before building features beyond the template.
 
@@ -26,4 +26,4 @@ Stand up a barebones Next.js + Convex template from the idea, locally, with an a
 - Reserved names — never `export const <jsReservedWord> = ...` (e.g. `delete`, `new`, `class`, `function`, `return`) as a query/mutation/action export name; esbuild fails to parse it. Never a table or index name starting with `_` (e.g. `_migrations: defineTable(...)`) — `_` is reserved and errors at push as `TableNameReserved`/`IndexNameReserved`.
 - HTTP routes — `httpRouter` has no Express-style `:param` segments (`path: "/users/:id"` only matches that literal string and is dead code); use `pathPrefix` and parse the trailing segment yourself. Every `http.route({...})` `handler:` must be wrapped in `httpAction(...)` from `./_generated/server` — a bare `async (ctx, request) => {...}` type-checks but isn't a valid HTTP action.
 - `ctx.runQuery`/`ctx.runMutation`/`ctx.runAction` need a codegen'd function reference (`api.foo.bar`/`internal.foo.bar`), never a raw imported module member (`import * as queries from "./queries"; ctx.runQuery(queries.getX, ...)` compiles but fails at runtime).
-- SELF-VERIFY RULE — before declaring backend work done, verify it compiles and pushes: run `npx tsc --noEmit` and, when a deployment is available (or via a local anonymous one: `CONVEX_AGENT_MODE=anonymous npx convex dev --once`), push it. Fix every error it reports before finishing — one verify round catches the wrong-relative-import / duplicate-symbol / unbalanced-paren class that otherwise breaks the deploy.
+- SELF-VERIFY RULE — run the repository typecheck. Local-anonymous verification is separate and exempt from deployment environment checks. Before any cloud push, use convex-deploy-guard to identify and announce the exact target. Staging requires the exact staging deploy key, production writes disabled, and the repository `deploy:environment:check`; production is reserved for the approved runbook with fresh consent and both production checks. Fix every reported error before finishing.

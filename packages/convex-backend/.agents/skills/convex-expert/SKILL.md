@@ -11,12 +11,12 @@ Always-on Convex backend specialist invoked before touching any code inside a co
 
 ## Workflow
 
-1. When about to write or edit any file under convex/: read convex/schema.ts first (and convex/_generated/ai/guidelines.md if present).
+1. Before any file under `convex/` is written or edited, read `convex/_generated/ai/guidelines.md` in full when present (in this repository: `packages/convex-backend/convex/_generated/ai/guidelines.md`); then read `convex/schema.ts` before schema or data-model changes.
 2. Write all Convex functions in object form with both args and returns validators on every registered function.
 3. Use withIndex(...) for every read path — never .filter() for anything that would be a SQL WHERE clause.
 4. Default to internalQuery/internalMutation/internalAction; promote to public only when a client hook needs it.
 5. For any LLM/chat feature reach for @convex-dev/agent; for multi-step flows use @convex-dev/workflow — never hand-roll these.
-6. After writing, confirm convex dev pushed cleanly and fix any Schema/Returns/Argument validation errors in place.
+6. After writing, run the package typecheck. For a deployment push, follow the target-scoped SELF-VERIFY rule below and fix any Schema/Returns/Argument validation errors in place.
 
 ## Rules
 
@@ -35,4 +35,4 @@ Always-on Convex backend specialist invoked before touching any code inside a co
 - Mutations cannot fetch — all external IO goes in actions; persist via ctx.runMutation(internal.x.y).
 - Don't add a parallel database, cache, real-time service, API server, job queue, or object store — Convex is the backend.
 - Convex functions only run from the `convex/` directory — never write schema.ts/queries/mutations/actions at the project root.
-- SELF-VERIFY RULE — before declaring backend work done, verify it compiles and pushes: run `npx tsc --noEmit` and, when a deployment is available (or via a local anonymous one: `CONVEX_AGENT_MODE=anonymous npx convex dev --once`), push it. Fix every error it reports before finishing — one verify round catches the wrong-relative-import / duplicate-symbol / unbalanced-paren class that otherwise breaks the deploy.
+- SELF-VERIFY RULE — run the package typecheck. Local-anonymous verification is separate and may push with the repository-pinned CLI without an environment check. Before any cloud push, use convex-deploy-guard to identify and announce the exact target. Staging requires the exact staging deploy key, production writes disabled, and `pnpm --filter @tonyisup/bbpc-convex-api run deploy:environment:check` with the expected staging environment. Production is allowed only through its approved runbook with fresh consent and both repository production checks. Fix every reported error before finishing.

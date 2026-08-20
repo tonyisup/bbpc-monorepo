@@ -12,10 +12,10 @@ convex-expert carries baked, plugin-versioned knowledge — excellent for stable
 ## Workflow
 
 1. PIN the version: read the installed `convex` version (`node -p "require('./node_modules/convex/package.json').version"` or `package.json`), and the versions of any `@convex-dev/*` components in play. The docs you trust must match THESE versions — version skew is the single largest source of wrong Convex code.
-2. FRESHNESS HIERARCHY (cheapest-correct first, the Supabase-taught order):
+2. FRESHNESS HIERARCHY (cheapest-correct first):
    (a) if a served docs tool / MCP `search_convex_docs` is available, use it (it returns version-scoped, reranked answers sized to the context window);
    (b) else fetch the specific docs page as MARKDOWN — request `docs.convex.dev/<path>` and prefer a `.md`/markdown form when the site serves one (far fewer tokens than HTML), or the component's README at the pinned version;
-   (c) only then fall back to a general web search, and treat its version as unverified.
+   (c) only then fall back to a general web search, and treat its version as unverified. If a document does not identify the installed Convex/component version, verify the API against the installed package's `package.json` exports, source, or `.d.ts` before applying it; if local package evidence is unavailable, report the uncertainty and do not invent the API.
    Do NOT skip to writing the API from memory when currentness is in doubt.
 3. VERIFY against the installed package when it matters: for a component export you're unsure exists, check `node_modules/@convex-dev/<x>/` (its `package.json` `exports`, its `.d.ts`) — the installed types are the ground truth for THIS version, more authoritative than any doc.
 4. USE the fetched fact narrowly: apply the current signature/flag, cite where it came from (page + version), and hand the actual code back to convex-expert to write idiomatically. convex-docs supplies the fresh fact; convex-expert supplies the idiom.

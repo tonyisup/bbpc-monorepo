@@ -11,10 +11,11 @@ Install @convex-dev/agent for durable threads, message history, tool-calls, and 
 
 ## Workflow
 
-1. Install @convex-dev/agent + add to convex.config.ts.
-2. Define the agent (model, tools, instructions); store the LLM key via the `env` micro power.
-3. Create threads + stream messages; persist history in Convex.
-4. For RAG: embed docs into a vector index and retrieve in the tool.
+1. Before any backend edit, read `convex/_generated/ai/guidelines.md` in full when present (in this repository: `packages/convex-backend/convex/_generated/ai/guidelines.md`), or delegate all `convex/` changes to convex-expert, which must read it first.
+2. Install @convex-dev/agent + add to convex.config.ts.
+3. Define the agent (model, tools, instructions); store the LLM key via the `env` micro power.
+4. Create threads + stream messages; persist history in Convex.
+5. For RAG: embed docs into a vector index and retrieve in the tool.
 
 ## Rules
 

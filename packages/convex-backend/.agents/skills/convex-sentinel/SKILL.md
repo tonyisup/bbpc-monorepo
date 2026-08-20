@@ -7,7 +7,7 @@ description: "Set up Sentinel production error capture in your own Convex deploy
 
 # Capture production errors in your own deployment
 
-Install `@convex-dev/sentinel` to capture production errors (server function failures, client JS/React crashes, OCC and scale signals) into a table in the user's OWN deployment, redacted at write time, then react to new ones. Data never leaves the user's deployment.
+Install `@convex-dev/sentinel` to store production errors in the user's own deployment, redacted at write time, then react to new ones. Storage stays in that deployment; when an agent reads evidence, the minimized/redacted content may be transmitted to the configured model provider and requires explicit user consent for that provider boundary.
 
 ## Workflow
 
@@ -15,11 +15,12 @@ Install `@convex-dev/sentinel` to capture production errors (server function fai
 2. Wire the client SDK: a React error boundary plus `window.onerror`/`unhandledrejection` and breadcrumbs.
 3. Redaction runs at write time and is on by default (default-deny on secret key names and value patterns).
 4. Read recent errors with the Convex CLI (`convex data`, `run-once-query`); react to new ones via the monitor's `prod_error` event.
-5. Optionally enable the self-healing cron: `triage` classifies each error and, for recurring non-transient ones, hands it to ai-runner to open a fix PR.
+5. Optionally enable the self-healing cron only after convex-self-heal's guard is installed and approved. ai-runner may prepare branch-only repairs after triage, certification, and append-only audit logging; it never merges or deploys, and a human retains the merge boundary.
 
 ## Rules
 
 - Redaction is mandatory and on by default — never store raw secrets; the agent's reads reach the model provider.
-- Data stays in the user's deployment; never send it to a third party.
+- Error storage stays in the user's deployment. Before an agent/model reads it, obtain consent for the configured model provider and transmit only redacted, minimized evidence; do not imply that model processing remains inside Convex.
+- ai-runner requires the convex-self-heal guard: branch-only repair, full certification, append-only auditing, and human merge are mandatory.
 - Sample and cap to control volume and cost.
 - Capturing PROD errors needs a deployed cloud app; install works anonymously.
