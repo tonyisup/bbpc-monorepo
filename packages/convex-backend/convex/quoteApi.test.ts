@@ -16,6 +16,10 @@ import {
   validateQuoteStatus,
   validateQuoteTimestamp,
 } from "./games/quoteWriteModel.js";
+import {
+  quoteSearchAnchors,
+  quotesPossiblyMatch,
+} from "./games/quoteSimilarity.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -222,6 +226,7 @@ async function insertQuote(
     pointId?: Id<"points">;
     createdAt?: number;
     quoteText?: string;
+    sourceTitle?: string;
   },
 ): Promise<Id<"quoteSubmissions">> {
   return await t.run(async (ctx) => {
@@ -230,7 +235,7 @@ async function insertQuote(
       episodeId: input.episodeId,
       seasonId: input.seasonId,
       quoteText: input.quoteText ?? "Synthetic quote",
-      sourceTitle: "Synthetic source",
+      sourceTitle: input.sourceTitle ?? "Synthetic source",
       sourceType: "MOVIE",
       status: input.status ?? "SUBMITTED",
       ...(input.bracketOrder === undefined
@@ -249,6 +254,175 @@ async function insertQuote(
 }
 
 describe("Quotabunga workflows", () => {
+  test("returns no search anchors for quotes below the minimum length", () => {
+    expect(quoteSearchAnchors("Tiny")).toEqual([]);
+  });
+
+  test("falls back to stop words when a quote has no meaningful anchor", () => {
+    expect(quoteSearchAnchors("the and you")).toEqual([
+      "and",
+      "the",
+      "you",
+    ]);
+  });
+
+  test("deduplicates repeated quote search anchors", () => {
+    expect(quoteSearchAnchors("echo echo alpha")).toEqual([
+      "alpha",
+      "echo",
+    ]);
+  });
+
+  test("sorts and limits meaningful quote search anchors", () => {
+    expect(
+      quoteSearchAnchors(
+        "I'm gonna make him an offer he can't refuse.",
+      ),
+    ).toEqual(["refuse", "gonna", "offer"]);
+  });
+
+  test.each([
+    {
+      label: "matches normalized wording from the same movie",
+      submitted: {
+        quoteText: "I'm gonna make him an offer he can't refuse.",
+        sourceTitle: "The Godfather",
+      },
+      candidate: {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "Godfather",
+      },
+      expected: true,
+    },
+    {
+      label: "normalizes ampersands in otherwise equal quotes",
+      submitted: {
+        quoteText: "Rock & roll forever",
+        sourceTitle: "Star Wars",
+      },
+      candidate: {
+        quoteText: "Rock and roll forever",
+        sourceTitle: "Star Wars Episode IV",
+      },
+      expected: true,
+    },
+    {
+      label: "matches a contained quote with a fuzzy source title",
+      submitted: {
+        quoteText: "May the Force be with you",
+        sourceTitle: "Star Wars New Hope",
+      },
+      candidate: {
+        quoteText: "May the Force be with you always",
+        sourceTitle: "Star Wars A New Hope",
+      },
+      expected: true,
+    },
+    {
+      label: "tolerates a small source-title typo",
+      submitted: {
+        quoteText: "Come with me if you want to live",
+        sourceTitle: "Terminator",
+      },
+      candidate: {
+        quoteText: "Come with me if you want to live",
+        sourceTitle: "Terminatr",
+      },
+      expected: true,
+    },
+    {
+      label: "normalizes punctuation and leading source articles",
+      submitted: {
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      },
+      candidate: {
+        quoteText: "Ill be back",
+        sourceTitle: "Terminator",
+      },
+      expected: true,
+    },
+    {
+      label: "rejects equal quotes from different submitted sources",
+      submitted: {
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      },
+      candidate: {
+        quoteText: "I'll be back.",
+        sourceTitle: "Last Action Hero",
+      },
+      expected: false,
+    },
+    {
+      label: "rejects a blank candidate source when submitted source is set",
+      submitted: {
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      },
+      candidate: {
+        quoteText: "I'll be back.",
+        sourceTitle: "",
+      },
+      expected: false,
+    },
+    {
+      label: "skips the source gate when the submitted source is blank",
+      submitted: {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "",
+      },
+      candidate: {
+        quoteText: "I'm gonna make him an offer he can't refuse.",
+        sourceTitle: "The Godfather",
+      },
+      expected: true,
+    },
+    {
+      label: "rejects unrelated quotes that share a source",
+      submitted: {
+        quoteText: "This town needs an enema.",
+        sourceTitle: "Batman",
+      },
+      candidate: {
+        quoteText: "I'm Batman.",
+        sourceTitle: "Batman",
+      },
+      expected: false,
+    },
+    {
+      label: "rejects quote text below the minimum length",
+      submitted: {
+        quoteText: "Tiny",
+        sourceTitle: "Same source",
+      },
+      candidate: {
+        quoteText: "Tiny bit",
+        sourceTitle: "Same source",
+      },
+      expected: false,
+    },
+    {
+      label: "rejects unrelated comparable-length quotes",
+      submitted: {
+        quoteText: "Nobody puts Baby in a corner",
+        sourceTitle: "Same source",
+      },
+      candidate: {
+        quoteText: "There is no place like home today",
+        sourceTitle: "Same source",
+      },
+      expected: false,
+    },
+  ])("$label", ({ submitted, candidate, expected }) => {
+    expect(
+      quotesPossiblyMatch(
+        submitted,
+        candidate,
+      ),
+    ).toBe(expected);
+  });
+
   test("validates canonical quote-domain boundaries", async () => {
     expect(validateQuoteAdminNotes("   ")).toBeUndefined();
     expect(validateQuoteSourceType("TV")).toBe("TV");
@@ -271,6 +445,126 @@ describe("Quotabunga workflows", () => {
         "VALIDATION_FAILED",
       );
     }
+  });
+
+  test("returns only a warning verdict for another listener's possible duplicate", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await insertQuote(t, {
+      userId: otherId,
+      episodeId: foundation.oldEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'm gonna make him an offer he can't refuse.",
+      sourceTitle: "The Godfather",
+    });
+
+    await expectDomainError(
+      t.query(api.games.quotes.checkPossibleDuplicate, {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "Godfather",
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: true });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: true });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Leave the gun. Take the cannoli.",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: false });
+
+    expect(memberId).not.toBe(otherId);
+  });
+
+  test("does not flag a listener's own current entry while they edit it", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.nextEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'll be back.",
+      sourceTitle: "The Terminator",
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Ill be back",
+          sourceTitle: "Terminator",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: false });
+  });
+
+  test("handles short quotes and historical matches without an active round", async () => {
+    const t = createTestBackend();
+    const { otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", foundation.nextEpisodeId, {
+        status: "published",
+      });
+    });
+    await insertQuote(t, {
+      userId: otherId,
+      episodeId: foundation.oldEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "May the Force be with you.",
+      sourceTitle: "Star Wars",
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        { quoteText: "Short", sourceTitle: "" },
+      ),
+    ).resolves.toEqual({ possibleMatch: false });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "May the Force be with you",
+          sourceTitle: "Star Wars",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: true });
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "May the Force be with you",
+          sourceTitle: "x".repeat(501),
+        },
+      ),
+      "VALIDATION_FAILED",
+    );
   });
 
   test("derives member ownership and preserves open-round edit rules", async () => {

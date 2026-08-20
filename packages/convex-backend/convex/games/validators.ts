@@ -270,6 +270,10 @@ export const currentQuoteSubmissionValidator = v.object({
   ),
 });
 
+export const quoteSimilarityResultValidator = v.object({
+  possibleMatch: v.boolean(),
+});
+
 export const quoteAdminUserValidator = v.object({
   id: v.id("users"),
   name: nullableStringValidator,

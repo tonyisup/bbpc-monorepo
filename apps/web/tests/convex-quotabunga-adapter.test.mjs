@@ -15,6 +15,7 @@ const [participation, component, adapter] = await Promise.all([
 test("Convex Quotabunga uses authenticated owner-derived functions", () => {
   for (const name of [
     "games/quotes:currentForMe",
+    "games/quotes:checkPossibleDuplicate",
     "games/quotes:submitMine",
     "games/quotes:withdrawMine",
   ]) {
@@ -23,6 +24,7 @@ test("Convex Quotabunga uses authenticated owner-derived functions", () => {
   assert.doesNotMatch(adapter, /userId/u);
   assert.match(adapter, /BBPC_CLIENT_API_VERSION/u);
   assert.match(adapter, /currentQuoteSubmissionSchema\.parse/u);
+  assert.match(adapter, /possibleQuoteDuplicateSchema\.parse/u);
   assert.match(adapter, /quoteSubmissionSchema\.parse/u);
   assert.match(adapter, /getPacificTodayPlainDate/u);
 });

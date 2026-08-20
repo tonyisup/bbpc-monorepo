@@ -2,6 +2,7 @@
 
 import { useConvex } from "convex/react";
 import {
+  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   Loader2,
@@ -14,6 +15,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   type ConvexCurrentQuoteSubmission,
   type ConvexQuoteSourceType,
+  checkConvexQuotabungaDuplicate,
   loadConvexQuotabunga,
   submitConvexQuotabunga,
   withdrawConvexQuotabunga,
@@ -31,6 +34,10 @@ import {
 import { getConvexDomainErrorCode } from "@/convex/identity";
 import { useAdminCollapse } from "@/hooks/useAdminCollapse";
 import { cn } from "@/lib/utils";
+
+const QUOTE_DUPLICATE_CHECK_DELAY_MS = 500;
+const QUOTE_DUPLICATE_REFRESH_INTERVAL_MS = 30_000;
+const MIN_QUOTE_DUPLICATE_CHECK_LENGTH = 8;
 
 function operationError(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -58,6 +65,21 @@ function sourceTypeLabel(sourceType: ConvexQuoteSourceType) {
   }
 }
 
+function DuplicateStatusPanel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
+      role="status"
+    >
+      <AlertTriangle
+        className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
+        aria-hidden="true"
+      />
+      <p>{children}</p>
+    </div>
+  );
+}
+
 export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
   const convex = useConvex();
   const [current, setCurrent] = useState<ConvexCurrentQuoteSubmission | null>(
@@ -74,11 +96,24 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
   const [clipUrl, setClipUrl] = useState("");
   const [clipStartSeconds, setClipStartSeconds] = useState("");
   const [listenerNotes, setListenerNotes] = useState("");
+  const [duplicateCheck, setDuplicateCheck] = useState<{
+    inputKey: string;
+    status: "ready" | "unavailable";
+    possibleMatch?: boolean;
+  } | null>(null);
   const loadGenerationRef = useRef(0);
   const { isAdminCollapsed, isContentVisible, headerProps } =
     useAdminCollapse(isAdmin);
 
   const submission = current?.submission ?? null;
+  const duplicateInputKey = `${quoteText.trim()}\u0000${sourceTitle.trim()}`;
+  const hasPossibleDuplicate =
+    duplicateCheck?.inputKey === duplicateInputKey &&
+    duplicateCheck.status === "ready" &&
+    duplicateCheck.possibleMatch;
+  const isDuplicateCheckUnavailable =
+    duplicateCheck?.inputKey === duplicateInputKey &&
+    duplicateCheck.status === "unavailable";
 
   const resetForm = useCallback(() => {
     setQuoteText("");
@@ -130,6 +165,57 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     setListenerNotes(submission.listenerNotes ?? "");
     setIsEditing(false);
   }, [resetForm, submission]);
+
+  useEffect(() => {
+    const normalizedQuote = quoteText.trim();
+    const normalizedSource = sourceTitle.trim();
+    if (
+      !isEditing ||
+      current?.isOpen !== true ||
+      normalizedQuote.length < MIN_QUOTE_DUPLICATE_CHECK_LENGTH
+    ) {
+      return;
+    }
+    const inputKey = `${normalizedQuote}\u0000${normalizedSource}`;
+    let cancelled = false;
+    let isCheckInFlight = false;
+    const runDuplicateCheck = () => {
+      if (isCheckInFlight) {
+        return;
+      }
+      isCheckInFlight = true;
+      void checkConvexQuotabungaDuplicate(convex, {
+        quoteText: normalizedQuote,
+        sourceTitle: normalizedSource,
+      })
+        .then((result) => {
+          if (!cancelled) {
+            setDuplicateCheck({ inputKey, status: "ready", ...result });
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDuplicateCheck({ inputKey, status: "unavailable" });
+          }
+        })
+        .finally(() => {
+          isCheckInFlight = false;
+        });
+    };
+    const timeout = window.setTimeout(
+      runDuplicateCheck,
+      QUOTE_DUPLICATE_CHECK_DELAY_MS
+    );
+    const interval = window.setInterval(
+      runDuplicateCheck,
+      QUOTE_DUPLICATE_REFRESH_INTERVAL_MS
+    );
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+      window.clearInterval(interval);
+    };
+  }, [convex, current?.isOpen, isEditing, quoteText, sourceTitle]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -386,6 +472,20 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
                   </select>
                 </div>
               </div>
+
+              {hasPossibleDuplicate ? (
+                <DuplicateStatusPanel>
+                  <span className="font-semibold">Possible duplicate.</span>{" "}
+                  A similar quote may have been submitted before. You can still submit it, but duplicate entries may be judged less favorably.
+                </DuplicateStatusPanel>
+              ) : null}
+
+              {isDuplicateCheckUnavailable ? (
+                <DuplicateStatusPanel>
+                  <span className="font-semibold">Couldn&apos;t check for duplicates.</span>{" "}
+                  You can still submit, but it may be judged less favorably if a similar quote was already entered.
+                </DuplicateStatusPanel>
+              ) : null}
 
               <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
                 <div className="space-y-2">
