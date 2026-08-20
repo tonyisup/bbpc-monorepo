@@ -38,11 +38,21 @@ const currentQuoteSubmissionSchema = z.object({
   submission: quoteSubmissionSchema.nullable(),
 });
 
+const possibleQuoteDuplicateSchema = z.object({
+  possibleMatch: z.boolean(),
+});
+
 const currentForMeReference = makeFunctionReference<
   "query",
   Record<string, never>,
   unknown
 >("games/quotes:currentForMe");
+
+const checkPossibleDuplicateReference = makeFunctionReference<
+  "query",
+  { quoteText: string; sourceTitle: string },
+  unknown
+>("games/quotes:checkPossibleDuplicate");
 
 const submitMineReference = makeFunctionReference<
   "mutation",
@@ -85,6 +95,15 @@ export interface ConvexQuoteSubmissionInput {
 export async function loadConvexQuotabunga(client: ConvexReactClient) {
   return currentQuoteSubmissionSchema.parse(
     await client.query(currentForMeReference, {})
+  );
+}
+
+export async function checkConvexQuotabungaDuplicate(
+  client: ConvexReactClient,
+  input: { quoteText: string; sourceTitle: string }
+) {
+  return possibleQuoteDuplicateSchema.parse(
+    await client.query(checkPossibleDuplicateReference, input)
   );
 }
 
