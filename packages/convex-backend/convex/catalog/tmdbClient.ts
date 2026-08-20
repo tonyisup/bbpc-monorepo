@@ -212,9 +212,9 @@ async function fetchTmdb(url: URL): Promise<unknown> {
 export function prepareTmdbSearchInput(
   rawQuery: string,
   page: number,
-): { query: string | null; page: number } {
-  const query = rawQuery.trim().normalize("NFKC");
-  if (query.length > MAX_TMDB_QUERY_LENGTH) {
+): { query: string | null; page: number; year: number | null } {
+  const normalizedQuery = rawQuery.trim().normalize("NFKC");
+  if (normalizedQuery.length > MAX_TMDB_QUERY_LENGTH) {
     domainError(
       "VALIDATION_FAILED",
       `TMDB query cannot exceed ${String(MAX_TMDB_QUERY_LENGTH)} characters.`,
@@ -230,9 +230,27 @@ export function prepareTmdbSearchInput(
       `TMDB page must be an integer from 1 through ${String(MAX_TMDB_PAGE)}.`,
     );
   }
+  const yearFilters = [
+    ...normalizedQuery.matchAll(/(?:^|\s)y:(\d{4})(?=\s|$)/giu),
+  ].map((match) => Number(match[1]));
+  const distinctYears = new Set(yearFilters);
+  if (
+    yearFilters.some((year) => year < 1_000 || year > 9_999) ||
+    distinctYears.size > 1
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      "TMDB year filters must specify one year from 1000 through 9999.",
+    );
+  }
+  const query = normalizedQuery
+    .replace(/(?:^|\s)y:\d{4}(?=\s|$)/giu, " ")
+    .trim()
+    .replace(/\s+/gu, " ");
   return {
     query: query.length === 0 ? null : query,
     page,
+    year: yearFilters[0] ?? null,
   };
 }
 
@@ -255,7 +273,7 @@ export async function searchTmdb(
   rawQuery: string,
   rawPage: number,
 ): Promise<TmdbSearchResponse> {
-  const { query, page } = prepareTmdbSearchInput(
+  const { query, page, year } = prepareTmdbSearchInput(
     rawQuery,
     rawPage,
   );
@@ -269,6 +287,9 @@ export async function searchTmdb(
   url.searchParams.set("language", "en-US");
   url.searchParams.set("query", query);
   url.searchParams.set("page", String(page));
+  if (year !== null) {
+    url.searchParams.set("year", String(year));
+  }
   const payload = await fetchTmdb(url);
   if (!isRecord(payload) || !Array.isArray(payload.results)) {
     domainError(
