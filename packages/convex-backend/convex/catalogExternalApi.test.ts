@@ -198,6 +198,7 @@ describe("authenticated TMDB catalog actions", () => {
       pathname?: string;
       query?: string | null;
       page?: string | null;
+      year?: string | null;
       hasSignal?: boolean;
       accept?: string | null;
     } = {};
@@ -220,6 +221,7 @@ describe("authenticated TMDB catalog actions", () => {
         requestEvidence.pathname = url.pathname;
         requestEvidence.query = url.searchParams.get("query");
         requestEvidence.page = url.searchParams.get("page");
+        requestEvidence.year = url.searchParams.get("year");
         requestEvidence.hasSignal = init?.signal !== undefined;
         requestEvidence.accept = new Headers(
           init?.headers,
@@ -257,9 +259,41 @@ describe("authenticated TMDB catalog actions", () => {
       pathname: "/3/search/movie",
       query: "Arrival",
       page: "3",
+      year: null,
       hasSignal: true,
       accept: "application/json",
     });
+  });
+
+  test("translates TMDB year modifiers into API filters", async () => {
+    const t = createTestBackend();
+    await seedUser(t);
+    let requestQuery = "";
+    let requestYear: string | null = null;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        requestQuery = url.searchParams.get("query") ?? "";
+        requestYear = url.searchParams.get("year");
+        return jsonResponse({
+          page: 1,
+          results: [validMovie(1)],
+        });
+      }),
+    );
+
+    await expect(
+      t.withIdentity(USER_IDENTITY).action(
+        api.catalog.external.searchMovies,
+        { query: "  Imposter   y:2001  " },
+      ),
+    ).resolves.toMatchObject({
+      page: 1,
+      results: [{ id: 1 }],
+    });
+    expect(requestQuery).toBe("Imposter");
+    expect(requestYear).toBe("2001");
   });
 
   test("maps show search fields and falls back to the requested page", async () => {
@@ -386,6 +420,8 @@ describe("authenticated TMDB catalog actions", () => {
       { query: "movie", page: 0 },
       { query: "movie", page: 1.5 },
       { query: "movie", page: 501 },
+      { query: "movie y:0999", page: 1 },
+      { query: "movie y:2001 y:2002", page: 1 },
     ]) {
       await expectDomainError(
         t.withIdentity(USER_IDENTITY).action(
