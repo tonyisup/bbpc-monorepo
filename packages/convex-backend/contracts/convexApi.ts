@@ -7495,6 +7495,12 @@ export type PublicApiType = {
           userId: Id<"users">;
         }
       >;
+      checkPossibleDuplicate: FunctionReference<
+        "query",
+        "public",
+        { quoteText: string; sourceTitle: string },
+        { possibleMatch: boolean }
+      >;
       currentForMe: FunctionReference<
         "query",
         "public",
