@@ -464,6 +464,12 @@ identity, and the mutation upserts at most one submission per user and episode. 
 submissions cannot be edited or withdrawn. Member responses expose the public quote
 fields and score state but never administrator notes.
 
+While a member enters a quote, `games.quotes.checkPossibleDuplicate` performs a bounded
+full-text candidate search and returns only whether a similar prior submission may
+exist. The advisory check accepts an optional source title, excludes the member's own
+current submission, and never prevents a submission when it finds a possible match or
+is temporarily unavailable.
+
 Administrator operations provide bounded episode selectors, exact and per-episode reads,
 submission creation and correction, moderation, seeded bracket ordering, placement
 awards, and deletion. Only `INCLUDED` submissions can be randomized or awarded.
