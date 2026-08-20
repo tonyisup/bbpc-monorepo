@@ -274,25 +274,29 @@ export const checkPossibleDuplicate = authenticatedQuery({
     const searchQueries = [
       ...new Set([anchors.join(" "), ...anchors]),
     ];
-    const candidateGroups = await Promise.all(
-      searchQueries.map(async (searchQuery) => {
-        return await ctx.db
-          .query("quoteSubmissions")
-          .withSearchIndex("search_quoteText", (search) =>
-            search.search("quoteText", searchQuery),
-          )
-          .take(MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH);
-      }),
-    );
-    const currentEpisode = await findSubmissionEpisode(ctx, ["next"]);
-    const ownCurrentSubmission =
-      currentEpisode === null
+    const ownCurrentSubmissionPromise = (async () => {
+      const currentEpisode = await findSubmissionEpisode(ctx, ["next"]);
+      return currentEpisode === null
         ? null
         : await findQuoteForEpisodeUser(
             ctx,
             currentEpisode._id,
             ctx.actor.user._id,
           );
+    })();
+    const [candidateGroups, ownCurrentSubmission] = await Promise.all([
+      Promise.all(
+        searchQueries.map(async (searchQuery) => {
+          return await ctx.db
+            .query("quoteSubmissions")
+            .withSearchIndex("search_quoteText", (search) =>
+              search.search("quoteText", searchQuery),
+            )
+            .take(MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH);
+        }),
+      ),
+      ownCurrentSubmissionPromise,
+    ]);
     const candidates = new Map(
       candidateGroups
         .flat()

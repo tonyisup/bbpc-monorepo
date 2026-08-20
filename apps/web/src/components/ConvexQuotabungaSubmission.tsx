@@ -15,6 +15,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { toast } from "sonner";
 
@@ -62,6 +63,21 @@ function sourceTypeLabel(sourceType: ConvexQuoteSourceType) {
     default:
       return "Other";
   }
+}
+
+function DuplicateStatusPanel({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
+      role="status"
+    >
+      <AlertTriangle
+        className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
+        aria-hidden="true"
+      />
+      <p>{children}</p>
+    </div>
+  );
 }
 
 export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
@@ -458,40 +474,17 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
               </div>
 
               {hasPossibleDuplicate ? (
-                <div
-                  className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
-                  role="status"
-                >
-                  <AlertTriangle
-                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
-                    aria-hidden="true"
-                  />
-                  <p>
-                    <span className="font-semibold">Possible duplicate.</span>{" "}
-                    A similar quote may have been submitted before. You can
-                    still submit it, but duplicate entries may be judged less
-                    favorably.
-                  </p>
-                </div>
+                <DuplicateStatusPanel>
+                  <span className="font-semibold">Possible duplicate.</span>{" "}
+                  A similar quote may have been submitted before. You can still submit it, but duplicate entries may be judged less favorably.
+                </DuplicateStatusPanel>
               ) : null}
 
               {isDuplicateCheckUnavailable ? (
-                <div
-                  className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
-                  role="status"
-                >
-                  <AlertTriangle
-                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
-                    aria-hidden="true"
-                  />
-                  <p>
-                    <span className="font-semibold">
-                      Couldn&apos;t check for duplicates.
-                    </span>{" "}
-                    You can still submit, but it may be judged less favorably
-                    if a similar quote was already entered.
-                  </p>
-                </div>
+                <DuplicateStatusPanel>
+                  <span className="font-semibold">Couldn&apos;t check for duplicates.</span>{" "}
+                  You can still submit, but it may be judged less favorably if a similar quote was already entered.
+                </DuplicateStatusPanel>
               ) : null}
 
               <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev --port 3000",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs && vitest run --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "start": "next start"
@@ -64,6 +64,7 @@
     "@types/prettier": "^2.7.2",
     "@types/react": "18.3.27",
     "@types/react-dom": "18.3.7",
+    "@types/react-test-renderer": "18.3.1",
     "@typescript-eslint/eslint-plugin": "^5.33.0",
     "@typescript-eslint/parser": "^5.33.0",
     "autoprefixer": "^10.4.7",
@@ -72,8 +73,10 @@
     "postcss": "8.5.25",
     "prettier": "^2.8.1",
     "prettier-plugin-tailwindcss": "^0.2.1",
+    "react-test-renderer": "18.3.1",
     "tailwindcss": "^3.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "3.2.7"
   },
   "ct3aMetadata": {
     "initVersion": "6.12.0"

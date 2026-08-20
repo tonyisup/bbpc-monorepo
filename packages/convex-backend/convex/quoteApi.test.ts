@@ -254,154 +254,173 @@ async function insertQuote(
 }
 
 describe("Quotabunga workflows", () => {
-  test("classifies possible duplicates without treating every shared phrase as a match", () => {
+  test("returns no search anchors for quotes below the minimum length", () => {
     expect(quoteSearchAnchors("Tiny")).toEqual([]);
+  });
+
+  test("falls back to stop words when a quote has no meaningful anchor", () => {
     expect(quoteSearchAnchors("the and you")).toEqual([
       "and",
       "the",
       "you",
     ]);
+  });
+
+  test("deduplicates repeated quote search anchors", () => {
     expect(quoteSearchAnchors("echo echo alpha")).toEqual([
       "alpha",
       "echo",
     ]);
+  });
+
+  test("sorts and limits meaningful quote search anchors", () => {
     expect(
       quoteSearchAnchors(
         "I'm gonna make him an offer he can't refuse.",
       ),
     ).toEqual(["refuse", "gonna", "offer"]);
+  });
+
+  test.each([
+    {
+      label: "matches normalized wording from the same movie",
+      submitted: {
+        quoteText: "I'm gonna make him an offer he can't refuse.",
+        sourceTitle: "The Godfather",
+      },
+      candidate: {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "Godfather",
+      },
+      expected: true,
+    },
+    {
+      label: "normalizes ampersands in otherwise equal quotes",
+      submitted: {
+        quoteText: "Rock & roll forever",
+        sourceTitle: "Star Wars",
+      },
+      candidate: {
+        quoteText: "Rock and roll forever",
+        sourceTitle: "Star Wars Episode IV",
+      },
+      expected: true,
+    },
+    {
+      label: "matches a contained quote with a fuzzy source title",
+      submitted: {
+        quoteText: "May the Force be with you",
+        sourceTitle: "Star Wars New Hope",
+      },
+      candidate: {
+        quoteText: "May the Force be with you always",
+        sourceTitle: "Star Wars A New Hope",
+      },
+      expected: true,
+    },
+    {
+      label: "tolerates a small source-title typo",
+      submitted: {
+        quoteText: "Come with me if you want to live",
+        sourceTitle: "Terminator",
+      },
+      candidate: {
+        quoteText: "Come with me if you want to live",
+        sourceTitle: "Terminatr",
+      },
+      expected: true,
+    },
+    {
+      label: "normalizes punctuation and leading source articles",
+      submitted: {
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      },
+      candidate: {
+        quoteText: "Ill be back",
+        sourceTitle: "Terminator",
+      },
+      expected: true,
+    },
+    {
+      label: "rejects equal quotes from different submitted sources",
+      submitted: {
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      },
+      candidate: {
+        quoteText: "I'll be back.",
+        sourceTitle: "Last Action Hero",
+      },
+      expected: false,
+    },
+    {
+      label: "rejects a blank candidate source when submitted source is set",
+      submitted: {
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      },
+      candidate: {
+        quoteText: "I'll be back.",
+        sourceTitle: "",
+      },
+      expected: false,
+    },
+    {
+      label: "skips the source gate when the submitted source is blank",
+      submitted: {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "",
+      },
+      candidate: {
+        quoteText: "I'm gonna make him an offer he can't refuse.",
+        sourceTitle: "The Godfather",
+      },
+      expected: true,
+    },
+    {
+      label: "rejects unrelated quotes that share a source",
+      submitted: {
+        quoteText: "This town needs an enema.",
+        sourceTitle: "Batman",
+      },
+      candidate: {
+        quoteText: "I'm Batman.",
+        sourceTitle: "Batman",
+      },
+      expected: false,
+    },
+    {
+      label: "rejects quote text below the minimum length",
+      submitted: {
+        quoteText: "Tiny",
+        sourceTitle: "Same source",
+      },
+      candidate: {
+        quoteText: "Tiny bit",
+        sourceTitle: "Same source",
+      },
+      expected: false,
+    },
+    {
+      label: "rejects unrelated comparable-length quotes",
+      submitted: {
+        quoteText: "Nobody puts Baby in a corner",
+        sourceTitle: "Same source",
+      },
+      candidate: {
+        quoteText: "There is no place like home today",
+        sourceTitle: "Same source",
+      },
+      expected: false,
+    },
+  ])("$label", ({ submitted, candidate, expected }) => {
     expect(
       quotesPossiblyMatch(
-        {
-          quoteText: "I'm gonna make him an offer he can't refuse.",
-          sourceTitle: "The Godfather",
-        },
-        {
-          quoteText: "Im going to make him an offer he cannot refuse",
-          sourceTitle: "Godfather",
-        },
+        submitted,
+        candidate,
       ),
-    ).toBe(true);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "Rock & roll forever",
-          sourceTitle: "Star Wars",
-        },
-        {
-          quoteText: "Rock and roll forever",
-          sourceTitle: "Star Wars Episode IV",
-        },
-      ),
-    ).toBe(true);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "May the Force be with you",
-          sourceTitle: "Star Wars New Hope",
-        },
-        {
-          quoteText: "May the Force be with you always",
-          sourceTitle: "Star Wars A New Hope",
-        },
-      ),
-    ).toBe(true);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "Come with me if you want to live",
-          sourceTitle: "Terminator",
-        },
-        {
-          quoteText: "Come with me if you want to live",
-          sourceTitle: "Terminatr",
-        },
-      ),
-    ).toBe(true);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "I'll be back.",
-          sourceTitle: "The Terminator",
-        },
-        {
-          quoteText: "Ill be back",
-          sourceTitle: "Terminator",
-        },
-      ),
-    ).toBe(true);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "I'll be back.",
-          sourceTitle: "The Terminator",
-        },
-        {
-          quoteText: "I'll be back.",
-          sourceTitle: "Last Action Hero",
-        },
-      ),
-    ).toBe(false);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "I'll be back.",
-          sourceTitle: "The Terminator",
-        },
-        {
-          quoteText: "I'll be back.",
-          sourceTitle: "",
-        },
-      ),
-    ).toBe(false);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "Im going to make him an offer he cannot refuse",
-          sourceTitle: "",
-        },
-        {
-          quoteText: "I'm gonna make him an offer he can't refuse.",
-          sourceTitle: "The Godfather",
-        },
-      ),
-    ).toBe(true);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "This town needs an enema.",
-          sourceTitle: "Batman",
-        },
-        {
-          quoteText: "I'm Batman.",
-          sourceTitle: "Batman",
-        },
-      ),
-    ).toBe(false);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "Tiny",
-          sourceTitle: "Same source",
-        },
-        {
-          quoteText: "Tiny bit",
-          sourceTitle: "Same source",
-        },
-      ),
-    ).toBe(false);
-    expect(
-      quotesPossiblyMatch(
-        {
-          quoteText: "Nobody puts Baby in a corner",
-          sourceTitle: "Same source",
-        },
-        {
-          quoteText: "There is no place like home today",
-          sourceTitle: "Same source",
-        },
-      ),
-    ).toBe(false);
+    ).toBe(expected);
   });
 
   test("validates canonical quote-domain boundaries", async () => {

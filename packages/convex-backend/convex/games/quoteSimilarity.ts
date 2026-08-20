@@ -132,41 +132,52 @@ export function quoteSearchAnchors(value: string): string[] {
     .slice(0, MAX_QUOTE_SEARCH_ANCHORS);
 }
 
+// Only a nonblank submitted title gates matching against the stored candidate.
 export function quotesPossiblyMatch(
-  left: { quoteText: string; sourceTitle: string },
-  right: { quoteText: string; sourceTitle: string },
+  submitted: { quoteText: string; sourceTitle: string },
+  candidate: { quoteText: string; sourceTitle: string },
 ): boolean {
   if (
-    left.sourceTitle.trim().length > 0 &&
-    !sourceTitlesPossiblyMatch(left.sourceTitle, right.sourceTitle)
+    submitted.sourceTitle.trim().length > 0 &&
+    !sourceTitlesPossiblyMatch(
+      submitted.sourceTitle,
+      candidate.sourceTitle,
+    )
   ) {
     return false;
   }
-  const normalizedLeft = normalizeSimilarityText(left.quoteText);
-  const normalizedRight = normalizeSimilarityText(right.quoteText);
+  const normalizedSubmitted = normalizeSimilarityText(submitted.quoteText);
+  const normalizedCandidate = normalizeSimilarityText(candidate.quoteText);
   if (
-    normalizedLeft.length < MIN_QUOTE_SIMILARITY_LENGTH ||
-    normalizedRight.length < MIN_QUOTE_SIMILARITY_LENGTH
+    normalizedSubmitted.length < MIN_QUOTE_SIMILARITY_LENGTH ||
+    normalizedCandidate.length < MIN_QUOTE_SIMILARITY_LENGTH
   ) {
     return false;
   }
-  if (normalizedLeft === normalizedRight) {
+  if (normalizedSubmitted === normalizedCandidate) {
     return true;
   }
-  const ratio = lengthRatio(normalizedLeft, normalizedRight);
+  const ratio = lengthRatio(normalizedSubmitted, normalizedCandidate);
   if (ratio < 0.55) {
     return false;
   }
   const shorter =
-    normalizedLeft.length <= normalizedRight.length
-      ? normalizedLeft
-      : normalizedRight;
-  const longer = shorter === normalizedLeft ? normalizedRight : normalizedLeft;
+    normalizedSubmitted.length <= normalizedCandidate.length
+      ? normalizedSubmitted
+      : normalizedCandidate;
+  const longer =
+    shorter === normalizedSubmitted
+      ? normalizedCandidate
+      : normalizedSubmitted;
   if (ratio >= 0.65 && ` ${longer} `.includes(` ${shorter} `)) {
     return true;
   }
-  const tokenScore = tokenDice(normalizedLeft, normalizedRight);
-  const ngramScore = ngramDice(normalizedLeft, normalizedRight, 3);
+  const tokenScore = tokenDice(normalizedSubmitted, normalizedCandidate);
+  const ngramScore = ngramDice(
+    normalizedSubmitted,
+    normalizedCandidate,
+    3,
+  );
   return (
     ngramScore >= 0.68 ||
     (tokenScore >= 0.68 && ngramScore >= 0.52)

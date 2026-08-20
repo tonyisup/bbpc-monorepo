@@ -34,32 +34,6 @@ test("Convex Quotabunga does not depend on the SQL auth or transport stack", () 
   assert.match(component, /submission\.scored/u);
   assert.match(component, /current\?\.isOpen/u);
   assert.match(component, /getConvexDomainErrorCode/u);
-  assert.match(component, /Possible duplicate\./u);
-  assert.match(component, /duplicate entries may be judged less/u);
-  assert.match(component, /Couldn&apos;t check for duplicates\./u);
-  assert.match(component, /QUOTE_DUPLICATE_REFRESH_INTERVAL_MS = 30_000/u);
-  assert.match(component, /window\.setInterval/u);
-  assert.match(component, /window\.clearInterval/u);
-  assert.match(component, /status: "unavailable"/u);
-  assert.doesNotMatch(
-    component,
-    /\.catch\([\s\S]*setDuplicateCheck\(\{ inputKey, possibleMatch: false \}\)/u
-  );
-  assert.match(
-    component,
-    /normalizedQuote\.length < MIN_QUOTE_DUPLICATE_CHECK_LENGTH\s*\)\s*\{/u
-  );
-  assert.match(component, /QUOTE_DUPLICATE_CHECK_DELAY_MS = 500/u);
-  assert.match(component, /!isEditing/u);
-  assert.match(component, /current\?\.isOpen !== true/u);
-  assert.match(component, /window\.setTimeout/u);
-  assert.match(component, /window\.clearTimeout\(timeout\)/u);
-  assert.match(component, /cancelled = true/u);
-  assert.match(
-    component,
-    /duplicateCheck\?\.inputKey === duplicateInputKey/u
-  );
-  assert.doesNotMatch(component, /disabled=\{[^}]*hasPossibleDuplicate/u);
 });
 
 test("game participation exposes quote writes only after canonical identity resolution", () => {
