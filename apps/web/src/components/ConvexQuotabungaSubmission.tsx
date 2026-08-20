@@ -35,6 +35,7 @@ import { useAdminCollapse } from "@/hooks/useAdminCollapse";
 import { cn } from "@/lib/utils";
 
 const QUOTE_DUPLICATE_CHECK_DELAY_MS = 500;
+const QUOTE_DUPLICATE_REFRESH_INTERVAL_MS = 30_000;
 const MIN_QUOTE_DUPLICATE_CHECK_LENGTH = 8;
 
 function operationError(error: unknown): string {
@@ -81,7 +82,8 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
   const [listenerNotes, setListenerNotes] = useState("");
   const [duplicateCheck, setDuplicateCheck] = useState<{
     inputKey: string;
-    possibleMatch: boolean;
+    status: "ready" | "unavailable";
+    possibleMatch?: boolean;
   } | null>(null);
   const loadGenerationRef = useRef(0);
   const { isAdminCollapsed, isContentVisible, headerProps } =
@@ -91,7 +93,11 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
   const duplicateInputKey = `${quoteText.trim()}\u0000${sourceTitle.trim()}`;
   const hasPossibleDuplicate =
     duplicateCheck?.inputKey === duplicateInputKey &&
+    duplicateCheck.status === "ready" &&
     duplicateCheck.possibleMatch;
+  const isDuplicateCheckUnavailable =
+    duplicateCheck?.inputKey === duplicateInputKey &&
+    duplicateCheck.status === "unavailable";
 
   const resetForm = useCallback(() => {
     setQuoteText("");
@@ -156,25 +162,42 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     }
     const inputKey = `${normalizedQuote}\u0000${normalizedSource}`;
     let cancelled = false;
-    const timeout = window.setTimeout(() => {
+    let isCheckInFlight = false;
+    const runDuplicateCheck = () => {
+      if (isCheckInFlight) {
+        return;
+      }
+      isCheckInFlight = true;
       void checkConvexQuotabungaDuplicate(convex, {
         quoteText: normalizedQuote,
         sourceTitle: normalizedSource,
       })
         .then((result) => {
           if (!cancelled) {
-            setDuplicateCheck({ inputKey, ...result });
+            setDuplicateCheck({ inputKey, status: "ready", ...result });
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setDuplicateCheck({ inputKey, possibleMatch: false });
+            setDuplicateCheck({ inputKey, status: "unavailable" });
           }
+        })
+        .finally(() => {
+          isCheckInFlight = false;
         });
-    }, QUOTE_DUPLICATE_CHECK_DELAY_MS);
+    };
+    const timeout = window.setTimeout(
+      runDuplicateCheck,
+      QUOTE_DUPLICATE_CHECK_DELAY_MS
+    );
+    const interval = window.setInterval(
+      runDuplicateCheck,
+      QUOTE_DUPLICATE_REFRESH_INTERVAL_MS
+    );
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
+      window.clearInterval(interval);
     };
   }, [convex, current?.isOpen, isEditing, quoteText, sourceTitle]);
 
@@ -448,6 +471,25 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
                     A similar quote may have been submitted before. You can
                     still submit it, but duplicate entries may be judged less
                     favorably.
+                  </p>
+                </div>
+              ) : null}
+
+              {isDuplicateCheckUnavailable ? (
+                <div
+                  className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
+                  role="status"
+                >
+                  <AlertTriangle
+                    className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
+                    aria-hidden="true"
+                  />
+                  <p>
+                    <span className="font-semibold">
+                      Couldn&apos;t check for duplicates.
+                    </span>{" "}
+                    You can still submit, but it may be judged less favorably
+                    if a similar quote was already entered.
                   </p>
                 </div>
               ) : null}
