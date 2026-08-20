@@ -16,6 +16,10 @@ import {
   validateQuoteStatus,
   validateQuoteTimestamp,
 } from "./games/quoteWriteModel.js";
+import {
+  quoteSearchAnchors,
+  quotesPossiblyMatch,
+} from "./games/quoteSimilarity.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -222,6 +226,7 @@ async function insertQuote(
     pointId?: Id<"points">;
     createdAt?: number;
     quoteText?: string;
+    sourceTitle?: string;
   },
 ): Promise<Id<"quoteSubmissions">> {
   return await t.run(async (ctx) => {
@@ -230,7 +235,7 @@ async function insertQuote(
       episodeId: input.episodeId,
       seasonId: input.seasonId,
       quoteText: input.quoteText ?? "Synthetic quote",
-      sourceTitle: "Synthetic source",
+      sourceTitle: input.sourceTitle ?? "Synthetic source",
       sourceType: "MOVIE",
       status: input.status ?? "SUBMITTED",
       ...(input.bracketOrder === undefined
@@ -249,6 +254,74 @@ async function insertQuote(
 }
 
 describe("Quotabunga workflows", () => {
+  test("classifies possible duplicates without treating every shared phrase as a match", () => {
+    expect(
+      quoteSearchAnchors(
+        "I'm gonna make him an offer he can't refuse.",
+      ),
+    ).toEqual(["refuse", "gonna", "offer"]);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "I'm gonna make him an offer he can't refuse.",
+          sourceTitle: "The Godfather",
+        },
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "I'll be back.",
+          sourceTitle: "The Terminator",
+        },
+        {
+          quoteText: "Ill be back",
+          sourceTitle: "Terminator",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "I'll be back.",
+          sourceTitle: "The Terminator",
+        },
+        {
+          quoteText: "I'll be back.",
+          sourceTitle: "Last Action Hero",
+        },
+      ),
+    ).toBe(false);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "",
+        },
+        {
+          quoteText: "I'm gonna make him an offer he can't refuse.",
+          sourceTitle: "The Godfather",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      quotesPossiblyMatch(
+        {
+          quoteText: "This town needs an enema.",
+          sourceTitle: "Batman",
+        },
+        {
+          quoteText: "I'm Batman.",
+          sourceTitle: "Batman",
+        },
+      ),
+    ).toBe(false);
+  });
+
   test("validates canonical quote-domain boundaries", async () => {
     expect(validateQuoteAdminNotes("   ")).toBeUndefined();
     expect(validateQuoteSourceType("TV")).toBe("TV");
@@ -271,6 +344,81 @@ describe("Quotabunga workflows", () => {
         "VALIDATION_FAILED",
       );
     }
+  });
+
+  test("returns only a warning verdict for another listener's possible duplicate", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await insertQuote(t, {
+      userId: otherId,
+      episodeId: foundation.oldEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'm gonna make him an offer he can't refuse.",
+      sourceTitle: "The Godfather",
+    });
+
+    await expectDomainError(
+      t.query(api.games.quotes.checkPossibleDuplicate, {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "Godfather",
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: true });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: true });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Leave the gun. Take the cannoli.",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: false });
+
+    expect(memberId).not.toBe(otherId);
+  });
+
+  test("does not flag a listener's own current entry while they edit it", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.nextEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'll be back.",
+      sourceTitle: "The Terminator",
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Ill be back",
+          sourceTitle: "Terminator",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: false });
   });
 
   test("derives member ownership and preserves open-round edit rules", async () => {

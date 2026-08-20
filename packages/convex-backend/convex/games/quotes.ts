@@ -12,6 +12,7 @@ import { domainError } from "../lib/errors.js";
 import {
   MAX_QUOTE_EPISODE_SELECTOR_SIZE,
   MAX_QUOTE_RANDOM_SEED_LENGTH,
+  MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH,
   MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR,
 } from "./limits.js";
 import {
@@ -24,6 +25,10 @@ import {
   toMemberQuoteSubmission,
   toQuoteEpisode,
 } from "./quoteReadModel.js";
+import {
+  quoteSearchAnchors,
+  quotesPossiblyMatch,
+} from "./quoteSimilarity.js";
 import {
   assertQuotePointOwnedOnly,
   deleteOwnedQuotePoint,
@@ -51,6 +56,7 @@ import {
   quoteAdminEpisodeValidator,
   quoteAdminSubmissionValidator,
   quoteMemberSubmissionValidator,
+  quoteSimilarityResultValidator,
   quoteSourceTypeValidator,
   quoteStatusValidator,
 } from "./validators.js";
@@ -246,6 +252,69 @@ export const currentForMe = authenticatedQuery({
           ? null
           : toMemberQuoteSubmission(submission),
     };
+  },
+});
+
+export const checkPossibleDuplicate = authenticatedQuery({
+  args: {
+    quoteText: v.string(),
+    sourceTitle: v.string(),
+  },
+  returns: quoteSimilarityResultValidator,
+  handler: async (ctx, args) => {
+    const quoteText = validateQuoteText(args.quoteText);
+    const sourceTitle =
+      args.sourceTitle.trim().length === 0
+        ? ""
+        : validateQuoteSourceTitle(args.sourceTitle);
+    const anchors = quoteSearchAnchors(quoteText);
+    if (anchors.length === 0) {
+      return { possibleMatch: false };
+    }
+    const searchQueries = [
+      ...new Set([anchors.join(" "), ...anchors]),
+    ];
+    const candidateGroups = await Promise.all(
+      searchQueries.map(async (searchQuery) => {
+        return await ctx.db
+          .query("quoteSubmissions")
+          .withSearchIndex("search_quoteText", (search) =>
+            search.search("quoteText", searchQuery),
+          )
+          .take(MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH);
+      }),
+    );
+    const currentEpisode = await findSubmissionEpisode(ctx, ["next"]);
+    const ownCurrentSubmission =
+      currentEpisode === null
+        ? null
+        : await findQuoteForEpisodeUser(
+            ctx,
+            currentEpisode._id,
+            ctx.actor.user._id,
+          );
+    const candidates = new Map(
+      candidateGroups
+        .flat()
+        .map((submission) => [submission._id, submission]),
+    );
+    for (const candidate of candidates.values()) {
+      if (candidate._id === ownCurrentSubmission?._id) {
+        continue;
+      }
+      if (
+        quotesPossiblyMatch(
+          { quoteText, sourceTitle },
+          {
+            quoteText: candidate.quoteText,
+            sourceTitle: candidate.sourceTitle,
+          },
+        )
+      ) {
+        return { possibleMatch: true };
+      }
+    }
+    return { possibleMatch: false };
   },
 });
 

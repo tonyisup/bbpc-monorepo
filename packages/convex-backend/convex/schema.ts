@@ -718,7 +718,8 @@ export default defineSchema({
     .index("by_seasonId", ["seasonId"])
     .index("by_userId", ["userId"])
     .index("by_userId_and_createdAt", ["userId", "createdAt"])
-    .index("by_pointId", ["pointId"]),
+    .index("by_pointId", ["pointId"])
+    .searchIndex("search_quoteText", { searchField: "quoteText" }),
 
   rankedListTypes: defineTable({
     legacyId: v.optional(v.string()),

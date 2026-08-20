@@ -51,6 +51,7 @@ import type * as games_pointWriteModel from "../games/pointWriteModel.js";
 import type * as games_points from "../games/points.js";
 import type * as games_public from "../games/public.js";
 import type * as games_quoteReadModel from "../games/quoteReadModel.js";
+import type * as games_quoteSimilarity from "../games/quoteSimilarity.js";
 import type * as games_quoteWriteModel from "../games/quoteWriteModel.js";
 import type * as games_quotes from "../games/quotes.js";
 import type * as games_readModel from "../games/readModel.js";
@@ -199,6 +200,7 @@ declare const fullApi: ApiFromModules<{
   "games/points": typeof games_points;
   "games/public": typeof games_public;
   "games/quoteReadModel": typeof games_quoteReadModel;
+  "games/quoteSimilarity": typeof games_quoteSimilarity;
   "games/quoteWriteModel": typeof games_quoteWriteModel;
   "games/quotes": typeof games_quotes;
   "games/readModel": typeof games_readModel;
