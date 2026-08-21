@@ -1,11 +1,11 @@
 # BBPC monorepo rollout
 
-Updated 2026-08-12.
+Updated 2026-08-20.
 
 ## Decision
 
 BBPC uses pnpm workspaces without an additional build orchestrator. The current graph
-has only one shared package, so explicit root scripts keep build and deployment
+has only two shared packages, so explicit root scripts keep build and deployment
 behavior visible; an orchestrator can be added later if build caching becomes a
 measured need.
 
@@ -23,13 +23,16 @@ apps/
   recording/
 packages/
   convex-backend/
+  movie-search-hints/
 ```
 
 The generated contract retains the import name `@tonyisup/bbpc-convex-api` so this
 repository move does not also become an API rename. It is now a private workspace
 package. The apps depend on workspace version `0.1.0`, which pnpm resolves locally,
-and their write-gate version comes from its `contracts` export. The GitHub Packages
-release workflow and registry configuration are retired.
+and their write-gate version comes from its `contracts` export. The private
+`@bbpc/movie-search-hints` workspace package shares movie-year query behavior between
+the public and admin applications without coupling their deployments. The GitHub
+Packages release workflow and registry configuration are retired.
 
 ## History provenance
 
