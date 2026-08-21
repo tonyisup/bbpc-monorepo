@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  analyzeMovieYearQuery,
+  applyMovieYearHint,
+  type MovieYearHintAction,
+  useMovieYearHint,
+} from "@bbpc/movie-search-hints";
 import { useConvex } from "convex/react";
 import {
   ArrowDown,
@@ -12,8 +18,10 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import MovieInlinePreview from "@/components/MovieInlinePreview";
+import { MovieYearSearchHint } from "@/components/MovieYearSearchHint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +50,14 @@ import { cn } from "@/lib/utils";
 type SearchResult =
   | { kind: "catalog"; movie: ConvexCatalogMovie }
   | { kind: "tmdb"; movie: ConvexTmdbMovie; year: number };
+
+type SearchSnapshot = {
+  generation: number;
+  requestQuery: string;
+  mediaKind: "movie";
+  tmdbStatus: "fulfilled" | "rejected";
+  visibleResults: SearchResult[];
+};
 
 function operationError(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -76,14 +92,28 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   const [notesText, setNotesText] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchInput, setSearchInput] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [externalSearchUnavailable, setExternalSearchUnavailable] =
-    useState(false);
+  const [searchSnapshot, setSearchSnapshot] =
+    useState<SearchSnapshot | null>(null);
+  const [searchingGeneration, setSearchingGeneration] = useState<
+    number | null
+  >(null);
+  const [searchGeneration, setSearchGeneration] = useState(0);
   const [insertPosition, setInsertPosition] =
     useState<SyllabusInsertPosition>("END");
   const loadGenerationRef = useRef(0);
   const searchGenerationRef = useRef(0);
+  const entriesRef = useRef(entries);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
+
+  const invalidateSearch = useCallback(() => {
+    const nextGeneration = searchGenerationRef.current + 1;
+    searchGenerationRef.current = nextGeneration;
+    setSearchGeneration(nextGeneration);
+  }, []);
 
   const reload = useCallback(async () => {
     const generation = loadGenerationRef.current + 1;
@@ -111,16 +141,14 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   }, [appUserId, reload]);
 
   useEffect(() => {
-    const query = searchInput.trim();
-    const generation = searchGenerationRef.current + 1;
-    searchGenerationRef.current = generation;
-    if (query.length < 2) {
-      setSearchResults([]);
-      setExternalSearchUnavailable(false);
-      setIsSearching(false);
+    const analysis = analyzeMovieYearQuery(searchInput);
+    const query = analysis.normalizedQuery;
+    const generation = searchGenerationRef.current;
+    if (query.length < 2 || analysis.syntax === "incomplete") {
+      setSearchingGeneration(null);
       return;
     }
-    setIsSearching(true);
+    setSearchingGeneration(generation);
     const timeout = window.setTimeout(() => {
       void Promise.allSettled([
         searchConvexCatalogMovies(convex, query),
@@ -138,7 +166,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
             movie.tmdbId === null ? [] : [movie.tmdbId]
           )
         );
-        setSearchResults([
+        const combinedResults: SearchResult[] = [
           ...catalogMovies.map(
             (movie): SearchResult => ({ kind: "catalog", movie })
           ),
@@ -150,9 +178,30 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
               ? []
               : [{ kind: "tmdb", movie, year }];
           }),
-        ]);
-        setExternalSearchUnavailable(tmdbResult.status === "rejected");
-        setIsSearching(false);
+        ];
+        const syllabusEntries = entriesRef.current;
+        const syllabusMovieIds = new Set(
+          syllabusEntries.map((entry) => entry.movie.id),
+        );
+        const syllabusTmdbIds = new Set(
+          syllabusEntries.flatMap((entry) =>
+            entry.movie.tmdbId === null ? [] : [entry.movie.tmdbId],
+          ),
+        );
+        const visibleResults = combinedResults.filter((result) =>
+          result.kind === "catalog"
+            ? !syllabusMovieIds.has(result.movie.id)
+            : !syllabusTmdbIds.has(result.movie.id),
+        );
+        setSearchSnapshot({
+          generation,
+          requestQuery: query,
+          mediaKind: "movie",
+          tmdbStatus:
+            tmdbResult.status === "fulfilled" ? "fulfilled" : "rejected",
+          visibleResults,
+        });
+        setSearchingGeneration(null);
       });
     }, 300);
     return () => {
@@ -162,21 +211,51 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
 
   const pending = useMemo(() => pendingEntries(entries), [entries]);
   const assigned = useMemo(() => assignedEntries(entries), [entries]);
-  const visibleSearchResults = useMemo(() => {
-    const syllabusMovieIds = new Set(entries.map((entry) => entry.movie.id));
-    const syllabusTmdbIds = new Set(
-      entries.flatMap((entry) =>
-        entry.movie.tmdbId === null ? [] : [entry.movie.tmdbId]
-      )
-    );
-    return searchResults.filter((result) =>
-      result.kind === "catalog"
-        ? !syllabusMovieIds.has(result.movie.id)
-        : !syllabusTmdbIds.has(result.movie.id)
-    );
-  }, [entries, searchResults]);
+  const searchAnalysis = analyzeMovieYearQuery(searchInput);
+  const currentSearchSnapshot =
+    searchSnapshot?.generation === searchGeneration &&
+    searchSnapshot.requestQuery === searchAnalysis.normalizedQuery &&
+    searchSnapshot.mediaKind === "movie"
+      ? searchSnapshot
+      : null;
+  const isSearching = searchingGeneration === searchGeneration;
+  const searchPhase = isSearching
+    ? "searching"
+    : currentSearchSnapshot
+      ? "settled"
+      : "idle";
+  const visibleSearchResults = currentSearchSnapshot?.visibleResults ?? [];
+  const movieYearHint = useMovieYearHint({
+    mediaKind: "movie",
+    currentInput: searchInput,
+    requestQuery: currentSearchSnapshot?.requestQuery ?? "",
+    phase: searchPhase,
+    tmdbStatus: currentSearchSnapshot?.tmdbStatus ?? "not-run",
+    visibleResultCount: visibleSearchResults.length,
+    requestGeneration: searchGeneration,
+  });
+  const externalSearchUnavailable =
+    currentSearchSnapshot?.tmdbStatus === "rejected";
+
+  const updateSearchInput = (value: string) => {
+    invalidateSearch();
+    setSearchInput(value);
+  };
+
+  const applyYearHint = (action: MovieYearHintAction) => {
+    const applied = applyMovieYearHint(searchInput, action);
+    if (!applied) {
+      return;
+    }
+    flushSync(() => {
+      updateSearchInput(applied.query);
+    });
+    searchInputRef.current?.focus();
+    searchInputRef.current?.setSelectionRange(applied.caret, applied.caret);
+  };
 
   const addMovie = async (result: SearchResult) => {
+    invalidateSearch();
     setBusyOperation(`add:${String(result.movie.id)}`);
     setErrorMessage(null);
     try {
@@ -186,7 +265,6 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
           : await upsertConvexTmdbMovie(convex, result.movie, result.year);
       await addConvexSyllabusEntry(convex, movie.id, insertPosition);
       setSearchInput("");
-      setSearchResults([]);
       setShowSearch(false);
       await reload();
     } catch (error) {
@@ -287,7 +365,14 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Button
           variant="outline"
-          onClick={() => setShowSearch((visible) => !visible)}
+          onClick={() => {
+            invalidateSearch();
+            if (showSearch) {
+              setSearchInput("");
+              setSearchingGeneration(null);
+            }
+            setShowSearch((visible) => !visible);
+          }}
         >
           {showSearch ? "Cancel movie search" : "Add movie"}
         </Button>
@@ -319,8 +404,9 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
             </label>
             <Input
               id="convex-movie-search"
+              ref={searchInputRef}
               value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
+              onChange={(event) => updateSearchInput(event.target.value)}
               placeholder="Search for a movie..."
               className="pl-9"
             />
@@ -337,6 +423,13 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
               <Loader2 className="h-4 w-4 animate-spin" />
               Searching movies...
             </p>
+          ) : null}
+          {searchPhase === "settled" ? (
+            <MovieYearSearchHint
+              hint={movieYearHint}
+              query={currentSearchSnapshot?.requestQuery ?? ""}
+              onAction={applyYearHint}
+            />
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             {visibleSearchResults.map((result) => {

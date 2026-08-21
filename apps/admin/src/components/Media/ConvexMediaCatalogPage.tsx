@@ -1,3 +1,9 @@
+import {
+  analyzeMovieYearQuery,
+  applyMovieYearHint,
+  type MovieYearHintAction,
+  useMovieYearHint,
+} from "@bbpc/movie-search-hints";
 import { useConvex } from "convex/react";
 import {
   ExternalLink,
@@ -12,7 +18,8 @@ import {
 import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import {
@@ -30,6 +37,7 @@ import {
 } from "@/convex/catalog";
 import { getConvexDomainErrorCode } from "@/convex/identity";
 
+import { MovieYearSearchHint } from "../MovieYearSearchHint";
 import { Button } from "../ui/button";
 import { ConfirmModal } from "../ui/confirm-modal";
 import { Input } from "../ui/input";
@@ -44,6 +52,14 @@ import {
 
 type MediaKind = "movie" | "show";
 type CatalogItem = ConvexAdminMovie | ConvexAdminShow;
+
+type TmdbSearchSnapshot = {
+  generation: number;
+  requestQuery: string;
+  mediaKind: MediaKind;
+  tmdbStatus: "fulfilled" | "rejected";
+  visibleResults: ConvexTmdbTitle[];
+};
 
 function mediaLabels(kind: MediaKind) {
   return kind === "movie"
@@ -104,13 +120,35 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
   const [revision, setRevision] = useState(0);
   const [filter, setFilter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<
-    ConvexTmdbTitle[] | null
+  const [searchSnapshot, setSearchSnapshot] =
+    useState<TmdbSearchSnapshot | null>(null);
+  const [searchingGeneration, setSearchingGeneration] = useState<
+    number | null
   >(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [searchGeneration, setSearchGeneration] = useState(0);
   const [pendingAddId, setPendingAddId] = useState<number | null>(null);
   const [deletingItem, setDeletingItem] = useState<CatalogItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const searchGenerationRef = useRef(0);
+  const previousKindRef = useRef(kind);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const invalidateSearch = useCallback(() => {
+    const nextGeneration = searchGenerationRef.current + 1;
+    searchGenerationRef.current = nextGeneration;
+    setSearchGeneration(nextGeneration);
+    return nextGeneration;
+  }, []);
+
+  useEffect(() => {
+    if (previousKindRef.current === kind) {
+      return;
+    }
+    previousKindRef.current = kind;
+    invalidateSearch();
+    setSearchTerm("");
+    setSearchingGeneration(null);
+  }, [invalidateSearch, kind]);
 
   useEffect(() => {
     let active = true;
@@ -175,24 +213,102 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
       .finally(() => setIsLoadingMore(false));
   };
 
-  const searchTmdb = () => {
-    const query = searchTerm.trim();
-    if (query.length < 3 || isSearching) {
+  const runTmdbSearch = (requestQuery: string) => {
+    const analysis = analyzeMovieYearQuery(requestQuery);
+    if (
+      analysis.normalizedQuery.length < 3 ||
+      (kind === "movie" && analysis.syntax === "incomplete")
+    ) {
       return;
     }
-    setIsSearching(true);
+    const query = analysis.normalizedQuery;
+    const generation = invalidateSearch();
+    const requestKind = kind;
+    setSearchingGeneration(generation);
     void (kind === "movie"
       ? searchConvexTmdbMovies(convex, query)
       : searchConvexTmdbShows(convex, query))
-      .then(setSearchResults)
+      .then((results) => {
+        if (searchGenerationRef.current !== generation) {
+          return;
+        }
+        setSearchSnapshot({
+          generation,
+          requestQuery: query,
+          mediaKind: requestKind,
+          tmdbStatus: "fulfilled",
+          visibleResults: results,
+        });
+      })
       .catch((error: unknown) => {
-        setSearchResults(null);
+        if (searchGenerationRef.current !== generation) {
+          return;
+        }
+        setSearchSnapshot({
+          generation,
+          requestQuery: query,
+          mediaKind: requestKind,
+          tmdbStatus: "rejected",
+          visibleResults: [],
+        });
         toast.error(searchFailureMessage(error));
       })
-      .finally(() => setIsSearching(false));
+      .finally(() => {
+        if (searchGenerationRef.current === generation) {
+          setSearchingGeneration(null);
+        }
+      });
+  };
+
+  const searchAnalysis = analyzeMovieYearQuery(searchTerm);
+  const currentSearchSnapshot =
+    searchSnapshot?.generation === searchGeneration &&
+    searchSnapshot.requestQuery === searchAnalysis.normalizedQuery &&
+    searchSnapshot.mediaKind === kind
+      ? searchSnapshot
+      : null;
+  const searchResults = currentSearchSnapshot?.visibleResults ?? [];
+  const isSearching = searchingGeneration === searchGeneration;
+  const searchPhase = isSearching
+    ? "searching"
+    : currentSearchSnapshot
+      ? "settled"
+      : "idle";
+  const movieYearHint = useMovieYearHint({
+    mediaKind: kind,
+    currentInput: searchTerm,
+    requestQuery: currentSearchSnapshot?.requestQuery ?? "",
+    phase: searchPhase,
+    tmdbStatus: currentSearchSnapshot?.tmdbStatus ?? "not-run",
+    visibleResultCount: searchResults.length,
+    requestGeneration: searchGeneration,
+  });
+  const canSearch =
+    searchAnalysis.normalizedQuery.length >= 3 &&
+    !(kind === "movie" && searchAnalysis.syntax === "incomplete");
+
+  const updateSearchTerm = (value: string) => {
+    invalidateSearch();
+    setSearchTerm(value);
+  };
+
+  const applyYearHint = (action: MovieYearHintAction) => {
+    const applied = applyMovieYearHint(searchTerm, action);
+    if (!applied) {
+      return;
+    }
+    flushSync(() => {
+      updateSearchTerm(applied.query);
+    });
+    searchInputRef.current?.focus();
+    searchInputRef.current?.setSelectionRange(applied.caret, applied.caret);
+    if (applied.rerun) {
+      runTmdbSearch(applied.query);
+    }
   };
 
   const addTitle = (title: ConvexTmdbTitle) => {
+    invalidateSearch();
     setPendingAddId(title.id);
     void (kind === "movie"
       ? upsertConvexAdminMovie(convex, title)
@@ -261,18 +377,22 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
           <div className="flex max-w-2xl gap-2">
             <Input
               aria-label={`Search TMDB for a ${kind}`}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              ref={searchInputRef}
+              onChange={(event) => updateSearchTerm(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  searchTmdb();
+                  event.preventDefault();
+                  if (canSearch) {
+                    runTmdbSearch(searchAnalysis.normalizedQuery);
+                  }
                 }
               }}
               placeholder={`Search for a ${kind}...`}
               value={searchTerm}
             />
             <Button
-              disabled={searchTerm.trim().length < 3 || isSearching}
-              onClick={searchTmdb}
+              disabled={!canSearch || isSearching}
+              onClick={() => runTmdbSearch(searchAnalysis.normalizedQuery)}
               variant="secondary"
             >
               {isSearching ? (
@@ -284,13 +404,32 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
             </Button>
           </div>
 
-          {searchResults?.length === 0 && (
+          {currentSearchSnapshot?.tmdbStatus === "rejected" ? (
+            <p className="text-sm text-destructive" role="alert">
+              TMDB search is unavailable in this Convex deployment.
+            </p>
+          ) : null}
+
+          {searchPhase === "settled" &&
+          kind === "movie" &&
+          currentSearchSnapshot?.tmdbStatus === "fulfilled" ? (
+            <MovieYearSearchHint
+              hint={movieYearHint}
+              onAction={applyYearHint}
+              query={currentSearchSnapshot.requestQuery}
+            />
+          ) : null}
+
+          {currentSearchSnapshot?.tmdbStatus === "fulfilled" &&
+            searchResults.length === 0 &&
+            movieYearHint.kind === "hidden" && (
             <p className="text-sm text-muted-foreground">
               No matching TMDB titles were found.
             </p>
           )}
 
-          {searchResults !== null && searchResults.length > 0 && (
+          {currentSearchSnapshot?.tmdbStatus === "fulfilled" &&
+            searchResults.length > 0 && (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
               {searchResults.map((result) => (
                 <div

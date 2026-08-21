@@ -1,9 +1,8 @@
 import type { ConvexTmdbTitle } from "@/convex/catalog";
 
-export async function replaceAssignmentMovieSearchResults(
-  search: () => Promise<ConvexTmdbTitle[]>,
-  setResults: (results: ConvexTmdbTitle[]) => void
-): Promise<void> {
-  setResults([]);
-  setResults(await search());
+export async function fetchAssignmentMovieSearchResults(
+  requestQuery: string,
+  search: (query: string) => Promise<ConvexTmdbTitle[]>,
+): Promise<ConvexTmdbTitle[]> {
+  return await search(requestQuery);
 }

@@ -8,6 +8,7 @@
 /** @type {import("next").NextConfig} */
 const config = {
   reactStrictMode: true,
+  transpilePackages: ["@bbpc/movie-search-hints"],
   i18n: {
     locales: ["en"],
     defaultLocale: "en",
