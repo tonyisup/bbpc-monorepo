@@ -1,12 +1,20 @@
 "use client";
 
+import {
+  analyzeMovieYearQuery,
+  applyMovieYearHint,
+  type MovieYearHintAction,
+  useMovieYearHint,
+} from "@bbpc/movie-search-hints";
 import { useConvex } from "convex/react";
 import { ArrowLeft, Loader2, Search } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { MovieYearSearchHint } from "@/components/MovieYearSearchHint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +53,14 @@ type ExtraSearchResult =
       item: ConvexExtraTmdbTitle;
       year: number;
     };
+
+type ExtraSearchSnapshot = {
+  generation: number;
+  requestQuery: string;
+  mediaKind: ExtraKind;
+  tmdbStatus: "fulfilled" | "rejected";
+  visibleResults: ExtraSearchResult[];
+};
 
 function saveError(error: unknown) {
   switch (getConvexDomainErrorCode(error)) {
@@ -121,36 +137,52 @@ export function ConvexAddExtraPageClient({
   const [kind, setKind] = useState<ExtraKind>("movie");
   const [inputValue, setInputValue] = useState("");
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ExtraSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [externalUnavailable, setExternalUnavailable] = useState(false);
+  const [debouncedGeneration, setDebouncedGeneration] = useState(0);
+  const [searchSnapshot, setSearchSnapshot] =
+    useState<ExtraSearchSnapshot | null>(null);
+  const [searchingGeneration, setSearchingGeneration] = useState<
+    number | null
+  >(null);
+  const [searchGeneration, setSearchGeneration] = useState(0);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const searchGenerationRef = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const canAdd =
     status === "authenticated" &&
     accountStatus === "ready" &&
     user?.appUserId !== null &&
     user?.appUserId !== undefined;
 
+  const invalidateSearch = useCallback(() => {
+    const nextGeneration = searchGenerationRef.current + 1;
+    searchGenerationRef.current = nextGeneration;
+    setSearchGeneration(nextGeneration);
+    return nextGeneration;
+  }, []);
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      setQuery(inputValue.trim());
+      setQuery(analyzeMovieYearQuery(inputValue).normalizedQuery);
+      setDebouncedGeneration(searchGenerationRef.current);
     }, 300);
     return () => window.clearTimeout(timeout);
   }, [inputValue]);
 
   useEffect(() => {
-    const generation = searchGenerationRef.current + 1;
-    searchGenerationRef.current = generation;
-    if (!canAdd || query.length < 2) {
-      setResults([]);
-      setIsSearching(false);
-      setExternalUnavailable(false);
+    const analysis = analyzeMovieYearQuery(query);
+    const generation = debouncedGeneration;
+    if (
+      searchGenerationRef.current !== generation ||
+      !canAdd ||
+      query.length < 2 ||
+      (kind === "movie" && analysis.syntax === "incomplete")
+    ) {
+      setSearchingGeneration(null);
       return;
     }
 
-    setIsSearching(true);
+    setSearchingGeneration(generation);
     setErrorMessage(null);
     const catalogSearch =
       kind === "movie"
@@ -199,23 +231,71 @@ export function ConvexAddExtraPageClient({
         }
         return [{ source: "tmdb", kind, item, year }];
       });
-      setResults([...catalogResults, ...externalResults]);
-      setExternalUnavailable(tmdbResult.status === "rejected");
-      setIsSearching(false);
+      setSearchSnapshot({
+        generation,
+        requestQuery: query,
+        mediaKind: kind,
+        tmdbStatus:
+          tmdbResult.status === "fulfilled" ? "fulfilled" : "rejected",
+        visibleResults: [...catalogResults, ...externalResults],
+      });
+      setSearchingGeneration(null);
     });
-  }, [canAdd, convex, kind, query]);
+  }, [canAdd, convex, debouncedGeneration, kind, query]);
 
-  const searchStatus = useMemo(() => {
-    if (query.length < 2) {
-      return "Enter at least two characters.";
+  const searchAnalysis = analyzeMovieYearQuery(inputValue);
+  const currentSearchSnapshot =
+    searchSnapshot?.generation === searchGeneration &&
+    searchSnapshot.requestQuery === searchAnalysis.normalizedQuery &&
+    searchSnapshot.mediaKind === kind
+      ? searchSnapshot
+      : null;
+  const results = currentSearchSnapshot?.visibleResults ?? [];
+  const isSearching = searchingGeneration === searchGeneration;
+  const searchPhase = isSearching
+    ? "searching"
+    : currentSearchSnapshot
+      ? "settled"
+      : "idle";
+  const movieYearHint = useMovieYearHint({
+    mediaKind: kind,
+    currentInput: inputValue,
+    requestQuery: currentSearchSnapshot?.requestQuery ?? "",
+    phase: searchPhase,
+    tmdbStatus: currentSearchSnapshot?.tmdbStatus ?? "not-run",
+    visibleResultCount: results.length,
+    requestGeneration: searchGeneration,
+  });
+  const externalUnavailable = currentSearchSnapshot?.tmdbStatus === "rejected";
+
+  const updateSearchInput = (value: string) => {
+    invalidateSearch();
+    setInputValue(value);
+  };
+
+  const applyYearHint = (action: MovieYearHintAction) => {
+    const applied = applyMovieYearHint(inputValue, action);
+    if (!applied) {
+      return;
     }
-    if (isSearching) {
-      return "Searching…";
-    }
-    return `${results.length} ${results.length === 1 ? "result" : "results"}`;
-  }, [isSearching, query.length, results.length]);
+    flushSync(() => {
+      updateSearchInput(applied.query);
+    });
+    searchInputRef.current?.focus();
+    searchInputRef.current?.setSelectionRange(applied.caret, applied.caret);
+  };
+
+  const searchStatus =
+    kind === "movie" && searchAnalysis.syntax === "incomplete"
+      ? "Enter a four-digit release year."
+      : searchAnalysis.normalizedQuery.length < 2
+        ? "Enter at least two characters."
+        : isSearching || currentSearchSnapshot === null
+          ? "Searching…"
+          : `${results.length} ${results.length === 1 ? "result" : "results"}`;
 
   const addResult = async (result: ExtraSearchResult) => {
+    invalidateSearch();
     const key = resultKey(result);
     setSavingKey(key);
     setErrorMessage(null);
@@ -300,8 +380,10 @@ export function ConvexAddExtraPageClient({
         value={kind}
         onValueChange={(value) => {
           if (value === "movie" || value === "show") {
+            const nextGeneration = invalidateSearch();
             setKind(value);
-            setResults([]);
+            setQuery(searchAnalysis.normalizedQuery);
+            setDebouncedGeneration(nextGeneration);
             setErrorMessage(null);
           }
         }}
@@ -324,9 +406,10 @@ export function ConvexAddExtraPageClient({
         <div className="relative">
           <Input
             id="extra-search"
+            ref={searchInputRef}
             value={inputValue}
             disabled={savingKey !== null}
-            onChange={(event) => setInputValue(event.target.value)}
+            onChange={(event) => updateSearchInput(event.target.value)}
             placeholder={`Search for a ${kind}…`}
             className="h-11 pl-10"
           />
@@ -341,6 +424,14 @@ export function ConvexAddExtraPageClient({
             usable.
           </p>
         )}
+        {searchPhase === "settled" ? (
+          <MovieYearSearchHint
+            className="mt-2"
+            hint={movieYearHint}
+            query={currentSearchSnapshot?.requestQuery ?? ""}
+            onAction={applyYearHint}
+          />
+        ) : null}
       </div>
 
       {errorMessage && (

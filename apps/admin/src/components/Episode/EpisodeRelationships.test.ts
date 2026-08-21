@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 
 import type { ConvexTmdbTitle } from "@/convex/catalog";
 
-import { replaceAssignmentMovieSearchResults } from "./assignmentMovieSearch";
+import { fetchAssignmentMovieSearchResults } from "./assignmentMovieSearch";
 
 const source = readFileSync(
   resolve(process.cwd(), "src/components/Episode/EpisodeRelationships.tsx"),
@@ -25,24 +25,22 @@ describe("episode relationship assignment flow", () => {
     expect(assignmentDialog).not.toContain("<CatalogPicker");
   });
 
-  test("clears successful search results when the next search fails", async () => {
+  test("passes the explicit request query through without synthesizing results", async () => {
     const arrival = { id: 329865 } as ConvexTmdbTitle;
-    let results: ConvexTmdbTitle[] = [];
-    const setResults = (nextResults: ConvexTmdbTitle[]) => {
-      results = nextResults;
-    };
-
-    await replaceAssignmentMovieSearchResults(
-      async () => [arrival],
-      setResults
-    );
-    expect(results).toEqual([arrival]);
+    let receivedQuery = "";
 
     await expect(
-      replaceAssignmentMovieSearchResults(async () => {
+      fetchAssignmentMovieSearchResults("Arrival y:2016", async (query) => {
+        receivedQuery = query;
+        return [arrival];
+      }),
+    ).resolves.toEqual([arrival]);
+    expect(receivedQuery).toBe("Arrival y:2016");
+
+    await expect(
+      fetchAssignmentMovieSearchResults("Arrival", async () => {
         throw new Error("TMDB unavailable");
-      }, setResults)
+      }),
     ).rejects.toThrow("TMDB unavailable");
-    expect(results).toEqual([]);
   });
 });

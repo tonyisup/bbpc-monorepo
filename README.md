@@ -12,6 +12,7 @@ contract changes atomic.
 | `apps/admin` | `bbpc-admin` | Administrator application |
 | `apps/recording` | `bbpc-recording` | Browser recording application |
 | `packages/convex-backend` | `@tonyisup/bbpc-convex-api` | Convex schema, functions, migration tools, and generated client contract |
+| `packages/movie-search-hints` | `@bbpc/movie-search-hints` | Shared movie-search query analysis, year-hint policy, and action helpers |
 
 `bbpc-pipeline` remains a separate repository and consumes the deployed HTTP API. It
 is not part of this consolidation milestone.
@@ -52,3 +53,7 @@ private and is no longer published to GitHub Packages.
 
 See [the rollout record](docs/monorepo-rollout.md) for history provenance, external
 project settings, and rollback guidance.
+
+Feature design records:
+
+- [Movie-search release-year hints](docs/designs/movie-search-year-hint.md)

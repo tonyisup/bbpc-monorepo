@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 
+import { movieYearConformanceFixtures } from "@bbpc/movie-search-hints/conformance-fixtures";
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
 import {
@@ -12,6 +13,7 @@ import {
 } from "vitest";
 
 import { api, internal } from "./_generated/api.js";
+import { prepareTmdbSearchInput } from "./catalog/tmdbClient.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -121,6 +123,23 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+});
+
+describe("movie year search conformance", () => {
+  test.each(movieYearConformanceFixtures)("matches $name", (fixture) => {
+    if (fixture.backend.kind === "validation-error") {
+      expect(() => prepareTmdbSearchInput(fixture.input, 1)).toThrow(
+        ConvexError,
+      );
+      return;
+    }
+
+    expect(prepareTmdbSearchInput(fixture.input, 1)).toEqual({
+      query: fixture.backend.query,
+      page: 1,
+      year: fixture.backend.year,
+    });
+  });
 });
 
 describe("authenticated TMDB catalog actions", () => {

@@ -20,6 +20,7 @@ const withPWA = createPWA({
 
 const config = withPWA({
   reactStrictMode: true,
+  transpilePackages: ["@bbpc/movie-search-hints"],
   async redirects() {
     return [
       {

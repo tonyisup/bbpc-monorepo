@@ -1,6 +1,6 @@
 {
   "name": "bbpc",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -11,6 +11,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@bbpc/movie-search-hints": "workspace:*",
     "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "@clerk/nextjs": "6.39.6",
     "@ducanh2912/next-pwa": "10.2.9",

@@ -2,6 +2,28 @@
 
 ## Infrastructure
 
+### Establish authenticated browser E2E coverage for public and admin journeys
+
+**What:** Add a reusable Playwright harness for authenticated flows across the public
+and admin applications, starting with movie-search focus, keyboard, timing, and
+responsive-layout behavior.
+
+**Why:** Replace manual-only browser verification with deterministic regression coverage
+for interactions that component tests cannot fully reproduce against the real DOM.
+
+**Context:** The movie-search year-hint design deliberately uses focused Vitest component
+tests plus a manual browser pass rather than expanding that feature branch into general
+test infrastructure. The admin app already declares Playwright packages, but the
+repository has no Playwright configuration, test script, authentication fixture, local
+server orchestration, or deterministic Convex/TMDB response layer. Start by defining
+test identities and service fixtures, then prove one cross-app authenticated journey
+before broadening coverage.
+
+**Effort:** L
+**Priority:** P3
+**Depends on:** Deterministic test authentication, local app startup orchestration, and
+fixture-backed or mocked Convex and TMDB responses
+
 ### Evaluate media-storage consolidation after the Convex cutover
 
 **What:** Measure whether Azure Blob and UploadThing should remain permanent media

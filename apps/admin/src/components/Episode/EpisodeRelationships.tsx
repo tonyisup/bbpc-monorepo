@@ -1,7 +1,14 @@
+import {
+  analyzeMovieYearQuery,
+  applyMovieYearHint,
+  type MovieYearHintAction,
+  useMovieYearHint,
+} from "@bbpc/movie-search-hints";
 import { useConvex } from "convex/react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import {
@@ -27,6 +34,7 @@ import {
 import { type ConvexAdminUser, loadConvexAdminUsersPage } from "@/convex/users";
 import { getAdminAssignmentPath } from "@/lib/routes";
 
+import { MovieYearSearchHint } from "../MovieYearSearchHint";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -55,13 +63,21 @@ import {
   SelectValue,
 } from "../ui/select";
 
-import { replaceAssignmentMovieSearchResults } from "./assignmentMovieSearch";
+import { fetchAssignmentMovieSearchResults } from "./assignmentMovieSearch";
 
 type CatalogKind = "movie" | "show";
 type CatalogSelection = Pick<
   ConvexAdminMovie | ConvexAdminShow,
   "id" | "title" | "year"
 >;
+
+type AssignmentMovieSearchSnapshot = {
+  generation: number;
+  requestQuery: string;
+  mediaKind: "movie";
+  tmdbStatus: "fulfilled" | "rejected";
+  visibleResults: ConvexTmdbTitle[];
+};
 
 function relationshipMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -295,35 +311,125 @@ function CatalogPicker({
   );
 }
 
-function TmdbMoviePicker({
+export function TmdbMoviePicker({
   selection,
   onSelect,
+  onClearSelection,
 }: {
   selection: ConvexTmdbTitle | null;
   onSelect: (selection: ConvexTmdbTitle) => void;
+  onClearSelection: () => void;
 }) {
   const convex = useConvex();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<ConvexTmdbTitle[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
+  const [searchSnapshot, setSearchSnapshot] =
+    useState<AssignmentMovieSearchSnapshot | null>(null);
+  const [searchingGeneration, setSearchingGeneration] = useState<
+    number | null
+  >(null);
+  const [searchGeneration, setSearchGeneration] = useState(0);
+  const searchGenerationRef = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const search = () => {
-    const normalized = query.trim();
-    if (normalized.length < 3) {
-      toast.error("Enter at least three characters to search TMDB.");
+  const invalidateSearch = useCallback(() => {
+    const nextGeneration = searchGenerationRef.current + 1;
+    searchGenerationRef.current = nextGeneration;
+    setSearchGeneration(nextGeneration);
+    return nextGeneration;
+  }, []);
+
+  const runSearch = (requestQuery: string) => {
+    const analysis = analyzeMovieYearQuery(requestQuery);
+    if (
+      analysis.normalizedQuery.length < 3 ||
+      analysis.syntax === "incomplete"
+    ) {
       return;
     }
-    setLoading(true);
-    setSearched(true);
-    void replaceAssignmentMovieSearchResults(
-      () => searchConvexAdminAssignmentMovies(convex, normalized),
-      setResults
+    const normalized = analysis.normalizedQuery;
+    const generation = invalidateSearch();
+    setSearchingGeneration(generation);
+    void fetchAssignmentMovieSearchResults(normalized, (explicitQuery) =>
+      searchConvexAdminAssignmentMovies(convex, explicitQuery),
     )
-      .catch((error: unknown) =>
-        toast.error(assignmentMovieSearchMessage(error))
-      )
-      .finally(() => setLoading(false));
+      .then((results) => {
+        if (searchGenerationRef.current !== generation) {
+          return;
+        }
+        setSearchSnapshot({
+          generation,
+          requestQuery: normalized,
+          mediaKind: "movie",
+          tmdbStatus: "fulfilled",
+          visibleResults: results,
+        });
+      })
+      .catch((error: unknown) => {
+        if (searchGenerationRef.current !== generation) {
+          return;
+        }
+        setSearchSnapshot({
+          generation,
+          requestQuery: normalized,
+          mediaKind: "movie",
+          tmdbStatus: "rejected",
+          visibleResults: [],
+        });
+        toast.error(assignmentMovieSearchMessage(error));
+      })
+      .finally(() => {
+        if (searchGenerationRef.current === generation) {
+          setSearchingGeneration(null);
+        }
+      });
+  };
+
+  const searchAnalysis = analyzeMovieYearQuery(query);
+  const currentSearchSnapshot =
+    searchSnapshot?.generation === searchGeneration &&
+    searchSnapshot.requestQuery === searchAnalysis.normalizedQuery &&
+    searchSnapshot.mediaKind === "movie"
+      ? searchSnapshot
+      : null;
+  const results = currentSearchSnapshot?.visibleResults ?? [];
+  const loading = searchingGeneration === searchGeneration;
+  const searchPhase = loading
+    ? "searching"
+    : currentSearchSnapshot
+      ? "settled"
+      : "idle";
+  const movieYearHint = useMovieYearHint({
+    mediaKind: "movie",
+    currentInput: query,
+    requestQuery: currentSearchSnapshot?.requestQuery ?? "",
+    phase: searchPhase,
+    tmdbStatus: currentSearchSnapshot?.tmdbStatus ?? "not-run",
+    visibleResultCount: results.length,
+    requestGeneration: searchGeneration,
+  });
+  const canSearch =
+    searchAnalysis.normalizedQuery.length >= 3 &&
+    searchAnalysis.syntax !== "incomplete";
+
+  const updateQuery = (value: string) => {
+    invalidateSearch();
+    onClearSelection();
+    setQuery(value);
+  };
+
+  const applyYearHint = (action: MovieYearHintAction) => {
+    const applied = applyMovieYearHint(query, action);
+    if (!applied) {
+      return;
+    }
+    flushSync(() => {
+      updateQuery(applied.query);
+    });
+    searchInputRef.current?.focus();
+    searchInputRef.current?.setSelectionRange(applied.caret, applied.caret);
+    if (applied.rerun) {
+      runSearch(applied.query);
+    }
   };
 
   return (
@@ -332,19 +438,22 @@ function TmdbMoviePicker({
       <div className="flex gap-2">
         <Input
           id="episode-assignment-movie-search"
-          onChange={(event) => setQuery(event.target.value)}
+          ref={searchInputRef}
+          onChange={(event) => updateQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
-              search();
+              if (canSearch) {
+                runSearch(searchAnalysis.normalizedQuery);
+              }
             }
           }}
           placeholder="Search TMDB movies"
           value={query}
         />
         <Button
-          disabled={loading}
-          onClick={search}
+          disabled={loading || !canSearch}
+          onClick={() => runSearch(searchAnalysis.normalizedQuery)}
           type="button"
           variant="outline"
         >
@@ -358,7 +467,22 @@ function TmdbMoviePicker({
           {tmdbMovieYear(selection)})
         </p>
       )}
-      {searched && !loading && (
+      {currentSearchSnapshot?.tmdbStatus === "rejected" ? (
+        <p className="text-sm text-destructive" role="alert">
+          TMDB movie search is unavailable in this Convex deployment.
+        </p>
+      ) : null}
+      {searchPhase === "settled" &&
+      currentSearchSnapshot?.tmdbStatus === "fulfilled" ? (
+        <MovieYearSearchHint
+          hint={movieYearHint}
+          onAction={applyYearHint}
+          query={currentSearchSnapshot.requestQuery}
+        />
+      ) : null}
+      {currentSearchSnapshot?.tmdbStatus === "fulfilled" &&
+        !loading &&
+        (results.length > 0 || movieYearHint.kind === "hidden") && (
         <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border p-2">
           {results.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -369,7 +493,10 @@ function TmdbMoviePicker({
               <Button
                 className="h-auto w-full justify-start px-3 py-2 text-left"
                 key={movie.id}
-                onClick={() => onSelect(movie)}
+                onClick={() => {
+                  invalidateSearch();
+                  onSelect(movie);
+                }}
                 type="button"
                 variant={selection?.id === movie.id ? "secondary" : "ghost"}
               >
@@ -413,7 +540,11 @@ function AddAssignmentDialog({
         </DialogHeader>
         <div className="grid gap-5 py-2">
           <UserPicker selectedId={user?.id ?? null} onSelect={setUser} />
-          <TmdbMoviePicker onSelect={setMovie} selection={movie} />
+          <TmdbMoviePicker
+            onClearSelection={() => setMovie(null)}
+            onSelect={setMovie}
+            selection={movie}
+          />
           <div className="grid gap-2">
             <Label htmlFor="episode-assignment-type">Assignment type</Label>
             <Select
