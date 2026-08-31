@@ -600,7 +600,7 @@ export function ConvexPredictionGame({
           guesses={data.guessesByAssignment[assignment.id] ?? []}
           episodeStatus={episodeStatus}
           searchQuery={searchQuery}
-          initiallyExpanded={index === firstIncompleteIndex}
+          initiallyExpanded={false}
           onGuessSaved={(guess) => {
             setData((current) => {
               if (current === null) {
