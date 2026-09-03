@@ -19,6 +19,7 @@ import {
   toCatalogMovie,
   toCatalogShow,
 } from "./readModel.js";
+import { parseMovieYearSearchQuery } from "./movieSearchQuery.js";
 
 function compareMovies(
   left: Doc<"movies">,
@@ -54,25 +55,35 @@ export const searchMovies = anonymousQuery({
   returns: v.array(catalogMovieValidator),
   handler: async (ctx, args) => {
     const limit = requirePublicSearchLimit(args.limit);
-    const query = preparePublicSearchQuery(args.query);
+    const preparedQuery = preparePublicSearchQuery(args.query);
+    if (preparedQuery === null) {
+      return [];
+    }
+    const { query, year: yearFilter } =
+      parseMovieYearSearchQuery(preparedQuery);
     if (query === null) {
       return [];
     }
-    const titleMatches = await ctx.db
+    const titleSearch = ctx.db
       .query("movies")
-      .withSearchIndex("search_title", (search) =>
-        search.search("title", query),
-      )
-      .take(limit);
-    const year =
-      /^\d{4}$/u.test(query) ? Number(query) : undefined;
+      .withSearchIndex("search_title", (search) => {
+        const titleQuery = search.search("title", query);
+        return yearFilter === null
+          ? titleQuery
+          : titleQuery.eq("year", yearFilter);
+      });
+    const titleMatches = await titleSearch.take(limit);
+    const exactYear =
+      yearFilter === null && /^\d{4}$/u.test(query)
+        ? Number(query)
+        : undefined;
     const yearMatches =
-      year === undefined
+      exactYear === undefined
         ? []
         : await ctx.db
             .query("movies")
             .withIndex("by_year", (index) =>
-              index.eq("year", year),
+              index.eq("year", exactYear),
             )
             .take(limit);
     const byId = new Map(

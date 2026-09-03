@@ -1,5 +1,6 @@
 import { domainError } from "../lib/errors.js";
 import { env } from "../_generated/server.js";
+import { parseMovieYearSearchQuery } from "./movieSearchQuery.js";
 
 const TMDB_API_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p";
@@ -230,27 +231,11 @@ export function prepareTmdbSearchInput(
       `TMDB page must be an integer from 1 through ${String(MAX_TMDB_PAGE)}.`,
     );
   }
-  const yearFilters = [
-    ...normalizedQuery.matchAll(/(?:^|\s)y:(\d{4})(?=\s|$)/giu),
-  ].map((match) => Number(match[1]));
-  const distinctYears = new Set(yearFilters);
-  if (
-    yearFilters.some((year) => year < 1_000 || year > 9_999) ||
-    distinctYears.size > 1
-  ) {
-    domainError(
-      "VALIDATION_FAILED",
-      "TMDB year filters must specify one year from 1000 through 9999.",
-    );
-  }
-  const query = normalizedQuery
-    .replace(/(?:^|\s)y:\d{4}(?=\s|$)/giu, " ")
-    .trim()
-    .replace(/\s+/gu, " ");
+  const { query, year } = parseMovieYearSearchQuery(normalizedQuery);
   return {
-    query: query.length === 0 ? null : query,
+    query,
     page,
-    year: yearFilters[0] ?? null,
+    year,
   };
 }
 

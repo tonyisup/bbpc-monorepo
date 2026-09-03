@@ -163,6 +163,23 @@ describe("public catalog read API", () => {
     expect(result.every((movie) => movie.year === 1999)).toBe(true);
   });
 
+  test("applies y: release-year modifiers to movie title searches", async () => {
+    const t = createTestBackend();
+    const matchingMovieId = await seedMovie(t, {
+      title: "The Imposter",
+      year: 2001,
+    });
+    await seedMovie(t, { title: "The Imposter", year: 2012 });
+    await seedMovie(t, { title: "D.A.R.Y.L.", year: 1985 });
+
+    const result = await t.query(api.catalog.public.searchMovies, {
+      limit: 20,
+      query: "Imposter y:2001",
+    });
+
+    expect(result.map((movie) => movie.id)).toEqual([matchingMovieId]);
+  });
+
   test("searches shows and treats a blank query as no results", async () => {
     const t = createTestBackend();
     await seedShow(t, { title: "Twin Peaks", year: 1990 });
