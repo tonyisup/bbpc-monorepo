@@ -286,7 +286,10 @@ export default defineSchema({
     .index("by_url", ["url"])
     .index("by_year", ["year"])
     .index("by_normalizedTitle_and_year", ["normalizedTitle", "year"])
-    .searchIndex("search_title", { searchField: "title" }),
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["year"],
+    }),
 
   shows: defineTable({
     legacyId: v.optional(v.string()),
