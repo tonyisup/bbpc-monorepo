@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { adminSeasonSchema } from "./seasons";
@@ -201,50 +203,19 @@ const performanceSchema = z
     });
   });
 
-const getSeasonReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("games/seasons:getById");
+const getSeasonReference = api.games.seasons.getById;
 
-const getPerformanceReference = makeFunctionReference<
-  "query",
-  { seasonId: string },
-  unknown
->("games/seasons:getPerformance");
+const getPerformanceReference = api.games.seasons.getPerformance;
 
-const listPointsReference = makeFunctionReference<
-  "query",
-  {
-    seasonId: string;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/points:listForSeasonPage");
+const listPointsReference = api.games.points.listForSeasonPage;
 
-const listGuessesReference = makeFunctionReference<
-  "query",
-  {
-    seasonId: string;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/guesses:listForSeasonPage");
+const listGuessesReference = api.games.guesses.listForSeasonPage;
 
-const listGamblingReference = makeFunctionReference<
-  "query",
-  {
-    seasonId: string;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/gambling:listForSeasonPage");
+const listGamblingReference = api.games.gambling.listForSeasonPage;
 
 export const ADMIN_SEASON_ACTIVITY_PAGE_SIZE = 30;
 
-export type ConvexAdminSeasonPerformance = z.infer<
-  typeof performanceSchema
->;
+export type ConvexAdminSeasonPerformance = z.infer<typeof performanceSchema>;
 export type ConvexAdminSeasonPoint = z.infer<typeof adminPointSchema>;
 export type ConvexAdminSeasonGuess = z.infer<typeof adminGuessSchema>;
 export type ConvexAdminSeasonGamblingEntry = z.infer<
@@ -271,9 +242,11 @@ export async function loadConvexAdminSeasonDetail(
   client: ConvexReactClient,
   id: string
 ) {
-  return adminSeasonSchema.nullable().parse(
-    await client.query(getSeasonReference, { id })
-  );
+  return adminSeasonSchema
+    .nullable()
+    .parse(
+      await client.query(getSeasonReference, { id: documentId("seasons", id) })
+    );
 }
 
 export async function loadConvexAdminSeasonPerformance(
@@ -281,7 +254,9 @@ export async function loadConvexAdminSeasonPerformance(
   seasonId: string
 ): Promise<ConvexAdminSeasonPerformance> {
   return performanceSchema.parse(
-    await client.query(getPerformanceReference, { seasonId })
+    await client.query(getPerformanceReference, {
+      seasonId: documentId("seasons", seasonId),
+    })
   );
 }
 
@@ -348,9 +323,7 @@ export async function loadConvexAdminSeasonGamblingPage(
   client: ConvexReactClient,
   seasonId: string,
   cursor: string | null
-): Promise<
-  ConvexAdminSeasonActivityPage<ConvexAdminSeasonGamblingEntry>
-> {
+): Promise<ConvexAdminSeasonActivityPage<ConvexAdminSeasonGamblingEntry>> {
   const result = await loadSeasonPage(
     client,
     listGamblingReference,
@@ -360,9 +333,7 @@ export async function loadConvexAdminSeasonGamblingPage(
   );
   result.items.forEach((entry) => {
     if (entry.season === null) {
-      throw new Error(
-        "A season-scoped gambling entry is missing its season."
-      );
+      throw new Error("A season-scoped gambling entry is missing its season.");
     }
     assertSeasonId(entry.season.id, seasonId, "Gambling entry");
   });

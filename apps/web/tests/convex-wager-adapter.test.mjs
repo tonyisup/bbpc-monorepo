@@ -20,7 +20,7 @@ test("Convex wagering uses bounded and owner-derived game functions", () => {
     "games/member:myAvailablePoints",
     "games/gambling:submit",
   ]) {
-    assert.match(adapter, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(adapter.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.match(adapter, /targetUserId/u);
   assert.doesNotMatch(adapter, /ownerUserId|input\.userId/u);

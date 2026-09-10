@@ -4,29 +4,22 @@ import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import { auth } from "@clerk/nextjs/server";
 import { fetchAction, fetchQuery } from "convex/nextjs";
 import {
-  makeFunctionReference,
   type ArgsAndOptions,
-  type DefaultFunctionArgs,
+  type FunctionArgs,
+  type FunctionReference,
+  type FunctionReturnType,
 } from "convex/server";
 import type { NextjsOptions } from "convex/nextjs";
 
 import { env } from "@/env.mjs";
 
-export const publicQueryReference = <Args extends DefaultFunctionArgs>(
-  name: string
-) => makeFunctionReference<"query", Args, unknown>(name);
-
-export const publicActionReference = <Args extends DefaultFunctionArgs>(
-  name: string
-) => makeFunctionReference<"action", Args, unknown>(name);
-
 function requireConvexUrl(): string {
   return env.NEXT_PUBLIC_CONVEX_URL;
 }
 
-function queryArgs<Args extends DefaultFunctionArgs>(
-  query: ReturnType<typeof publicQueryReference<Args>>,
-  args: Args,
+function queryArgs<Query extends FunctionReference<"query">>(
+  query: Query,
+  args: FunctionArgs<Query>,
   options: NextjsOptions
 ) {
   return [args, options] as unknown as ArgsAndOptions<
@@ -35,9 +28,9 @@ function queryArgs<Args extends DefaultFunctionArgs>(
   >;
 }
 
-function actionArgs<Args extends DefaultFunctionArgs>(
-  action: ReturnType<typeof publicActionReference<Args>>,
-  args: Args,
+function actionArgs<Action extends FunctionReference<"action">>(
+  action: Action,
+  args: FunctionArgs<Action>,
   options: NextjsOptions
 ) {
   return [args, options] as unknown as ArgsAndOptions<
@@ -46,10 +39,9 @@ function actionArgs<Args extends DefaultFunctionArgs>(
   >;
 }
 
-export async function fetchPublicQuery<Args extends DefaultFunctionArgs>(
-  query: ReturnType<typeof publicQueryReference<Args>>,
-  args: Args
-): Promise<unknown> {
+export async function fetchPublicQuery<
+  Query extends FunctionReference<"query">
+>(query: Query, args: FunctionArgs<Query>): Promise<FunctionReturnType<Query>> {
   return fetchQuery(
     query,
     ...queryArgs(query, args, {
@@ -58,9 +50,7 @@ export async function fetchPublicQuery<Args extends DefaultFunctionArgs>(
   );
 }
 
-async function retryClerkNotFound<T>(
-  operation: () => Promise<T>
-): Promise<T> {
+async function retryClerkNotFound<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
@@ -104,11 +94,11 @@ async function getOptionalConvexToken(): Promise<string | null> {
 }
 
 export async function fetchQueryForSignedInUser<
-  Args extends DefaultFunctionArgs
+  Query extends FunctionReference<"query">
 >(
-  query: ReturnType<typeof publicQueryReference<Args>>,
-  args: Args
-): Promise<unknown | null> {
+  query: Query,
+  args: FunctionArgs<Query>
+): Promise<FunctionReturnType<Query> | null> {
   const url = requireConvexUrl();
   const token = await getOptionalConvexToken();
   if (token === null) {
@@ -118,11 +108,11 @@ export async function fetchQueryForSignedInUser<
 }
 
 export async function fetchActionForSignedInUser<
-  Args extends DefaultFunctionArgs
+  Action extends FunctionReference<"action">
 >(
-  action: ReturnType<typeof publicActionReference<Args>>,
-  args: Args
-): Promise<unknown | null> {
+  action: Action,
+  args: FunctionArgs<Action>
+): Promise<FunctionReturnType<Action> | null> {
   const url = requireConvexUrl();
   const token = await getOptionalConvexToken();
   if (token === null) {

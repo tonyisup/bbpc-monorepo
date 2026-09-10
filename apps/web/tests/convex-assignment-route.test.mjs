@@ -23,8 +23,8 @@ test("the assignment route uses only the Convex controller", () => {
 });
 
 test("Convex assignment resolution is public, normalized, and runtime validated", () => {
-  assert.match(adapter, /assignments\/public:getBySlug/u);
-  assert.match(adapter, /assignments\/public:getByLegacyId/u);
+  assert.match(adapter, /api\.assignments\.public\.getBySlug/u);
+  assert.match(adapter, /api\.assignments\.public\.getByLegacyId/u);
   assert.match(adapter, /assignmentSchema[\s\S]*\.nullable\(\)[\s\S]*\.parse/u);
   assert.match(page, /getAssignmentBySlug\(slug\)/u);
   assert.match(page, /isUuid\(slug\)[\s\S]*getAssignmentByLegacyId\(slug\)/u);

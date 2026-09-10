@@ -9,12 +9,13 @@ const AudioStream: React.FC<AudioStreamProps> = ({ stream, id }) => {
 	const audioRef = useRef<HTMLAudioElement>(null);
 
 	useEffect(() => {
-		if (audioRef.current && stream) {
-			audioRef.current.srcObject = stream;
+		const audio = audioRef.current;
+		if (audio && stream) {
+			audio.srcObject = stream;
 		}
 		return () => {
-			if (audioRef.current) {
-				audioRef.current.srcObject = null;
+			if (audio) {
+				audio.srcObject = null;
 			}
 		};
 	}, [stream]);

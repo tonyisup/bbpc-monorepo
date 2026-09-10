@@ -183,7 +183,7 @@ function RankedTargetSearch({
       .then(setResults)
       .catch(() => {
         setResults(null);
-        toast.error("The canonical target catalog could not be searched.");
+        toast.error("The catalog could not be searched.");
       })
       .finally(() => setIsSearching(false));
   };
@@ -202,7 +202,7 @@ function RankedTargetSearch({
                 search();
               }
             }}
-            placeholder={`Search canonical ${targetType.toLowerCase()}s...`}
+            placeholder={`Search ${targetType.toLowerCase()}s...`}
             value={query}
           />
         </div>
@@ -223,7 +223,7 @@ function RankedTargetSearch({
           <div className="max-h-72 overflow-y-auto">
             {results.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
-                No canonical targets found. Add the title in its catalog first.
+                No matches found. Add the title in its catalog first.
               </div>
             ) : (
               results.map((result) => (
@@ -372,8 +372,7 @@ export function ConvexRankedListDetailPage() {
     return (
       <div className="flex min-h-[320px] flex-col items-center justify-center gap-4">
         <p className="text-sm text-muted-foreground">
-          This ranked list is unavailable or you do not have access. No legacy
-          SQL fallback was attempted.
+          This ranked list is unavailable or you do not have access. Try again.
         </p>
         <Button onClick={refresh} variant="outline">
           <RefreshCw className="mr-2 h-4 w-4" />
@@ -571,7 +570,7 @@ export function ConvexRankedListDetailPage() {
                           <div className="text-center">
                             <Badge variant="outline">Rank #{rank}</Badge>
                             <p className="mt-2 text-xs text-muted-foreground">
-                              Search the canonical catalog to fill this slot.
+                              Search the catalog to fill this slot.
                             </p>
                           </div>
                           <RankedTargetSearch

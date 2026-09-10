@@ -1,20 +1,16 @@
+import { api } from "@tonyisup/bbpc-convex-api";
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { z } from "zod";
 
 import { BBPC_API_VERSION } from "@tonyisup/bbpc-convex-api/contracts";
 
-import {
-  fetchActionForSignedInUser,
-  publicActionReference,
-} from "@/server/convex/client";
+import { fetchActionForSignedInUser } from "@/server/convex/client";
 
 const f = createUploadthing();
 const BBPC_CLIENT_API_VERSION = BBPC_API_VERSION;
 
-const actionGateReference = publicActionReference<{
-  clientApiVersion: string;
-}>("identity/profile:actionGateProbe");
+const actionGateReference = api.identity.profile.actionGateProbe;
 
 async function requireConvexUploadAccess() {
   const gate = await fetchActionForSignedInUser(actionGateReference, {

@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -97,110 +99,31 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listAdminEpisodesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/quotes:listAdminEpisodes");
+const listAdminEpisodesReference = api.games.quotes.listAdminEpisodes;
 
-const listAdminForEpisodeReference = makeFunctionReference<
-  "query",
-  { episodeId: string },
-  unknown
->("games/quotes:listAdminForEpisode");
+const listAdminForEpisodeReference = api.games.quotes.listAdminForEpisode;
 
-const createForUserReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    userId: string;
-    quoteText: string;
-    sourceTitle: string;
-    sourceType: ConvexQuoteSourceType;
-    clipUrl: string | null;
-    clipStartSeconds: number | null;
-    listenerNotes: string | null;
-    today: string;
-  },
-  unknown
->("games/quotes:createForUser");
+const createForUserReference = api.games.quotes.createForUser;
 
-const updateContentReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    quoteText: string;
-    sourceTitle: string;
-    sourceType: ConvexQuoteSourceType;
-    clipUrl: string | null;
-    clipStartSeconds: number | null;
-    listenerNotes: string | null;
-    adminNotes: string | null;
-  },
-  unknown
->("games/quotes:updateContent");
+const updateContentReference = api.games.quotes.updateContent;
 
-const setStatusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    status: ConvexQuoteStatus;
-  },
-  unknown
->("games/quotes:setStatus");
+const setStatusReference = api.games.quotes.setStatus;
 
-const randomizeIncludedReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    seed: string;
-  },
-  unknown
->("games/quotes:randomizeIncluded");
+const randomizeIncludedReference = api.games.quotes.randomizeIncluded;
 
-const awardPlacementsReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    placements: ConvexQuotePlacementInput[];
-    expectedAwards: ConvexQuoteAwardSnapshot[];
-  },
-  unknown
->("games/quotes:awardPlacements");
+const awardPlacementsReference = api.games.quotes.awardPlacements;
 
-const removeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expectedAward: {
-      pointId: string | null;
-      placement: ConvexQuotePlacement | null;
-    };
-  },
-  unknown
->("games/quotes:remove");
+const removeReference = api.games.quotes.remove;
 
 export type ConvexQuoteSourceType = z.infer<typeof quoteSourceTypeSchema>;
 export type ConvexQuoteStatus = z.infer<typeof quoteStatusSchema>;
 export type ConvexQuotePlacement = z.infer<typeof quotePlacementSchema>;
-export type ConvexAdminQuoteEpisode = z.infer<
-  typeof quoteAdminEpisodeSchema
->;
+export type ConvexAdminQuoteEpisode = z.infer<typeof quoteAdminEpisodeSchema>;
 export type ConvexAdminQuoteSubmission = z.infer<
   typeof quoteAdminSubmissionSchema
 >;
-export type ConvexQuoteAwardSnapshot = z.infer<
-  typeof quoteAwardSnapshotSchema
->;
-export type ConvexQuoteAwardResult = z.infer<
-  typeof quoteAwardResultSchema
->;
+export type ConvexQuoteAwardSnapshot = z.infer<typeof quoteAwardSnapshotSchema>;
+export type ConvexQuoteAwardResult = z.infer<typeof quoteAwardResultSchema>;
 
 export interface ConvexQuoteContentInput {
   quoteText: string;
@@ -231,7 +154,9 @@ export async function loadConvexAdminQuoteSubmissions(
   return z
     .array(quoteAdminSubmissionSchema)
     .parse(
-      await client.query(listAdminForEpisodeReference, { episodeId })
+      await client.query(listAdminForEpisodeReference, {
+        episodeId: documentId("episodes", episodeId),
+      })
     );
 }
 
@@ -247,6 +172,8 @@ export async function createConvexAdminQuoteForUser(
     await client.mutation(createForUserReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      episodeId: documentId("episodes", input.episodeId),
+      userId: documentId("users", input.userId),
     })
   );
 }
@@ -262,6 +189,7 @@ export async function updateConvexAdminQuoteContent(
     await client.mutation(updateContentReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      id: documentId("quoteSubmissions", input.id),
     })
   );
 }
@@ -274,7 +202,7 @@ export async function setConvexAdminQuoteStatus(
   return quoteAdminSubmissionSchema.parse(
     await client.mutation(setStatusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("quoteSubmissions", id),
       status,
     })
   );
@@ -285,15 +213,13 @@ export async function randomizeConvexAdminQuotes(
   episodeId: string,
   seed: string
 ): Promise<number> {
-  return z
-    .object({ count: z.number().int().nonnegative() })
-    .parse(
-      await client.mutation(randomizeIncludedReference, {
-        clientApiVersion: BBPC_CLIENT_API_VERSION,
-        episodeId,
-        seed,
-      })
-    ).count;
+  return z.object({ count: z.number().int().nonnegative() }).parse(
+    await client.mutation(randomizeIncludedReference, {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      episodeId: documentId("episodes", episodeId),
+      seed,
+    })
+  ).count;
 }
 
 export function snapshotConvexQuoteAwards(
@@ -301,8 +227,7 @@ export function snapshotConvexQuoteAwards(
 ): ConvexQuoteAwardSnapshot[] {
   return submissions
     .filter(
-      (submission) =>
-        submission.point !== null || submission.placement !== null
+      (submission) => submission.point !== null || submission.placement !== null
     )
     .map((submission) => ({
       submissionId: submission.id,
@@ -320,9 +245,19 @@ export async function awardConvexAdminQuotePlacements(
   return quoteAwardResultSchema.parse(
     await client.mutation(awardPlacementsReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      episodeId,
-      placements,
-      expectedAwards: z.array(quoteAwardSnapshotSchema).parse(expectedAwards),
+      episodeId: documentId("episodes", episodeId),
+      placements: placements.map((entry) => ({
+        ...entry,
+        submissionId: documentId("quoteSubmissions", entry.submissionId),
+      })),
+      expectedAwards: z
+        .array(quoteAwardSnapshotSchema)
+        .parse(expectedAwards)
+        .map((entry) => ({
+          ...entry,
+          submissionId: documentId("quoteSubmissions", entry.submissionId),
+          pointId: documentId("points", entry.pointId),
+        })),
     })
   );
 }
@@ -334,9 +269,9 @@ export async function deleteConvexAdminQuote(
   idResultSchema.parse(
     await client.mutation(removeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: submission.id,
+      id: documentId("quoteSubmissions", submission.id),
       expectedAward: {
-        pointId: submission.point?.id ?? null,
+        pointId: documentId("points", submission.point?.id ?? null),
         placement: submission.placement,
       },
     })

@@ -222,7 +222,7 @@ function PointTypeEditor({
             {editingItem === null ? "Add Point Type" : "Edit Point Type"}
           </DialogTitle>
           <DialogDescription>
-            Point values must remain within the migrated SQL SMALLINT range.
+            Enter a value between −32,768 and 32,767.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -633,15 +633,14 @@ export function ConvexGameConfigPage({
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Game Mechanics</h2>
           <p className="text-muted-foreground">
-            Configure the bounded scoring and wagering catalogs.
+            Configure scoring and wagering.
           </p>
         </div>
 
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Game configuration could not be loaded. No legacy SQL fallback
-              was attempted.
+              Game configuration could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

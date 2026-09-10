@@ -1,12 +1,14 @@
 import { type Infer, v } from "convex/values";
 
-import type { Doc } from "../_generated/dataModel.js";
+import { internal } from "../_generated/api.js";
+import type { Doc, Id } from "../_generated/dataModel.js";
 import type {
   MutationCtx,
   QueryCtx,
 } from "../_generated/server.js";
 import {
   adminMutation,
+  internalAppMutation,
   authenticatedMutation,
   recordingMutation,
   recordingQuery,
@@ -32,7 +34,8 @@ import {
 
 const MAX_SESSION_PARTICIPANTS = 12;
 const MAX_SESSION_EVENTS = 2_000;
-const MAX_SESSION_CHILDREN_PER_TABLE = 2_000;
+// Even a batch consisting entirely of 512 KiB manifests stays below the read-byte limit.
+const MAX_SESSION_DELETE_ROWS = 25;
 const MAX_CLEANUP_BATCH = 100;
 
 const participantInputValidator = v.object({
@@ -859,139 +862,122 @@ export const listSessionEvents = recordingQuery({
   },
 });
 
-type SessionChildTable =
-  | "recordingSessionInvites"
-  | "recordingParticipants"
-  | "recordingSessionEvents"
-  | "recordingSessionManifests"
-  | "recordingSessionFavorites"
-  | "recordingUploads";
-
-async function deleteByPublicSessionId(
-  ctx: MutationCtx,
-  table: SessionChildTable,
-  publicSessionId: string,
-): Promise<number> {
-  const documents = await ctx.db
-    .query(table)
-    .withIndex("by_publicSessionId", (query) =>
-      query.eq("publicSessionId", publicSessionId),
-    )
-    .take(MAX_SESSION_CHILDREN_PER_TABLE + 1);
-  if (
-    documents.length > MAX_SESSION_CHILDREN_PER_TABLE
-  ) {
-    domainError(
-      "CONFLICT",
-      "Recording cleanup exceeded its per-table safety limit.",
-      {
-        details: {
-          limit: MAX_SESSION_CHILDREN_PER_TABLE,
-        },
-      },
-    );
-  }
-  for (const document of documents) {
-    await ctx.db.delete(table, document._id);
-  }
-  return documents.length;
+const sessionChildTables = [
+  ["recordingParticipants", "participants"],
+  ["recordingSessionInvites", "invites"],
+  ["recordingSessionEvents", "events"],
+  ["recordingSessionManifests", "manifests"],
+  ["recordingSessionFavorites", "favorites"],
+  ["recordingUploads", "recordings"],
+  ["recordingRtcPresence", "rtcPresence"],
+] as const;
+const emptyDeletionResult = () => ({
+  sessions: 0,
+  invites: 0,
+  participants: 0,
+  rtcPresence: 0,
+  rtcSignals: 0,
+  events: 0,
+  manifests: 0,
+  favorites: 0,
+  recordings: 0,
+});
+type DeletionResult = ReturnType<typeof emptyDeletionResult>;
+interface CleanupGate {
+  cutoverRunId: string;
+  clientApiVersion: string;
 }
 
-async function deleteRtcByPublicSessionId(
+async function deleteRecordingSessionsBatch(
   ctx: MutationCtx,
-  publicSessionId: string,
-): Promise<{ rtcPresence: number; rtcSignals: number }> {
-  const [presence, signals] = await Promise.all([
-    ctx.db
-      .query("recordingRtcPresence")
-      .withIndex("by_publicSessionId", (query) =>
-        query.eq("publicSessionId", publicSessionId),
-      )
-      .take(MAX_SESSION_CHILDREN_PER_TABLE + 1),
-    ctx.db
-      .query("recordingRtcSignals")
-      .withIndex("by_createdAt", (query) =>
-        query.eq("publicSessionId", publicSessionId),
-      )
-      .take(MAX_SESSION_CHILDREN_PER_TABLE + 1),
-  ]);
-  if (
-    presence.length > MAX_SESSION_CHILDREN_PER_TABLE ||
-    signals.length > MAX_SESSION_CHILDREN_PER_TABLE
-  ) {
-    domainError(
-      "CONFLICT",
-      "Recording RTC cleanup exceeded its per-table safety limit.",
-      {
-        details: {
-          limit: MAX_SESSION_CHILDREN_PER_TABLE,
+  sessionIds: Array<Id<"recordingSessions">>,
+  gate: CleanupGate,
+): Promise<DeletionResult> {
+  const deleted = emptyDeletionResult();
+  let budget = MAX_SESSION_DELETE_ROWS;
+  for (const [index, sessionId] of sessionIds.entries()) {
+    const session = await ctx.db.get("recordingSessions", sessionId);
+    if (session === null) continue;
+    // Revoke access before the first batch so in-flight clients cannot refill child tables.
+    if (!session.deleting) {
+      await ctx.db.patch("recordingSessions", session._id, {
+        deleting: true,
+        status: "ended",
+        endedAt: session.endedAt ?? Date.now(),
+      });
+    }
+    for (const [table, key] of sessionChildTables) {
+      if (budget === 0) break;
+      const rows = await ctx.db
+        .query(table)
+        .withIndex("by_publicSessionId", (q) =>
+          q.eq("publicSessionId", session.publicId),
+        )
+        .take(budget);
+      for (const row of rows) await ctx.db.delete(table, row._id);
+      deleted[key] += rows.length;
+      budget -= rows.length;
+    }
+    if (budget > 0) {
+      const rows = await ctx.db
+        .query("recordingRtcSignals")
+        .withIndex("by_createdAt", (q) =>
+          q.eq("publicSessionId", session.publicId),
+        )
+        .take(budget);
+      for (const row of rows)
+        await ctx.db.delete("recordingRtcSignals", row._id);
+      deleted.rtcSignals += rows.length;
+      budget -= rows.length;
+    }
+    if (budget === 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.recording.sessions.continueSessionDeletion,
+        {
+          sessionIds: sessionIds.slice(index),
+          ...gate,
         },
-      },
-    );
+      );
+      return deleted;
+    }
+    await ctx.db.delete("recordingSessions", session._id);
+    deleted.sessions++;
+    budget--;
+    if (budget === 0 && index + 1 < sessionIds.length) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.recording.sessions.continueSessionDeletion,
+        {
+          sessionIds: sessionIds.slice(index + 1),
+          ...gate,
+        },
+      );
+      return deleted;
+    }
   }
-  for (const document of presence) {
-    await ctx.db.delete(
-      "recordingRtcPresence",
-      document._id,
-    );
-  }
-  for (const document of signals) {
-    await ctx.db.delete(
-      "recordingRtcSignals",
-      document._id,
-    );
-  }
-  return {
-    rtcPresence: presence.length,
-    rtcSignals: signals.length,
-  };
-}
-
-async function deleteRecordingSession(
-  ctx: MutationCtx,
-  session: Doc<"recordingSessions">,
-) {
-  const deleted = {
-    sessions: 0,
-    invites: await deleteByPublicSessionId(
-      ctx,
-      "recordingSessionInvites",
-      session.publicId,
-    ),
-    participants: await deleteByPublicSessionId(
-      ctx,
-      "recordingParticipants",
-      session.publicId,
-    ),
-    events: await deleteByPublicSessionId(
-      ctx,
-      "recordingSessionEvents",
-      session.publicId,
-    ),
-    manifests: await deleteByPublicSessionId(
-      ctx,
-      "recordingSessionManifests",
-      session.publicId,
-    ),
-    favorites: await deleteByPublicSessionId(
-      ctx,
-      "recordingSessionFavorites",
-      session.publicId,
-    ),
-    recordings: await deleteByPublicSessionId(
-      ctx,
-      "recordingUploads",
-      session.publicId,
-    ),
-    ...(await deleteRtcByPublicSessionId(
-      ctx,
-      session.publicId,
-    )),
-  };
-  await ctx.db.delete("recordingSessions", session._id);
-  deleted.sessions = 1;
   return deleted;
 }
+
+export const continueSessionDeletion = internalAppMutation({
+  args: { sessionIds: v.array(v.id("recordingSessions")) },
+  returns: deletionResultValidator,
+  handler: async (ctx, args) => {
+    const deleted = await deleteRecordingSessionsBatch(ctx, args.sessionIds, {
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      clientApiVersion: ctx.systemState.apiVersion,
+    });
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "recording.sessions.deletionContinued",
+      targetType: "recordingSessionBatch",
+      targetId: `count:${String(deleted.sessions)}`,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: deleted,
+    });
+    return deleted;
+  },
+});
 
 export const cleanupEndedSessions = adminMutation({
   args: {
@@ -1019,34 +1005,18 @@ export const cleanupEndedSessions = adminMutation({
     const sessions = await ctx.db
       .query("recordingSessions")
       .withIndex("by_status_and_endedAt", (query) =>
-        query
-          .eq("status", "ended")
-          .lt("endedAt", olderThan),
+        query.eq("status", "ended").lt("endedAt", olderThan),
       )
       .take(limit);
-    const deleted = {
-      sessions: 0,
-      invites: 0,
-      participants: 0,
-      rtcPresence: 0,
-      rtcSignals: 0,
-      events: 0,
-      manifests: 0,
-      favorites: 0,
-      recordings: 0,
-    };
-    for (const session of sessions) {
-      const sessionDeleted = await deleteRecordingSession(
-        ctx,
-        session,
-      );
-      for (const key of Object.keys(
-        deleted,
-      ) as Array<keyof typeof deleted>) {
-        deleted[key] += sessionDeleted[key];
-      }
-    }
-    if (deleted.sessions > 0) {
+    const deleted = await deleteRecordingSessionsBatch(
+      ctx,
+      sessions.map((session) => session._id),
+      {
+        cutoverRunId: ctx.systemState.cutoverRunId,
+        clientApiVersion: ctx.systemState.apiVersion,
+      },
+    );
+    if (Object.values(deleted).some((count) => count > 0)) {
       await writeAuditEvent(ctx, {
         actor: ctx.actor,
         action: "recording.sessions.retentionDeleted",
@@ -1067,15 +1037,15 @@ export const deleteSessionData = adminMutation({
   },
   returns: v.union(deletionResultValidator, v.null()),
   handler: async (ctx, args) => {
-    const publicId = requirePortableId(
-      args.publicId,
-      "Recording session ID",
-    );
+    const publicId = requirePortableId(args.publicId, "Recording session ID");
     const session = await sessionByPublicId(ctx, publicId);
     if (session === null) {
       return null;
     }
-    const deleted = await deleteRecordingSession(ctx, session);
+    const deleted = await deleteRecordingSessionsBatch(ctx, [session._id], {
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      clientApiVersion: ctx.systemState.apiVersion,
+    });
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
       action: "recording.session.deleted",

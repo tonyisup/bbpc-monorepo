@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -59,88 +61,25 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listMoviesPageReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("catalog/public:listMoviesPage");
+const listMoviesPageReference = api.catalog.public.listMoviesPage;
 
-const listShowsPageReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("catalog/public:listShowsPage");
+const listShowsPageReference = api.catalog.public.listShowsPage;
 
-const searchCatalogMoviesReference = makeFunctionReference<
-  "query",
-  { query: string; limit: number },
-  unknown
->("catalog/public:searchMovies");
+const searchCatalogMoviesReference = api.catalog.public.searchMovies;
 
-const searchCatalogShowsReference = makeFunctionReference<
-  "query",
-  { query: string; limit: number },
-  unknown
->("catalog/public:searchShows");
+const searchCatalogShowsReference = api.catalog.public.searchShows;
 
-const searchMoviesReference = makeFunctionReference<
-  "action",
-  { query: string; page?: number },
-  unknown
->("catalog/external:searchMovies");
+const searchMoviesReference = api.catalog.external.searchMovies;
 
-const searchShowsReference = makeFunctionReference<
-  "action",
-  { query: string; page?: number },
-  unknown
->("catalog/external:searchShows");
+const searchShowsReference = api.catalog.external.searchShows;
 
-const upsertMovieReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    year: number;
-    poster: string;
-    url: string;
-    tmdbId?: number;
-  },
-  unknown
->("catalog/write:upsertMovieByUrl");
+const upsertMovieReference = api.catalog.write.upsertMovieByUrl;
 
-const upsertShowReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    year: number;
-    poster: string;
-    url: string;
-  },
-  unknown
->("catalog/write:upsertShowByUrl");
+const upsertShowReference = api.catalog.write.upsertShowByUrl;
 
-const deleteMovieReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("catalog/admin:deleteMovie");
+const deleteMovieReference = api.catalog.admin.deleteMovie;
 
-const deleteShowReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("catalog/admin:deleteShow");
+const deleteShowReference = api.catalog.admin.deleteShow;
 
 export const ADMIN_CATALOG_PAGE_SIZE = 30;
 
@@ -276,7 +215,7 @@ export async function deleteConvexAdminMovie(
   idResultSchema.parse(
     await client.mutation(deleteMovieReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("movies", id),
     })
   );
 }
@@ -288,7 +227,7 @@ export async function deleteConvexAdminShow(
   idResultSchema.parse(
     await client.mutation(deleteShowReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("shows", id),
     })
   );
 }

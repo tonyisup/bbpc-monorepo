@@ -217,7 +217,7 @@ export function ConvexPointDetailPage() {
         <CardHeader>
           <CardTitle>Point not found</CardTitle>
           <CardDescription>
-            No canonical point matches this identifier.
+            No point event matches this identifier.
           </CardDescription>
         </CardHeader>
         <CardFooter>
@@ -418,7 +418,7 @@ export function ConvexPointDetailPage() {
           <CardHeader>
             <CardTitle>Linked assignments</CardTitle>
             <CardDescription>
-              Search is bounded to 30 assignments by movie title, episode
+              Search returns up to 30 assignments by movie title, episode
               title, or exact episode number.
             </CardDescription>
           </CardHeader>

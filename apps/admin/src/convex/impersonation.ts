@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -13,31 +15,11 @@ const impersonationSessionSchema = z.object({
   endsAt: z.number(),
 });
 
-const currentReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("identity/impersonation:current");
+const currentReference = api.identity.impersonation.current;
 
-const startReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    targetUserId: string;
-    reason: string;
-    durationMinutes: number;
-  },
-  unknown
->("identity/impersonation:start");
+const startReference = api.identity.impersonation.start;
 
-const revokeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    sessionId: string;
-  },
-  unknown
->("identity/impersonation:revoke");
+const revokeReference = api.identity.impersonation.revoke;
 
 const revokeResultSchema = z.object({
   revoked: z.boolean(),
@@ -52,9 +34,7 @@ export async function loadCurrentConvexImpersonation(
   client: ConvexReactClient
 ): Promise<ConvexImpersonationSession | null> {
   const result = await client.query(currentReference, {});
-  return result === null
-    ? null
-    : impersonationSessionSchema.parse(result);
+  return result === null ? null : impersonationSessionSchema.parse(result);
 }
 
 export async function startConvexImpersonation(
@@ -69,6 +49,7 @@ export async function startConvexImpersonation(
     await client.mutation(startReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      targetUserId: documentId("users", input.targetUserId),
     })
   );
 }
@@ -80,7 +61,7 @@ export async function revokeConvexImpersonation(
   revokeResultSchema.parse(
     await client.mutation(revokeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      sessionId,
+      sessionId: documentId("impersonationSessions", sessionId),
     })
   );
 }

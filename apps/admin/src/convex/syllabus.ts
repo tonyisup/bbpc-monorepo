@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -57,28 +59,13 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listSyllabusReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("syllabus/admin:listPage");
+const listSyllabusReference = api.syllabus.admin.listPage;
 
-const removeSyllabusReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("syllabus/admin:removeEntry");
+const removeSyllabusReference = api.syllabus.admin.removeEntry;
 
 export const ADMIN_SYLLABUS_PAGE_SIZE = 50;
 
-export type ConvexAdminSyllabusEntry = z.infer<
-  typeof adminSyllabusEntrySchema
->;
+export type ConvexAdminSyllabusEntry = z.infer<typeof adminSyllabusEntrySchema>;
 
 export interface ConvexAdminSyllabusPage {
   entries: ConvexAdminSyllabusEntry[];
@@ -112,7 +99,7 @@ export async function removeConvexAdminSyllabusEntry(
   idResultSchema.parse(
     await client.mutation(removeSyllabusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("syllabusEntries", id),
     })
   );
 }

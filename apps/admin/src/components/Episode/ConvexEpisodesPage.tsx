@@ -242,15 +242,13 @@ export function ConvexEpisodesPage() {
         </div>
 
         <div className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-          Episode workbenches are available for canonical slugs. Assignment
-          and extra relationship editing remains in dedicated routes.
+          Open an episode to edit its assignments and extra reviews.
         </div>
 
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Episodes could not be loaded. No legacy SQL fallback was
-              attempted.
+              Episodes could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

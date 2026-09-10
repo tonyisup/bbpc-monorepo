@@ -1,7 +1,9 @@
 "use client";
 
+import { api } from "@tonyisup/bbpc-convex-api";
+
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
@@ -42,38 +44,13 @@ const possibleQuoteDuplicateSchema = z.object({
   possibleMatch: z.boolean(),
 });
 
-const currentForMeReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/quotes:currentForMe");
+const currentForMeReference = api.games.quotes.currentForMe;
 
-const checkPossibleDuplicateReference = makeFunctionReference<
-  "query",
-  { quoteText: string; sourceTitle: string },
-  unknown
->("games/quotes:checkPossibleDuplicate");
+const checkPossibleDuplicateReference = api.games.quotes.checkPossibleDuplicate;
 
-const submitMineReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    quoteText: string;
-    sourceTitle: string;
-    sourceType: ConvexQuoteSourceType;
-    clipUrl: string | null;
-    clipStartSeconds: number | null;
-    listenerNotes: string | null;
-    today: string;
-  },
-  unknown
->("games/quotes:submitMine");
+const submitMineReference = api.games.quotes.submitMine;
 
-const withdrawMineReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string },
-  unknown
->("games/quotes:withdrawMine");
+const withdrawMineReference = api.games.quotes.withdrawMine;
 
 const withdrawnSubmissionSchema = z.object({ id: z.string().min(1) });
 

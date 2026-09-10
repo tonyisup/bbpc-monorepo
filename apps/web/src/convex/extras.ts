@@ -1,7 +1,10 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
@@ -41,74 +44,21 @@ const extraReviewResultSchema = z.object({
   review: z.object({ id: z.string().min(1) }),
 });
 
-const searchCatalogMoviesReference = makeFunctionReference<
-  "query",
-  { query: string; limit: number },
-  unknown
->("catalog/public:searchMovies");
+const searchCatalogMoviesReference = api.catalog.public.searchMovies;
 
-const searchCatalogShowsReference = makeFunctionReference<
-  "query",
-  { query: string; limit: number },
-  unknown
->("catalog/public:searchShows");
+const searchCatalogShowsReference = api.catalog.public.searchShows;
 
-const searchTmdbMoviesReference = makeFunctionReference<
-  "action",
-  { query: string; page?: number },
-  unknown
->("catalog/external:searchMovies");
+const searchTmdbMoviesReference = api.catalog.external.searchMovies;
 
-const searchTmdbShowsReference = makeFunctionReference<
-  "action",
-  { query: string; page?: number },
-  unknown
->("catalog/external:searchShows");
+const searchTmdbShowsReference = api.catalog.external.searchShows;
 
-const upsertMovieReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    year: number;
-    poster: string;
-    url: string;
-    tmdbId?: number;
-  },
-  unknown
->("catalog/write:upsertMovieByUrl");
+const upsertMovieReference = api.catalog.write.upsertMovieByUrl;
 
-const upsertShowReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    year: number;
-    poster: string;
-    url: string;
-  },
-  unknown
->("catalog/write:upsertShowByUrl");
+const upsertShowReference = api.catalog.write.upsertShowByUrl;
 
-const addMovieExtraReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    movieId: string;
-  },
-  unknown
->("reviews/mine:addMovieExtra");
+const addMovieExtraReference = api.reviews.mine.addMovieExtra;
 
-const addShowExtraReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    showId: string;
-  },
-  unknown
->("reviews/mine:addShowExtra");
+const addShowExtraReference = api.reviews.mine.addShowExtra;
 
 export type ConvexExtraCatalogMovie = z.infer<typeof catalogMovieSchema>;
 export type ConvexExtraCatalogShow = z.infer<typeof catalogShowSchema>;
@@ -200,8 +150,8 @@ export async function addMyConvexMovieExtra(
   return extraReviewResultSchema.parse(
     await client.mutation(addMovieExtraReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      episodeId,
-      movieId,
+      episodeId: documentId("episodes", episodeId),
+      movieId: documentId("movies", movieId),
     })
   );
 }
@@ -214,8 +164,8 @@ export async function addMyConvexShowExtra(
   return extraReviewResultSchema.parse(
     await client.mutation(addShowExtraReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      episodeId,
-      showId,
+      episodeId: documentId("episodes", episodeId),
+      showId: documentId("shows", showId),
     })
   );
 }

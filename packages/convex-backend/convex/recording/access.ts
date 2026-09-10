@@ -78,6 +78,10 @@ export async function requireRecordingParticipant(
       "Recording session access is denied.",
     );
   }
+  const session = await ctx.db.get("recordingSessions", participant.sessionId);
+  if (session === null || session.deleting === true) {
+    domainError("FORBIDDEN", "Recording session access is denied.");
+  }
   return participant;
 }
 

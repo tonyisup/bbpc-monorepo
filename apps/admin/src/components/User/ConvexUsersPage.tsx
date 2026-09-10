@@ -205,8 +205,7 @@ function RoleMembershipEditor({
         <DialogHeader>
           <DialogTitle>Manage Roles</DialogTitle>
           <DialogDescription>
-            {user.name ?? user.email ?? "This user"} receives capabilities only
-            from these canonical role memberships.
+            Choose which roles and permissions {user.name ?? user.email ?? "this user"} has.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-5 py-4">
@@ -500,7 +499,7 @@ export function ConvexUsersPage() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Users</h2>
             <p className="text-muted-foreground">
-              Manage canonical accounts, status, and role memberships.
+              Manage accounts, status, and roles.
             </p>
           </div>
           <Button onClick={() => setEditingUser(null)}>
@@ -563,7 +562,7 @@ export function ConvexUsersPage() {
         {loadFailed ? (
           <Card className="p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Users could not be loaded. No legacy SQL fallback was attempted.
+              Users could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

@@ -174,7 +174,9 @@ export const useAudioRecorder = (options: UseAudioRecorderOptions = {}) => {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
 			// Web Audio API setup for loudness indicator
-			const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+			const AudioContextClass = window.AudioContext ||
+				(window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+			const audioContext = new AudioContextClass();
 			const analyser = audioContext.createAnalyser();
 			const source = audioContext.createMediaStreamSource(stream);
 			source.connect(analyser);
@@ -221,8 +223,8 @@ export const useAudioRecorder = (options: UseAudioRecorderOptions = {}) => {
 				if (!isRecordingRef.current) return;
 				analyser.getByteFrequencyData(dataArray);
 				let max = 0;
-				for (let i = 0; i < bufferLength; i++) {
-					if (dataArray[i]! > max) max = dataArray[i]!;
+				for (const level of dataArray) {
+					if (level > max) max = level;
 				}
 				// Normalize to 0-100 range
 				const normalizedVolume = Math.min(100, Math.round((max / 255) * 100));

@@ -1,8 +1,10 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import "server-only";
 
 import { z } from "zod";
 
-import { fetchPublicQuery, publicQueryReference } from "./client";
+import { fetchPublicQuery } from "./client";
 import type { CompleteEpisode } from "@/types/episode";
 
 const PUBLIC_SEARCH_LIMIT = 20;
@@ -68,37 +70,19 @@ const episodeSchema = z.object({
   ),
 });
 
-const nextScheduledReference = publicQueryReference<Record<string, never>>(
-  "episodes/public:nextScheduled"
-);
+const nextScheduledReference = api.episodes.public.nextScheduled;
 
-const latestPublishedReference = publicQueryReference<{
-  onOrBefore: string;
-}>("episodes/public:latestPublished");
+const latestPublishedReference = api.episodes.public.latestPublished;
 
-const searchReference = publicQueryReference<{
-  query: string;
-  limit: number;
-}>("episodes/public:search");
+const searchReference = api.episodes.public.search;
 
-const listPageReference = publicQueryReference<{
-  paginationOpts: {
-    cursor: string | null;
-    numItems: number;
-  };
-}>("episodes/public:listPage");
+const listPageReference = api.episodes.public.listPage;
 
-const getByLegacyIdReference = publicQueryReference<{
-  legacyId: string;
-}>("episodes/public:getByLegacyId");
+const getByLegacyIdReference = api.episodes.public.getByLegacyId;
 
-const getBySlugReference = publicQueryReference<{
-  slug: string;
-}>("episodes/public:getBySlug");
+const getBySlugReference = api.episodes.public.getBySlug;
 
-const resultsReference = publicQueryReference<{
-  episodeId: string;
-}>("episodes/public:results");
+const resultsReference = api.episodes.public.results;
 
 const episodePageSchema = z.object({
   page: z.array(episodeSchema),
@@ -185,7 +169,7 @@ export async function getEpisodeBySlug(
 
 export async function getEpisodeResults(episodeId: string) {
   const result = await fetchPublicQuery(resultsReference, {
-    episodeId,
+    episodeId: documentId("episodes", episodeId),
   });
   return episodeResultsSchema.parse(result);
 }

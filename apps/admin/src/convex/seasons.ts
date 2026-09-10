@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -46,55 +48,15 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listGameTypesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/config:listGameTypes");
+const listGameTypesReference = api.games.config.listGameTypes;
 
-const listSeasonsReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("games/seasons:listPage");
+const listSeasonsReference = api.games.seasons.listPage;
 
-const createSeasonReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    description?: string;
-    gameTypeId: string;
-    startedOn: string;
-    endedOn?: string | null;
-  },
-  unknown
->("games/seasons:create");
+const createSeasonReference = api.games.seasons.create;
 
-const updateSeasonReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    title: string;
-    description: string | null;
-    gameTypeId: string;
-    startedOn: string;
-    endedOn: string | null;
-  },
-  unknown
->("games/seasons:update");
+const updateSeasonReference = api.games.seasons.update;
 
-const deleteSeasonReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/seasons:removeIfUnreferenced");
+const deleteSeasonReference = api.games.seasons.removeIfUnreferenced;
 
 export const ADMIN_SEASONS_PAGE_SIZE = 30;
 
@@ -148,7 +110,7 @@ export async function createConvexAdminSeason(
     await client.mutation(createSeasonReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       title: input.title,
-      gameTypeId: input.gameTypeId,
+      gameTypeId: documentId("gameTypes", input.gameTypeId),
       startedOn: input.startedOn,
       ...(input.description === null ? {} : { description: input.description }),
       ...(input.endedOn === null ? {} : { endedOn: input.endedOn }),
@@ -164,8 +126,9 @@ export async function updateConvexAdminSeason(
   adminSeasonSchema.parse(
     await client.mutation(updateSeasonReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("seasons", id),
       ...input,
+      gameTypeId: documentId("gameTypes", input.gameTypeId),
     })
   );
 }
@@ -177,7 +140,7 @@ export async function deleteConvexAdminSeason(
   idResultSchema.parse(
     await client.mutation(deleteSeasonReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("seasons", id),
     })
   );
 }

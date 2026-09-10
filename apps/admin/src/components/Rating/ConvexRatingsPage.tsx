@@ -286,7 +286,7 @@ export function ConvexRatingsPage() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Ratings</h2>
             <p className="text-muted-foreground">
-              Manage the bounded movie and show rating catalog.
+              Manage movie and TV ratings.
             </p>
           </div>
           <Button onClick={() => setEditingRating(null)}>
@@ -298,7 +298,7 @@ export function ConvexRatingsPage() {
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Ratings could not be loaded. No legacy SQL fallback was attempted.
+              Ratings could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from './SessionProvider';
 import { useAudio } from './AudioProvider';
 import { useRecordingEngine } from '@/hooks/useRecordingEngine';
-import type { RecordingTracks } from '@/hooks/useRecordingEngine';
+import { useRecordingUpload } from '@/hooks/useRecordingUpload';
 import { useRecordingSync } from '@/hooks/useRecordingSync';
 import { useMeshAudioRoom } from '@/hooks/useMeshAudioRoom';
 
@@ -78,11 +78,19 @@ export function DashboardHeader() {
     participantAccessToken,
     participantRole,
     sessionStatus,
+    pendingEventCount,
+    syncError,
+    retryPendingEvents,
   } = useSession();
   const { stopAll } = useAudio();
-  const recording = useRecordingEngine();
-  const uploadStatusRef = useRef<'idle' | 'uploading' | 'done' | 'error'>('idle');
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
+  const recovery = useRecordingUpload(sessionId, state.episode, state.hostName);
+  const recording = useRecordingEngine(recovery.retain);
+  const uploadStatus = recovery.status;
+  const uploadTracks = recovery.upload;
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const savingEditRef = useRef(false);
+  const transportBusyRef = useRef(false);
+  const [transportBusy, setTransportBusy] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
   const endingSessionRef = useRef(false);
   const forcedUploadRef = useRef(false);
@@ -99,19 +107,22 @@ export function DashboardHeader() {
   const [episodeInput, setEpisodeInput] = useState('');
   const episodeInputRef = useRef<HTMLInputElement>(null);
 
-  const saveEpisode = useCallback((name: string) => {
+  const saveEpisode = useCallback(async (name: string) => {
     const trimmed = name.trim();
-    if (trimmed) {
-      dispatch({ type: 'UPDATE_EPISODE', episode: trimmed });
-      void fetch(`/api/sessions/${sessionId}/episode`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+    if (!trimmed || savingEditRef.current) return;
+    savingEditRef.current = true;
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/episode`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ episode: trimmed }),
-      }).catch(err => {
-        console.error('[Session] Failed to update episode:', err);
       });
-    }
-    setEditingEpisode(false);
+      if (!res.ok) throw new Error(`Could not save episode title (${res.status}). Try again.`);
+      dispatch({ type: 'UPDATE_EPISODE', episode: trimmed });
+      setEditingEpisode(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save episode title');
+    } finally { savingEditRef.current = false; }
   }, [dispatch, sessionId]);
 
   const startEpisodeEdit = useCallback(() => {
@@ -123,20 +134,23 @@ export function DashboardHeader() {
     }, 0);
   }, [episodeName]);
 
-  const saveName = useCallback((name: string) => {
+  const saveName = useCallback(async (name: string) => {
     const trimmed = name.trim();
-    if (trimmed) {
+    if (!trimmed || savingEditRef.current) return;
+    savingEditRef.current = true;
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/participant`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+      if (!res.ok) throw new Error(`Could not save your name (${res.status}). Try again.`);
       writeStoredDisplayName(trimmed);
       dispatch({ type: 'UPDATE_HOST_NAME', hostName: trimmed });
-      void fetch(`/api/sessions/${sessionId}/participant`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: trimmed }),
-      }).catch(err => {
-        console.error('[Session] Failed to update display name:', err);
-      });
-    }
-    setEditingName(false);
+      setEditingName(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save your name');
+    } finally { savingEditRef.current = false; }
   }, [dispatch, sessionId]);
 
   const startNameEdit = useCallback(() => {
@@ -160,6 +174,8 @@ export function DashboardHeader() {
 
   // Realtime recording sync
   const recordingStartRef = useRef<number>(0);
+  const stoppedTakesRef = useRef(new Set<number>());
+  const joiningTakeRef = useRef<{ startedAt: number; canceled: boolean } | null>(null);
   const isOwner = participantRole === 'owner';
   const rtcAudioEnabled = process.env.NEXT_PUBLIC_RTC_AUDIO_ENABLED !== 'false';
   const meshAudio = useMeshAudioRoom({
@@ -214,62 +230,6 @@ export function DashboardHeader() {
     },
   });
 
-  const uploadTrack = useCallback(async (
-    sessionId: string,
-    episode: string,
-    hostName: string,
-    trackType: 'mic' | 'sounders',
-    blob: Blob,
-    startedAt: number,
-  ) => {
-    try {
-      if (blob.size < 100) {
-        console.log('[Recording] Skipping empty track:', trackType, blob.size);
-        return true;
-      }
-      const arrayBuffer = await blob.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64 = btoa(binary);
-
-      const res = await fetch('/api/recordings/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, episode, hostName, trackType, startedAt, audioBase64: base64 }),
-      });
-
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      return true;
-    } catch (err) {
-      console.error('[Recording] Upload error:', err);
-      return false;
-    }
-  }, []);
-
-  const uploadTracks = useCallback(async (tracks: RecordingTracks) => {
-    setUploadStatus('uploading');
-    uploadStatusRef.current = 'uploading';
-
-    const [micOk, sounderOk] = await Promise.all([
-      uploadTrack(sessionId, episodeName, hostName, 'mic', tracks.mic, tracks.startedAt),
-      uploadTrack(sessionId, episodeName, hostName, 'sounders', tracks.sounders, tracks.startedAt),
-    ]);
-
-    const finalStatus = micOk && sounderOk ? 'done' : 'error';
-    setUploadStatus(finalStatus);
-    uploadStatusRef.current = finalStatus;
-
-    setTimeout(() => {
-      setUploadStatus('idle');
-      uploadStatusRef.current = 'idle';
-    }, 3000);
-
-    return finalStatus === 'done';
-  }, [episodeName, hostName, sessionId, uploadTrack]);
-
   const dispatchRecordingJoin = useCallback((recordingStartedAt: number, joinedAt: number) => {
     dispatch({
       type: 'JOIN_RECORDING',
@@ -300,38 +260,58 @@ export function DashboardHeader() {
   }, [dispatch, participantClientId]);
 
   const joinActiveRecording = useCallback(async (recordingStartedAt: number) => {
-    if (sessionStatus === 'ended' || recording.state.isRecording) return;
-
-    let micStream: MediaStream | null = null;
-    if (rtcAudioEnabled) {
-      if (!meshAudio.state.joined) await meshAudio.joinAudio();
-      micStream = meshAudio.getLocalStream();
-      if (!micStream) return;
-    } else {
-      const hasPermission = await recording.requestMicPermission();
-      if (!hasPermission) return;
-    }
-    setMicPermissionOk(true);
-
+    if (sessionStatus === 'ended' || recording.state.isRecording || recovery.hasPending() || transportBusyRef.current || stoppedTakesRef.current.has(recordingStartedAt)) return;
+    const attempt = { startedAt: recordingStartedAt, canceled: false };
+    joiningTakeRef.current = attempt;
+    transportBusyRef.current = true;
+    setTransportBusy(true);
     try {
+      let micStream: MediaStream | null = null;
+      if (rtcAudioEnabled) {
+        if (!meshAudio.state.joined) await meshAudio.joinAudio();
+        micStream = meshAudio.getLocalStream();
+        if (!micStream) return;
+      } else {
+        const hasPermission = await recording.requestMicPermission();
+        if (!hasPermission) return;
+      }
+      if (attempt.canceled) return;
+      setMicPermissionOk(true);
       await recording.startRecording({ mediaStream: micStream ?? undefined, ownsMediaStream: !micStream });
+      if (attempt.canceled) {
+        // The host stopped while microphone/recorder startup was pending.
+        // Finalize any capture immediately and preserve it through upload recovery.
+        await uploadTracks(await recording.stopRecording());
+        return;
+      }
       recordingStartRef.current = recordingStartedAt;
       dispatchRecordingJoin(recordingStartedAt, Date.now());
     } catch (err) {
-      console.error('[Recording] Failed to join recording:', err);
+      setSaveError(err instanceof Error ? err.message : 'Could not join recording');
+    } finally {
+      if (joiningTakeRef.current === attempt) joiningTakeRef.current = null;
+      if (attempt.canceled && recordingStartRef.current === recordingStartedAt) recordingStartRef.current = 0;
+      transportBusyRef.current = false;
+      setTransportBusy(false);
     }
-  }, [dispatchRecordingJoin, meshAudio, recording, rtcAudioEnabled, sessionStatus]);
+  }, [dispatchRecordingJoin, meshAudio, recording, rtcAudioEnabled, sessionStatus, recovery, uploadTracks]);
 
   const leaveActiveRecording = useCallback(async (reason: 'left' | 'host-stopped') => {
     const recordingStartedAt = recordingStartRef.current || state.recordingStart;
-    if (!recordingStartedAt || !recording.state.isRecording) return;
-
-    const leftAt = Date.now();
-    dispatchRecordingLeave(recordingStartedAt, leftAt, reason);
-
-    const tracks = await recording.stopRecording();
-    recordingStartRef.current = reason === 'host-stopped' ? 0 : recordingStartedAt;
-    await uploadTracks(tracks);
+    if (!recordingStartedAt || !recording.state.isRecording || transportBusyRef.current) return;
+    transportBusyRef.current = true;
+    setTransportBusy(true);
+    try {
+      dispatchRecordingLeave(recordingStartedAt, Date.now(), reason);
+      const tracks = await recording.stopRecording();
+      recordingStartRef.current = reason === 'host-stopped' ? 0 : recordingStartedAt;
+      await uploadTracks(tracks);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not stop recording');
+    } finally {
+      transportBusyRef.current = false;
+      setTransportBusy(false);
+    }
   }, [dispatchRecordingLeave, recording, state.recordingStart, uploadTracks]);
 
   const handleRemoteStart = useCallback((startedAt: number) => {
@@ -341,13 +321,19 @@ export function DashboardHeader() {
 
   const handleRemoteStop = useCallback(async (startedAt: number, durationMs: number) => {
     console.log('[Recording] Remote host stopped recording', { startedAt, durationMs });
-    if (!isOwner && recording.state.isRecording) {
+    stoppedTakesRef.current.add(startedAt);
+    const joining = joiningTakeRef.current;
+    if (!isOwner && joining?.startedAt === startedAt) {
+      joining.canceled = true;
+      return;
+    }
+    if (!isOwner && recording.state.isRecording && recordingStartRef.current === startedAt) {
       await leaveActiveRecording('host-stopped');
     }
-    recordingStartRef.current = 0;
+    if (recordingStartRef.current === startedAt) recordingStartRef.current = 0;
   }, [isOwner, leaveActiveRecording, recording.state.isRecording]);
 
-  const { broadcastStart, broadcastStop } = useRecordingSync({
+  const recordingSync = useRecordingSync({
     sessionId,
     clientId: participantClientId,
     accessToken: participantAccessToken,
@@ -370,90 +356,111 @@ export function DashboardHeader() {
 
   // Unified start: session + audio recording + broadcast
   const handleStartRecording = async () => {
-    if (!isOwner || sessionStatus === 'ended') return;
-
-    // Request mic permission first
-    let micStream: MediaStream | null = null;
-    if (rtcAudioEnabled) {
-      if (!meshAudio.state.joined) await meshAudio.joinAudio();
-      micStream = meshAudio.getLocalStream();
-      if (!micStream) return;
-    } else {
-      const hasPermission = await recording.requestMicPermission();
-      if (!hasPermission) return;
-    }
-    setMicPermissionOk(true);
-
-    const now = Date.now();
-    recordingStartRef.current = now;
-
+    if (!isOwner || sessionStatus === 'ended' || recovery.hasPending() || transportBusyRef.current || pendingEventCount || recordingSync.pendingCount) return;
+    transportBusyRef.current = true;
+    setTransportBusy(true);
     try {
-      // Start the local recorder before changing shared transport state.
-      await recording.startRecording({
-        mediaStream: micStream ?? undefined,
-        ownsMediaStream: !micStream,
-      });
-    } catch (err) {
-      recordingStartRef.current = 0;
-      console.error('[Recording] Failed to start recording:', err);
-      return;
-    }
 
-    dispatch({
-      type: 'START_RECORDING',
-      startedAt: now,
-      participant: {
+      // Request mic permission first
+      let micStream: MediaStream | null = null;
+      if (rtcAudioEnabled) {
+        if (!meshAudio.state.joined) await meshAudio.joinAudio();
+        micStream = meshAudio.getLocalStream();
+        if (!micStream) return;
+      } else {
+        const hasPermission = await recording.requestMicPermission();
+        if (!hasPermission) return;
+      }
+      setMicPermissionOk(true);
+
+      const now = Date.now();
+      recordingStartRef.current = now;
+
+      try {
+        // Start the local recorder before changing shared transport state.
+        await recording.startRecording({
+          mediaStream: micStream ?? undefined,
+          ownsMediaStream: !micStream,
+        });
+      } catch (err) {
+        recordingStartRef.current = 0;
+        console.error('[Recording] Failed to start recording:', err);
+        return;
+      }
+
+      dispatch({
+        type: 'START_RECORDING',
+        startedAt: now,
+        participant: {
+          clientId: participantClientId,
+          name: hostName,
+          role: 'owner',
+          joinedAt: now,
+        },
+      });
+
+      // Broadcast to guests
+      void recordingSync.broadcastStart(now, {
         clientId: participantClientId,
         name: hostName,
-        role: 'owner',
         joinedAt: now,
-      },
-    });
-
-    // Broadcast to guests
-    broadcastStart(now, {
-      clientId: participantClientId,
-      name: hostName,
-      joinedAt: now,
-    });
+      })?.catch(() => { /* The sync banner exposes and retains the event. */ });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Recording start could not be shared');
+    } finally {
+      transportBusyRef.current = false;
+      setTransportBusy(false);
+    }
   };
 
   // Unified stop: session + audio recording + broadcast + upload
   const handleStopRecording = async () => {
-    if (!isOwner) return;
-    const recordingStartedAt = recordingStartRef.current || state.recordingStart || Date.now();
-    const stoppedAt = Date.now();
+    if (!isOwner || transportBusyRef.current) return false;
+    transportBusyRef.current = true;
+    setTransportBusy(true);
+    try {
+      const recordingStartedAt = recordingStartRef.current || state.recordingStart || Date.now();
+      const stoppedAt = Date.now();
 
-    // Stop session recording
-    dispatch({
-      type: 'STOP_RECORDING',
-      participant: {
+      // Stop session recording
+      dispatch({
+        type: 'STOP_RECORDING',
+        participant: {
+          clientId: participantClientId,
+          leftAt: stoppedAt,
+          recordingStartedAt,
+          reason: 'host-stopped',
+        },
+      });
+
+      // Stop WebRTC audio recording
+      const tracks = await recording.stopRecording();
+      recordingStartRef.current = 0;
+
+      // Retain/upload audio before attempting the shared stop event.
+      const upload = uploadTracks(tracks);
+      const broadcast = recordingSync.broadcastStop(recordingStartedAt, stoppedAt - recordingStartedAt, {
         clientId: participantClientId,
         leftAt: stoppedAt,
-        recordingStartedAt,
-        reason: 'host-stopped',
-      },
-    });
+      });
 
-    // Stop WebRTC audio recording
-    const tracks = await recording.stopRecording();
-    recordingStartRef.current = 0;
-
-    // Broadcast stop to guests
-    await broadcastStop(recordingStartedAt, stoppedAt - recordingStartedAt, {
-      clientId: participantClientId,
-      leftAt: stoppedAt,
-    });
-
-    await uploadTracks(tracks);
+      const results = await Promise.allSettled([broadcast, upload]);
+      return results.every(result => result.status === 'fulfilled' && result.value !== false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not stop recording');
+      return false;
+    } finally {
+      transportBusyRef.current = false;
+      setTransportBusy(false);
+    }
   };
 
   const hostRecordingActive = state.isRecording;
   const localRecordingActive = recording.state.isRecording;
   const isRecording = isOwner ? (hostRecordingActive || localRecordingActive) : localRecordingActive;
   const sessionEnded = sessionStatus === 'ended';
-  const canEditEpisode = isOwner && !sessionEnded && !hostRecordingActive;
-  const guestCanJoinRecording = !isOwner && !sessionEnded && hostRecordingActive && !localRecordingActive;
+  const canEditEpisode = isOwner && !sessionEnded && !hostRecordingActive && !recovery.pending;
+  const guestCanJoinRecording = !isOwner && !sessionEnded && hostRecordingActive && !localRecordingActive && !recovery.pending;
   const canEndSession = isOwner && !sessionEnded;
   const inviteUnavailable = sessionEnded || inviteUrl === null;
   const inviteButtonClassName = inviteUnavailable
@@ -461,7 +468,7 @@ export function DashboardHeader() {
     : 'px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--foreground)] hover:border-[var(--accent)] transition-colors';
 
   const handleEndSession = async () => {
-    if (!canEndSession) return;
+    if (!canEndSession || endingSessionRef.current || transportBusyRef.current) return;
     const confirmed = window.confirm('End this recording session? Active recordings will be stopped and uploaded first.');
     if (!confirmed) return;
 
@@ -471,8 +478,10 @@ export function DashboardHeader() {
 
     try {
       if (hostRecordingActive || localRecordingActive) {
-        await handleStopRecording();
+        if (!await handleStopRecording()) return;
       }
+      if (recovery.hasPending() && !await recovery.retry()) return;
+      await Promise.all([retryPendingEvents(), recordingSync.retryPendingEvents()]);
       if (meshAudio.state.joined) {
         await meshAudio.leaveAudio();
       }
@@ -480,7 +489,7 @@ export function DashboardHeader() {
       const res = await fetch(`/api/sessions/${sessionId}/end`, { method: 'POST' });
       if (!res.ok) throw new Error(`End session failed: ${res.status}`);
     } catch (err) {
-      console.error('[Session] Failed to end session:', err);
+      setSaveError(err instanceof Error ? err.message : 'Could not end session');
     } finally {
       endingSessionRef.current = false;
       setEndingSession(false);
@@ -495,6 +504,16 @@ export function DashboardHeader() {
       forcedUploadRef.current = false;
     });
   }, [leaveActiveRecording, localRecordingActive, sessionEnded]);
+
+  useEffect(() => {
+    const preventLoss = (event: BeforeUnloadEvent) => {
+      if (!localRecordingActive && !recovery.hasPending() && !pendingEventCount && !recordingSync.pendingCount) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', preventLoss);
+    return () => window.removeEventListener('beforeunload', preventLoss);
+  }, [localRecordingActive, pendingEventCount, recordingSync.pendingCount, recovery]);
 
   return (
     <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[var(--card-border)] bg-[var(--card-bg)]">
@@ -628,21 +647,35 @@ export function DashboardHeader() {
               <span className="text-xs text-[var(--muted)] font-mono">
                 {formatElapsed(recording.state.durationMs)}
               </span>
-              {uploadStatus === 'uploading' && (
-                <span className="text-xs text-[var(--warning)] animate-pulse">↑ uploading...</span>
-              )}
-              {uploadStatus === 'done' && (
-                <span className="text-xs text-[var(--success)]">✓ uploaded</span>
-              )}
-              {uploadStatus === 'error' && (
-                <span className="text-xs text-[var(--danger)]">✗ upload failed</span>
-              )}
             </>
           ) : (
             <span className="text-xs text-[var(--muted)]">
               {micPermissionOk ? '🎙 Ready' : '🎙 Click Start'}
             </span>
           )}
+        </div>
+
+        <div className="flex flex-col gap-1 text-xs" aria-live="polite">
+          {uploadStatus === 'uploading' && <span>Uploading audio…</span>}
+          {uploadStatus === 'done' && <span>Audio uploaded</span>}
+          {recovery.pending && <>
+            <span role={uploadStatus === 'error' ? 'alert' : undefined}>{recovery.error ?? 'Audio is saved in this tab. Upload it before ending the session.'}</span>
+            <div className="flex gap-2">
+              <button disabled={uploadStatus === 'uploading'} onClick={() => void recovery.retry()}>Retry upload</button>
+              <button onClick={() => recovery.download('mic')}>Download mic</button>
+              <button onClick={() => recovery.download('sounders')}>Download sounders</button>
+              <button disabled={uploadStatus === 'uploading'} onClick={() => {
+                if (window.confirm('Discard the audio still in this tab? Download both tracks first if you want to keep them. This cannot be undone.')) recovery.discard();
+              }}>Discard audio</button>
+            </div>
+          </>}
+          {(pendingEventCount > 0 || recordingSync.pendingCount > 0) && <div role="status">
+            {syncError || recordingSync.syncError ? 'Changes not saved. Keep this tab open.' : 'Saving session changes…'}
+            {(syncError || recordingSync.syncError) && <button onClick={() => {
+              void Promise.all([retryPendingEvents(), recordingSync.retryPendingEvents()]).then(() => setSaveError(null)).catch(() => {});
+            }}>Retry saving</button>}
+          </div>}
+          {saveError && <span role="alert">{saveError}</span>}
         </div>
 
         {/* Sounder stop */}
@@ -709,6 +742,7 @@ export function DashboardHeader() {
         ) : isOwner && isRecording ? (
           <button
             onClick={handleStopRecording}
+            disabled={transportBusy}
             className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
           >
             Stop Recording
@@ -716,6 +750,7 @@ export function DashboardHeader() {
         ) : isOwner ? (
           <button
             onClick={handleStartRecording}
+            disabled={transportBusy || !!recovery.pending || pendingEventCount > 0 || recordingSync.pendingCount > 0}
             className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--success)] text-white hover:opacity-90 transition-opacity"
           >
             Start Recording
@@ -723,12 +758,14 @@ export function DashboardHeader() {
         ) : localRecordingActive ? (
           <button
             onClick={() => void leaveActiveRecording('left')}
+            disabled={transportBusy}
             className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
           >
             Leave Recording
           </button>
         ) : guestCanJoinRecording ? (
           <button
+            disabled={transportBusy}
             onClick={() => {
               const recordingStartedAt = recordingStartRef.current || state.recordingStart;
               if (recordingStartedAt) void joinActiveRecording(recordingStartedAt);
@@ -745,7 +782,7 @@ export function DashboardHeader() {
         {participantRole === 'owner' && !sessionEnded && (
           <button
             onClick={handleEndSession}
-            disabled={!canEndSession || endingSession}
+            disabled={!canEndSession || endingSession || transportBusy || uploadStatus === 'uploading'}
             className={`px-2 py-1.5 text-xs font-medium rounded border transition-colors ${
               canEndSession && !endingSession
                 ? 'border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)]'

@@ -24,12 +24,16 @@ export const dashboardGuessStatValidator = v.object({
 });
 
 export const dashboardOverviewValidator = v.object({
-  counts: v.object({
-    episodes: v.number(),
-    users: v.number(),
-    movies: v.number(),
-    reviews: v.number(),
-  }),
+  countsReady: v.boolean(),
+  counts: v.union(
+    v.null(),
+    v.object({
+      episodes: v.number(),
+      users: v.number(),
+      movies: v.number(),
+      reviews: v.number(),
+    }),
+  ),
   latestEpisode: v.union(episodeDetailValidator, v.null()),
   upcomingEpisode: v.union(episodeDetailValidator, v.null()),
   latestSyllabus: v.array(dashboardSyllabusEntryValidator),

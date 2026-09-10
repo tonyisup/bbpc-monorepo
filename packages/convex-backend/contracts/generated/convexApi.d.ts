@@ -638,14 +638,20 @@ export type PublicApiType = {
         };
     };
     admin: {
+        dashboardBackfill: {
+            initialize: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, null>;
+        };
         dashboard: {
             overview: FunctionReference<"query", "public", Record<string, never>, {
+                countsReady: boolean;
                 counts: {
                     episodes: number;
                     movies: number;
                     reviews: number;
                     users: number;
-                };
+                } | null;
                 guessStats: Array<{
                     fullTitle: string;
                     guesses: number;

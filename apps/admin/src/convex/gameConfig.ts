@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -34,123 +36,32 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listGameTypesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/config:listGameTypes");
+const listGameTypesReference = api.games.config.listGameTypes;
 
-const listGamePointTypesReference = makeFunctionReference<
-  "query",
-  { gameTypeId?: string },
-  unknown
->("games/config:listGamePointTypes");
+const listGamePointTypesReference = api.games.config.listGamePointTypes;
 
-const listGamblingTypesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/gambling:listTypes");
+const listGamblingTypesReference = api.games.gambling.listTypes;
 
-const createGameTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    description?: string;
-    lookupId: string;
-  },
-  unknown
->("games/config:createGameType");
+const createGameTypeReference = api.games.config.createGameType;
 
-const updateGameTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    title: string;
-    description: string | null;
-    lookupId: string;
-  },
-  unknown
->("games/config:updateGameType");
+const updateGameTypeReference = api.games.config.updateGameType;
 
-const removeGameTypeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/config:removeGameType");
+const removeGameTypeReference = api.games.config.removeGameType;
 
-const createGamePointTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    gameTypeId: string;
-    title: string;
-    description?: string;
-    lookupId: string;
-    points: number;
-  },
-  unknown
->("games/config:createGamePointType");
+const createGamePointTypeReference = api.games.config.createGamePointType;
 
-const updateGamePointTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    gameTypeId: string;
-    title: string;
-    description: string | null;
-    lookupId: string;
-    points: number;
-  },
-  unknown
->("games/config:updateGamePointType");
+const updateGamePointTypeReference = api.games.config.updateGamePointType;
 
-const removeGamePointTypeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/config:removeGamePointType");
+const removeGamePointTypeReference = api.games.config.removeGamePointType;
 
-const createGamblingTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    lookupId: string;
-    description?: string;
-    multiplier: number;
-    isActive: boolean;
-  },
-  unknown
->("games/gambling:createType");
+const createGamblingTypeReference = api.games.gambling.createType;
 
-const updateGamblingTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    title: string;
-    lookupId: string;
-    description: string | null;
-    multiplier: number;
-    isActive: boolean;
-  },
-  unknown
->("games/gambling:updateType");
+const updateGamblingTypeReference = api.games.gambling.updateType;
 
-const removeGamblingTypeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/gambling:removeType");
+const removeGamblingTypeReference = api.games.gambling.removeType;
 
 export type ConvexAdminGameType = z.infer<typeof gameTypeSchema>;
-export type ConvexAdminGamePointType = z.infer<
-  typeof gamePointTypeSchema
->;
+export type ConvexAdminGamePointType = z.infer<typeof gamePointTypeSchema>;
 export type ConvexAdminGamblingType = z.infer<typeof gamblingTypeSchema>;
 
 export interface ConvexAdminGameTypeInput {
@@ -165,8 +76,7 @@ export interface ConvexAdminGamePointTypeInput
   points: number;
 }
 
-export interface ConvexAdminGamblingTypeInput
-  extends ConvexAdminGameTypeInput {
+export interface ConvexAdminGamblingTypeInput extends ConvexAdminGameTypeInput {
   multiplier: number;
   isActive: boolean;
 }
@@ -177,9 +87,9 @@ export interface ConvexAdminGameCatalog {
   gamblingTypes: ConvexAdminGamblingType[];
 }
 
-function optionalDescription(description: string | null):
-  | { description?: string }
-  | Record<string, never> {
+function optionalDescription(
+  description: string | null
+): { description?: string } | Record<string, never> {
   return description === null ? {} : { description };
 }
 
@@ -220,7 +130,7 @@ export async function updateConvexAdminGameType(
   gameTypeSchema.parse(
     await client.mutation(updateGameTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("gameTypes", id),
       ...input,
     })
   );
@@ -233,7 +143,7 @@ export async function deleteConvexAdminGameType(
   idResultSchema.parse(
     await client.mutation(removeGameTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("gameTypes", id),
     })
   );
 }
@@ -245,7 +155,7 @@ export async function createConvexAdminGamePointType(
   gamePointTypeSchema.parse(
     await client.mutation(createGamePointTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      gameTypeId: input.gameTypeId,
+      gameTypeId: documentId("gameTypes", input.gameTypeId),
       title: input.title,
       lookupId: input.lookupId,
       points: input.points,
@@ -262,8 +172,9 @@ export async function updateConvexAdminGamePointType(
   gamePointTypeSchema.parse(
     await client.mutation(updateGamePointTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("gamePointTypes", id),
       ...input,
+      gameTypeId: documentId("gameTypes", input.gameTypeId),
     })
   );
 }
@@ -275,7 +186,7 @@ export async function deleteConvexAdminGamePointType(
   idResultSchema.parse(
     await client.mutation(removeGamePointTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("gamePointTypes", id),
     })
   );
 }
@@ -304,7 +215,7 @@ export async function updateConvexAdminGamblingType(
   gamblingTypeSchema.parse(
     await client.mutation(updateGamblingTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("gamblingTypes", id),
       ...input,
     })
   );
@@ -317,7 +228,7 @@ export async function deleteConvexAdminGamblingType(
   idResultSchema.parse(
     await client.mutation(removeGamblingTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("gamblingTypes", id),
     })
   );
 }

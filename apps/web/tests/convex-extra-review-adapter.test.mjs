@@ -27,8 +27,8 @@ test("the add-extra route uses only the Convex controller", () => {
 });
 
 test("Convex extras use owner-derived versioned mutations", () => {
-  assert.match(adapter, /reviews\/mine:addMovieExtra/u);
-  assert.match(adapter, /reviews\/mine:addShowExtra/u);
+  assert.match(adapter, /api\.reviews\.mine\.addMovieExtra/u);
+  assert.match(adapter, /api\.reviews\.mine\.addShowExtra/u);
   assert.match(adapter, /BBPC_CLIENT_API_VERSION/u);
   assert.doesNotMatch(adapter, /userId/u);
   assert.match(adapter, /extraReviewResultSchema\.parse/u);
@@ -40,12 +40,12 @@ test("Convex extras use owner-derived versioned mutations", () => {
 });
 
 test("catalog search survives an unavailable external provider", () => {
-  assert.match(adapter, /catalog\/public:searchMovies/u);
-  assert.match(adapter, /catalog\/public:searchShows/u);
-  assert.match(adapter, /catalog\/external:searchMovies/u);
-  assert.match(adapter, /catalog\/external:searchShows/u);
-  assert.match(adapter, /catalog\/write:upsertMovieByUrl/u);
-  assert.match(adapter, /catalog\/write:upsertShowByUrl/u);
+  assert.match(adapter, /api\.catalog\.public\.searchMovies/u);
+  assert.match(adapter, /api\.catalog\.public\.searchShows/u);
+  assert.match(adapter, /api\.catalog\.external\.searchMovies/u);
+  assert.match(adapter, /api\.catalog\.external\.searchShows/u);
+  assert.match(adapter, /api\.catalog\.write\.upsertMovieByUrl/u);
+  assert.match(adapter, /api\.catalog\.write\.upsertShowByUrl/u);
   assert.match(component, /Promise\.allSettled/u);
   assert.match(component, /External title search is unavailable/u);
 });

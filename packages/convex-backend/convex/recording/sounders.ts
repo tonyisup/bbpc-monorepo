@@ -41,6 +41,7 @@ export const list = anonymousQuery({
   handler: async (ctx) => {
     const sounders = await ctx.db
       .query("recordingSounders")
+      // convex-query-audit: allow-take catalog replacement enforces MAX_SOUNDERS at write and read boundaries
       .take(MAX_SOUNDERS + 1);
     if (sounders.length > MAX_SOUNDERS) {
       domainError(
@@ -111,6 +112,7 @@ export const replaceAll = adminMutation({
     }
     const existing = await ctx.db
       .query("recordingSounders")
+      // convex-query-audit: allow-take catalog replacement enforces MAX_SOUNDERS at write and read boundaries
       .take(MAX_SOUNDERS + 1);
     if (existing.length > MAX_SOUNDERS) {
       domainError(

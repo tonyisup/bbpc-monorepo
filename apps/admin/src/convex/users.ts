@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -59,66 +61,17 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listUsersPageReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("identity/admin:listUsersPage");
+const listUsersPageReference = api.identity.admin.listUsersPage;
 
-const createUserReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    name: string;
-    email: string;
-  },
-  unknown
->("identity/admin:createUser");
+const createUserReference = api.identity.admin.createUser;
 
-const updateUserReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    name: string;
-    email: string;
-  },
-  unknown
->("identity/admin:updateUser");
+const updateUserReference = api.identity.admin.updateUser;
 
-const setUserStatusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    status: "active" | "disabled";
-  },
-  unknown
->("identity/admin:setUserStatus");
+const setUserStatusReference = api.identity.admin.setUserStatus;
 
-const assignRoleReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    userId: string;
-    roleId: string;
-  },
-  unknown
->("identity/admin:assignRole");
+const assignRoleReference = api.identity.admin.assignRole;
 
-const removeRoleMembershipReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-  },
-  unknown
->("identity/admin:removeRoleMembership");
+const removeRoleMembershipReference = api.identity.admin.removeRoleMembership;
 
 export const ADMIN_USERS_PAGE_SIZE = 50;
 
@@ -173,7 +126,7 @@ export async function updateConvexAdminUser(
   adminUserSchema.parse(
     await client.mutation(updateUserReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("users", id),
       ...input,
     })
   );
@@ -187,7 +140,7 @@ export async function setConvexAdminUserStatus(
   adminUserSchema.parse(
     await client.mutation(setUserStatusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("users", id),
       status,
     })
   );
@@ -201,8 +154,8 @@ export async function assignConvexAdminUserRole(
   adminRoleMembershipSchema.parse(
     await client.mutation(assignRoleReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      userId,
-      roleId,
+      userId: documentId("users", userId),
+      roleId: documentId("roles", roleId),
     })
   );
 }
@@ -214,7 +167,7 @@ export async function removeConvexAdminUserRole(
   idResultSchema.parse(
     await client.mutation(removeRoleMembershipReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: membershipId,
+      id: documentId("userRoles", membershipId),
     })
   );
 }

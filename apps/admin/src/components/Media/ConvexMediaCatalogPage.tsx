@@ -66,12 +66,12 @@ function mediaLabels(kind: MediaKind) {
     ? {
         plural: "Movies",
         singular: "Movie",
-        description: "Manage the canonical movie catalog.",
+        description: "Manage movies.",
       }
     : {
         plural: "Shows",
         singular: "Show",
-        description: "Manage the canonical TV-show catalog.",
+        description: "Manage TV shows.",
       };
 }
 
@@ -359,9 +359,7 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
         </div>
 
         <div className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-          Detail pages expose at most 100 runtime-validated reviews and their
-          bounded episode relationships. Deletion still succeeds only when
-          the backend proves this item is unreferenced.
+          Detail pages show up to 100 reviews. Titles can be deleted only when no reviews, assignments, or other records use them.
         </div>
 
         <section className="flex flex-col gap-4 rounded-lg border bg-card p-6 shadow-sm">
@@ -509,8 +507,7 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
           {loadFailed ? (
             <div className="rounded-md border bg-card p-8 text-center">
               <p className="mb-4 text-sm text-muted-foreground">
-                {labels.plural} could not be loaded. No legacy SQL fallback was
-                attempted.
+                {labels.plural} could not be loaded. Try again.
               </p>
               <Button onClick={refresh} variant="outline">
                 <RefreshCw className="mr-2 h-4 w-4" />

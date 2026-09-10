@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -17,44 +19,13 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listRatingsReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("ratings/admin:list");
+const listRatingsReference = api.ratings.admin.list;
 
-const createRatingReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    name: string;
-    value: number;
-    sound?: string;
-    icon?: string;
-    category?: string;
-  },
-  unknown
->("ratings/admin:create");
+const createRatingReference = api.ratings.admin.create;
 
-const updateRatingReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    name: string;
-    value: number;
-    sound: string | null;
-    icon: string | null;
-    category: string | null;
-  },
-  unknown
->("ratings/admin:update");
+const updateRatingReference = api.ratings.admin.update;
 
-const deleteRatingReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("ratings/admin:removeIfUnreferenced");
+const deleteRatingReference = api.ratings.admin.removeIfUnreferenced;
 
 export type ConvexAdminRating = z.infer<typeof ratingSchema>;
 export interface ConvexAdminRatingInput {
@@ -97,7 +68,7 @@ export async function updateConvexAdminRating(
   ratingSchema.parse(
     await client.mutation(updateRatingReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("ratings", id),
       ...input,
     })
   );
@@ -110,7 +81,7 @@ export async function deleteConvexAdminRating(
   idResultSchema.parse(
     await client.mutation(deleteRatingReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("ratings", id),
     })
   );
 }

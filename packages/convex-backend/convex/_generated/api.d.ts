@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as admin_dashboardBackfill from "../admin/dashboardBackfill.js";
 import type * as admin_dashboard from "../admin/dashboard.js";
 import type * as admin_limits from "../admin/limits.js";
 import type * as admin_validators from "../admin/validators.js";
@@ -158,6 +159,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "admin/dashboardBackfill": typeof admin_dashboardBackfill;
   "admin/dashboard": typeof admin_dashboard;
   "admin/limits": typeof admin_limits;
   "admin/validators": typeof admin_validators;

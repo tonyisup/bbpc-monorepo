@@ -590,9 +590,11 @@ export const inspectPortableTarget = internalReadQuery({
     const [authIdentities, auditEvents] = await Promise.all([
       ctx.db
         .query("authIdentities")
+        // convex-query-audit: allow-take portable rehearsal rejects fixtures above its audited identity budget
         .take(MAX_PORTABLE_AUTH_IDENTITIES + 1),
       ctx.db
         .query("auditEvents")
+        // convex-query-audit: allow-take portable rehearsal rejects fixtures above its audited audit-event budget
         .take(MAX_PORTABLE_AUDIT_EVENTS + 1),
     ]);
     if (

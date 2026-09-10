@@ -1,7 +1,9 @@
 "use client";
 
+import { api } from "@tonyisup/bbpc-convex-api";
+
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 
@@ -39,52 +41,19 @@ const domainErrorSchema = z.object({
   ]),
 });
 
-const meReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("identity/profile:me");
+const meReference = api.identity.profile.me;
 
-const linkOrCreateMeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string },
-  unknown
->("identity/linking:linkOrCreateMe");
+const linkOrCreateMeReference = api.identity.linking.linkOrCreateMe;
 
-const updateMyNameReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; name: string },
-  unknown
->("identity/profile:updateMyName");
+const updateMyNameReference = api.identity.profile.updateMyName;
 
-const actionGateReference = makeFunctionReference<
-  "action",
-  { clientApiVersion: string },
-  unknown
->("identity/profile:actionGateProbe");
+const actionGateReference = api.identity.profile.actionGateProbe;
 
-const updateMyProfileWithImageReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    name: string;
-    image: string;
-    fileKey: string;
-    uploadId: string;
-    expectedImage: string | null;
-  },
-  unknown
->("identity/profile:updateMyProfileWithImage");
+const updateMyProfileWithImageReference =
+  api.identity.profile.updateMyProfileWithImage;
 
-const discardMyProfileImageUploadReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    fileKey: string;
-    uploadId: string;
-  },
-  unknown
->("identity/profile:discardMyProfileImageUpload");
+const discardMyProfileImageUploadReference =
+  api.identity.profile.discardMyProfileImageUpload;
 
 const updateMyNameResultSchema = z.object({
   name: z.string(),

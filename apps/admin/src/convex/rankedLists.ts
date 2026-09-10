@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -125,94 +127,29 @@ const deleteItemResultSchema = z.object({
   rank: z.number(),
 });
 
-const listMineReference = makeFunctionReference<
-  "query",
-  { targetType?: z.infer<typeof rankingTargetTypeSchema> },
-  unknown
->("rankings/lists:listMine");
+const listMineReference = api.rankings.lists.listMine;
 
-const listAdminPageReference = makeFunctionReference<
-  "query",
-  {
-    userId?: string;
-    rankedListTypeId?: string;
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("rankings/lists:listAdminPage");
+const listAdminPageReference = api.rankings.lists.listAdminPage;
 
-const getListReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("rankings/lists:get");
+const getListReference = api.rankings.lists.get;
 
-const createListReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    rankedListTypeId: string;
-    title?: string | null;
-    status: z.infer<typeof rankingStatusSchema>;
-  },
-  unknown
->("rankings/lists:createMine");
+const createListReference = api.rankings.lists.createMine;
 
-const updateListReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    title?: string | null;
-    status?: z.infer<typeof rankingStatusSchema>;
-  },
-  unknown
->("rankings/lists:updateAccessible");
+const updateListReference = api.rankings.lists.updateAccessible;
 
-const removeListReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("rankings/lists:removeAccessible");
+const removeListReference = api.rankings.lists.removeAccessible;
 
-const changeOwnerReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string; userId: string },
-  unknown
->("rankings/lists:changeOwner");
+const changeOwnerReference = api.rankings.lists.changeOwner;
 
-const upsertItemReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    rankedListId: string;
-    target: RankingTargetInput;
-    rank: number;
-    comment?: string | null;
-  },
-  unknown
->("rankings/items:upsert");
+const upsertItemReference = api.rankings.items.upsert;
 
-const moveItemReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string; newRank: number },
-  unknown
->("rankings/items:move");
+const moveItemReference = api.rankings.items.move;
 
-const removeItemReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("rankings/items:remove");
+const removeItemReference = api.rankings.items.remove;
 
 export const ADMIN_RANKED_LISTS_PAGE_SIZE = 30;
 
-export type ConvexRankedListSummary = z.infer<
-  typeof rankingListSummarySchema
->;
+export type ConvexRankedListSummary = z.infer<typeof rankingListSummarySchema>;
 export type ConvexRankedListDetail = z.infer<typeof rankingListDetailSchema>;
 export type ConvexRankedItem = z.infer<typeof rankingItemSchema>;
 export type ConvexRankingStatus = z.infer<typeof rankingStatusSchema>;
@@ -259,7 +196,7 @@ export async function loadConvexRankedList(
   id: string
 ): Promise<ConvexRankedListDetail> {
   return rankingListDetailSchema.parse(
-    await client.query(getListReference, { id })
+    await client.query(getListReference, { id: documentId("rankedLists", id) })
   );
 }
 
@@ -270,7 +207,7 @@ export async function createMyConvexRankedList(
   return rankingListDetailSchema.parse(
     await client.mutation(createListReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      rankedListTypeId,
+      rankedListTypeId: documentId("rankedListTypes", rankedListTypeId),
       status: "DRAFT",
     })
   );
@@ -287,7 +224,7 @@ export async function updateConvexRankedList(
   return rankingListDetailSchema.parse(
     await client.mutation(updateListReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("rankedLists", id),
       ...patch,
     })
   );
@@ -300,7 +237,7 @@ export async function deleteConvexRankedList(
   return deleteListResultSchema.parse(
     await client.mutation(removeListReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("rankedLists", id),
     })
   ).deletedItems;
 }
@@ -313,8 +250,8 @@ export async function changeConvexRankedListOwner(
   return rankingListDetailSchema.parse(
     await client.mutation(changeOwnerReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
-      userId,
+      id: documentId("rankedLists", id),
+      userId: documentId("users", userId),
     })
   );
 }
@@ -332,6 +269,13 @@ export async function upsertConvexRankedItem(
     await client.mutation(upsertItemReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      target:
+        input.target.kind === "movie"
+          ? { kind: "movie", id: documentId("movies", input.target.id) }
+          : input.target.kind === "show"
+          ? { kind: "show", id: documentId("shows", input.target.id) }
+          : { kind: "episode", id: documentId("episodes", input.target.id) },
+      rankedListId: documentId("rankedLists", input.rankedListId),
     })
   );
 }
@@ -344,7 +288,7 @@ export async function moveConvexRankedItem(
   return rankingItemSchema.parse(
     await client.mutation(moveItemReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("rankedItems", id),
       newRank,
     })
   );
@@ -357,7 +301,7 @@ export async function removeConvexRankedItem(
   deleteItemResultSchema.parse(
     await client.mutation(removeItemReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("rankedItems", id),
     })
   );
 }

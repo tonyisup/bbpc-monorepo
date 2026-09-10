@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -422,4 +422,134 @@ describe("shared recording RTC boundary", () => {
       deletedSignals: 1,
     });
   });
+});
+
+test("stale presence must regain capacity at join and heartbeat, including the expiry boundary", async () => {
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(1_000_000);
+    const t = createTestBackend();
+    await seedIdentity(t, { identity: HOST_IDENTITY, role: "host" });
+    await seedS3(t);
+    const { input, ownerGrant } = await seedSession(t);
+    const guests = await Promise.all(
+      [1, 2, 3, 4].map((i) => joinGuest(t, input.inviteToken, i)),
+    );
+    const replacement = guests.at(3);
+    if (replacement === undefined) throw new Error("Missing guest");
+    for (const grant of [ownerGrant, ...guests.slice(0, 3)])
+      await t.mutation(api.recording.rtc.joinAudio, {
+        ...grant,
+        muted: false,
+        recording: false,
+      });
+    vi.setSystemTime(1_015_000);
+    expect(
+      await t.mutation(api.recording.rtc.joinAudio, {
+        ...replacement,
+        muted: false,
+        recording: false,
+      }),
+    ).toEqual({ ok: false, reason: "room-full" });
+    for (const grant of guests.slice(0, 3))
+      await t.mutation(api.recording.rtc.heartbeatAudio, {
+        ...grant,
+        muted: false,
+        recording: false,
+      });
+    vi.setSystemTime(1_015_001);
+    expect(
+      await t.mutation(api.recording.rtc.joinAudio, {
+        ...replacement,
+        muted: false,
+        recording: false,
+      }),
+    ).toEqual({ ok: true });
+    expect(
+      await t.mutation(api.recording.rtc.joinAudio, {
+        ...ownerGrant,
+        muted: false,
+        recording: false,
+      }),
+    ).toEqual({ ok: false, reason: "room-full" });
+    expect(
+      await t.mutation(api.recording.rtc.heartbeatAudio, {
+        ...ownerGrant,
+        muted: false,
+        recording: false,
+      }),
+    ).toBeNull();
+    await t.mutation(api.recording.rtc.leaveAudio, replacement);
+    expect(
+      await t.mutation(api.recording.rtc.heartbeatAudio, {
+        ...ownerGrant,
+        muted: false,
+        recording: false,
+      }),
+    ).toEqual({ ok: true });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("RTC cleanup drains multiple bounded batches and preserves fresh signals", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = createTestBackend();
+    await seedIdentity(t, { identity: HOST_IDENTITY, role: "host" });
+    await seedIdentity(t, { identity: ADMIN_IDENTITY, role: "admin" });
+    await seedS3(t);
+    const { ownerGrant } = await seedSession(t);
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 602; i++)
+        await ctx.db.insert("recordingRtcSignals", {
+          publicSessionId: ownerGrant.publicSessionId,
+          fromClientId: ownerGrant.clientId,
+          toClientId: "guest",
+          signalId: `backlog_${String(i)}`,
+          createdAt: i === 601 ? Date.now() : 1,
+          type: "offer",
+          payload: {},
+        });
+    });
+    const first = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.recording.rtc.cleanupRtcSession, {
+        clientApiVersion: BBPC_API_VERSION,
+        publicSessionId: ownerGrant.publicSessionId,
+        olderThan: Date.now(),
+      });
+    expect(first.deletedSignals).toBe(100);
+    await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+    expect(
+      await t.run((ctx) => ctx.db.query("recordingRtcSignals").collect()),
+    ).toHaveLength(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a session being deleted rejects still-valid participant capabilities", async () => {
+  const t = createTestBackend();
+  await seedIdentity(t, { identity: HOST_IDENTITY, role: "host" });
+  await seedS3(t);
+  const { ownerGrant } = await seedSession(t);
+  await t.run(async (ctx) => {
+    const session = await ctx.db
+      .query("recordingSessions")
+      .withIndex("by_publicId", (q) =>
+        q.eq("publicId", ownerGrant.publicSessionId),
+      )
+      .unique();
+    if (!session) throw new Error("Missing session");
+    await ctx.db.patch("recordingSessions", session._id, { deleting: true });
+  });
+  await expectDomainError(
+    t.mutation(api.recording.rtc.joinAudio, {
+      ...ownerGrant,
+      muted: false,
+      recording: false,
+    }),
+    "FORBIDDEN",
+  );
 });

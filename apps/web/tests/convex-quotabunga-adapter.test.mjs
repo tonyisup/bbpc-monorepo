@@ -19,7 +19,7 @@ test("Convex Quotabunga uses authenticated owner-derived functions", () => {
     "games/quotes:submitMine",
     "games/quotes:withdrawMine",
   ]) {
-    assert.match(adapter, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(adapter.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.doesNotMatch(adapter, /userId/u);
   assert.match(adapter, /BBPC_CLIENT_API_VERSION/u);

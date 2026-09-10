@@ -1,7 +1,10 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
@@ -31,36 +34,13 @@ const wagerEntrySchema = z.object({
   targetUser: wagerTargetSchema.nullable(),
 });
 
-const listActiveTypesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/gambling:listActiveTypes");
+const listActiveTypesReference = api.games.gambling.listActiveTypes;
 
-const mineForAssignmentReference = makeFunctionReference<
-  "query",
-  { assignmentId: string },
-  unknown
->("games/gambling:mineForAssignment");
+const mineForAssignmentReference = api.games.gambling.mineForAssignment;
 
-const myAvailablePointsReference = makeFunctionReference<
-  "query",
-  { season: { kind: "current"; today: string } },
-  unknown
->("games/member:myAvailablePoints");
+const myAvailablePointsReference = api.games.member.myAvailablePoints;
 
-const submitReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    gamblingTypeId: string;
-    points: number;
-    assignmentId: string;
-    targetUserId?: string;
-    today: string;
-  },
-  unknown
->("games/gambling:submit");
+const submitReference = api.games.gambling.submit;
 
 export type ConvexGamblingType = z.infer<typeof gamblingTypeSchema>;
 export type ConvexWagerEntry = z.infer<typeof wagerEntrySchema>;
@@ -78,7 +58,9 @@ export async function loadConvexAssignmentWagers(
   const today = getPacificTodayPlainDate();
   const [rawTypes, rawEntries, rawAvailablePoints] = await Promise.all([
     client.query(listActiveTypesReference, {}),
-    client.query(mineForAssignmentReference, { assignmentId }),
+    client.query(mineForAssignmentReference, {
+      assignmentId: documentId("assignments", assignmentId),
+    }),
     client.query(myAvailablePointsReference, {
       season: { kind: "current", today },
     }),
@@ -102,13 +84,20 @@ export async function submitConvexWager(
   return wagerEntrySchema.parse(
     await client.mutation(submitReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      gamblingTypeId: input.gamblingTypeId,
+      gamblingTypeId: documentId("gamblingTypes", input.gamblingTypeId),
       points: input.points,
-      assignmentId: input.assignmentId,
+      assignmentId: documentId("assignments", input.assignmentId),
       ...(input.targetUserId === undefined
         ? {}
-        : { targetUserId: input.targetUserId }),
+        : { targetUserId: documentId("users", input.targetUserId) }),
       today: getPacificTodayPlainDate(),
+      targetUserId: documentId(
+        "users",
+        (input.targetUserId === undefined
+          ? {}
+          : { targetUserId: input.targetUserId }
+        ).targetUserId
+      ),
     })
   );
 }

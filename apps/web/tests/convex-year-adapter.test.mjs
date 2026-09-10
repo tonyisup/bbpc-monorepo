@@ -20,7 +20,7 @@ test("the year route uses only the Convex controller", () => {
 });
 
 test("the Convex year archive is public and runtime validated", () => {
-  assert.match(adapter, /reviews\/public:listMovieReviewsForYear/u);
+  assert.match(adapter, /api\.reviews\.public\.listMovieReviewsForYear/u);
   assert.match(adapter, /yearReviewSchema/u);
   assert.match(adapter, /\.array\(yearReviewSchema\)[\s\S]*\.parse/u);
   assert.match(component, /listConvexYearReviews\(convex, selectedYear\)/u);
@@ -35,11 +35,11 @@ test("ranking controls use owner-derived versioned Convex functions", () => {
     "rankings/items:remove",
     "rankings/items:reorder",
   ]) {
-    assert.match(adapter, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(adapter.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.doesNotMatch(adapter, /userId/u);
   assert.match(adapter, /BBPC_CLIENT_API_VERSION/u);
-  assert.match(adapter, /target: \{ kind: "movie", id: input\.movieId \}/u);
+  assert.match(adapter, /target: \{ kind: "movie", id: documentId\("movies", input\.movieId\) \}/u);
   assert.match(component, /accountStatus === "ready"[\s\S]*user\.isAdmin/u);
   assert.match(component, /orderedItems\.map\(\(item\) => item\.id\)/u);
   assert.match(component, /getConvexDomainErrorCode/u);

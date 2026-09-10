@@ -7,6 +7,7 @@ export interface RecordingUploadInput {
   trackType: 'mic' | 'sounders';
   startedAt: number;
   audioBase64: string;
+  contentType: string;
 }
 
 export function parseRecordingUploadInput(value: unknown): RecordingUploadInput | null {
@@ -24,6 +25,8 @@ export function parseRecordingUploadInput(value: unknown): RecordingUploadInput 
     || !Number.isFinite(input.startedAt)
     || input.startedAt <= 0
     || typeof input.audioBase64 !== 'string'
+    || typeof input.contentType !== 'string'
+    || recordingExtension(input.contentType) === null
   ) {
     return null;
   }
@@ -35,6 +38,7 @@ export function parseRecordingUploadInput(value: unknown): RecordingUploadInput 
     trackType: input.trackType,
     startedAt: input.startedAt,
     audioBase64: input.audioBase64,
+    contentType: input.contentType!,
   };
 }
 
@@ -49,4 +53,13 @@ export function safeBlobSegment(value: string): string {
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^[._-]+|[._-]+$/g, '')
     .slice(0, 80) || 'participant';
+}
+
+export function recordingExtension(contentType: string): 'webm' | 'ogg' | 'm4a' | null {
+  switch (contentType.toLowerCase().split(';')[0].trim()) {
+    case 'audio/webm': return 'webm';
+    case 'audio/ogg': return 'ogg';
+    case 'audio/mp4': return 'm4a';
+    default: return null;
+  }
 }

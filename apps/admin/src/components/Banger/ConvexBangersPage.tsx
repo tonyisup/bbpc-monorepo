@@ -343,8 +343,7 @@ export function ConvexBangersPage() {
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Bangers could not be loaded. No legacy SQL fallback was
-              attempted.
+              Bangers could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />
@@ -459,8 +458,7 @@ export function ConvexBangersPage() {
               {editing === null ? "Add Banger" : "Edit Banger"}
             </DialogTitle>
             <DialogDescription>
-              Episode and user links are optional and validated against
-              canonical Convex records.
+              Optionally link this song to an episode or user.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -20,42 +22,13 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listRankingTypesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("rankings/types:list");
+const listRankingTypesReference = api.rankings.types.list;
 
-const createRankingTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    name: string;
-    description: string | null;
-    maxItems: number;
-    targetType: z.infer<typeof rankingTargetTypeSchema>;
-  },
-  unknown
->("rankings/types:create");
+const createRankingTypeReference = api.rankings.types.create;
 
-const updateRankingTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    name: string;
-    description: string | null;
-    maxItems: number;
-    targetType: z.infer<typeof rankingTargetTypeSchema>;
-  },
-  unknown
->("rankings/types:update");
+const updateRankingTypeReference = api.rankings.types.update;
 
-const removeRankingTypeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("rankings/types:remove");
+const removeRankingTypeReference = api.rankings.types.remove;
 
 export type ConvexAdminRankingType = z.infer<typeof rankingTypeSchema>;
 export type ConvexAdminRankingTargetType = z.infer<
@@ -97,7 +70,7 @@ export async function updateConvexAdminRankingType(
   rankingTypeSchema.parse(
     await client.mutation(updateRankingTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("rankedListTypes", id),
       ...input,
     })
   );
@@ -110,7 +83,7 @@ export async function deleteConvexAdminRankingType(
   idResultSchema.parse(
     await client.mutation(removeRankingTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("rankedListTypes", id),
     })
   );
 }
