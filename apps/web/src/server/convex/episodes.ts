@@ -96,6 +96,7 @@ export const transcriptSearchSchema = z.object({
   limited: z.boolean(),
 });
 
+/** Fetch and validate public transcript matches from the Convex backend. */
 export async function searchEpisodeTranscripts(query: string) {
   return transcriptSearchSchema.parse(
     await fetchPublicQuery(api.episodes.transcripts.search, { query })

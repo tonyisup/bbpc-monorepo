@@ -3,6 +3,7 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import { MAX_TRANSCRIPT_PASSAGES } from "./transcriptModel.js";
 import { domainError } from "./errors.js";
 
+/** Return whether an episode is currently eligible for public transcript search. */
 export function isPublishedEpisode(episode: Doc<"episodes"> | null): boolean {
   return (
     episode !== null &&
@@ -10,6 +11,7 @@ export function isPublishedEpisode(episode: Doc<"episodes"> | null): boolean {
   );
 }
 
+/** Load an episode's passages while enforcing the atomic replacement limit. */
 export async function episodePassages(
   ctx: MutationCtx,
   episodeId: Id<"episodes">
@@ -23,6 +25,7 @@ export async function episodePassages(
   return passages;
 }
 
+/** Synchronize indexed passage visibility after an episode changes. */
 export async function syncTranscriptVisibility(
   ctx: MutationCtx,
   episodeId: Id<"episodes">,

@@ -14,6 +14,7 @@ import {
   transcriptFingerprintInput,
 } from "../../convex/lib/transcriptModel.ts";
 
+/** Read and locally validate the pipeline JWT used by transcript tooling. */
 export function requirePipelineToken(env) {
   const token = env.BBPC_PIPELINE_ACCESS_TOKEN?.trim();
   if (!token)
@@ -24,6 +25,7 @@ export function requirePipelineToken(env) {
   return token;
 }
 
+/** Require an explicitly approved Convex origin before any remote operation. */
 export function assertImportTarget(url, env) {
   const target = new URL(url);
   const local = ["127.0.0.1", "localhost", "[::1]"].includes(target.hostname);
@@ -61,6 +63,7 @@ export function assertImportTarget(url, env) {
   return target.origin;
 }
 
+/** Validate transcript files and build deterministic import requests. */
 export async function prepareImports(source, manifest) {
   if (!Array.isArray(manifest) || !manifest.length || manifest.length > 1000) {
     throw new Error(
@@ -137,6 +140,7 @@ export async function prepareImports(source, manifest) {
   return prepared;
 }
 
+/** Report or apply prepared transcript replacements with bounded retries. */
 export async function importPrepared(
   client,
   prepared,
@@ -201,6 +205,7 @@ export async function importPrepared(
   }
 }
 
+/** Run the transcript validation and import command-line workflow. */
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { values } = parseArgs({
     args: argv,

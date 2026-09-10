@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { searchEpisodeTranscripts } from "@/server/convex/episodes";
 
+/** Validate a public transcript query and return its bounded search results. */
 export async function GET(request: NextRequest) {
   const query = (request.nextUrl.searchParams.get("q") ?? "").trim();
   const terms = query.match(/[\p{L}\p{N}]+/gu) ?? [];

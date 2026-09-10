@@ -10,8 +10,10 @@ export interface TranscriptPassage {
 }
 
 const encoder = new TextEncoder();
+/** Measure text using the UTF-8 byte limits enforced by Convex. */
 const bytes = (text: string) => encoder.encode(text).length;
 
+/** Parse and validate one raw transcript segment. */
 function segment(value: unknown, index: number): TranscriptPassage {
   if (typeof value !== "object" || value === null) {
     throw new Error(`Segment ${String(index)}: expected an object.`);
@@ -32,6 +34,7 @@ function segment(value: unknown, index: number): TranscriptPassage {
   return { start: item.start, end: item.end, text: item.text };
 }
 
+/** Validate bounded, ordered passages accepted by the transcript API. */
 export function validatePassages(value: unknown): TranscriptPassage[] {
   if (
     !Array.isArray(value) ||
@@ -63,6 +66,7 @@ export function validatePassages(value: unknown): TranscriptPassage[] {
   });
 }
 
+/** Convert raw transcript segments into bounded, searchable passages. */
 export function buildPassages(value: unknown): {
   segmentCount: number;
   passages: TranscriptPassage[];
@@ -131,16 +135,19 @@ export function buildPassages(value: unknown): {
   return { segmentCount: value.length, passages: validatePassages(passages) };
 }
 
+/** Serialize a transcript into the canonical input used for content hashing. */
 export function transcriptFingerprintInput(
   passages: TranscriptPassage[]
 ): string {
   return JSON.stringify({ version: TRANSCRIPT_VERSION, passages });
 }
 
+/** Extract normalized Unicode letter and number terms from a search query. */
 export function transcriptTerms(query: string): string[] {
   return query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
+/** Normalize a search query and enforce its public resource limits. */
 export function validateTranscriptQuery(query: string): string {
   const normalized = query.trim();
   if (
