@@ -76,6 +76,32 @@ const latestPublishedReference = api.episodes.public.latestPublished;
 
 const searchReference = api.episodes.public.search;
 
+export const transcriptSearchSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        episode: episodeSchema,
+        passages: z
+          .array(
+            z.object({
+              start: z.number().finite().nonnegative(),
+              end: z.number().finite().nonnegative(),
+              text: z.string(),
+            })
+          )
+          .max(3),
+      })
+    )
+    .max(20),
+  limited: z.boolean(),
+});
+
+export async function searchEpisodeTranscripts(query: string) {
+  return transcriptSearchSchema.parse(
+    await fetchPublicQuery(api.episodes.transcripts.search, { query })
+  );
+}
+
 const listPageReference = api.episodes.public.listPage;
 
 const getByLegacyIdReference = api.episodes.public.getByLegacyId;

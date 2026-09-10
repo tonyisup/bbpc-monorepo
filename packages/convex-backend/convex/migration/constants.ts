@@ -239,6 +239,8 @@ export const PORTABLE_BACKUP_TABLES = [
   "archivePosts",
   "episodes",
   "episodeLinks",
+  "episodeTranscripts",
+  "transcriptPassages",
   "bangers",
   "episodeAudioMessages",
   "movies",

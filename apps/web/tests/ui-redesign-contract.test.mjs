@@ -129,14 +129,14 @@ test("history, about, and footer implement the approved content and accessibilit
   assert.match(history, /Browse all episodes/);
   assert.match(history, /flex-col[^"\n]*sm:flex-row/);
   const emptyStateIndex = history.indexOf("if (!query)");
-  const loadingStateIndex = history.indexOf("if (isLoading)");
+  const loadingStateIndex = history.indexOf("if (isLoading && rows.length === 0)");
   assert.notEqual(emptyStateIndex, -1);
   assert.notEqual(loadingStateIndex, -1);
   assert.ok(emptyStateIndex < loadingStateIndex);
   assert.match(history, /return \(\s*<ul/);
   assert.match(history, /router\.push\([\s\S]*?\{ scroll: false \}\)/);
-  assert.doesNotMatch(history, /role="status"/);
-  assert.match(history, /Search by episode title or movie name\./);
+  assert.doesNotMatch(history, /<ul[^>]*role="status"/);
+  assert.match(history, /Search by episode title, movie name, or words from a transcript\./);
   assert.doesNotMatch(history, /movie name, or number/);
 
   const about = read("src/app/about/page.tsx");
