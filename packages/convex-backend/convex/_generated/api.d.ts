@@ -8,8 +8,8 @@
  * @module
  */
 
-import type * as admin_dashboardBackfill from "../admin/dashboardBackfill.js";
 import type * as admin_dashboard from "../admin/dashboard.js";
+import type * as admin_dashboardBackfill from "../admin/dashboardBackfill.js";
 import type * as admin_limits from "../admin/limits.js";
 import type * as admin_validators from "../admin/validators.js";
 import type * as assignments_admin from "../assignments/admin.js";
@@ -79,6 +79,7 @@ import type * as identity_roles from "../identity/roles.js";
 import type * as identity_validators from "../identity/validators.js";
 import type * as lib_actors from "../lib/actors.js";
 import type * as lib_audit from "../lib/audit.js";
+import type * as lib_dashboardProjection from "../lib/dashboardProjection.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_normalize from "../lib/normalize.js";
 import type * as lib_publicSearch from "../lib/publicSearch.js";
@@ -159,8 +160,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "admin/dashboardBackfill": typeof admin_dashboardBackfill;
   "admin/dashboard": typeof admin_dashboard;
+  "admin/dashboardBackfill": typeof admin_dashboardBackfill;
   "admin/limits": typeof admin_limits;
   "admin/validators": typeof admin_validators;
   "assignments/admin": typeof assignments_admin;
@@ -230,6 +231,7 @@ declare const fullApi: ApiFromModules<{
   "identity/validators": typeof identity_validators;
   "lib/actors": typeof lib_actors;
   "lib/audit": typeof lib_audit;
+  "lib/dashboardProjection": typeof lib_dashboardProjection;
   "lib/errors": typeof lib_errors;
   "lib/normalize": typeof lib_normalize;
   "lib/publicSearch": typeof lib_publicSearch;
