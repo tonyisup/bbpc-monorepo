@@ -6,6 +6,7 @@ import { internalMigrationMutation } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import {
+  DASHBOARD_DERIVED_TABLES,
   FINAL_SCRUB_OPERATIONS,
   FINAL_SCRUB_SCOPE,
   FOUNDATION_SCRUB_OPERATIONS,
@@ -828,7 +829,11 @@ async function hasDeploymentControlRows(
     .query("servicePrincipals")
     .withIndex("by_status")
     .first();
-  return impersonationSession !== null || servicePrincipal !== null;
+  if (impersonationSession !== null || servicePrincipal !== null) return true;
+  for (const table of DASHBOARD_DERIVED_TABLES) {
+    if (await ctx.db.query(table).first()) return true;
+  }
+  return false;
 }
 
 async function hasUnresolvedSideEffectIntents(
@@ -1187,8 +1192,19 @@ export const scrubFinalDeploymentControlBatch =
       for (const principal of servicePrincipals) {
         await ctx.db.delete("servicePrincipals", principal._id);
       }
+      remaining -= servicePrincipals.length;
+      let dashboardDeletedThisBatch = 0;
+      for (const table of DASHBOARD_DERIVED_TABLES) {
+        if (remaining === 0) break;
+        // convex-query-audit: allow-take deletion consumes a fixed shared budget and resumes until all derived state is gone
+        const rows = await ctx.db.query(table).take(remaining);
+        for (const row of rows) await ctx.db.delete(table, row._id);
+        remaining -= rows.length;
+        dashboardDeletedThisBatch += rows.length;
+      }
+      const dashboardRowsDeleted = (scrubRun.dashboardRowsDeleted ?? 0) + dashboardDeletedThisBatch;
       const deletedThisBatch =
-        impersonationSessions.length + servicePrincipals.length;
+        impersonationSessions.length + servicePrincipals.length + dashboardDeletedThisBatch;
       const impersonationSessionsDeleted =
         (scrubRun.impersonationSessionsDeleted ?? 0) +
         impersonationSessions.length;
@@ -1198,12 +1214,13 @@ export const scrubFinalDeploymentControlBatch =
       await ctx.db.patch("migrationScrubRuns", scrubRun._id, {
         impersonationSessionsDeleted,
         servicePrincipalsDeleted,
+        dashboardRowsDeleted,
         updatedAt: Date.now(),
       });
       return {
         deletedThisBatch,
         totalDeleted:
-          impersonationSessionsDeleted + servicePrincipalsDeleted,
+          impersonationSessionsDeleted + servicePrincipalsDeleted + dashboardRowsDeleted,
         done: !(await hasDeploymentControlRows(ctx)),
       };
     },

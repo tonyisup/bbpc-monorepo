@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -22,40 +24,13 @@ const deleteRoleResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listRolesReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("identity/admin:listRoles");
+const listRolesReference = api.identity.admin.listRoles;
 
-const createRoleReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    name: string;
-    description: string;
-    admin: boolean;
-  },
-  unknown
->("identity/admin:createRole");
+const createRoleReference = api.identity.admin.createRole;
 
-const updateRoleReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    name: string;
-    description: string;
-    admin: boolean;
-  },
-  unknown
->("identity/admin:updateRole");
+const updateRoleReference = api.identity.admin.updateRole;
 
-const deleteRoleReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("identity/admin:deleteRole");
+const deleteRoleReference = api.identity.admin.deleteRole;
 
 export type ConvexAdminRole = z.infer<typeof roleSummarySchema>;
 export interface ConvexAdminRoleInput {
@@ -92,7 +67,7 @@ export async function updateConvexAdminRole(
   roleSchema.parse(
     await client.mutation(updateRoleReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("roles", id),
       ...input,
     })
   );
@@ -105,7 +80,7 @@ export async function deleteConvexAdminRole(
   deleteRoleResultSchema.parse(
     await client.mutation(deleteRoleReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("roles", id),
     })
   );
 }

@@ -101,7 +101,7 @@ function assignmentMovieSearchMessage(error: unknown): string {
     case "VALIDATION_FAILED":
       return "Enter at least three useful search characters.";
     default:
-      return "TMDB movie search is unavailable in this Convex deployment.";
+      return "TMDB movie search is unavailable. Try again.";
   }
 }
 
@@ -469,7 +469,7 @@ export function TmdbMoviePicker({
       )}
       {currentSearchSnapshot?.tmdbStatus === "rejected" ? (
         <p className="text-sm text-destructive" role="alert">
-          TMDB movie search is unavailable in this Convex deployment.
+          TMDB movie search is unavailable. Try again.
         </p>
       ) : null}
       {searchPhase === "settled" &&
@@ -698,6 +698,7 @@ export function EpisodeRelationships({
   const convex = useConvex();
   const [dialog, setDialog] = useState<"assignment" | "extra" | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   return (
     <>
@@ -705,6 +706,8 @@ export function EpisodeRelationships({
         <AddAssignmentDialog
           onClose={() => setDialog(null)}
           onSave={(input) => {
+            if (savingRef.current) return;
+            savingRef.current = true;
             setSaving(true);
             void addConvexAdminEpisodeAssignmentFromTmdb(
               convex,
@@ -719,7 +722,10 @@ export function EpisodeRelationships({
               .catch((error: unknown) =>
                 toast.error(relationshipMessage(error))
               )
-              .finally(() => setSaving(false));
+              .finally(() => {
+                savingRef.current = false;
+                setSaving(false);
+              });
           }}
           saving={saving}
         />
@@ -728,6 +734,8 @@ export function EpisodeRelationships({
         <AddExtraDialog
           onClose={() => setDialog(null)}
           onSave={(input) => {
+            if (savingRef.current) return;
+            savingRef.current = true;
             setSaving(true);
             void addConvexAdminEpisodeExtra(convex, episode.id, input)
               .then(() => {
@@ -738,7 +746,10 @@ export function EpisodeRelationships({
               .catch((error: unknown) =>
                 toast.error(relationshipMessage(error))
               )
-              .finally(() => setSaving(false));
+              .finally(() => {
+                savingRef.current = false;
+                setSaving(false);
+              });
           }}
           saving={saving}
         />

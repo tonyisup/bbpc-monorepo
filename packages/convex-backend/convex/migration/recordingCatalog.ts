@@ -221,6 +221,7 @@ async function storedCatalogs(ctx: DatabaseContext): Promise<{
   const [sounderRows, templateRows] = await Promise.all([
     ctx.db
       .query("recordingSounders")
+      // convex-query-audit: allow-take migration reconciles the explicitly capped sounder catalog
       .take(MAX_SOUNDERS + 1),
     ctx.db
       .query("recordingSegmentTemplates")

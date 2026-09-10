@@ -469,7 +469,7 @@ export function ConvexEpisodeDetailPage() {
       <div className="mx-auto flex min-h-[420px] max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
         <h1 className="text-2xl font-bold">Episode unavailable</h1>
         <p className="text-sm text-muted-foreground">
-          Convex could not load this workbench. No SQL fallback was attempted.
+          The episode could not be loaded. Try again.
         </p>
         <Button className="gap-2" onClick={refresh} variant="outline">
           <RefreshCw className="h-4 w-4" />

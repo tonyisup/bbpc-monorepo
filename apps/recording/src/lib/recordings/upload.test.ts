@@ -4,6 +4,7 @@ import {
   estimatedBase64Bytes,
   parseRecordingUploadInput,
   safeBlobSegment,
+  recordingExtension,
 } from './upload';
 
 describe('recording upload boundary', () => {
@@ -14,6 +15,7 @@ describe('recording upload boundary', () => {
     trackType: 'mic' as const,
     startedAt: 1_000,
     audioBase64: 'YWJj',
+    contentType: 'audio/webm',
   };
 
   it('rejects anonymous uploads without a session id', () => {
@@ -23,6 +25,14 @@ describe('recording upload boundary', () => {
   it('rejects invalid track types and timestamps', () => {
     expect(parseRecordingUploadInput({ ...valid, trackType: 'video' })).toBeNull();
     expect(parseRecordingUploadInput({ ...valid, startedAt: Number.NaN })).toBeNull();
+  });
+
+  it('keeps supported fallback MIME types and rejects non-audio formats', () => {
+    expect(parseRecordingUploadInput({ ...valid, contentType: 'audio/ogg;codecs=opus' })?.contentType).toBe('audio/ogg;codecs=opus');
+    expect(recordingExtension('audio/mp4')).toBe('m4a');
+    expect(recordingExtension('audio/ogg;codecs=opus')).toBe('ogg');
+    expect(parseRecordingUploadInput({ ...valid, contentType: 'text/html' })).toBeNull();
+    expect(parseRecordingUploadInput({ ...valid, contentType: undefined })).toBeNull();
   });
 
   it('estimates decoded size before allocating the audio buffer', () => {

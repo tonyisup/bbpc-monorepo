@@ -18,8 +18,8 @@ export interface RecordingEngine {
 }
 
 export interface RecordingTracks {
-  mic: Blob;        // webm/opus of mic only
-  sounders: Blob;   // webm/opus of sounders only
+  mic: Blob;        // The recorder-selected audio format
+  sounders: Blob;
   startedAt: number; // Date.now() when recording started
   durationMs: number;
 }
@@ -40,7 +40,7 @@ function getSupportedMimeType(): string {
   for (const type of types) {
     if (MediaRecorder.isTypeSupported(type)) return type;
   }
-  return 'audio/webm';
+  throw new Error('This browser has no supported audio recording format');
 }
 
 /**
@@ -50,7 +50,7 @@ function getSupportedMimeType(): string {
  *   Mic → MediaStreamDestination → MediaRecorder (mic track)
  *   Sounder destination (via AudioProvider) → MediaStreamDestination → MediaRecorder (sounder track)
  */
-export function useRecordingEngine(): RecordingEngine {
+export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => void): RecordingEngine {
   const { setSounderDestination } = useAudio();
   const [state, setState] = useState<RecordingState>({
     isRecording: false,
@@ -73,18 +73,36 @@ export function useRecordingEngine(): RecordingEngine {
   const rafRef = useRef<number>(0);
   const startedAtRef = useRef<number>(0);
 
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        audioCtxRef.current.close();
-      }
-    };
-  }, []);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const stoppingRef = useRef<Promise<RecordingTracks> | null>(null);
 
-  const stopVU = useCallback(() => {
+  const teardown = useCallback(async () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  }, []);
+    rafRef.current = 0;
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    for (const recorder of [micRecorderRef.current, sounderRecorderRef.current]) {
+      if (recorder && recorder.state !== 'inactive') recorder.stop();
+    }
+    if (ownsMicStreamRef.current) micStreamRef.current?.getTracks().forEach(track => track.stop());
+    micDestRef.current?.stream.getTracks().forEach(track => track.stop());
+    sounderDestRef.current?.stream.getTracks().forEach(track => track.stop());
+    micSourceRef.current?.disconnect();
+    analyserRef.current?.disconnect();
+    const ctx = audioCtxRef.current;
+    micStreamRef.current = null;
+    micSourceRef.current = null;
+    micDestRef.current = null;
+    sounderDestRef.current = null;
+    micRecorderRef.current = null;
+    sounderRecorderRef.current = null;
+    analyserRef.current = null;
+    audioCtxRef.current = null;
+    setSounderDestination(null);
+    if (ctx && ctx.state !== 'closed') await ctx.close();
+  }, [setSounderDestination]);
 
   const startVU = useCallback(() => {
     if (!analyserRef.current) return;
@@ -124,6 +142,8 @@ export function useRecordingEngine(): RecordingEngine {
   }, []);
 
   const startRecording = useCallback(async (options?: { mediaStream?: MediaStream; ownsMediaStream?: boolean }) => {
+    if (startingRef.current || micRecorderRef.current || stoppingRef.current) return;
+    startingRef.current = true;
     try {
       setState(prev => ({ ...prev, error: null, isRecording: true, micLevel: 0, durationMs: 0 }));
       startedAtRef.current = Date.now();
@@ -140,6 +160,10 @@ export function useRecordingEngine(): RecordingEngine {
           sampleRate: SAMPLE_RATE,
         },
       });
+      if (!mountedRef.current) {
+        if (!options?.mediaStream || options.ownsMediaStream) micStream.getTracks().forEach(track => track.stop());
+        return;
+      }
       micStreamRef.current = micStream;
       ownsMicStreamRef.current = options?.mediaStream ? options.ownsMediaStream ?? false : true;
 
@@ -183,100 +207,64 @@ export function useRecordingEngine(): RecordingEngine {
 
       startVU();
 
-      const timer = setInterval(() => {
+      timerRef.current = setInterval(() => {
         setState(prev => ({ ...prev, durationMs: Date.now() - startedAtRef.current }));
       }, 250);
-      (window as unknown as { __recordingTimer: ReturnType<typeof setInterval> }).__recordingTimer = timer;
     } catch (err) {
-      const timer = (window as unknown as { __recordingTimer?: ReturnType<typeof setInterval> }).__recordingTimer;
-      if (timer) clearInterval(timer);
-      if (micRecorderRef.current?.state === 'recording') micRecorderRef.current.stop();
-      if (sounderRecorderRef.current?.state === 'recording') sounderRecorderRef.current.stop();
-      if (micStreamRef.current && ownsMicStreamRef.current) {
-        micStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-        await audioCtxRef.current.close();
-      }
-      micStreamRef.current = null;
-      ownsMicStreamRef.current = true;
-      micSourceRef.current = null;
-      micDestRef.current = null;
-      sounderDestRef.current = null;
-      micRecorderRef.current = null;
-      sounderRecorderRef.current = null;
-      analyserRef.current = null;
-      audioCtxRef.current = null;
-      micChunksRef.current = [];
-      sounderChunksRef.current = [];
-      setSounderDestination(null);
+      await teardown();
       setState(prev => ({
         ...prev,
         isRecording: false,
         error: err instanceof Error ? err.message : 'Failed to start recording',
       }));
       throw err;
+    } finally {
+      startingRef.current = false;
     }
-  }, [startVU, setSounderDestination]);
+  }, [startVU, setSounderDestination, teardown]);
 
-  const stopRecording = useCallback(async (): Promise<RecordingTracks> => {
-    stopVU();
-    const timer = (window as unknown as { __recordingTimer?: ReturnType<typeof setInterval> }).__recordingTimer;
-    if (timer) clearInterval(timer);
-
-    setState(prev => ({ ...prev, isRecording: false, micLevel: 0 }));
-
+  const stopRecording = useCallback((): Promise<RecordingTracks> => {
+    if (stoppingRef.current) return stoppingRef.current;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    if (mountedRef.current) setState(prev => ({ ...prev, isRecording: false, micLevel: 0 }));
     const durationMs = Date.now() - startedAtRef.current;
-
-    const micBlob = await new Promise<Blob>((resolve) => {
-      const rec = micRecorderRef.current;
-      if (!rec || rec.state === 'inactive') {
-        resolve(new Blob(micChunksRef.current, { type: 'audio/webm' }));
-        return;
+    const stopTrack = (rec: MediaRecorder | null, chunks: Blob[]) => new Promise<Blob>(resolve => {
+      const finish = () => resolve(new Blob(chunks, { type: rec?.mimeType || chunks[0]?.type || '' }));
+      if (!rec || rec.state === 'inactive') finish();
+      else {
+        rec.onstop = finish;
+        rec.stop();
       }
-      rec.onstop = () => resolve(new Blob(micChunksRef.current, { type: 'audio/webm' }));
-      rec.stop();
     });
+    // Stop both recorders at the same boundary, before waiting for either final chunk.
+    const result = Promise.all([
+      stopTrack(micRecorderRef.current, micChunksRef.current),
+      stopTrack(sounderRecorderRef.current, sounderChunksRef.current),
+    ]).then(async ([mic, sounders]) => {
+      await teardown();
+      micChunksRef.current = [];
+      sounderChunksRef.current = [];
+      return { mic, sounders, startedAt: startedAtRef.current, durationMs };
+    }).finally(() => { stoppingRef.current = null; });
+    stoppingRef.current = result;
+    return result;
+  }, [teardown]);
 
-    const sounderBlob = await new Promise<Blob>((resolve) => {
-      const rec = sounderRecorderRef.current;
-      if (!rec || rec.state === 'inactive') {
-        resolve(new Blob(sounderChunksRef.current, { type: 'audio/webm' }));
-        return;
+  const onInterruptedRef = useRef(onInterrupted);
+  useEffect(() => { onInterruptedRef.current = onInterrupted; }, [onInterrupted]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (micRecorderRef.current || sounderRecorderRef.current) {
+        void stopRecording().then(tracks => onInterruptedRef.current?.(tracks));
+      } else {
+        void teardown();
       }
-      rec.onstop = () => resolve(new Blob(sounderChunksRef.current, { type: 'audio/webm' }));
-      rec.stop();
-    });
-
-    // Cleanup
-    if (micStreamRef.current && ownsMicStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(t => t.stop());
-    }
-    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-      await audioCtxRef.current.close();
-    }
-
-    micStreamRef.current = null;
-    ownsMicStreamRef.current = true;
-    micSourceRef.current = null;
-    micDestRef.current = null;
-    sounderDestRef.current = null;
-    micRecorderRef.current = null;
-    sounderRecorderRef.current = null;
-    analyserRef.current = null;
-    audioCtxRef.current = null;
-    micChunksRef.current = [];
-    sounderChunksRef.current = [];
-
-    setSounderDestination(null);
-
-    return {
-      mic: micBlob,
-      sounders: sounderBlob,
-      startedAt: startedAtRef.current,
-      durationMs,
     };
-  }, [stopVU, setSounderDestination]);
+  }, [stopRecording, teardown]);
 
   return {
     state,

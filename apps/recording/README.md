@@ -16,12 +16,12 @@ Open `http://localhost:3000`.
 Useful commands:
 
 ```bash
-pnpm run lint
-pnpm test
-pnpm run build
+pnpm --filter bbpc-recording run lint
+pnpm --filter bbpc-recording test
+pnpm --filter bbpc-recording run build
 ```
 
-Copy `.env.example` to `.env.local`. Point `NEXT_PUBLIC_CONVEX_URL` at the
+Copy `apps/recording/.env.example` to `apps/recording/.env.local`. Point `NEXT_PUBLIC_CONVEX_URL` at the
 shared `bbpc-convex` deployment, and configure the same Clerk application used
 by the primary BBPC applications. Clerk must have a JWT template named
 `convex` with audience `convex`.
@@ -55,16 +55,16 @@ After a recording session, use the app's `Download Merge Bundle` button. The bun
 To merge locally:
 
 ```bash
-pnpm run merge-session -- --bundle ./EP-merge-bundle.json --out ./merged/EP
+pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json --out ./merged/EP
 ```
 
 Options:
 
 ```bash
-pnpm run merge-session -- --help
-pnpm run merge-session -- --bundle ./EP-merge-bundle.json --format=mp3
-pnpm run merge-session -- --bundle ./EP-merge-bundle.json --sounders=reconstruct
-pnpm run merge-session -- --dry-run
+pnpm --filter bbpc-recording run merge-session -- --help
+pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json --format=mp3
+pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json --sounders=reconstruct
+pnpm --filter bbpc-recording run merge-session -- --dry-run
 ```
 
 Sounder modes:

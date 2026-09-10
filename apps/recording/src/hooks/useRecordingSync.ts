@@ -45,7 +45,7 @@ export function useRecordingSync({
     }
   }, [onRemoteStart, onRemoteStop]);
 
-  const { sendEvent } = useSessionSync({
+  const { sendEvent, pendingCount, syncError, retryPendingEvents } = useSessionSync({
     sessionId,
     clientId,
     accessToken,
@@ -91,5 +91,5 @@ export function useRecordingSync({
     });
   }, [participantRole, sendEvent]);
 
-  return { broadcastStart, broadcastStop };
+  return { broadcastStart, broadcastStop, pendingCount, syncError, retryPendingEvents };
 }

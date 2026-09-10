@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 const movieSchema = z.object({
@@ -88,17 +90,9 @@ const showDetailSchema = z.object({
   reviews: z.array(reviewSchema),
 });
 
-const getMovieDetailReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("catalog/admin:getMovieDetail");
+const getMovieDetailReference = api.catalog.admin.getMovieDetail;
 
-const getShowDetailReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("catalog/admin:getShowDetail");
+const getShowDetailReference = api.catalog.admin.getShowDetail;
 
 export type ConvexMediaDetailReview = z.infer<typeof reviewSchema>;
 export type ConvexMovieDetail = z.infer<typeof movieDetailSchema>;
@@ -108,15 +102,16 @@ export async function loadConvexMovieDetail(
   client: ConvexReactClient,
   id: string
 ): Promise<ConvexMovieDetail | null> {
-  const result = await client.query(getMovieDetailReference, { id });
+  const result = await client.query(getMovieDetailReference, {
+    id: documentId("movies", id),
+  });
   if (result === null) {
     return null;
   }
   const detail = movieDetailSchema.parse(result);
   if (
     detail.reviews.some(
-      (review) =>
-        review.movie?.id !== detail.media.id || review.show !== null
+      (review) => review.movie?.id !== detail.media.id || review.show !== null
     )
   ) {
     throw new Error("Movie detail contains a cross-target review.");
@@ -128,15 +123,16 @@ export async function loadConvexShowDetail(
   client: ConvexReactClient,
   id: string
 ): Promise<ConvexShowDetail | null> {
-  const result = await client.query(getShowDetailReference, { id });
+  const result = await client.query(getShowDetailReference, {
+    id: documentId("shows", id),
+  });
   if (result === null) {
     return null;
   }
   const detail = showDetailSchema.parse(result);
   if (
     detail.reviews.some(
-      (review) =>
-        review.show?.id !== detail.media.id || review.movie !== null
+      (review) => review.show?.id !== detail.media.id || review.movie !== null
     )
   ) {
     throw new Error("Show detail contains a cross-target review.");

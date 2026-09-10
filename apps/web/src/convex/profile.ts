@@ -1,7 +1,9 @@
 "use client";
 
+import { api } from "@tonyisup/bbpc-convex-api";
+
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 const syllabusEntrySchema = z.object({
@@ -54,28 +56,11 @@ const pointHistoryPageSchema = z.object({
   continueCursor: z.string(),
 });
 
-const syllabusListReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("syllabus/mine:list");
+const syllabusListReference = api.syllabus.mine.list;
 
-const availablePointsReference = makeFunctionReference<
-  "query",
-  { season: { kind: "current"; today: string } },
-  unknown
->("games/member:myAvailablePoints");
+const availablePointsReference = api.games.member.myAvailablePoints;
 
-const pointHistoryPageReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      numItems: number;
-      cursor: string | null;
-    };
-  },
-  unknown
->("games/member:myPointsPage");
+const pointHistoryPageReference = api.games.member.myPointsPage;
 
 export type ConvexPointHistoryItem = z.infer<typeof pointHistoryItemSchema>;
 export type ConvexPointHistoryPage = z.infer<typeof pointHistoryPageSchema>;

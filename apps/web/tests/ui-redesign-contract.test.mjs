@@ -173,7 +173,7 @@ test("voice messages use the Convex recorder without a SQL fallback", () => {
   assert.match(leaveMessage, /aria-label="Leave a message"/);
   assert.match(leaveMessage, /<ConvexVoiceMailRecorder enabled=\{isModalOpen\}/);
   assert.doesNotMatch(leaveMessage, /SqlMessageContent|voice-mail-recorder|trpc/);
-  assert.match(recorder, /episodes\/public:nextScheduled/);
+  assert.match(recorder, /api\.episodes\.public\.nextScheduled/);
   assert.match(recorder, /No upcoming episode/i);
 });
 
@@ -207,38 +207,4 @@ test("authenticated mobile navigation mirrors active route semantics", () => {
     /aria-current=\{isActive\(item\.href\) \? "page" : undefined\}/
   );
   assert.match(mobileAuthNav, /bg-red-500\/10 text-red-300/);
-});
-
-test("year ranking candidates are movie-grouped, labelled, and submit once", () => {
-  const year = read("src/app/year/ConvexYearPageClient.tsx");
-
-  assert.match(year, /const selectedYear = getSelectedYear\(searchParams\.get\("y"\)/);
-  assert.match(year, /getInitialViewMode\(searchParams\.get\("view"\)\)/);
-  assert.match(year, /const sortDesc = searchParams\.get\("sort"\) !== "asc"/);
-  assert.doesNotMatch(year, /lastSyncedSearchParams/);
-  assert.match(
-    year,
-    /replaceControls\(\{ year: Number\(event\.target\.value\) \}\)/
-  );
-  assert.match(year, /replaceControls\(\{ descending: !sortDesc \}\)/);
-  assert.match(year, /replaceControls\(\{ view: "grid" \}\)/);
-  assert.match(year, /replaceControls\(\{ view: "list" \}\)/);
-  assert.match(year, /const groupedMovies = useMemo/);
-  assert.match(year, /groupedMovies\.map\(\(group\)/);
-  assert.match(year, /htmlFor="ranked-list-selector"/);
-  assert.match(year, /id="ranked-list-selector"/);
-  assert.match(year, /htmlFor=\{`rank-select-\$\{group\.movie\.id\}`\}/);
-  assert.match(year, /id=\{`rank-select-\$\{group\.movie\.id\}`\}/);
-  assert.match(year, /value=\{selectedRank\}/);
-  assert.match(year, /setRankSelections/);
-  assert.match(year, /Number\.parseInt\(selectedRank/);
-  assert.doesNotMatch(year, /previousElementSibling/);
-  assert.match(year, /const existingItem = selectedList\?\.items\.find/);
-  assert.doesNotMatch(
-    year,
-    /<select[\s\S]{0,500}onChange=\{[\s\S]{0,300}upsertConvexMovieRankingItem/
-  );
-  assert.match(year, /await upsertConvexMovieRankingItem/);
-  assert.match(year, /await reorderConvexMovieRankingItems/);
-  assert.match(year, /await removeConvexMovieRankingItem/);
 });

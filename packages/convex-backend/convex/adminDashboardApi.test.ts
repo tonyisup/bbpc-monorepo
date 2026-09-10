@@ -2,9 +2,11 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import { api } from "./_generated/api.js";
+import { BBPC_API_VERSION } from "../contracts/index.js";
+import { dashboardTriggers } from "./lib/dashboardProjection.js";
+import { api, internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import schema from "./schema.js";
 
@@ -85,6 +87,39 @@ async function seedUser(
     }
     return userId;
   });
+}
+
+async function initializeDashboard(
+  t: TestBackend,
+  beforeDrain?: () => Promise<void>,
+) {
+  await t.mutation(internal.system.cutover.initialize, {
+    cutoverRunId: "dashboard",
+    apiVersion: BBPC_API_VERSION,
+    actor: "test",
+  });
+  for (const [expectedStage, nextStage] of [
+    ["S0", "S1"],
+    ["S1", "S2"],
+    ["S2", "S3"],
+  ] as const) {
+    await t.mutation(internal.system.cutover.transition, {
+      cutoverRunId: "dashboard",
+      expectedStage,
+      nextStage,
+      actor: "test",
+      ...(nextStage === "S3"
+        ? { approvedBackupId: "test", approvedBackupChecksum: "sha256:test" }
+        : {}),
+    });
+  }
+  await t
+    .withIdentity(ADMIN_IDENTITY)
+    .mutation(api.admin.dashboardBackfill.initialize, {
+      clientApiVersion: BBPC_API_VERSION,
+    });
+  await beforeDrain?.();
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers());
 }
 
 describe("administrator dashboard API", () => {
@@ -200,6 +235,9 @@ describe("administrator dashboard API", () => {
       });
     });
 
+    vi.useFakeTimers();
+    await initializeDashboard(t);
+    vi.useRealTimers();
     await expect(
       t.withIdentity(ADMIN_IDENTITY).query(api.admin.dashboard.overview, {}),
     ).resolves.toMatchObject({
@@ -245,6 +283,9 @@ describe("administrator dashboard API", () => {
       admin: true,
     });
 
+    vi.useFakeTimers();
+    await initializeDashboard(t);
+    vi.useRealTimers();
     const result = await t
       .withIdentity(ADMIN_IDENTITY)
       .query(api.admin.dashboard.overview, {});
@@ -261,4 +302,156 @@ describe("administrator dashboard API", () => {
       guessStats: [],
     });
   });
+});
+
+// convex-test implements even indexed lookups by scanning its in-memory rows.
+// Isolate each historical cap so unrelated tables do not multiply that cost.
+// Every case still runs the real scheduled backfill beyond its former limit.
+test.each([
+  { table: "users", users: 501, movies: 1, reviews: 0, episodes: 1 },
+  { table: "movies", users: 0, movies: 3001, reviews: 0, episodes: 1 },
+  { table: "reviews", users: 0, movies: 1, reviews: 3001, episodes: 1 },
+  { table: "episodes", users: 0, movies: 1, reviews: 0, episodes: 2001 },
+])("dashboard backfill crosses the former $table cap and maintains exact counts through edits and deletes", async (size) => {
+  vi.useFakeTimers();
+  try {
+    const t = createTestBackend();
+    await seedUser(t, {
+      identity: ADMIN_IDENTITY,
+      name: "Admin",
+      email: "admin@example.test",
+      admin: true,
+    });
+    const before = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.admin.dashboard.overview, {});
+    expect(before.countsReady).toBe(false);
+    expect(before.counts).toBeNull();
+    await t.run(async (ctx) => {
+      for (let i = 0; i < size.users; i++)
+        await ctx.db.insert("users", {
+          status: "active",
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      for (let i = 0; i < size.movies; i++) {
+        await ctx.db.insert("movies", {
+          title: `Movie ${String(i)}`,
+          normalizedTitle: `movie ${String(i)}`,
+          year: 2026,
+          url: "https://example.test",
+        });
+      }
+      for (let i = 0; i < size.reviews; i++)
+        await ctx.db.insert("reviews", {});
+      for (let i = 0; i < size.episodes; i++)
+        await ctx.db.insert("episodes", {
+          number: i,
+          title: "Episode",
+          status: "Published",
+          date: "2026-01-01",
+        });
+    });
+    await initializeDashboard(t);
+    expect(
+      (
+        await t
+          .withIdentity(ADMIN_IDENTITY)
+          .query(api.admin.dashboard.overview, {})
+      ).counts,
+    ).toEqual({
+      users: size.users + 1,
+      movies: size.movies,
+      reviews: size.reviews,
+      episodes: size.episodes,
+    });
+    await t.run(async (original) => {
+      const ctx = dashboardTriggers.wrapDB(original);
+      const movie = await ctx.db.query("movies").first();
+      if (!movie) throw new Error("Missing fixture");
+      await ctx.db.patch("movies", movie._id, { title: "Changed" });
+      await ctx.db.delete("movies", movie._id);
+      await ctx.db.insert("reviews", {});
+    });
+    // Re-running initialization cannot count existing membership twice.
+    await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.admin.dashboardBackfill.initialize, {
+        clientApiVersion: BBPC_API_VERSION,
+      });
+    await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+    const result = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.admin.dashboard.overview, {});
+    expect(result.countsReady).toBe(true);
+    expect(result.counts).toEqual({
+      users: size.users + 1,
+      movies: size.movies - 1,
+      reviews: size.reviews + 1,
+      episodes: size.episodes,
+    });
+    expect(result.latestEpisode?.number).toBe(size.episodes - 1);
+  } finally {
+    vi.useRealTimers();
+  }
+}, 60_000);
+
+test("dashboard backfill tolerates live inserts, edits, and deletions on either side of its cursor", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = createTestBackend();
+    await seedUser(t, {
+      identity: ADMIN_IDENTITY,
+      name: "Admin",
+      email: "admin@example.test",
+      admin: true,
+    });
+    const users = await t.run(async (ctx) => {
+      const ids: Array<Id<"users">> = [];
+      for (let i = 0; i < 120; i++)
+        ids.push(
+          await ctx.db.insert("users", {
+            status: "active",
+            createdAt: 1,
+            updatedAt: 1,
+          }),
+        );
+      return ids;
+    });
+    await initializeDashboard(t, async () => {
+      await t.mutation(internal.admin.dashboardBackfill.batch, {
+        source: "users",
+        cutoverRunId: "dashboard",
+        clientApiVersion: BBPC_API_VERSION,
+      });
+      const during = await t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.admin.dashboard.overview, {});
+      expect(during.counts).toBeNull();
+      await t.run(async (original) => {
+        const ctx = dashboardTriggers.wrapDB(original);
+        const first = users.at(0),
+          last = users.at(-1),
+          penultimate = users.at(-2);
+        if (!first || !last || !penultimate) throw new Error("Missing users");
+        await ctx.db.delete("users", first);
+        await ctx.db.delete("users", last);
+        await ctx.db.patch("users", penultimate, {
+          name: "Edited before backfill reaches this user",
+        });
+        await ctx.db.insert("users", {
+          status: "active",
+          createdAt: 1,
+          updatedAt: 1,
+        });
+      });
+    });
+    const result = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.admin.dashboard.overview, {});
+    expect(result.countsReady).toBe(true);
+    expect(result.counts?.users).toBe(120);
+  } finally {
+    vi.useRealTimers();
+  }
 });

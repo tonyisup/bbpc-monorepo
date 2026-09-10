@@ -272,7 +272,7 @@ export function ConvexRolesPage() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">Roles</h2>
             <p className="text-muted-foreground">
-              Manage canonical user roles and administrator capability.
+              Manage roles and administrator access.
             </p>
           </div>
           <Button onClick={() => setEditingRole(null)}>
@@ -284,7 +284,7 @@ export function ConvexRolesPage() {
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Roles could not be loaded. No legacy SQL fallback was attempted.
+              Roles could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

@@ -1,5 +1,6 @@
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { ConvexError } from "convex/values";
 import { z } from "zod";
 
@@ -37,17 +38,9 @@ const domainErrorSchema = z.object({
   ]),
 });
 
-const administratorMeReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("identity/profile:administratorMe");
+const administratorMeReference = api.identity.profile.administratorMe;
 
-const linkOrCreateMeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string },
-  unknown
->("identity/linking:linkOrCreateMe");
+const linkOrCreateMeReference = api.identity.linking.linkOrCreateMe;
 
 export type ConvexIdentityProfile = z.infer<typeof identityProfileSchema>;
 export type ConvexIdentityIssue =

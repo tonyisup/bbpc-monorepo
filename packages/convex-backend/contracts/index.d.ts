@@ -1,6 +1,14 @@
+import type { GenericId } from "convex/values";
+
 export declare const BBPC_API_VERSION: "0.1.0";
 
 export type BbpcApiVersion = typeof BBPC_API_VERSION;
+
+/** Restore a document ID's table brand after an HTML/validated JSON boundary. */
+export declare function documentId<Table extends string, Value extends string | null | undefined>(
+  table: Table,
+  value: Value,
+): Value extends string ? GenericId<Table> : Value;
 
 export type DomainErrorCode =
   | "AUTHENTICATION_REQUIRED"

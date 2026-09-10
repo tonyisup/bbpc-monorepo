@@ -370,15 +370,14 @@ export function ConvexTagsPage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Tags & Votes</h2>
           <p className="text-muted-foreground">
-            Manage the bounded tag catalog and paginated vote ledger.
+            Manage tags and review votes.
           </p>
         </div>
 
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Tags and votes could not be loaded. No legacy SQL fallback was
-              attempted.
+              Tags and votes could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />
@@ -540,7 +539,7 @@ export function ConvexTagsPage() {
                             size="icon"
                             title={
                               vote.user === null
-                                ? "A canonical user is required"
+                                ? "Choose a user"
                                 : vote.award.kind !== "unawarded"
                                   ? "Award evidence already exists"
                                   : "Apply points"

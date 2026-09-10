@@ -282,15 +282,14 @@ export function ConvexRankedListsPage() {
             </Badge>
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Manage personal rankings with owner-derived Convex authorization.
+            Manage personal ranked lists.
           </p>
         </div>
 
         {loadFailed ? (
           <Card className="p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Ranked lists could not be loaded. No legacy SQL fallback was
-              attempted.
+              Ranked lists could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

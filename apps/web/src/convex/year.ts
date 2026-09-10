@@ -1,7 +1,10 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
@@ -87,53 +90,17 @@ const rankingListDetailSchema = rankingListSummarySchema.extend({
   items: z.array(rankingItemSchema),
 });
 
-const listYearReviewsReference = makeFunctionReference<
-  "query",
-  { year: number },
-  unknown
->("reviews/public:listMovieReviewsForYear");
+const listYearReviewsReference = api.reviews.public.listMovieReviewsForYear;
 
-const listMyRankingListsReference = makeFunctionReference<
-  "query",
-  { targetType: "MOVIE" },
-  unknown
->("rankings/lists:listMine");
+const listMyRankingListsReference = api.rankings.lists.listMine;
 
-const getRankingListReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("rankings/lists:get");
+const getRankingListReference = api.rankings.lists.get;
 
-const upsertRankingItemReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    rankedListId: string;
-    target: { kind: "movie"; id: string };
-    rank: number;
-  },
-  unknown
->("rankings/items:upsert");
+const upsertRankingItemReference = api.rankings.items.upsert;
 
-const removeRankingItemReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-  },
-  unknown
->("rankings/items:remove");
+const removeRankingItemReference = api.rankings.items.remove;
 
-const reorderRankingItemsReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    rankedListId: string;
-    itemIds: string[];
-  },
-  unknown
->("rankings/items:reorder");
+const reorderRankingItemsReference = api.rankings.items.reorder;
 
 export type ConvexYearReview = z.infer<typeof yearReviewSchema>;
 export type ConvexMovieRankingListSummary = z.infer<
@@ -164,7 +131,9 @@ export async function getMyConvexMovieRankingList(
   id: string
 ) {
   return rankingListDetailSchema.parse(
-    await client.query(getRankingListReference, { id })
+    await client.query(getRankingListReference, {
+      id: documentId("rankedLists", id),
+    })
   );
 }
 
@@ -175,8 +144,8 @@ export async function upsertConvexMovieRankingItem(
   return rankingItemSchema.parse(
     await client.mutation(upsertRankingItemReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      rankedListId: input.rankedListId,
-      target: { kind: "movie", id: input.movieId },
+      rankedListId: documentId("rankedLists", input.rankedListId),
+      target: { kind: "movie", id: documentId("movies", input.movieId) },
       rank: input.rank,
     })
   );
@@ -191,7 +160,7 @@ export async function removeConvexMovieRankingItem(
     .parse(
       await client.mutation(removeRankingItemReference, {
         clientApiVersion: BBPC_CLIENT_API_VERSION,
-        id,
+        id: documentId("rankedItems", id),
       })
     );
 }
@@ -204,8 +173,8 @@ export async function reorderConvexMovieRankingItems(
   return rankingListDetailSchema.parse(
     await client.mutation(reorderRankingItemsReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      rankedListId,
-      itemIds,
+      rankedListId: documentId("rankedLists", rankedListId),
+      itemIds: itemIds.map((id) => documentId("rankedItems", id)),
     })
   );
 }

@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -98,49 +100,13 @@ const deleteImpactSchema = z.object({
   guessCount: z.number(),
 });
 
-const listReviewsReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-    ratingId?: string;
-    unrated?: boolean;
-    userId?: string;
-  },
-  unknown
->("reviews/admin:listPage");
+const listReviewsReference = api.reviews.admin.listPage;
 
-const getDeleteImpactReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("reviews/admin:getDeleteImpact");
+const getDeleteImpactReference = api.reviews.admin.getDeleteImpact;
 
-const setRatingReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    reviewId: string;
-    ratingId: string | null;
-  },
-  unknown
->("reviews/admin:setRating");
+const setRatingReference = api.reviews.admin.setRating;
 
-const removeReviewReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expectedImpact: {
-      assignmentReviewCount: number;
-      extraReviewCount: number;
-      guessCount: number;
-    };
-  },
-  unknown
->("reviews/admin:remove");
+const removeReviewReference = api.reviews.admin.remove;
 
 export const ADMIN_REVIEWS_PAGE_SIZE = 30;
 
@@ -172,11 +138,26 @@ export async function loadConvexAdminReviewsPage(
         numItems: ADMIN_REVIEWS_PAGE_SIZE,
       },
       ...(filters.rating.kind === "rating"
-        ? { ratingId: filters.rating.id }
+        ? { ratingId: documentId("ratings", filters.rating.id) }
         : filters.rating.kind === "unrated"
         ? { unrated: true }
         : {}),
-      ...(filters.userId === null ? {} : { userId: filters.userId }),
+      ...(filters.userId === null
+        ? {}
+        : { userId: documentId("users", filters.userId) }),
+      ratingId: documentId(
+        "ratings",
+        (filters.rating.kind === "rating"
+          ? { ratingId: filters.rating.id }
+          : filters.rating.kind === "unrated"
+          ? { unrated: true }
+          : {}
+        ).ratingId
+      ),
+      userId: documentId(
+        "users",
+        (filters.userId === null ? {} : { userId: filters.userId }).userId
+      ),
     })
   );
   return {
@@ -191,7 +172,9 @@ export async function loadConvexReviewDeleteImpact(
   id: string
 ): Promise<ConvexReviewDeleteImpact> {
   return deleteImpactSchema.parse(
-    await client.query(getDeleteImpactReference, { id })
+    await client.query(getDeleteImpactReference, {
+      id: documentId("reviews", id),
+    })
   );
 }
 
@@ -203,8 +186,8 @@ export async function setConvexAdminReviewRating(
   reviewSchema.parse(
     await client.mutation(setRatingReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      reviewId,
-      ratingId,
+      reviewId: documentId("reviews", reviewId),
+      ratingId: documentId("ratings", ratingId),
     })
   );
 }
@@ -216,7 +199,7 @@ export async function deleteConvexAdminReview(
   const result = deleteImpactSchema.parse(
     await client.mutation(removeReviewReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: impact.id,
+      id: documentId("reviews", impact.id),
       expectedImpact: {
         assignmentReviewCount: impact.assignmentReviewCount,
         extraReviewCount: impact.extraReviewCount,

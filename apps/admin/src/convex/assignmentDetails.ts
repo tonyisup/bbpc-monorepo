@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -114,210 +116,50 @@ const audioPageSchema = z.object({
 
 const idResultSchema = z.object({ id: z.string().min(1) });
 
-const getBySlugReference = makeFunctionReference<
-  "query",
-  { slug: string },
-  unknown
->("assignments/public:getBySlug");
+const getBySlugReference = api.assignments.public.getBySlug;
 
-const getWorkbenchReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("assignments/admin:getWorkbench");
+const getWorkbenchReference = api.assignments.admin.getWorkbench;
 
-const updateSlugReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    slug: string;
-    expectedSlug: string | null;
-  },
-  unknown
->("assignments/admin:updateSlug");
+const updateSlugReference = api.assignments.admin.updateSlug;
 
-const setTypeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    type: ConvexAssignmentType;
-    expectedType: ConvexAssignmentType;
-  },
-  unknown
->("assignments/admin:setType");
+const setTypeReference = api.assignments.admin.setType;
 
-const setPlayableReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    playable: boolean;
-    expectedPlayable: boolean;
-  },
-  unknown
->("assignments/admin:setPlayable");
+const setPlayableReference = api.assignments.admin.setPlayable;
 
-const updateIdentityReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    type: ConvexAssignmentType;
-    playable: boolean;
-    slug: string;
-    expected: {
-      type: ConvexAssignmentType;
-      playable: boolean;
-      slug: string | null;
-    };
-  },
-  unknown
->("assignments/admin:updateIdentity");
+const updateIdentityReference = api.assignments.admin.updateIdentity;
 
-const removeAssignmentReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: {
-      type: ConvexAssignmentType;
-      slug: string | null;
-      userId: string;
-      movieId: string;
-      episodeId: string;
-    };
-  },
-  unknown
->("assignments/admin:removeIfUnreferenced");
+const removeAssignmentReference = api.assignments.admin.removeIfUnreferenced;
 
-const createReviewReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    assignmentId: string;
-    userId: string;
-    ratingId?: string;
-  },
-  unknown
->("reviews/admin:createForAssignment");
+const createReviewReference = api.reviews.admin.createForAssignment;
 
-const setReviewRatingReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    reviewId: string;
-    ratingId: string | null;
-    expectedRatingId: string | null;
-  },
-  unknown
->("reviews/admin:setRating");
+const setReviewRatingReference = api.reviews.admin.setRating;
 
-const removeAssignmentReviewReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-  },
-  unknown
->("reviews/admin:removeAssignmentIfNoGuesses");
+const removeAssignmentReviewReference =
+  api.reviews.admin.removeAssignmentIfNoGuesses;
 
-const createGuessReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    userId: string;
-    assignmentReviewId: string;
-    ratingId: string;
-    seasonId: string;
-  },
-  unknown
->("games/guesses:create");
+const createGuessReference = api.games.guesses.create;
 
-const updateGuessRatingReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    ratingId: string;
-    expectedRatingId: string;
-  },
-  unknown
->("games/guesses:updateRating");
+const updateGuessRatingReference = api.games.guesses.updateRating;
 
-const removeGuessReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: {
-      userId: string;
-      assignmentReviewId: string;
-      ratingId: string;
-      seasonId: string;
-      createdAt: number;
-      hasPoint: boolean;
-    };
-  },
-  unknown
->("games/guesses:remove");
+const removeGuessReference = api.games.guesses.remove;
 
-const updateWagerStatusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    status: ConvexAssignmentWagerStatus;
-    expectedStatus: ConvexAssignmentWagerStatus;
-  },
-  unknown
->("games/gambling:updateStatus");
+const updateWagerStatusReference = api.games.gambling.updateStatus;
 
-const listAudioReference = makeFunctionReference<
-  "query",
-  {
-    assignmentId: string;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("assignments/admin:listAudioMessages");
+const listAudioReference = api.assignments.admin.listAudioMessages;
 
-const removeAudioReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: {
-      assignmentId: string | null;
-      userId: string;
-      url: string;
-      fileKey: string | null;
-      createdAt: number;
-    };
-  },
-  unknown
->("assignments/admin:removeAudioMessage");
+const removeAudioReference = api.assignments.admin.removeAudioMessage;
 
 export const ADMIN_ASSIGNMENT_AUDIO_PAGE_SIZE = 30;
 
-export type ConvexAssignmentWorkbench = z.infer<
-  typeof workbenchSchema
->;
+export type ConvexAssignmentWorkbench = z.infer<typeof workbenchSchema>;
 export type ConvexAssignmentType =
   ConvexAssignmentWorkbench["assignment"]["type"];
 export type ConvexAssignmentReview =
   ConvexAssignmentWorkbench["reviews"][number];
-export type ConvexAssignmentGuess =
-  ConvexAssignmentReview["guesses"][number];
-export type ConvexAssignmentWager =
-  ConvexAssignmentWorkbench["wagers"][number];
-export type ConvexAssignmentWagerStatus = z.infer<
-  typeof wagerStatusSchema
->;
-export type ConvexAssignmentAudioMessage = z.infer<
-  typeof audioMessageSchema
->;
+export type ConvexAssignmentGuess = ConvexAssignmentReview["guesses"][number];
+export type ConvexAssignmentWager = ConvexAssignmentWorkbench["wagers"][number];
+export type ConvexAssignmentWagerStatus = z.infer<typeof wagerStatusSchema>;
+export type ConvexAssignmentAudioMessage = z.infer<typeof audioMessageSchema>;
 
 export interface ConvexAssignmentAudioPage {
   messages: ConvexAssignmentAudioMessage[];
@@ -336,14 +178,8 @@ export async function loadConvexAssignmentWorkbench(
   if (route === null) {
     return null;
   }
-  const workbench = await loadConvexAssignmentWorkbenchById(
-    client,
-    route.id
-  );
-  if (
-    workbench !== null &&
-    workbench.assignment.slug !== route.slug
-  ) {
+  const workbench = await loadConvexAssignmentWorkbenchById(client, route.id);
+  if (workbench !== null && workbench.assignment.slug !== route.slug) {
     throw new Error("Assignment slug changed while loading its workbench.");
   }
   return workbench;
@@ -355,7 +191,11 @@ export async function loadConvexAssignmentWorkbenchById(
 ): Promise<ConvexAssignmentWorkbench | null> {
   return workbenchSchema
     .nullable()
-    .parse(await client.query(getWorkbenchReference, { id }));
+    .parse(
+      await client.query(getWorkbenchReference, {
+        id: documentId("assignments", id),
+      })
+    );
 }
 
 export async function updateConvexAssignmentSlug(
@@ -366,7 +206,7 @@ export async function updateConvexAssignmentSlug(
   return assignmentSchema.parse(
     await client.mutation(updateSlugReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: assignment.id,
+      id: documentId("assignments", assignment.id),
       slug,
       expectedSlug: assignment.slug,
     })
@@ -381,7 +221,7 @@ export async function updateConvexAssignmentType(
   return assignmentSchema.parse(
     await client.mutation(setTypeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: assignment.id,
+      id: documentId("assignments", assignment.id),
       type,
       expectedType: assignment.type,
     })
@@ -396,7 +236,7 @@ export async function updateConvexAssignmentPlayable(
   return assignmentSchema.parse(
     await client.mutation(setPlayableReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: assignment.id,
+      id: documentId("assignments", assignment.id),
       playable,
       expectedPlayable: assignment.playable,
     })
@@ -415,7 +255,7 @@ export async function updateConvexAssignmentIdentity(
   return assignmentSchema.parse(
     await client.mutation(updateIdentityReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: input.assignment.id,
+      id: documentId("assignments", input.assignment.id),
       type: input.type,
       playable: input.playable,
       slug: input.slug,
@@ -435,13 +275,13 @@ export async function deleteConvexAssignment(
   idResultSchema.parse(
     await client.mutation(removeAssignmentReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: assignment.id,
+      id: documentId("assignments", assignment.id),
       expected: {
         type: assignment.type,
         slug: assignment.slug,
-        userId: assignment.user.id,
-        movieId: assignment.movie.id,
-        episodeId: assignment.episode.id,
+        userId: documentId("users", assignment.user.id),
+        movieId: documentId("movies", assignment.movie.id),
+        episodeId: documentId("episodes", assignment.episode.id),
       },
     })
   );
@@ -458,9 +298,15 @@ export async function createConvexAssignmentReview(
   idResultSchema.parse(
     await client.mutation(createReviewReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      assignmentId: input.assignmentId,
-      userId: input.userId,
-      ...(input.ratingId === null ? {} : { ratingId: input.ratingId }),
+      assignmentId: documentId("assignments", input.assignmentId),
+      userId: documentId("users", input.userId),
+      ...(input.ratingId === null
+        ? {}
+        : { ratingId: documentId("ratings", input.ratingId) }),
+      ratingId: documentId(
+        "ratings",
+        (input.ratingId === null ? {} : { ratingId: input.ratingId }).ratingId
+      ),
     })
   );
 }
@@ -473,9 +319,9 @@ export async function updateConvexAssignmentReviewRating(
   idResultSchema.parse(
     await client.mutation(setReviewRatingReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      reviewId: review.reviewId,
-      ratingId,
-      expectedRatingId: review.rating?.id ?? null,
+      reviewId: documentId("reviews", review.reviewId),
+      ratingId: documentId("ratings", ratingId),
+      expectedRatingId: documentId("ratings", review.rating?.id ?? null),
     })
   );
 }
@@ -487,7 +333,7 @@ export async function removeConvexAssignmentReview(
   idResultSchema.parse(
     await client.mutation(removeAssignmentReviewReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: assignmentReviewId,
+      id: documentId("assignmentReviews", assignmentReviewId),
     })
   );
 }
@@ -505,6 +351,13 @@ export async function createConvexAssignmentGuess(
     await client.mutation(createGuessReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      assignmentReviewId: documentId(
+        "assignmentReviews",
+        input.assignmentReviewId
+      ),
+      ratingId: documentId("ratings", input.ratingId),
+      seasonId: documentId("seasons", input.seasonId),
+      userId: documentId("users", input.userId),
     })
   );
 }
@@ -517,9 +370,9 @@ export async function updateConvexAssignmentGuessRating(
   idResultSchema.parse(
     await client.mutation(updateGuessRatingReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: guess.id,
-      ratingId,
-      expectedRatingId: guess.rating.id,
+      id: documentId("guesses", guess.id),
+      ratingId: documentId("ratings", ratingId),
+      expectedRatingId: documentId("ratings", guess.rating.id),
     })
   );
 }
@@ -532,12 +385,12 @@ export async function removeConvexAssignmentGuess(
   idResultSchema.parse(
     await client.mutation(removeGuessReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: guess.id,
+      id: documentId("guesses", guess.id),
       expected: {
-        userId: guess.user.id,
-        assignmentReviewId,
-        ratingId: guess.rating.id,
-        seasonId: guess.season.id,
+        userId: documentId("users", guess.user.id),
+        assignmentReviewId: documentId("assignmentReviews", assignmentReviewId),
+        ratingId: documentId("ratings", guess.rating.id),
+        seasonId: documentId("seasons", guess.season.id),
         createdAt: guess.createdAt,
         hasPoint: guess.hasPoint,
       },
@@ -553,7 +406,7 @@ export async function updateConvexAssignmentWagerStatus(
   idResultSchema.parse(
     await client.mutation(updateWagerStatusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: wager.id,
+      id: documentId("gamblingEntries", wager.id),
       status,
       expectedStatus: wager.status,
     })
@@ -567,7 +420,7 @@ export async function loadConvexAssignmentAudioPage(
 ): Promise<ConvexAssignmentAudioPage> {
   const result = audioPageSchema.parse(
     await client.query(listAudioReference, {
-      assignmentId,
+      assignmentId: documentId("assignments", assignmentId),
       paginationOpts: {
         cursor,
         numItems: ADMIN_ASSIGNMENT_AUDIO_PAGE_SIZE,
@@ -595,10 +448,10 @@ export async function removeConvexAssignmentAudio(
   idResultSchema.parse(
     await client.mutation(removeAudioReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: message.id,
+      id: documentId("assignmentAudioMessages", message.id),
       expected: {
-        assignmentId: message.assignmentId,
-        userId: message.user.id,
+        assignmentId: documentId("assignments", message.assignmentId),
+        userId: documentId("users", message.user.id),
         url: message.url,
         fileKey: message.fileKey,
         createdAt: message.createdAt,

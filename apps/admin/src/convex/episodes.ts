@@ -1,5 +1,6 @@
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -85,32 +86,11 @@ const episodesPageSchema = z.object({
     .optional(),
 });
 
-const listEpisodesReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("episodes/admin:listPage");
+const listEpisodesReference = api.episodes.admin.listPage;
 
-const searchEpisodesReference = makeFunctionReference<
-  "query",
-  { query: string; limit: number },
-  unknown
->("episodes/public:search");
+const searchEpisodesReference = api.episodes.public.search;
 
-const createEpisodeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    number: number;
-    title: string;
-  },
-  unknown
->("episodes/admin:createEpisode");
+const createEpisodeReference = api.episodes.admin.createEpisode;
 
 export const ADMIN_EPISODES_PAGE_SIZE = 20;
 

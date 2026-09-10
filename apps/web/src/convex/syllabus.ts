@@ -1,7 +1,10 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
@@ -52,71 +55,21 @@ const tmdbSearchSchema = z.object({
   results: z.array(tmdbMovieSchema),
 });
 
-const syllabusListReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("syllabus/mine:list");
+const syllabusListReference = api.syllabus.mine.list;
 
-const searchCatalogMoviesReference = makeFunctionReference<
-  "query",
-  { query: string; limit: number },
-  unknown
->("catalog/public:searchMovies");
+const searchCatalogMoviesReference = api.catalog.public.searchMovies;
 
-const searchTmdbMoviesReference = makeFunctionReference<
-  "action",
-  { query: string; page?: number },
-  unknown
->("catalog/external:searchMovies");
+const searchTmdbMoviesReference = api.catalog.external.searchMovies;
 
-const upsertMovieReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    year: number;
-    poster: string;
-    url: string;
-    tmdbId?: number;
-  },
-  unknown
->("catalog/write:upsertMovieByUrl");
+const upsertMovieReference = api.catalog.write.upsertMovieByUrl;
 
-const addReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    movieId: string;
-    position?: SyllabusInsertPosition;
-  },
-  unknown
->("syllabus/mine:add");
+const addReference = api.syllabus.mine.add;
 
-const removeReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("syllabus/mine:remove");
+const removeReference = api.syllabus.mine.remove;
 
-const reorderReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    orderedPendingIds: string[];
-  },
-  unknown
->("syllabus/mine:reorderPending");
+const reorderReference = api.syllabus.mine.reorderPending;
 
-const updateNotesReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    notes: string | null;
-  },
-  unknown
->("syllabus/mine:updateNotes");
+const updateNotesReference = api.syllabus.mine.updateNotes;
 
 const idResultSchema = z.object({ id: z.string().min(1) });
 const reorderResultSchema = z.object({ success: z.literal(true) });
@@ -185,7 +138,7 @@ export async function addConvexSyllabusEntry(
   return syllabusEntrySchema.parse(
     await client.mutation(addReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      movieId,
+      movieId: documentId("movies", movieId),
       position,
     })
   );
@@ -198,7 +151,7 @@ export async function removeConvexSyllabusEntry(
   return idResultSchema.parse(
     await client.mutation(removeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("syllabusEntries", id),
     })
   );
 }
@@ -210,7 +163,9 @@ export async function reorderConvexSyllabus(
   return reorderResultSchema.parse(
     await client.mutation(reorderReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      orderedPendingIds,
+      orderedPendingIds: orderedPendingIds.map((id) =>
+        documentId("syllabusEntries", id)
+      ),
     })
   );
 }
@@ -223,7 +178,7 @@ export async function updateConvexSyllabusNotes(
   return syllabusEntrySchema.parse(
     await client.mutation(updateNotesReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("syllabusEntries", id),
       notes,
     })
   );

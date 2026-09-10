@@ -513,7 +513,7 @@ export function ConvexQuotabungaPage() {
               <Quote className="h-8 w-8 text-primary" /> Quotabunga
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Moderate bounded episode entries, seed the bracket, and award
+              Moderate episode entries, seed the bracket, and award
               owned result points.
             </p>
           </div>
@@ -532,8 +532,7 @@ export function ConvexQuotabungaPage() {
         {loadFailed ? (
           <Card className="p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Quotabunga could not be loaded. No legacy SQL fallback was
-              attempted.
+              Quotabunga could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

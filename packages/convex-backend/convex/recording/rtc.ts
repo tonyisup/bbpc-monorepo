@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import { internal } from "../_generated/api.js";
 import type { Doc } from "../_generated/dataModel.js";
 import type {
   MutationCtx,
@@ -7,6 +8,7 @@ import type {
 } from "../_generated/server.js";
 import {
   adminMutation,
+  internalAppMutation,
   recordingMutation,
   recordingQuery,
 } from "../functions.js";
@@ -32,7 +34,7 @@ const ROOM_CAPACITY = 4;
 const MAX_STALE_PRESENCE_ROWS = 100;
 const MAX_PENDING_SIGNALS = 200;
 const MAX_SIGNAL_PAYLOAD_BYTES = 64 * 1024;
-const MAX_RTC_CLEANUP_ROWS = 500;
+const MAX_RTC_CLEANUP_ROWS = 100;
 
 const presenceValidator = v.object({
   clientId: v.string(),
@@ -149,7 +151,7 @@ export const joinAudio = recordingMutation({
       session.publicId,
       participant.clientId,
     );
-    if (existing === null) {
+    if (existing === null || existing.lastSeenAt < now - ACTIVE_PRESENCE_MS) {
       const activeRows = await activePresenceRows(
         ctx,
         session.publicId,
@@ -238,13 +240,18 @@ export const heartbeatAudio = recordingMutation({
     if (existing === null) {
       return null;
     }
+    const now = Date.now();
+    if (existing.lastSeenAt < now - ACTIVE_PRESENCE_MS) {
+      const activeRows = await activePresenceRows(ctx, participant.publicSessionId, now);
+      if (activeRows.length >= ROOM_CAPACITY) return null;
+    }
     await ctx.db.patch(
       "recordingRtcPresence",
       existing._id,
       {
         displayName: participant.displayName,
         role: participant.role,
-        lastSeenAt: Date.now(),
+        lastSeenAt: now,
         muted: args.muted,
         recording: args.recording,
       },
@@ -495,57 +502,92 @@ export const cleanupRtcSession = adminMutation({
       "RTC cleanup cutoff",
     );
     const now = Date.now();
-    const signalCutoff = Math.min(
-      olderThan,
-      now - SIGNAL_TTL_MS,
+    const signalCutoff = Math.min(olderThan, now - SIGNAL_TTL_MS);
+    const presenceCutoff = Math.min(olderThan, now - PRESENCE_CLEANUP_MS);
+    return await deleteRtcBatch(
+      ctx,
+      publicSessionId,
+      signalCutoff,
+      presenceCutoff,
+      {
+        cutoverRunId: ctx.systemState.cutoverRunId,
+        clientApiVersion: ctx.systemState.apiVersion,
+      },
     );
-    const presenceCutoff = Math.min(
-      olderThan,
-      now - PRESENCE_CLEANUP_MS,
-    );
-    const [signals, presence] = await Promise.all([
-      ctx.db
-        .query("recordingRtcSignals")
-        .withIndex("by_createdAt", (query) =>
-          query
-            .eq("publicSessionId", publicSessionId)
-            .lt("createdAt", signalCutoff),
-        )
-        .take(MAX_RTC_CLEANUP_ROWS + 1),
-      ctx.db
-        .query("recordingRtcPresence")
-        .withIndex("by_lastSeenAt", (query) =>
-          query
-            .eq("publicSessionId", publicSessionId)
-            .lt("lastSeenAt", presenceCutoff),
-        )
-        .take(MAX_RTC_CLEANUP_ROWS + 1),
-    ]);
-    if (
-      signals.length > MAX_RTC_CLEANUP_ROWS ||
-      presence.length > MAX_RTC_CLEANUP_ROWS
-    ) {
-      domainError(
-        "CONFLICT",
-        "RTC cleanup exceeded its safety limit.",
-        { details: { limit: MAX_RTC_CLEANUP_ROWS } },
-      );
-    }
-    for (const signal of signals) {
-      await ctx.db.delete(
-        "recordingRtcSignals",
-        signal._id,
-      );
-    }
-    for (const row of presence) {
-      await ctx.db.delete(
-        "recordingRtcPresence",
-        row._id,
-      );
-    }
-    return {
-      deletedPresence: presence.length,
-      deletedSignals: signals.length,
-    };
   },
+});
+
+interface CleanupGate {
+  cutoverRunId: string;
+  clientApiVersion: string;
+}
+async function deleteRtcBatch(
+  ctx: MutationCtx,
+  publicSessionId: string,
+  signalCutoff: number,
+  presenceCutoff: number,
+  gate: CleanupGate,
+): Promise<{ deletedPresence: number; deletedSignals: number }> {
+  const [signals, presence] = await Promise.all([
+    ctx.db
+      .query("recordingRtcSignals")
+      .withIndex("by_createdAt", (query) =>
+        query
+          .eq("publicSessionId", publicSessionId)
+          .lt("createdAt", signalCutoff),
+      )
+      .take(MAX_RTC_CLEANUP_ROWS),
+    ctx.db
+      .query("recordingRtcPresence")
+      .withIndex("by_lastSeenAt", (query) =>
+        query
+          .eq("publicSessionId", publicSessionId)
+          .lt("lastSeenAt", presenceCutoff),
+      )
+      .take(MAX_RTC_CLEANUP_ROWS),
+  ]);
+  for (const signal of signals) {
+    await ctx.db.delete("recordingRtcSignals", signal._id);
+  }
+  for (const row of presence) {
+    await ctx.db.delete("recordingRtcPresence", row._id);
+  }
+  if (
+    signals.length === MAX_RTC_CLEANUP_ROWS ||
+    presence.length === MAX_RTC_CLEANUP_ROWS
+  ) {
+    await ctx.scheduler.runAfter(0, internal.recording.rtc.continueCleanup, {
+      publicSessionId,
+      signalCutoff,
+      presenceCutoff,
+      ...gate,
+    });
+  }
+  return {
+    deletedPresence: presence.length,
+    deletedSignals: signals.length,
+  };
+}
+
+export const continueCleanup = internalAppMutation({
+  args: {
+    publicSessionId: v.string(),
+    signalCutoff: v.number(),
+    presenceCutoff: v.number(),
+  },
+  returns: v.object({
+    deletedPresence: v.number(),
+    deletedSignals: v.number(),
+  }),
+  handler: async (ctx, args) =>
+    await deleteRtcBatch(
+      ctx,
+      args.publicSessionId,
+      args.signalCutoff,
+      args.presenceCutoff,
+      {
+        cutoverRunId: ctx.systemState.cutoverRunId,
+        clientApiVersion: ctx.systemState.apiVersion,
+      },
+    ),
 });

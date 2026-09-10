@@ -546,7 +546,7 @@ export function ConvexUserDetailPage() {
         <CardHeader>
           <CardTitle>User not found</CardTitle>
           <CardDescription>
-            No canonical user matches this identifier.
+            No user matches this identifier.
           </CardDescription>
         </CardHeader>
         <CardFooter>
@@ -694,8 +694,7 @@ export function ConvexUserDetailPage() {
                 <CardHeader>
                   <CardTitle>Point events</CardTitle>
                   <CardDescription>
-                    Paginated canonical points. Destructive changes open the
-                    exact point workbench.
+                    View point events. Open an event to edit or delete it.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">

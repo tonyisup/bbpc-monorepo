@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -51,65 +53,19 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listTagsReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/tags:listCatalog");
+const listTagsReference = api.games.tags.listCatalog;
 
-const listVotesReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("games/tags:listVotesPage");
+const listVotesReference = api.games.tags.listVotesPage;
 
-const createTagReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    name: string;
-    description?: string;
-  },
-  unknown
->("games/tags:createCatalogTag");
+const createTagReference = api.games.tags.createCatalogTag;
 
-const updateTagReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    name: string;
-    description: string | null;
-  },
-  unknown
->("games/tags:updateCatalogTag");
+const updateTagReference = api.games.tags.updateCatalogTag;
 
-const deleteTagReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/tags:deleteCatalogTag");
+const deleteTagReference = api.games.tags.deleteCatalogTag;
 
-const applyVotePointsReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    today: string;
-  },
-  unknown
->("games/tags:applyVotePoints");
+const applyVotePointsReference = api.games.tags.applyVotePoints;
 
-const deleteVoteReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/tags:deleteVote");
+const deleteVoteReference = api.games.tags.deleteVote;
 
 export const ADMIN_TAG_VOTES_PAGE_SIZE = 50;
 
@@ -160,9 +116,7 @@ export async function createConvexAdminTag(
     await client.mutation(createTagReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       name: input.name,
-      ...(input.description === null
-        ? {}
-        : { description: input.description }),
+      ...(input.description === null ? {} : { description: input.description }),
     })
   );
 }
@@ -175,7 +129,7 @@ export async function updateConvexAdminTag(
   tagSchema.parse(
     await client.mutation(updateTagReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("tags", id),
       ...input,
     })
   );
@@ -188,7 +142,7 @@ export async function deleteConvexAdminTag(
   idResultSchema.parse(
     await client.mutation(deleteTagReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("tags", id),
     })
   );
 }
@@ -201,7 +155,7 @@ export async function applyConvexAdminTagVotePoints(
   adminTagVoteSchema.parse(
     await client.mutation(applyVotePointsReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("tagVotes", id),
       today,
     })
   );
@@ -214,7 +168,7 @@ export async function deleteConvexAdminTagVote(
   idResultSchema.parse(
     await client.mutation(deleteVoteReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("tagVotes", id),
     })
   );
 }

@@ -1,8 +1,11 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import { useConvex } from "convex/react";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import {
   Check,
   ChevronDown,
@@ -65,44 +68,17 @@ const assignmentAudioMessageSchema = z.object({
 const assignmentAudioMessagesSchema = z.array(assignmentAudioMessageSchema);
 type AssignmentAudioMessage = z.infer<typeof assignmentAudioMessageSchema>;
 
-const listMyAudioMessagesReference = makeFunctionReference<
-  "query",
-  { assignmentId: string },
-  unknown
->("assignments/public:listMyAudioMessages");
-const createMyAudioMessageReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    assignmentId: string;
-    url: string;
-    fileKey: string;
-    createdAt: number;
-  },
-  unknown
->("assignments/public:createMyAudioMessage");
-const deleteMyAudioMessageReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("assignments/public:deleteMyAudioMessage");
-const discardMyAudioUploadReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    assignmentId: string;
-    fileKey: string;
-    uploadId: string;
-  },
-  unknown
->("assignments/public:discardMyAudioUpload");
+const listMyAudioMessagesReference = api.assignments.public.listMyAudioMessages;
+const createMyAudioMessageReference = api.assignments.public.createMyAudioMessage;
+const deleteMyAudioMessageReference = api.assignments.public.deleteMyAudioMessage;
+const discardMyAudioUploadReference = api.assignments.public.discardMyAudioUpload;
 
 async function loadMyAssignmentAudioMessages(
   convex: ConvexReactClient,
   assignmentId: string
 ) {
   return assignmentAudioMessagesSchema.parse(
-    await convex.query(listMyAudioMessagesReference, { assignmentId })
+    await convex.query(listMyAudioMessagesReference, { assignmentId: documentId("assignments", assignmentId) })
   );
 }
 
@@ -192,7 +168,7 @@ function ConvexAssignmentVoiceMessages({
       assignmentAudioMessageSchema.parse(
         await convex.mutation(createMyAudioMessageReference, {
           clientApiVersion: BBPC_CLIENT_API_VERSION,
-          assignmentId,
+          assignmentId: documentId("assignments", assignmentId),
           url: uploadedFile.url,
           fileKey: uploadedFile.key,
           createdAt: Date.now(),
@@ -224,7 +200,7 @@ function ConvexAssignmentVoiceMessages({
         try {
           await convex.mutation(discardMyAudioUploadReference, {
             clientApiVersion: BBPC_CLIENT_API_VERSION,
-            assignmentId,
+            assignmentId: documentId("assignments", assignmentId),
             fileKey: uploadedFile.key,
             uploadId,
           });
@@ -249,7 +225,7 @@ function ConvexAssignmentVoiceMessages({
     try {
       await convex.mutation(deleteMyAudioMessageReference, {
         clientApiVersion: BBPC_CLIENT_API_VERSION,
-        id,
+        id: documentId("assignmentAudioMessages", id),
       });
       setMessages((current) =>
         current.filter((message) => message.id !== id)
@@ -504,15 +480,6 @@ export function ConvexPredictionGame({
       ).length,
     0
   );
-  const firstIncompleteIndex = assignments.findIndex((assignment) =>
-    data.hosts.some(
-      (host) =>
-        !findGuessForHost(
-          data.guessesByAssignment[assignment.id] ?? [],
-          host.id
-        )
-    )
-  );
   const isRoundOpen =
     getPredictionRoundState(episodeStatus) === PredictionRoundState.OPEN;
 
@@ -591,7 +558,7 @@ export function ConvexPredictionGame({
         </div>
       ) : null}
 
-      {assignments.map((assignment, index) => (
+      {assignments.map((assignment) => (
         <ConvexAssignmentPrediction
           key={assignment.id}
           assignment={assignment}

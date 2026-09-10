@@ -30,7 +30,7 @@ test("Convex syllabus reads and writes derive the owner from authentication", ()
     "syllabus/mine:reorderPending",
     "syllabus/mine:updateNotes",
   ]) {
-    assert.match(adapter, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(adapter.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.doesNotMatch(adapter, /userId/u);
   assert.match(adapter, /BBPC_CLIENT_API_VERSION/u);
@@ -40,9 +40,9 @@ test("Convex syllabus reads and writes derive the owner from authentication", ()
 });
 
 test("movie search keeps the migrated catalog usable when TMDB is unavailable", () => {
-  assert.match(adapter, /catalog\/public:searchMovies/u);
-  assert.match(adapter, /catalog\/external:searchMovies/u);
-  assert.match(adapter, /catalog\/write:upsertMovieByUrl/u);
+  assert.match(adapter, /api\.catalog\.public\.searchMovies/u);
+  assert.match(adapter, /api\.catalog\.external\.searchMovies/u);
+  assert.match(adapter, /api\.catalog\.write\.upsertMovieByUrl/u);
   assert.match(manager, /Promise\.allSettled/u);
   assert.match(manager, /External movie search is unavailable/u);
   assert.match(

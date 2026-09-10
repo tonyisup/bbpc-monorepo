@@ -802,6 +802,36 @@ export default defineSchema({
     .index("by_showId", ["showId"])
     .index("by_episodeId", ["episodeId"]),
 
+  dashboardCounts: defineTable({ key: v.string(), count: v.number() }).index(
+    "by_key",
+    ["key"],
+  ),
+  dashboardCountMembers: defineTable({
+    sourceId: v.string(),
+    key: v.string(),
+  }).index("by_sourceId", ["sourceId"]),
+  dashboardBackfills: defineTable({
+    source: v.string(),
+    cursor: v.union(v.string(), v.null()),
+    complete: v.boolean(),
+  }).index("by_source", ["source"]),
+  dashboardEpisodes: defineTable({
+    episodeId: v.id("episodes"),
+    status: v.string(),
+    date: v.string(),
+    number: v.number(),
+    hasRecording: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_episodeId", ["episodeId"])
+    .index("by_status_and_date_and_number_and_createdAt", [
+      "status",
+      "date",
+      "number",
+      "createdAt",
+    ])
+    .index("by_hasRecording_and_number", ["hasRecording", "number"]),
+
   recordingSessions: defineTable({
     publicId: v.string(),
     episodeId: v.optional(v.id("episodes")),
@@ -810,6 +840,7 @@ export default defineSchema({
     status: v.union(v.literal("active"), v.literal("ended")),
     createdAt: v.number(),
     endedAt: v.optional(v.number()),
+    deleting: v.optional(v.boolean()),
   })
     .index("by_publicId", ["publicId"])
     .index("by_episodeId", ["episodeId"])
@@ -1009,6 +1040,7 @@ export default defineSchema({
     priorScrubRunsDeleted: v.optional(v.number()),
     impersonationSessionsDeleted: v.optional(v.number()),
     servicePrincipalsDeleted: v.optional(v.number()),
+    dashboardRowsDeleted: v.optional(v.number()),
     tagAwardArchiveIdsRemoved: v.optional(v.number()),
     startedAt: v.number(),
     updatedAt: v.number(),

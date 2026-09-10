@@ -188,6 +188,7 @@ export function ConvexYearPageClient() {
   const [isRankingsLoading, setIsRankingsLoading] = useState(false);
   const [rankingError, setRankingError] = useState<string | null>(null);
   const [busyOperation, setBusyOperation] = useState<string | null>(null);
+  const rankingWriteRef = useRef(false);
   const archiveGenerationRef = useRef(0);
   const rankingGenerationRef = useRef(0);
 
@@ -334,9 +335,10 @@ export function ConvexYearPageClient() {
   };
 
   const saveRank = async (movieId: string, rank: number) => {
-    if (selectedListId === null || selectedList === null) {
+    if (selectedListId === null || selectedList === null || rankingWriteRef.current) {
       return;
     }
+    rankingWriteRef.current = true;
     const previousList = selectedList;
     const previousItems = orderedItems;
     setBusyOperation(`rank:${movieId}`);
@@ -353,14 +355,16 @@ export function ConvexYearPageClient() {
       setOrderedItems(previousItems);
       setRankingError(rankingOperationError(error));
     } finally {
+      rankingWriteRef.current = false;
       setBusyOperation(null);
     }
   };
 
   const removeRankingItem = async (item: ConvexMovieRankingItem) => {
-    if (selectedListId === null || selectedList === null) {
+    if (selectedListId === null || selectedList === null || rankingWriteRef.current) {
       return;
     }
+    rankingWriteRef.current = true;
     const previousList = selectedList;
     const previousItems = orderedItems;
     setSelectedList({
@@ -381,14 +385,16 @@ export function ConvexYearPageClient() {
       setOrderedItems(previousItems);
       setRankingError(rankingOperationError(error));
     } finally {
+      rankingWriteRef.current = false;
       setBusyOperation(null);
     }
   };
 
   const persistOrderedItems = async () => {
-    if (selectedListId === null || selectedList === null) {
+    if (selectedListId === null || selectedList === null || rankingWriteRef.current) {
       return;
     }
+    rankingWriteRef.current = true;
     const previousList = selectedList;
     const previousItems = selectedList.items;
     setBusyOperation("reorder");
@@ -408,6 +414,7 @@ export function ConvexYearPageClient() {
       setOrderedItems(previousItems);
       setRankingError(rankingOperationError(error));
     } finally {
+      rankingWriteRef.current = false;
       setBusyOperation(null);
     }
   };

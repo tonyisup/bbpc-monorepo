@@ -1,6 +1,8 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
 import { useConvex } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import {
   ArrowUpRight,
   Coins,
@@ -101,61 +103,19 @@ import {
   summarizeEpisodePoints,
 } from "./recordingManagementModel";
 
-const listGuessesForAssignmentReference = makeFunctionReference<
-  "query",
-  { assignmentId: string },
-  unknown
->("games/guesses:listForAssignment");
+const listGuessesForAssignmentReference = api.games.guesses.listForAssignment;
 
-const listGamblingForAssignmentReference = makeFunctionReference<
-  "query",
-  { assignmentId: string },
-  unknown
->("games/gambling:listForAssignment");
+const listGamblingForAssignmentReference = api.games.gambling.listForAssignment;
 
-const listGuessSettlementsForAssignmentReference = makeFunctionReference<
-  "query",
-  { assignmentId: string },
-  unknown
->("games/guesses:listSettlementsForAssignment");
+const listGuessSettlementsForAssignmentReference = api.games.guesses.listSettlementsForAssignment;
 
-const assignmentPointTotalsReference = makeFunctionReference<
-  "query",
-  { userIds: string[]; assignmentIds: string[] },
-  unknown
->("games/points:totalsForAssignments");
+const assignmentPointTotalsReference = api.games.points.totalsForAssignments;
 
-const awardGuessPointReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    adjustment: number;
-    reason: string;
-  },
-  unknown
->("games/guesses:awardPoint");
+const awardGuessPointReference = api.games.guesses.awardPoint;
 
-const settleGuessesForAssignmentUserReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    assignmentId: string;
-    userId: string;
-  },
-  unknown
->("games/guesses:settleForAssignmentUser");
+const settleGuessesForAssignmentUserReference = api.games.guesses.settleForAssignmentUser;
 
-const updateWagerStatusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    status: "won" | "lost" | "rejected";
-    expectedStatus: ConvexAdminSeasonGamblingEntry["status"];
-  },
-  unknown
->("games/gambling:updateStatus");
+const updateWagerStatusReference = api.games.gambling.updateStatus;
 
 const assignmentPointTotalSchema = z.object({
   userId: z.string().min(1),
@@ -224,8 +184,8 @@ async function loadAssignmentPointTotals(
   const totals: AssignmentPointTotal[] = [];
   for (const userChunk of chunkRecordingValues(users, 100)) {
     const value = await client.query(assignmentPointTotalsReference, {
-      userIds: userChunk.map(({ id }) => id),
-      assignmentIds,
+      userIds: userChunk.map(({ id }) => id).map((id) => documentId("users", id)),
+      assignmentIds: assignmentIds.map((id) => documentId("assignments", id)),
     });
     totals.push(...z.array(assignmentPointTotalSchema).parse(value));
   }
@@ -243,11 +203,11 @@ async function loadAssignmentGames(
   const rows = await Promise.all(
     assignmentIds.map(async (assignmentId) => {
       const [guesses, guessSettlements, wagers] = await Promise.all([
-        client.query(listGuessesForAssignmentReference, { assignmentId }),
+        client.query(listGuessesForAssignmentReference, { assignmentId: documentId("assignments", assignmentId) }),
         client.query(listGuessSettlementsForAssignmentReference, {
-          assignmentId,
+          assignmentId: documentId("assignments", assignmentId),
         }),
-        client.query(listGamblingForAssignmentReference, { assignmentId }),
+        client.query(listGamblingForAssignmentReference, { assignmentId: documentId("assignments", assignmentId) }),
       ]);
       return {
         guesses: z.array(adminGuessSchema).parse(guesses),
@@ -1415,7 +1375,7 @@ export function ConvexRecordingManagementPage() {
         adminGuessSchema.parse(
           await client.mutation(awardGuessPointReference, {
             clientApiVersion: BBPC_CLIENT_API_VERSION,
-            id: guess.id,
+            id: documentId("guesses", guess.id),
             adjustment: 0,
             reason: "Correct prediction",
           })
@@ -1431,8 +1391,8 @@ export function ConvexRecordingManagementPage() {
         guessSettlementResultSchema.parse(
           await client.mutation(settleGuessesForAssignmentUserReference, {
             clientApiVersion: BBPC_CLIENT_API_VERSION,
-            assignmentId,
-            userId,
+            assignmentId: documentId("assignments", assignmentId),
+            userId: documentId("users", userId),
           })
         ),
       "Settled the listener's three guesses."
@@ -1449,7 +1409,7 @@ export function ConvexRecordingManagementPage() {
         adminGamblingEntrySchema.parse(
           await client.mutation(updateWagerStatusReference, {
             clientApiVersion: BBPC_CLIENT_API_VERSION,
-            id: wager.id,
+            id: documentId("gamblingEntries", wager.id),
             status,
             expectedStatus: wager.status,
           })

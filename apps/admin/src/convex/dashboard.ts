@@ -1,5 +1,7 @@
+import { BBPC_CLIENT_API_VERSION } from "./identity";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 const catalogMovieSchema = z.object({
@@ -62,12 +64,15 @@ const episodeSchema = z.object({
 });
 
 const dashboardOverviewSchema = z.object({
-  counts: z.object({
-    episodes: z.number(),
-    users: z.number(),
-    movies: z.number(),
-    reviews: z.number(),
-  }),
+  countsReady: z.boolean(),
+  counts: z
+    .object({
+      episodes: z.number(),
+      users: z.number(),
+      movies: z.number(),
+      reviews: z.number(),
+    })
+    .nullable(),
   latestEpisode: episodeSchema.nullable(),
   upcomingEpisode: episodeSchema.nullable(),
   latestSyllabus: z.array(
@@ -92,11 +97,7 @@ const dashboardOverviewSchema = z.object({
   ),
 });
 
-const dashboardOverviewReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("admin/dashboard:overview");
+const dashboardOverviewReference = api.admin.dashboard.overview;
 
 export type ConvexAdminDashboard = z.infer<typeof dashboardOverviewSchema>;
 export type ConvexAdminEpisode = NonNullable<
@@ -109,4 +110,12 @@ export async function loadConvexAdminDashboard(
   return dashboardOverviewSchema.parse(
     await client.query(dashboardOverviewReference, {})
   );
+}
+
+export async function initializeConvexAdminDashboard(
+  client: ConvexReactClient
+): Promise<void> {
+  await client.mutation(api.admin.dashboardBackfill.initialize, {
+    clientApiVersion: BBPC_CLIENT_API_VERSION,
+  });
 }

@@ -16,12 +16,7 @@ import {
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -54,15 +49,9 @@ import {
   type ConvexAdminSeason,
   loadConvexAdminSeasonsPage,
 } from "@/convex/seasons";
-import {
-  type ConvexAdminUser,
-  loadConvexAdminUsersPage,
-} from "@/convex/users";
+import { type ConvexAdminUser, loadConvexAdminUsersPage } from "@/convex/users";
 import { formatInstantLocal } from "@/lib/dates";
-import {
-  getAdminAssignmentPath,
-  getAdminEpisodePath,
-} from "@/lib/routes";
+import { getAdminAssignmentPath, getAdminEpisodePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 import RatingIcon from "../Review/RatingIcon";
@@ -182,10 +171,7 @@ function ReviewCard({
     guess: ConvexAssignmentGuess
   ) => void;
   onRemoveReview: (review: ConvexAssignmentReview) => void;
-  onUpdateGuessRating: (
-    guess: ConvexAssignmentGuess,
-    ratingId: string
-  ) => void;
+  onUpdateGuessRating: (guess: ConvexAssignmentGuess, ratingId: string) => void;
   onUpdateRating: (
     review: ConvexAssignmentReview,
     ratingId: string | null
@@ -213,9 +199,7 @@ function ReviewCard({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {review.rating !== null && (
-            <RatingIcon value={review.rating.value} />
-          )}
+          {review.rating !== null && <RatingIcon value={review.rating.value} />}
           <RatingSelector
             allowNone
             disabled={busy !== null}
@@ -269,9 +253,7 @@ function ReviewCard({
                     })}
                   </p>
                 </div>
-                {guess.hasPoint && (
-                  <Badge variant="secondary">Awarded</Badge>
-                )}
+                {guess.hasPoint && <Badge variant="secondary">Awarded</Badge>}
               </div>
               <div className="flex items-center gap-2">
                 <RatingSelector
@@ -366,10 +348,7 @@ function WagerCard({
         <Button
           disabled={busy !== null}
           onClick={() =>
-            onStatus(
-              wager,
-              wager.status === "pending" ? "locked" : "pending"
-            )
+            onStatus(wager, wager.status === "pending" ? "locked" : "pending")
           }
           size="sm"
           variant="outline"
@@ -390,12 +369,16 @@ export function ConvexAssignmentDetailPage() {
   const router = useRouter();
   const slugParam = router.query.slug;
   const slug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
-  const [workbench, setWorkbench] =
-    useState<ConvexAssignmentWorkbench | null>(null);
+  const [workbench, setWorkbench] = useState<ConvexAssignmentWorkbench | null>(
+    null
+  );
   const [users, setUsers] = useState<ConvexAdminUser[]>([]);
   const [ratings, setRatings] = useState<ConvexAdminRating[]>([]);
   const [seasons, setSeasons] = useState<ConvexAdminSeason[]>([]);
-  const [selectorsIncomplete, setSelectorsIncomplete] = useState(false);
+  const [userCursor, setUserCursor] = useState<string | null>(null);
+  const [seasonCursor, setSeasonCursor] = useState<string | null>(null);
+  const [loadingSelectors, setLoadingSelectors] = useState(false);
+  const selectorRequestRef = useRef(false);
   const [audio, setAudio] = useState<ConvexAssignmentAudioMessage[]>([]);
   const [audioCursor, setAudioCursor] = useState("");
   const [audioDone, setAudioDone] = useState(true);
@@ -404,8 +387,7 @@ export function ConvexAssignmentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [slugDraft, setSlugDraft] = useState("");
-  const [typeDraft, setTypeDraft] =
-    useState<ConvexAssignmentType>("HOMEWORK");
+  const [typeDraft, setTypeDraft] = useState<ConvexAssignmentType>("HOMEWORK");
   const [playableDraft, setPlayableDraft] = useState(true);
   const [reviewUserId, setReviewUserId] = useState("");
   const [reviewRatingId, setReviewRatingId] = useState("none");
@@ -432,7 +414,8 @@ export function ConvexAssignmentDetailPage() {
       setUsers(userPage.users);
       setRatings(nextRatings);
       setSeasons(seasonPage.seasons);
-      setSelectorsIncomplete(!userPage.isDone || !seasonPage.isDone);
+      setUserCursor(userPage.isDone ? null : userPage.continueCursor);
+      setSeasonCursor(seasonPage.isDone ? null : seasonPage.continueCursor);
       if (nextWorkbench !== null) {
         const audioPage = await loadConvexAssignmentAudioPage(
           client,
@@ -493,6 +476,41 @@ export function ConvexAssignmentDetailPage() {
     }
   }
 
+  async function loadMoreSelectors(kind: "users" | "seasons") {
+    const cursor = kind === "users" ? userCursor : seasonCursor;
+    if (cursor === null || selectorRequestRef.current) return;
+    selectorRequestRef.current = true;
+    setLoadingSelectors(true);
+    try {
+      if (kind === "users") {
+        const page = await loadConvexAdminUsersPage(client, cursor);
+        setUsers((current) =>
+          Array.from(
+            new Map(
+              [...current, ...page.users].map((user) => [user.id, user])
+            ).values()
+          )
+        );
+        setUserCursor(page.isDone ? null : page.continueCursor);
+      } else {
+        const page = await loadConvexAdminSeasonsPage(client, cursor);
+        setSeasons((current) =>
+          Array.from(
+            new Map(
+              [...current, ...page.seasons].map((season) => [season.id, season])
+            ).values()
+          )
+        );
+        setSeasonCursor(page.isDone ? null : page.continueCursor);
+      }
+    } catch {
+      toast.error(`More ${kind} could not be loaded. Try again.`);
+    } finally {
+      selectorRequestRef.current = false;
+      setLoadingSelectors(false);
+    }
+  }
+
   async function loadMoreAudio() {
     if (
       workbench === null ||
@@ -549,9 +567,7 @@ export function ConvexAssignmentDetailPage() {
       <Card className="mx-auto mt-12 max-w-xl">
         <CardHeader>
           <CardTitle>Assignment not found</CardTitle>
-          <CardDescription>
-            No canonical assignment matches this slug.
-          </CardDescription>
+          <CardDescription>No assignment matches this address.</CardDescription>
         </CardHeader>
         <CardFooter>
           <Button asChild variant="outline">
@@ -584,10 +600,7 @@ export function ConvexAssignmentDetailPage() {
           </Button>
           <Button disabled={busy !== null} onClick={() => void load()}>
             <RefreshCw
-              className={cn(
-                "mr-2 h-4 w-4",
-                busy !== null && "animate-spin"
-              )}
+              className={cn("mr-2 h-4 w-4", busy !== null && "animate-spin")}
             />
             Refresh
           </Button>
@@ -643,11 +656,7 @@ export function ConvexAssignmentDetailPage() {
                 </Link>
               </Button>
               <Button asChild size="sm" variant="ghost">
-                <a
-                  href={assignment.movie.url}
-                  rel="noreferrer"
-                  target="_blank"
-                >
+                <a href={assignment.movie.url} rel="noreferrer" target="_blank">
                   Catalog source
                   <ExternalLink className="ml-2 h-3 w-3" />
                 </a>
@@ -673,7 +682,7 @@ export function ConvexAssignmentDetailPage() {
                 value={slugDraft}
               />
               <p className="text-xs text-muted-foreground">
-                Leave blank to regenerate it from canonical relationships.
+                Leave blank to generate an address from the episode and movie.
               </p>
             </div>
             <div className="grid gap-2">
@@ -781,17 +790,35 @@ export function ConvexAssignmentDetailPage() {
               Reviews and guesses
             </h2>
             <p className="text-sm text-muted-foreground">
-              {workbench.reviews.length} bounded review relationship(s).
-              Assignment review removal preserves the review record and is
-              blocked while guesses exist.
+              {workbench.reviews.length} review(s). Assignment review removal
+              preserves the review record and is blocked while guesses exist.
             </p>
           </div>
-          {selectorsIncomplete && (
-            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800">
-              User or season selectors show only the first bounded page. Use
-              the dedicated user or season tools when the desired record is
-              not listed.
-            </p>
+          {(userCursor !== null || seasonCursor !== null) && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+              <p className="text-sm text-muted-foreground">
+                Missing a user or season? Load more choices.
+              </p>
+              {userCursor !== null && (
+                <Button
+                  variant="outline"
+                  disabled={loadingSelectors || busy !== null}
+                  onClick={() => void loadMoreSelectors("users")}
+                >
+                  Load more users
+                </Button>
+              )}
+              {seasonCursor !== null && (
+                <Button
+                  variant="outline"
+                  disabled={loadingSelectors || busy !== null}
+                  onClick={() => void loadMoreSelectors("seasons")}
+                >
+                  Load more seasons
+                </Button>
+              )}
+              {loadingSelectors && <span role="status">Loading choices…</span>}
+            </div>
           )}
           <Card>
             <CardHeader>
@@ -843,9 +870,7 @@ export function ConvexAssignmentDetailPage() {
                         assignmentId: assignment.id,
                         userId: reviewUserId,
                         ratingId:
-                          reviewRatingId === "none"
-                            ? null
-                            : reviewRatingId,
+                          reviewRatingId === "none" ? null : reviewRatingId,
                       });
                       setReviewUserId("");
                       setReviewRatingId("none");
@@ -899,10 +924,7 @@ export function ConvexAssignmentDetailPage() {
                     void runMutation(
                       `remove-review:${selectedReview.id}`,
                       () =>
-                        removeConvexAssignmentReview(
-                          client,
-                          selectedReview.id
-                        ),
+                        removeConvexAssignmentReview(client, selectedReview.id),
                       "Assignment review unlinked"
                     );
                   }
@@ -952,9 +974,7 @@ export function ConvexAssignmentDetailPage() {
                   <select
                     className="h-9 rounded-md border bg-background px-3 text-sm"
                     id="guess-review"
-                    onChange={(event) =>
-                      setGuessReviewId(event.target.value)
-                    }
+                    onChange={(event) => setGuessReviewId(event.target.value)}
                     value={guessReviewId}
                   >
                     {workbench.reviews.map((review) => (
@@ -969,9 +989,7 @@ export function ConvexAssignmentDetailPage() {
                   <select
                     className="h-9 rounded-md border bg-background px-3 text-sm"
                     id="guess-user"
-                    onChange={(event) =>
-                      setGuessUserId(event.target.value)
-                    }
+                    onChange={(event) => setGuessUserId(event.target.value)}
                     value={guessUserId}
                   >
                     <option value="">Choose user</option>
@@ -987,9 +1005,7 @@ export function ConvexAssignmentDetailPage() {
                   <select
                     className="h-9 rounded-md border bg-background px-3 text-sm"
                     id="guess-rating"
-                    onChange={(event) =>
-                      setGuessRatingId(event.target.value)
-                    }
+                    onChange={(event) => setGuessRatingId(event.target.value)}
                     value={guessRatingId}
                   >
                     <option value="">Choose rating</option>
@@ -1005,9 +1021,7 @@ export function ConvexAssignmentDetailPage() {
                   <select
                     className="h-9 rounded-md border bg-background px-3 text-sm"
                     id="guess-season"
-                    onChange={(event) =>
-                      setGuessSeasonId(event.target.value)
-                    }
+                    onChange={(event) => setGuessSeasonId(event.target.value)}
                     value={guessSeasonId}
                   >
                     <option value="">Choose season</option>
@@ -1062,8 +1076,8 @@ export function ConvexAssignmentDetailPage() {
               Audio messages
             </h2>
             <p className="text-sm text-muted-foreground">
-              Native 30-row pages. Externally keyed files remain protected
-              until provider cleanup is integrated.
+              Native 30-row pages. Externally keyed files remain protected until
+              provider cleanup is integrated.
             </p>
           </div>
           {audio.length === 0 ? (
@@ -1105,8 +1119,7 @@ export function ConvexAssignmentDetailPage() {
                       ) {
                         void runMutation(
                           `remove-audio:${message.id}`,
-                          () =>
-                            removeConvexAssignmentAudio(client, message),
+                          () => removeConvexAssignmentAudio(client, message),
                           "Audio metadata deleted"
                         );
                       }
@@ -1148,8 +1161,7 @@ export function ConvexAssignmentDetailPage() {
               Gambling wagers
             </h2>
             <p className="text-sm text-muted-foreground">
-              {workbench.wagers.length} bounded wager(s). Status changes use
-              the exact loaded status.
+              {workbench.wagers.length} wager(s).
             </p>
           </div>
           {workbench.wagers.length === 0 ? (

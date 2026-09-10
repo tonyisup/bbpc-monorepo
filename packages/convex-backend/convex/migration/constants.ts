@@ -278,7 +278,13 @@ export const PORTABLE_BACKUP_TABLES = [
   "recordingUploads",
 ] as const;
 
+// Rebuilt from canonical rows when the administrator opens the dashboard.
+export const DASHBOARD_DERIVED_TABLES = [
+  "dashboardBackfills", "dashboardCountMembers", "dashboardCounts", "dashboardEpisodes",
+] as const;
+
 export const PORTABLE_CONTROL_TABLES = [
+  ...DASHBOARD_DERIVED_TABLES,
   "impersonationSessions",
   "servicePrincipals",
   "systemState",

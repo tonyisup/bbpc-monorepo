@@ -49,7 +49,7 @@ test("anonymous episode reads use the fail-closed Convex adapter", () => {
     "episodes/public:getBySlug",
     "episodes/public:results",
   ]) {
-    assert.match(episodes, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(episodes.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.match(episodes, /episodeSchema\.nullable\(\)\.parse/u);
   assert.match(episodes, /HISTORY_EPISODE_LIMIT = 1_000/u);
@@ -85,7 +85,7 @@ test("anonymous episode reads use the fail-closed Convex adapter", () => {
 });
 
 test("authenticated Convex reads use Clerk tokens and fail closed", () => {
-  assert.match(gambling, /games\/gambling:hasWonForEpisode/u);
+  assert.match(gambling, /api\.games\.gambling\.hasWonForEpisode/u);
   assert.match(
     gambling,
     /AUTHENTICATION_REQUIRED[\s\S]*IDENTITY_NOT_LINKED[\s\S]*IDENTITY_CONFLICT[\s\S]*ACCOUNT_DISABLED[\s\S]*return false/u

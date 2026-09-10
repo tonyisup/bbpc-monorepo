@@ -22,6 +22,7 @@ export const listHosts = anonymousQuery({
   handler: async (ctx) => {
     const roles = await ctx.db
       .query("roles")
+      // convex-query-audit: allow-take roles are a bounded configuration catalog, checked for overflow
       .take(MAX_ROLE_CATALOG_SIZE + 1);
     if (roles.length > MAX_ROLE_CATALOG_SIZE) {
       domainError(

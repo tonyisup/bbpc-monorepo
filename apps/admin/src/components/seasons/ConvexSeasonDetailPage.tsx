@@ -121,7 +121,7 @@ function ActivityFailure({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="rounded-2xl border border-dashed p-8 text-center">
       <p className="text-sm font-medium text-muted-foreground">
-        This activity feed could not be loaded. No SQL fallback was attempted.
+        This activity feed could not be loaded. Try again.
       </p>
       <Button className="mt-4 gap-2" onClick={onRetry} variant="outline">
         <RefreshCw className="h-4 w-4" />
@@ -340,8 +340,7 @@ export function ConvexSeasonDetailPage() {
       <div className="mx-auto flex min-h-[420px] max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
         <h1 className="text-2xl font-bold">Season details unavailable</h1>
         <p className="text-sm text-muted-foreground">
-          Convex could not load the requested season. No SQL fallback was
-          attempted.
+          The season could not be loaded. Try again.
         </p>
         <Button className="gap-2" onClick={refresh} variant="outline">
           <RefreshCw className="h-4 w-4" />
@@ -744,8 +743,7 @@ export function ConvexSeasonDetailPage() {
               <Loader2 className="mx-auto my-12 h-8 w-8 animate-spin text-muted-foreground" />
             ) : performance === null ? (
               <p className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
-                The exact leaderboard is unavailable because its bounded
-                aggregate failed closed.
+                The leaderboard could not be loaded. Try refreshing the page.
               </p>
             ) : performance.userSummary.length === 0 ? (
               <p className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">

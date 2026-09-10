@@ -290,7 +290,7 @@ export function ConvexRankingTypesPage() {
         description={
           deletingType === null
             ? ""
-            : `Delete “${deletingType.name}”? Convex rejects deletion while any ranked list references this type.`
+            : `Delete “${deletingType.name}”? Remove ranked lists using this type before deleting it.`
         }
         isOpen={deletingType !== null}
         onClose={() => setDeletingType(null)}
@@ -309,7 +309,7 @@ export function ConvexRankingTypesPage() {
               Ranked List Types
             </h2>
             <p className="text-muted-foreground">
-              Configure the bounded ranked-list templates.
+              Configure ranked-list templates.
             </p>
           </div>
           <Button onClick={() => setEditingType(null)}>
@@ -321,8 +321,7 @@ export function ConvexRankingTypesPage() {
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Ranking types could not be loaded. No legacy SQL fallback was
-              attempted.
+              Ranking types could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

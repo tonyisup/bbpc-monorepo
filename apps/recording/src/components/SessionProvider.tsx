@@ -40,6 +40,9 @@ interface SessionContextValue {
   participantRole: SessionRole;
   sessionStatus: SessionStatus;
   endedAt: string | null;
+  pendingEventCount: number;
+  syncError: string | null;
+  retryPendingEvents: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -90,7 +93,6 @@ export function SessionProvider({
 
   useEffect(() => {
     if (!state.isRecording || state.recordingStart === null) {
-      setElapsedMs(0);
       return;
     }
     const tick = () => {
@@ -115,7 +117,7 @@ export function SessionProvider({
     play(event.sounder.url, { record: false });
   }, [play]);
 
-  const { sendEvent } = useSessionSync({
+  const { sendEvent, pendingCount, syncError, retryPendingEvents } = useSessionSync({
     sessionId,
     clientId: participantClientId,
     accessToken: participantAccessToken,
@@ -136,7 +138,7 @@ export function SessionProvider({
 
     rawDispatch(action);
     const event = actionToSyncEvent(action, state.hostName, state.recordingStart, sessionIdRef.current);
-    if (event) sendEvent(event);
+    if (event) void sendEvent(event).catch(() => { /* The sync banner retains and exposes the failed event. */ });
   }, [rawDispatch, sendEvent, sessionStatus, state.hostName, state.recordingStart]);
 
   const toManifest = useCallback(
@@ -149,7 +151,7 @@ export function SessionProvider({
       value={{
         state,
         dispatch,
-        elapsedMs,
+        elapsedMs: state.isRecording ? elapsedMs : 0,
         toManifest,
         sessionId,
         inviteUrl,
@@ -158,6 +160,9 @@ export function SessionProvider({
         participantRole,
         sessionStatus,
         endedAt,
+        pendingEventCount: pendingCount,
+        syncError,
+        retryPendingEvents,
       }}
     >
       {children}

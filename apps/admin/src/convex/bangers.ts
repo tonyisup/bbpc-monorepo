@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -66,53 +68,13 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
-const listBangersReference = makeFunctionReference<
-  "query",
-  {
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("episodes/bangers:listAdminPage");
+const listBangersReference = api.episodes.bangers.listAdminPage;
 
-const createBangerReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    title: string;
-    artist: string;
-    url: string;
-    episodeId: string | null;
-    userId: string | null;
-  },
-  unknown
->("episodes/bangers:create");
+const createBangerReference = api.episodes.bangers.create;
 
-const updateBangerReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    title: string;
-    artist: string;
-    url: string;
-    episodeId: string | null;
-    userId: string | null;
-  },
-  unknown
->("episodes/bangers:update");
+const updateBangerReference = api.episodes.bangers.update;
 
-const removeBangerReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: ConvexAdminBangerInput;
-  },
-  unknown
->("episodes/bangers:remove");
+const removeBangerReference = api.episodes.bangers.remove;
 
 export const ADMIN_BANGERS_PAGE_SIZE = 30;
 
@@ -159,6 +121,8 @@ export async function createConvexAdminBanger(
     await client.mutation(createBangerReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      episodeId: documentId("episodes", input.episodeId),
+      userId: documentId("users", input.userId),
     })
   );
 }
@@ -171,8 +135,10 @@ export async function updateConvexAdminBanger(
   bangerSchema.parse(
     await client.mutation(updateBangerReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id,
+      id: documentId("bangers", id),
       ...input,
+      episodeId: documentId("episodes", input.episodeId),
+      userId: documentId("users", input.userId),
     })
   );
 }
@@ -184,13 +150,13 @@ export async function deleteConvexAdminBanger(
   idResultSchema.parse(
     await client.mutation(removeBangerReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: banger.id,
+      id: documentId("bangers", banger.id),
       expected: {
         title: banger.title,
         artist: banger.artist,
         url: banger.url,
-        episodeId: banger.episodeId,
-        userId: banger.userId,
+        episodeId: documentId("episodes", banger.episodeId),
+        userId: documentId("users", banger.userId),
       },
     })
   );

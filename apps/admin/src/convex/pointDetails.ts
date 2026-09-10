@@ -1,5 +1,8 @@
+import type { FunctionArgs } from "convex/server";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -89,9 +92,7 @@ const pointDetailSchema = pointCoreSchema.extend({
       })
     )
     .max(100),
-  gamblingEntries: z
-    .array(z.object({ id: z.string().min(1) }))
-    .max(100),
+  gamblingEntries: z.array(z.object({ id: z.string().min(1) })).max(100),
   tagVotes: z
     .array(
       z.object({
@@ -100,9 +101,7 @@ const pointDetailSchema = pointCoreSchema.extend({
       })
     )
     .max(100),
-  quoteSubmissions: z
-    .array(z.object({ id: z.string().min(1) }))
-    .max(100),
+  quoteSubmissions: z.array(z.object({ id: z.string().min(1) })).max(100),
 });
 
 const pointImpactSchema = z.object({
@@ -130,102 +129,42 @@ const pointWorkbenchSchema = z.object({
 const idResultSchema = z.object({ id: z.string().min(1) });
 const unlinkResultSchema = z.object({ count: z.literal(1) });
 
-const getWorkbenchReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("games/points:getWorkbench");
+const getWorkbenchReference = api.games.points.getWorkbench;
 
-const listGamePointTypesReference = makeFunctionReference<
-  "query",
-  { gameTypeId?: string },
-  unknown
->("games/config:listGamePointTypes");
+const listGamePointTypesReference = api.games.config.listGamePointTypes;
 
-const searchAssignmentsReference = makeFunctionReference<
-  "query",
-  { query: string },
-  unknown
->("games/points:searchAssignmentsForLink");
+const searchAssignmentsReference = api.games.points.searchAssignmentsForLink;
 
-const updatePointReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: ConvexPointEditableSnapshot;
-    reason: string | null;
-    adjustment: number | null;
-    gamePointTypeId: string | null;
-  },
-  unknown
->("games/points:update");
+const updatePointReference = api.games.points.update;
 
-const linkAssignmentReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    pointId: string;
-    assignmentId: string;
-  },
-  unknown
->("games/points:linkAssignment");
+const linkAssignmentReference = api.games.points.linkAssignment;
 
-const unlinkAssignmentReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    pointId: string;
-    assignmentId: string;
-    expectedLinkId: string;
-  },
-  unknown
->("games/points:unlinkAssignment");
+const unlinkAssignmentReference = api.games.points.unlinkAssignment;
 
-const removePointReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: ConvexPointEditableSnapshot;
-    expectedImpact: ConvexPointDeleteImpact;
-  },
-  unknown
->("games/points:remove");
+const removePointReference = api.games.points.remove;
 
-export type ConvexPointWorkbench = z.infer<
-  typeof pointWorkbenchSchema
->;
+export type ConvexPointWorkbench = z.infer<typeof pointWorkbenchSchema>;
 export type ConvexPoint = ConvexPointWorkbench["point"];
 export type ConvexPointAssignment =
   ConvexPoint["assignmentLinks"][number]["assignment"];
-export type ConvexPointAssignmentLink =
-  ConvexPoint["assignmentLinks"][number];
-export type ConvexPointDeleteImpact = z.infer<
-  typeof pointImpactSchema
->;
-export type ConvexPointGamePointType = z.infer<
-  typeof gamePointTypeSchema
->;
+export type ConvexPointAssignmentLink = ConvexPoint["assignmentLinks"][number];
+export type ConvexPointDeleteImpact = z.infer<typeof pointImpactSchema>;
+export type ConvexPointGamePointType = z.infer<typeof gamePointTypeSchema>;
 
-export interface ConvexPointEditableSnapshot {
-  userId: string;
-  seasonId: string;
-  reason: string | null;
-  adjustment: number | null;
-  gamePointTypeId: string | null;
-  earnedAt: number;
-}
+export type ConvexPointEditableSnapshot = FunctionArgs<
+  typeof updatePointReference
+>["expected"];
 
-function editableSnapshot(
-  point: ConvexPoint
-): ConvexPointEditableSnapshot {
+function editableSnapshot(point: ConvexPoint): ConvexPointEditableSnapshot {
   return {
-    userId: point.user.id,
-    seasonId: point.season.id,
+    userId: documentId("users", point.user.id),
+    seasonId: documentId("seasons", point.season.id),
     reason: point.reason,
     adjustment: point.adjustment,
-    gamePointTypeId: point.gamePointType?.id ?? null,
+    gamePointTypeId: documentId(
+      "gamePointTypes",
+      point.gamePointType?.id ?? null
+    ),
     earnedAt: point.earnedAt,
   };
 }
@@ -236,7 +175,11 @@ export async function loadConvexPointWorkbench(
 ): Promise<ConvexPointWorkbench | null> {
   return pointWorkbenchSchema
     .nullable()
-    .parse(await client.query(getWorkbenchReference, { id }));
+    .parse(
+      await client.query(getWorkbenchReference, {
+        id: documentId("points", id),
+      })
+    );
 }
 
 export async function loadConvexPointGamePointTypes(
@@ -269,9 +212,10 @@ export async function updateConvexPoint(
   pointCoreSchema.parse(
     await client.mutation(updatePointReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: point.id,
+      id: documentId("points", point.id),
       expected: editableSnapshot(point),
       ...input,
+      gamePointTypeId: documentId("gamePointTypes", input.gamePointTypeId),
     })
   );
 }
@@ -284,8 +228,8 @@ export async function linkConvexPointAssignment(
   assignmentLinkSchema.parse(
     await client.mutation(linkAssignmentReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      pointId,
-      assignmentId,
+      pointId: documentId("points", pointId),
+      assignmentId: documentId("assignments", assignmentId),
     })
   );
 }
@@ -298,9 +242,9 @@ export async function unlinkConvexPointAssignment(
   unlinkResultSchema.parse(
     await client.mutation(unlinkAssignmentReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      pointId,
-      assignmentId: link.assignment.id,
-      expectedLinkId: link.id,
+      pointId: documentId("points", pointId),
+      assignmentId: documentId("assignments", link.assignment.id),
+      expectedLinkId: documentId("assignmentPointLinks", link.id),
     })
   );
 }
@@ -312,7 +256,7 @@ export async function deleteConvexPoint(
   idResultSchema.parse(
     await client.mutation(removePointReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: workbench.point.id,
+      id: documentId("points", workbench.point.id),
       expected: editableSnapshot(workbench.point),
       expectedImpact: workbench.impact,
     })

@@ -1,5 +1,7 @@
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "./identity";
@@ -44,37 +46,14 @@ const sideEffectPageSchema = z.object({
     .optional(),
 });
 
-const listSideEffectsReference = makeFunctionReference<
-  "query",
-  {
-    status?: z.infer<typeof sideEffectStatusSchema>;
-    paginationOpts: {
-      cursor: string | null;
-      numItems: number;
-    };
-  },
-  unknown
->("sideEffects/intents:list");
+const listSideEffectsReference = api.sideEffects.intents.list;
 
-const redriveSideEffectReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expectedStatus: z.infer<typeof sideEffectStatusSchema>;
-    expectedUpdatedAt: number;
-  },
-  unknown
->("sideEffects/intents:redrive");
+const redriveSideEffectReference = api.sideEffects.intents.redrive;
 
 export const ADMIN_SIDE_EFFECT_PAGE_SIZE = 30;
 
-export type ConvexSideEffectStatus = z.infer<
-  typeof sideEffectStatusSchema
->;
-export type ConvexSideEffectIntent = z.infer<
-  typeof sideEffectIntentSchema
->;
+export type ConvexSideEffectStatus = z.infer<typeof sideEffectStatusSchema>;
+export type ConvexSideEffectIntent = z.infer<typeof sideEffectIntentSchema>;
 
 export interface ConvexSideEffectPage {
   intents: ConvexSideEffectIntent[];
@@ -110,7 +89,7 @@ export async function redriveConvexSideEffect(
   return sideEffectIntentSchema.parse(
     await client.mutation(redriveSideEffectReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: intent.id,
+      id: documentId("sideEffectIntents", intent.id),
       expectedStatus: intent.status,
       expectedUpdatedAt: intent.updatedAt,
     })

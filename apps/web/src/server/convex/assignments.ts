@@ -1,8 +1,9 @@
+import { api } from "@tonyisup/bbpc-convex-api";
 import "server-only";
 
 import { z } from "zod";
 
-import { fetchPublicQuery, publicQueryReference } from "./client";
+import { fetchPublicQuery } from "./client";
 
 const assignmentSchema = z.object({
   id: z.string().min(1),
@@ -31,13 +32,9 @@ const assignmentSchema = z.object({
   }),
 });
 
-const getBySlugReference = publicQueryReference<{ slug: string }>(
-  "assignments/public:getBySlug"
-);
+const getBySlugReference = api.assignments.public.getBySlug;
 
-const getByLegacyIdReference = publicQueryReference<{ legacyId: string }>(
-  "assignments/public:getByLegacyId"
-);
+const getByLegacyIdReference = api.assignments.public.getByLegacyId;
 
 export type ConvexPublicAssignment = z.infer<typeof assignmentSchema>;
 

@@ -12,11 +12,11 @@ import {
   estimatedBase64Bytes,
   parseRecordingUploadInput,
   safeBlobSegment,
+  recordingExtension,
 } from '@/lib/recordings/upload';
 
 const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME_RECORDINGS || 'recordings';
 const CONN_STR = process.env.AZURE_STORAGE_ACCOUNT_CONNECTION_STRING;
-const RECORDING_CONTENT_TYPE = 'audio/webm';
 
 function getBlobServiceClient() {
   if (!CONN_STR) throw new Error('AZURE_STORAGE_ACCOUNT_CONNECTION_STRING not set');
@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       return res.status(400).json({ message: 'Missing required fields' });
     }
-    const { sessionId, episode, hostName, trackType, startedAt, audioBase64 } = upload;
+    const { sessionId, episode, hostName, trackType, startedAt, audioBase64, contentType } = upload;
 
     if (estimatedBase64Bytes(audioBase64) > MAX_RECORDING_BYTES) {
       return res.status(413).json({ message: 'Recording exceeds 100 MB upload limit' });
@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const timestamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
     const authoritativeHostName = participant.displayName;
-    const blobName = `${sessionId}/${timestamp}/${safeBlobSegment(authoritativeHostName)}-${participant.clientId}-${trackType}.webm`;
+    const blobName = `${sessionId}/${timestamp}/${safeBlobSegment(authoritativeHostName)}-${participant.clientId}-${trackType}.${recordingExtension(contentType)}`;
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
 
     const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -75,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     await blockBlobClient.upload(audioBuffer, audioBuffer.length, {
-      blobHTTPHeaders: { blobContentType: RECORDING_CONTENT_TYPE },
+      blobHTTPHeaders: { blobContentType: contentType },
       metadata: {
         episode,
         sessionId,
@@ -99,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       blobName,
       url: blockBlobClient.url,
       size: audioBuffer.length,
-      contentType: RECORDING_CONTENT_TYPE,
+      contentType: contentType,
       uploadedAt: Date.now(),
     });
 

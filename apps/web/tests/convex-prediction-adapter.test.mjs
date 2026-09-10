@@ -21,7 +21,7 @@ test("Convex predictions combine bounded catalogs with owner-derived guesses", (
     "games/guesses:mineForAssignments",
     "games/guesses:submit",
   ]) {
-    assert.match(adapter, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(adapter.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.doesNotMatch(adapter, /userId/u);
   assert.match(adapter, /BBPC_CLIENT_API_VERSION/u);
@@ -44,7 +44,7 @@ test("the Convex prediction UI is independent of the SQL transport and auth stac
     "assignments/public:deleteMyAudioMessage",
     "assignments/public:discardMyAudioUpload",
   ]) {
-    assert.match(component, new RegExp(name.replace("/", "\\/"), "u"));
+    assert.ok(component.includes(`api.${name.replaceAll("/", ".").replace(":", ".")}`), name);
   }
   assert.match(component, /useUploadThing\("audioUploader"\)/u);
   assert.doesNotMatch(

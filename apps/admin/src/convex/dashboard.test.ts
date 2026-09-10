@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import { loadConvexAdminDashboard } from "./dashboard";
 
 const emptyDashboard = {
+  countsReady: true,
   counts: {
     episodes: 0,
     users: 0,
@@ -30,6 +31,7 @@ describe("Convex admin dashboard adapter", () => {
   test("rejects a drifted server response", async () => {
     const query = vi.fn().mockResolvedValue({
       ...emptyDashboard,
+      countsReady: true,
       counts: { ...emptyDashboard.counts, episodes: "0" },
     });
     const client = { query } as unknown as ConvexReactClient;

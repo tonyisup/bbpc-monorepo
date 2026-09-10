@@ -218,7 +218,7 @@ export function ConvexReviewsPage() {
           <div>
             <h2 className="text-3xl font-bold tracking-tight">All Reviews</h2>
             <p className="text-muted-foreground">
-              Audit paginated review records and their bounded relationships. (
+              Review ratings and related episodes. (
               {reviews?.length ?? 0} loaded)
             </p>
           </div>
@@ -285,8 +285,7 @@ export function ConvexReviewsPage() {
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Reviews could not be loaded. No legacy SQL fallback was
-              attempted.
+              Reviews could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

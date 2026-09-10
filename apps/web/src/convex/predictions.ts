@@ -1,7 +1,10 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
@@ -43,47 +46,17 @@ const assignmentGuessGroupSchema = z.object({
   guesses: z.array(guessSchema),
 });
 
-const listHostsReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("identity/public:listHosts");
+const listHostsReference = api.identity.public.listHosts;
 
-const listRatingsReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("ratings/public:list");
+const listRatingsReference = api.ratings.public.list;
 
-const hasActiveSeasonReference = makeFunctionReference<
-  "query",
-  { today: string },
-  unknown
->("games/public:hasActiveSeason");
+const hasActiveSeasonReference = api.games.public.hasActiveSeason;
 
-const predictionScoringReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("games/public:predictionScoring");
+const predictionScoringReference = api.games.public.predictionScoring;
 
-const mineForAssignmentsReference = makeFunctionReference<
-  "query",
-  { assignmentIds: string[] },
-  unknown
->("games/guesses:mineForAssignments");
+const mineForAssignmentsReference = api.games.guesses.mineForAssignments;
 
-const submitGuessReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    assignmentId: string;
-    hostId: string;
-    ratingId: string;
-    today: string;
-  },
-  unknown
->("games/guesses:submit");
+const submitGuessReference = api.games.guesses.submit;
 
 export type ConvexPredictionHost = z.infer<typeof hostSchema>;
 export type ConvexPredictionRating = z.infer<typeof ratingSchema>;
@@ -124,7 +97,9 @@ export async function loadConvexPredictionData(
       client.query(listRatingsReference, {}),
       client.query(hasActiveSeasonReference, { today }),
       client.query(predictionScoringReference, {}),
-      client.query(mineForAssignmentsReference, { assignmentIds }),
+      client.query(mineForAssignmentsReference, {
+        assignmentIds: assignmentIds.map((id) => documentId("assignments", id)),
+      }),
     ]);
   const groups = z.array(assignmentGuessGroupSchema).parse(rawGuessGroups);
 
@@ -159,6 +134,9 @@ export async function submitConvexPrediction(
         clientApiVersion: BBPC_CLIENT_API_VERSION,
         ...input,
         today: getPacificTodayPlainDate(),
+        assignmentId: documentId("assignments", input.assignmentId),
+        hostId: documentId("users", input.hostId),
+        ratingId: documentId("ratings", input.ratingId),
       })
     )
   );

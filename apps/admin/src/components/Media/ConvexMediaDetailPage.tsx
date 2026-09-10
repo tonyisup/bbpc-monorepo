@@ -132,8 +132,7 @@ function ConvexMediaDetailPage({ kind }: { kind: MediaKind }) {
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
         <p className="text-sm text-muted-foreground">
-          Media details could not be loaded. No legacy SQL fallback was
-          attempted.
+          Media details could not be loaded. Try again.
         </p>
         <Button
           onClick={() => setRevision((value) => value + 1)}
@@ -240,7 +239,7 @@ function ConvexMediaDetailPage({ kind }: { kind: MediaKind }) {
                 Linked Episodes
               </CardTitle>
               <CardDescription>
-                Bounded canonical assignment and extra-review links.
+                Related episodes and extra reviews.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -275,7 +274,7 @@ function ConvexMediaDetailPage({ kind }: { kind: MediaKind }) {
                 Reviews
               </CardTitle>
               <CardDescription>
-                Up to 100 canonical reviews with bounded relationships.
+                Up to 100 reviews and their related episodes.
               </CardDescription>
             </CardHeader>
             <CardContent>

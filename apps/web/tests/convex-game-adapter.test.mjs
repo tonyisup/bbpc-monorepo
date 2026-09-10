@@ -18,8 +18,8 @@ const [adapter, gamePage, performance, participation, authContext, identity] =
 
 test("the public game page reads bounded runtime-validated Convex data directly", () => {
   assert.match(adapter, /import "server-only"/u);
-  assert.match(adapter, /games\/public:predictionScoring/u);
-  assert.match(adapter, /games\/public:currentPerformance/u);
+  assert.match(adapter, /api\.games\.public\.predictionScoring/u);
+  assert.match(adapter, /api\.games\.public\.currentPerformance/u);
   assert.match(adapter, /predictionScoringSchema\.parse/u);
   assert.match(adapter, /currentPerformanceSchema\.parse/u);
   assert.doesNotMatch(gamePage, /BBPC_BACKEND|server\/sql|trpc/u);
@@ -38,9 +38,9 @@ test("Clerk subjects never become legacy application-data identifiers", () => {
     authContext,
     /A Clerk subject must never be used as[\s\S]*application-data foreign key/u
   );
-  assert.match(identity, /identity\/profile:me/u);
+  assert.match(identity, /api\.identity\.profile\.me/u);
   assert.match(identity, /IDENTITY_NOT_LINKED/u);
-  assert.match(identity, /identity\/linking:linkOrCreateMe/u);
+  assert.match(identity, /api\.identity\.linking\.linkOrCreateMe/u);
   assert.match(
     identity,
     /BBPC_API_VERSION.*@tonyisup\/bbpc-convex-api\/contracts/u

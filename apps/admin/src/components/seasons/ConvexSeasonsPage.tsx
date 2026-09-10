@@ -399,7 +399,7 @@ export function ConvexSeasonsPage() {
               Seasons
             </h1>
             <p className="mt-2 text-lg font-medium text-muted-foreground">
-              Manage bounded season definitions and their game rulesets.
+              Manage seasons and their game rules.
             </p>
           </div>
           <Button
@@ -432,7 +432,7 @@ export function ConvexSeasonsPage() {
         {loadFailed ? (
           <Card className="p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
-              Seasons could not be loaded. No legacy SQL fallback was attempted.
+              Seasons could not be loaded. Try again.
             </p>
             <Button onClick={refresh} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />

@@ -1,13 +1,13 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
-import {
-  BBPC_CLIENT_API_VERSION,
-  getConvexDomainErrorCode,
-} from "./identity";
+import { BBPC_CLIENT_API_VERSION, getConvexDomainErrorCode } from "./identity";
 
 const impersonationSessionSchema = z.object({
   id: z.string().min(1),
@@ -18,20 +18,9 @@ const impersonationSessionSchema = z.object({
   endsAt: z.number(),
 });
 
-const currentReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->("identity/impersonation:current");
+const currentReference = api.identity.impersonation.current;
 
-const revokeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    sessionId: string;
-  },
-  unknown
->("identity/impersonation:revoke");
+const revokeReference = api.identity.impersonation.revoke;
 
 const revokeResultSchema = z.object({
   revoked: z.boolean(),
@@ -47,9 +36,7 @@ export async function loadCurrentConvexImpersonation(
 ): Promise<ConvexImpersonationSession | null> {
   try {
     const result = await client.query(currentReference, {});
-    return result === null
-      ? null
-      : impersonationSessionSchema.parse(result);
+    return result === null ? null : impersonationSessionSchema.parse(result);
   } catch (error) {
     if (getConvexDomainErrorCode(error) === "FORBIDDEN") {
       return null;
@@ -65,7 +52,7 @@ export async function revokeConvexImpersonation(
   revokeResultSchema.parse(
     await client.mutation(revokeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      sessionId,
+      sessionId: documentId("impersonationSessions", sessionId),
     })
   );
 }

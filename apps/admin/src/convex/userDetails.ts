@@ -1,5 +1,8 @@
+import type { FunctionArgs } from "convex/server";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import { z } from "zod";
 
 import {
@@ -9,13 +12,8 @@ import {
 } from "./seasonDetails";
 import { adminSyllabusEntrySchema } from "./syllabus";
 import { adminTagVoteSchema } from "./tags";
-import {
-  BBPC_CLIENT_API_VERSION,
-} from "./identity";
-import {
-  adminRoleMembershipSchema,
-  adminUserSchema,
-} from "./users";
+import { BBPC_CLIENT_API_VERSION } from "./identity";
+import { adminRoleMembershipSchema, adminUserSchema } from "./users";
 
 const idResultSchema = z.object({ id: z.string().min(1) });
 const totalSchema = z.number();
@@ -36,12 +34,8 @@ function pageSchema<T extends z.ZodTypeAny>(itemSchema: T) {
 export type ConvexUserDetail = z.infer<typeof adminUserSchema>;
 export type ConvexUserPoint = z.infer<typeof adminPointSchema>;
 export type ConvexUserGuess = z.infer<typeof adminGuessSchema>;
-export type ConvexUserGamblingEntry = z.infer<
-  typeof adminGamblingEntrySchema
->;
-export type ConvexUserSyllabusEntry = z.infer<
-  typeof adminSyllabusEntrySchema
->;
+export type ConvexUserGamblingEntry = z.infer<typeof adminGamblingEntrySchema>;
+export type ConvexUserSyllabusEntry = z.infer<typeof adminSyllabusEntrySchema>;
 export type ConvexUserTagVote = z.infer<typeof adminTagVoteSchema>;
 export type ConvexUserSeasonSelector =
   | { kind: "all" }
@@ -57,212 +51,47 @@ export interface ConvexUserPage<T> {
   continueCursor: string;
 }
 
-const getUserReference = makeFunctionReference<
-  "query",
-  { id: string },
-  unknown
->("identity/admin:getUser");
+const getUserReference = api.identity.admin.getUser;
 
-const listSyllabusReference = makeFunctionReference<
-  "query",
-  { userId: string },
-  unknown
->("syllabus/admin:listForUser");
+const listSyllabusReference = api.syllabus.admin.listForUser;
 
-const listPointsReference = makeFunctionReference<
-  "query",
-  {
-    userId: string;
-    season: ConvexUserSeasonSelector;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/points:listForUserPage");
+const listPointsReference = api.games.points.listForUserPage;
 
-const totalPointsReference = makeFunctionReference<
-  "query",
-  { userId: string; season: ConvexUserSeasonSelector },
-  unknown
->("games/points:totalForUser");
+const totalPointsReference = api.games.points.totalForUser;
 
-const listGuessesReference = makeFunctionReference<
-  "query",
-  {
-    userId: string;
-    season: ConvexUserSeasonSelector;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/guesses:listForUserPage");
+const listGuessesReference = api.games.guesses.listForUserPage;
 
-const listGamblingReference = makeFunctionReference<
-  "query",
-  {
-    userId: string;
-    season: ConvexUserSeasonSelector;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/gambling:listForUserPage");
+const listGamblingReference = api.games.gambling.listForUserPage;
 
-const listVotesReference = makeFunctionReference<
-  "query",
-  {
-    userId: string;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("games/tags:listVotesForUserPage");
+const listVotesReference = api.games.tags.listVotesForUserPage;
 
-const updateUserReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: ConvexUserProfileSnapshot;
-    name: string;
-    email: string;
-  },
-  unknown
->("identity/admin:updateUser");
+const updateUserReference = api.identity.admin.updateUser;
 
-const setUserStatusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: ConvexUserProfileSnapshot;
-    status: "active" | "disabled";
-  },
-  unknown
->("identity/admin:setUserStatus");
+const setUserStatusReference = api.identity.admin.setUserStatus;
 
-const assignRoleReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; userId: string; roleId: string },
-  unknown
->("identity/admin:assignRole");
+const assignRoleReference = api.identity.admin.assignRole;
 
-const removeRoleReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: {
-      userId: string;
-      roleId: string;
-      assignedAt: number | null;
-      assignedBy: string | null;
-    };
-  },
-  unknown
->("identity/admin:removeRoleMembership");
+const removeRoleReference = api.identity.admin.removeRoleMembership;
 
-const assignEpisodeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    syllabusId: string;
-    expected: ConvexUserSyllabusSnapshot;
-    episodeNumber: number;
-    assignmentType: string;
-  },
-  unknown
->("syllabus/admin:assignEpisode");
+const assignEpisodeReference = api.syllabus.admin.assignEpisode;
 
-const unlinkEpisodeReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    syllabusId: string;
-    expected: ConvexUserSyllabusSnapshot;
-  },
-  unknown
->("syllabus/admin:unlinkEpisode");
+const unlinkEpisodeReference = api.syllabus.admin.unlinkEpisode;
 
-const removeSyllabusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: ConvexUserSyllabusSnapshot;
-  },
-  unknown
->("syllabus/admin:removeEntry");
+const removeSyllabusReference = api.syllabus.admin.removeEntry;
 
-const reorderSyllabusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    userId: string;
-    items: Array<{ id: string; expectedOrder: number }>;
-  },
-  unknown
->("syllabus/admin:reorderPendingForUser");
+const reorderSyllabusReference = api.syllabus.admin.reorderPendingForUser;
 
-const createPointReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    userId: string;
-    season: ConvexUserSeasonTarget;
-    reason?: string;
-    adjustment: number | null;
-    gamePointTypeId?: string;
-  },
-  unknown
->("games/points:create");
+const createPointReference = api.games.points.create;
 
-const createWagerReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    userId: string;
-    gamblingTypeId?: string;
-    points: number;
-    season: ConvexUserSeasonTarget;
-  },
-  unknown
->("games/gambling:create");
+const createWagerReference = api.games.gambling.create;
 
-const updateWagerStatusReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    status: ConvexUserGamblingEntry["status"];
-    expectedStatus: ConvexUserGamblingEntry["status"];
-    season?: ConvexUserSeasonTarget;
-  },
-  unknown
->("games/gambling:updateStatus");
+const updateWagerStatusReference = api.games.gambling.updateStatus;
 
-const updateWagerPointsReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    id: string;
-    expected: {
-      points: number;
-      status: ConvexUserGamblingEntry["status"];
-      awardPointId: string | null;
-    };
-    points: number;
-  },
-  unknown
->("games/gambling:updatePoints");
+const updateWagerPointsReference = api.games.gambling.updatePoints;
 
-const applyVotePointsReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string; today: string },
-  unknown
->("games/tags:applyVotePoints");
+const applyVotePointsReference = api.games.tags.applyVotePoints;
 
-const deleteVoteReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("games/tags:deleteVote");
+const deleteVoteReference = api.games.tags.deleteVote;
 
 export const ADMIN_USER_ACTIVITY_PAGE_SIZE = 30;
 
@@ -273,18 +102,26 @@ export interface ConvexUserProfileSnapshot {
   updatedAt: number;
 }
 
-export interface ConvexUserSyllabusSnapshot {
-  userId: string;
-  movieId: string;
-  order: number;
-  createdAt: number;
-  notes: string | null;
-  assignmentId: string | null;
+export type ConvexUserSyllabusSnapshot = FunctionArgs<
+  typeof removeSyllabusReference
+>["expected"];
+
+function seasonArgument(
+  season: ConvexUserSeasonTarget
+): FunctionArgs<typeof createPointReference>["season"];
+function seasonArgument(
+  season: ConvexUserSeasonSelector
+): FunctionArgs<typeof totalPointsReference>["season"];
+function seasonArgument(season: ConvexUserSeasonSelector) {
+  return season.kind === "season"
+    ? {
+        kind: "season" as const,
+        seasonId: documentId("seasons", season.seasonId),
+      }
+    : season;
 }
 
-function profileSnapshot(
-  user: ConvexUserDetail
-): ConvexUserProfileSnapshot {
+function profileSnapshot(user: ConvexUserDetail): ConvexUserProfileSnapshot {
   return {
     name: user.name,
     email: user.email,
@@ -297,12 +134,12 @@ function syllabusSnapshot(
   entry: ConvexUserSyllabusEntry
 ): ConvexUserSyllabusSnapshot {
   return {
-    userId: entry.user.id,
-    movieId: entry.movie.id,
+    userId: documentId("users", entry.user.id),
+    movieId: documentId("movies", entry.movie.id),
     order: entry.order,
     createdAt: entry.createdAt,
     notes: entry.notes,
-    assignmentId: entry.assignment?.id ?? null,
+    assignmentId: documentId("assignments", entry.assignment?.id ?? null),
   };
 }
 
@@ -317,10 +154,7 @@ function assertSelectedSeason(
   selector: ConvexUserSeasonSelector,
   label: string
 ) {
-  if (
-    selector.kind === "season" &&
-    actual !== selector.seasonId
-  ) {
+  if (selector.kind === "season" && actual !== selector.seasonId) {
     throw new Error(`${label} does not belong to the selected season.`);
   }
 }
@@ -354,7 +188,9 @@ export async function loadConvexUserDetail(
 ): Promise<ConvexUserDetail | null> {
   return adminUserSchema
     .nullable()
-    .parse(await client.query(getUserReference, { id: userId }));
+    .parse(
+      await client.query(getUserReference, { id: documentId("users", userId) })
+    );
 }
 
 export async function loadConvexUserSyllabus(
@@ -364,7 +200,11 @@ export async function loadConvexUserSyllabus(
   const entries = z
     .array(adminSyllabusEntrySchema)
     .max(100)
-    .parse(await client.query(listSyllabusReference, { userId }));
+    .parse(
+      await client.query(listSyllabusReference, {
+        userId: documentId("users", userId),
+      })
+    );
   entries.forEach((entry) =>
     assertUserId(entry.user.id, userId, "Syllabus entry")
   );
@@ -397,7 +237,10 @@ export async function loadConvexUserPointTotal(
   season: ConvexUserSeasonSelector
 ): Promise<number> {
   return totalSchema.parse(
-    await client.query(totalPointsReference, { userId, season })
+    await client.query(totalPointsReference, {
+      userId: documentId("users", userId),
+      season: seasonArgument(season),
+    })
   );
 }
 
@@ -470,7 +313,7 @@ export async function updateConvexUserProfile(
   adminUserSchema.parse(
     await client.mutation(updateUserReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: user.id,
+      id: documentId("users", user.id),
       expected: profileSnapshot(user),
       ...input,
     })
@@ -485,7 +328,7 @@ export async function setConvexUserStatus(
   adminUserSchema.parse(
     await client.mutation(setUserStatusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: user.id,
+      id: documentId("users", user.id),
       expected: profileSnapshot(user),
       status,
     })
@@ -500,8 +343,8 @@ export async function assignConvexUserRole(
   adminRoleMembershipSchema.parse(
     await client.mutation(assignRoleReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      userId,
-      roleId,
+      userId: documentId("users", userId),
+      roleId: documentId("roles", roleId),
     })
   );
 }
@@ -514,12 +357,12 @@ export async function removeConvexUserRole(
   idResultSchema.parse(
     await client.mutation(removeRoleReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: membership.id,
+      id: documentId("userRoles", membership.id),
       expected: {
-        userId,
-        roleId: membership.role.id,
+        userId: documentId("users", userId),
+        roleId: documentId("roles", membership.role.id),
         assignedAt: membership.assignedAt,
-        assignedBy: membership.assignedBy,
+        assignedBy: documentId("users", membership.assignedBy),
       },
     })
   );
@@ -534,7 +377,7 @@ export async function assignConvexUserSyllabusEpisode(
   adminSyllabusEntrySchema.parse(
     await client.mutation(assignEpisodeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      syllabusId: entry.id,
+      syllabusId: documentId("syllabusEntries", entry.id),
       expected: syllabusSnapshot(entry),
       episodeNumber,
       assignmentType,
@@ -549,7 +392,7 @@ export async function unlinkConvexUserSyllabusEpisode(
   adminSyllabusEntrySchema.parse(
     await client.mutation(unlinkEpisodeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      syllabusId: entry.id,
+      syllabusId: documentId("syllabusEntries", entry.id),
       expected: syllabusSnapshot(entry),
     })
   );
@@ -562,7 +405,7 @@ export async function removeConvexUserSyllabusEntry(
   idResultSchema.parse(
     await client.mutation(removeSyllabusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: entry.id,
+      id: documentId("syllabusEntries", entry.id),
       expected: syllabusSnapshot(entry),
     })
   );
@@ -573,16 +416,18 @@ export async function reorderConvexUserPendingSyllabus(
   userId: string,
   entries: ConvexUserSyllabusEntry[]
 ): Promise<void> {
-  z.array(adminSyllabusEntrySchema).max(100).parse(
-    await client.mutation(reorderSyllabusReference, {
-      clientApiVersion: BBPC_CLIENT_API_VERSION,
-      userId,
-      items: entries.map((entry) => ({
-        id: entry.id,
-        expectedOrder: entry.order,
-      })),
-    })
-  );
+  z.array(adminSyllabusEntrySchema)
+    .max(100)
+    .parse(
+      await client.mutation(reorderSyllabusReference, {
+        clientApiVersion: BBPC_CLIENT_API_VERSION,
+        userId: documentId("users", userId),
+        items: entries.map((entry) => ({
+          id: documentId("syllabusEntries", entry.id),
+          expectedOrder: entry.order,
+        })),
+      })
+    );
 }
 
 export async function createConvexUserPoint(
@@ -598,13 +443,18 @@ export async function createConvexUserPoint(
   adminPointSchema.parse(
     await client.mutation(createPointReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      userId: input.userId,
-      season: input.season,
+      userId: documentId("users", input.userId),
+      season: seasonArgument(input.season),
       adjustment: input.adjustment,
       ...(input.reason === null ? {} : { reason: input.reason }),
       ...(input.gamePointTypeId === null
         ? {}
-        : { gamePointTypeId: input.gamePointTypeId }),
+        : {
+            gamePointTypeId: documentId(
+              "gamePointTypes",
+              input.gamePointTypeId
+            ),
+          }),
     })
   );
 }
@@ -622,6 +472,9 @@ export async function createConvexUserWager(
     await client.mutation(createWagerReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       ...input,
+      season: seasonArgument(input.season),
+      gamblingTypeId: documentId("gamblingTypes", input.gamblingTypeId),
+      userId: documentId("users", input.userId),
     })
   );
 }
@@ -635,10 +488,10 @@ export async function updateConvexUserWagerStatus(
   adminGamblingEntrySchema.parse(
     await client.mutation(updateWagerStatusReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: entry.id,
+      id: documentId("gamblingEntries", entry.id),
       status,
       expectedStatus: entry.status,
-      ...(season === undefined ? {} : { season }),
+      ...(season === undefined ? {} : { season: seasonArgument(season) }),
     })
   );
 }
@@ -651,11 +504,11 @@ export async function updateConvexUserWagerPoints(
   adminGamblingEntrySchema.parse(
     await client.mutation(updateWagerPointsReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: entry.id,
+      id: documentId("gamblingEntries", entry.id),
       expected: {
         points: entry.points,
         status: entry.status,
-        awardPointId: entry.awardPoint?.id ?? null,
+        awardPointId: documentId("points", entry.awardPoint?.id ?? null),
       },
       points,
     })
@@ -670,7 +523,7 @@ export async function applyConvexUserVotePoints(
   adminTagVoteSchema.parse(
     await client.mutation(applyVotePointsReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: voteId,
+      id: documentId("tagVotes", voteId),
       today,
     })
   );
@@ -683,7 +536,7 @@ export async function deleteConvexUserVote(
   idResultSchema.parse(
     await client.mutation(deleteVoteReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
-      id: voteId,
+      id: documentId("tagVotes", voteId),
     })
   );
 }

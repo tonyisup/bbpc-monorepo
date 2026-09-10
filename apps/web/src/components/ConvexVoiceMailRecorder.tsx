@@ -1,8 +1,11 @@
 "use client";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+
+import { api } from "@tonyisup/bbpc-convex-api";
 
 import { useConvex } from "convex/react";
 import type { ConvexReactClient } from "convex/react";
-import { makeFunctionReference } from "convex/server";
+
 import {
   ChevronDown,
   ChevronRight,
@@ -60,53 +63,12 @@ type Episode = z.infer<typeof episodeSchema>;
 type AudioMessage = z.infer<typeof audioMessageSchema>;
 type AudioUsage = z.infer<typeof audioUsageSchema>;
 
-const nextEpisodeReference = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  unknown
->(
-  "episodes/public:nextScheduled"
-);
-const listMineReference = makeFunctionReference<
-  "query",
-  {
-    episodeId: string;
-    paginationOpts: { cursor: string | null; numItems: number };
-  },
-  unknown
->("episodes/audio:listMine");
-const usageReference = makeFunctionReference<
-  "query",
-  { episodeId: string },
-  unknown
->("episodes/audio:usageForEpisode");
-const createMineReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    url: string;
-    fileKey: string;
-    createdAt: number;
-    notes?: string;
-  },
-  unknown
->("episodes/audio:createMine");
-const deleteMineReference = makeFunctionReference<
-  "mutation",
-  { clientApiVersion: string; id: string },
-  unknown
->("episodes/audio:deleteMine");
-const discardUploadReference = makeFunctionReference<
-  "mutation",
-  {
-    clientApiVersion: string;
-    episodeId: string;
-    fileKey: string;
-    uploadId: string;
-  },
-  unknown
->("episodes/audio:discardMyUpload");
+const nextEpisodeReference = api.episodes.public.nextScheduled;
+const listMineReference = api.episodes.audio.listMine;
+const usageReference = api.episodes.audio.usageForEpisode;
+const createMineReference = api.episodes.audio.createMine;
+const deleteMineReference = api.episodes.audio.deleteMine;
+const discardUploadReference = api.episodes.audio.discardMyUpload;
 
 function messageForError(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -129,10 +91,10 @@ async function loadAudioState(
 ): Promise<{ messages: AudioMessage[]; usage: AudioUsage }> {
   const [page, usage] = await Promise.all([
     convex.query(listMineReference, {
-      episodeId,
+      episodeId: documentId("episodes", episodeId),
       paginationOpts: { cursor: null, numItems: 50 },
     }),
-    convex.query(usageReference, { episodeId }),
+    convex.query(usageReference, { episodeId: documentId("episodes", episodeId) }),
   ]);
   const parsedPage = audioPageSchema.parse(page);
   if (!parsedPage.isDone) {
@@ -221,7 +183,7 @@ function ConvexEpisodeVoiceMailRecorder({ episode }: { episode: Episode }) {
       audioMessageSchema.parse(
         await convex.mutation(createMineReference, {
           clientApiVersion: BBPC_CLIENT_API_VERSION,
-          episodeId: episode.id,
+          episodeId: documentId("episodes", episode.id),
           url: uploadedFile.url,
           fileKey: uploadedFile.key,
           createdAt,
@@ -253,7 +215,7 @@ function ConvexEpisodeVoiceMailRecorder({ episode }: { episode: Episode }) {
         try {
           await convex.mutation(discardUploadReference, {
             clientApiVersion: BBPC_CLIENT_API_VERSION,
-            episodeId: episode.id,
+            episodeId: documentId("episodes", episode.id),
             fileKey: uploadedFile.key,
             uploadId,
           });
@@ -278,7 +240,7 @@ function ConvexEpisodeVoiceMailRecorder({ episode }: { episode: Episode }) {
     try {
       await convex.mutation(deleteMineReference, {
         clientApiVersion: BBPC_CLIENT_API_VERSION,
-        id: message.id,
+        id: documentId("episodeAudioMessages", message.id),
       });
       setMessages((current) =>
         current.filter((candidate) => candidate.id !== message.id)

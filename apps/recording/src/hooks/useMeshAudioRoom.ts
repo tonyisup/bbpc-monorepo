@@ -120,7 +120,7 @@ export function useMeshAudioRoom({
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [connectionStates, setConnectionStates] = useState<Record<string, RTCPeerConnectionState>>({});
   const [audioLevels, setAudioLevels] = useState<Record<string, number>>({});
-  const [tick, setTick] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [signalReadAt, setSignalReadAt] = useState(() => Date.now());
 
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -414,6 +414,7 @@ export function useMeshAudioRoom({
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
+      setSignalReadAt(Date.now());
       setJoined(true);
       await refreshInputDevices();
       onAudioJoinedRef.current(Date.now());
@@ -490,7 +491,6 @@ export function useMeshAudioRoom({
 
   useEffect(() => {
     if (!joined) return;
-    setSignalReadAt(Date.now());
     const timer = setInterval(
       () => setSignalReadAt(Date.now()),
       SIGNAL_WINDOW_REFRESH_MS,
@@ -598,7 +598,7 @@ export function useMeshAudioRoom({
   }, [joined, leaveAudio, sessionEnded]);
 
   useEffect(() => {
-    const timer = setInterval(() => setTick(value => value + 1), 1000);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -646,14 +646,13 @@ export function useMeshAudioRoom({
   }, [teardownLocal]);
 
   const participants = useMemo(() => {
-    const now = Date.now();
-    void tick;
+
     return (presence ?? (joined ? [{
       clientId,
       displayName,
       role,
-      joinedAudioAt: Date.now(),
-      lastSeenAt: Date.now(),
+      joinedAudioAt: now,
+      lastSeenAt: now,
       muted,
       recording,
     }] : [])).map(row => {
@@ -674,7 +673,7 @@ export function useMeshAudioRoom({
         audioLevel: audioLevels[row.clientId] ?? 0,
       };
     });
-  }, [audioLevels, clientId, connectionStates, displayName, joined, muted, presence, recording, role, tick]);
+  }, [audioLevels, clientId, connectionStates, displayName, joined, muted, presence, recording, role, now]);
 
   return {
     state: {

@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -1083,4 +1083,81 @@ describe("shared recording session boundary", () => {
       participants: 1,
     });
   });
+});
+
+test("retention completes a session with more than 2000 child rows without deleting newer sessions", async () => {
+  vi.useFakeTimers();
+  try {
+    const t = createTestBackend();
+    await seedUser(t, {
+      identity: HOST_IDENTITY,
+      name: "Host",
+      email: "host@example.test",
+      role: "host",
+    });
+    await seedUser(t, {
+      identity: ADMIN_IDENTITY,
+      name: "Admin",
+      email: "admin@example.test",
+      role: "admin",
+    });
+    await initializeAtS1(t);
+    await advanceToS3(t);
+    const expired = ownerInput("expired-large", 1);
+    const recent = ownerInput("recent-large", 1);
+    for (const input of [expired, recent])
+      await t
+        .withIdentity(HOST_IDENTITY)
+        .mutation(api.recording.sessions.createSession, input);
+    await t.run(async (ctx) => {
+      const session = await ctx.db
+        .query("recordingSessions")
+        .withIndex("by_publicId", (q) => q.eq("publicId", expired.publicId))
+        .unique();
+      if (!session) throw new Error("Missing session");
+      await ctx.db.patch("recordingSessions", session._id, {
+        status: "ended",
+        endedAt: 100,
+      });
+      for (let i = 0; i < 2101; i++)
+        await ctx.db.insert("recordingRtcSignals", {
+          publicSessionId: expired.publicId,
+          fromClientId: expired.participant.clientId,
+          toClientId: "guest",
+          signalId: `retention_${String(i)}`,
+          createdAt: 1,
+          type: "offer",
+          payload: {},
+        });
+    });
+    const first = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.recording.sessions.cleanupEndedSessions, {
+        clientApiVersion: BBPC_API_VERSION,
+        olderThan: 500,
+        confirmation: "delete-ended-sessions",
+      });
+    expect(first.sessions).toBe(0);
+    expect(first.rtcSignals).toBeGreaterThan(0);
+    await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+    const remaining = await t.run((ctx) =>
+      ctx.db.query("recordingSessions").collect(),
+    );
+    expect(remaining.map((row) => row.publicId)).toEqual([recent.publicId]);
+    expect(
+      await t.run((ctx) => ctx.db.query("recordingRtcSignals").collect()),
+    ).toHaveLength(0);
+    expect(
+      await t.run((ctx) =>
+        ctx.db
+          .query("recordingParticipants")
+          .withIndex("by_publicSessionId", (q) =>
+            q.eq("publicSessionId", expired.publicId),
+          )
+          .collect(),
+      ),
+    ).toHaveLength(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });

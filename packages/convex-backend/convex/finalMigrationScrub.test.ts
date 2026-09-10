@@ -497,6 +497,11 @@ describe("final portable scrub", () => {
     await initializeAtS1(t);
     await seedReconciledRun(t);
     await seedPortableFixture(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("dashboardCounts", { key: "users", count: 2 });
+      await ctx.db.insert("dashboardCountMembers", { sourceId: "synthetic-user", key: "users" });
+      await ctx.db.insert("dashboardBackfills", { source: "users", cursor: null, complete: true });
+    });
 
     await expect(startFinalScrub(t)).resolves.toEqual({
       runId: CUTOVER_RUN_ID,
@@ -618,7 +623,12 @@ describe("final portable scrub", () => {
         },
       ),
     );
-    expect(control.totalDeleted).toBe(2);
+    expect(control.totalDeleted).toBe(5);
+    await t.run(async (ctx) => {
+      for (const table of ["dashboardBackfills", "dashboardCounts", "dashboardCountMembers", "dashboardEpisodes"] as const) {
+        expect(await ctx.db.query(table).first()).toBeNull();
+      }
+    });
 
     const completed = await t.mutation(
       internal.migration.scrub.finishFinalScrub,

@@ -1,9 +1,9 @@
 import {
   action as rawAction,
   internalAction as rawInternalAction,
-  internalMutation as rawInternalMutation,
+  internalMutation as baseInternalMutation,
   internalQuery as rawInternalQuery,
-  mutation as rawMutation,
+  mutation as baseMutation,
   query as rawQuery,
 } from "./_generated/server.js";
 import { v } from "convex/values";
@@ -26,6 +26,18 @@ import {
   requireApplicationWritesEnabled,
   requireMigrationWritesEnabled,
 } from "./lib/writeGate.js";
+
+import { dashboardTriggers } from "./lib/dashboardProjection.js";
+
+// Every write path, including migration/control mutations, maintains read models atomically.
+const rawMutation = customMutation(
+  baseMutation,
+  customCtx(dashboardTriggers.wrapDB),
+);
+const rawInternalMutation = customMutation(
+  baseInternalMutation,
+  customCtx(dashboardTriggers.wrapDB),
+);
 
 export const anonymousQuery = customQuery(
   rawQuery,

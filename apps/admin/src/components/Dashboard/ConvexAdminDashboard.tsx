@@ -14,6 +14,7 @@ import {
   type ConvexAdminDashboard as ConvexAdminDashboardData,
   type ConvexAdminEpisode,
   loadConvexAdminDashboard,
+  initializeConvexAdminDashboard,
 } from "@/convex/dashboard";
 import { formatInstantLocal, formatPlainDate } from "@/lib/dates";
 
@@ -157,31 +158,42 @@ export function ConvexAdminDashboard({ userName }: ConvexAdminDashboardProps) {
     let active = true;
     setError(false);
 
-    void loadConvexAdminDashboard(convex)
-      .then((result) => {
-        if (active) {
-          setDashboard(result);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let initialized = false;
+    let delay = 1000;
+    const load = async () => {
+      try {
+        const result = await loadConvexAdminDashboard(convex);
+        if (!active) return;
+        setDashboard(result);
+        if (!result.countsReady) {
+          if (!initialized) {
+            await initializeConvexAdminDashboard(convex);
+            initialized = true;
+          }
+          if (!active) return;
+          timer = setTimeout(() => void load(), delay);
+          delay = Math.min(delay * 2, 15000);
         }
-      })
-      .catch(() => {
-        if (active) {
-          setError(true);
-        }
-      });
+      } catch {
+        if (active) setError(true);
+      }
+    };
+    void load();
 
     return () => {
       active = false;
+      clearTimeout(timer);
     };
   }, [convex, revision]);
 
-  if (error) {
+  if (error && dashboard === null) {
     return (
       <Card className="mx-auto mt-12 max-w-xl">
         <CardHeader>
           <CardTitle>Dashboard unavailable</CardTitle>
           <CardDescription>
-            The Convex admin overview could not be loaded. No legacy SQL
-            fallback was attempted.
+            The dashboard could not be loaded. Try again.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -214,34 +226,52 @@ export function ConvexAdminDashboard({ userName }: ConvexAdminDashboardProps) {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <CountCard
-          description="Podcast episodes"
-          icon={<Mic2 className="h-4 w-4 text-muted-foreground" />}
-          label="Total Episodes"
-          value={dashboard.counts.episodes}
-        />
-        <CountCard
-          description="Canonical BBPC accounts"
-          icon={<Users className="h-4 w-4 text-muted-foreground" />}
-          label="Users"
-          value={dashboard.counts.users}
-        />
-        <CountCard
-          description="Movies in the catalog"
-          icon={<Film className="h-4 w-4 text-muted-foreground" />}
-          label="Total Movies"
-          value={dashboard.counts.movies}
-        />
-        <CountCard
-          description="Reviews submitted"
-          icon={<Star className="h-4 w-4 text-muted-foreground" />}
-          label="Total Reviews"
-          value={dashboard.counts.reviews}
-        />
-      </div>
+      {error ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-md border p-4"
+        >
+          <p>Dashboard totals could not be updated. Try again.</p>
+          <Button onClick={retry} variant="outline">
+            Try again
+          </Button>
+        </div>
+      ) : !dashboard.countsReady ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Preparing dashboard totals…
+        </p>
+      ) : null}
 
-      {dashboard.guessStats.length > 0 && (
+      {dashboard.counts !== null && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <CountCard
+            description="Podcast episodes"
+            icon={<Mic2 className="h-4 w-4 text-muted-foreground" />}
+            label="Total Episodes"
+            value={dashboard.counts.episodes}
+          />
+          <CountCard
+            description="BBPC accounts"
+            icon={<Users className="h-4 w-4 text-muted-foreground" />}
+            label="Users"
+            value={dashboard.counts.users}
+          />
+          <CountCard
+            description="Movies in the catalog"
+            icon={<Film className="h-4 w-4 text-muted-foreground" />}
+            label="Total Movies"
+            value={dashboard.counts.movies}
+          />
+          <CountCard
+            description="Reviews submitted"
+            icon={<Star className="h-4 w-4 text-muted-foreground" />}
+            label="Total Reviews"
+            value={dashboard.counts.reviews}
+          />
+        </div>
+      )}
+
+      {dashboard.countsReady && dashboard.guessStats.length > 0 && (
         <GuessesGraph
           className="col-span-7"
           data={dashboard.guessStats}
@@ -249,18 +279,26 @@ export function ConvexAdminDashboard({ userName }: ConvexAdminDashboardProps) {
         />
       )}
 
-      <EpisodeSummary
-        description="The most recent published episode."
-        emptyMessage="No published episodes found."
-        episode={dashboard.latestEpisode}
-        title="Latest Episode"
-      />
-      <EpisodeSummary
-        description="The next scheduled or recording episode."
-        emptyMessage="No upcoming episodes found."
-        episode={dashboard.upcomingEpisode}
-        title="Upcoming Episode"
-      />
+      {dashboard.countsReady ? (
+        <>
+          <EpisodeSummary
+            description="The most recent published episode."
+            emptyMessage="No published episodes found."
+            episode={dashboard.latestEpisode}
+            title="Latest Episode"
+          />
+          <EpisodeSummary
+            description="The next scheduled or recording episode."
+            emptyMessage="No upcoming episodes found."
+            episode={dashboard.upcomingEpisode}
+            title="Upcoming Episode"
+          />
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Preparing episode summaries…
+        </p>
+      )}
 
       <Card>
         <CardHeader>

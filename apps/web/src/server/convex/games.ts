@@ -1,8 +1,9 @@
+import { api } from "@tonyisup/bbpc-convex-api";
 import "server-only";
 
 import { z } from "zod";
 
-import { fetchPublicQuery, publicQueryReference } from "@/server/convex/client";
+import { fetchPublicQuery } from "@/server/convex/client";
 import type { GamePerformanceData, PredictionScoring } from "@/types/game";
 
 const predictionScoringSchema = z.object({
@@ -37,12 +38,8 @@ const currentPerformanceSchema = z
   })
   .nullable();
 
-const predictionScoringQuery = publicQueryReference<Record<string, never>>(
-  "games/public:predictionScoring"
-);
-const currentPerformanceQuery = publicQueryReference<{
-  today: string;
-}>("games/public:currentPerformance");
+const predictionScoringQuery = api.games.public.predictionScoring;
+const currentPerformanceQuery = api.games.public.currentPerformance;
 
 export async function getConvexPredictionScoring(): Promise<PredictionScoring> {
   return predictionScoringSchema.parse(
