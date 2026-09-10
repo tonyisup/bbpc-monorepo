@@ -45,3 +45,12 @@ The backend schema and API changes must be released through the existing environ
 - Generated PWA build output was restored so it is not part of the source change.
 
 `pnpm run check` passes: **849 tests**, all application and backend typechecks, all three app lint commands, backend lint/query/access checks, and deployment/migration verification suites. Backend coverage is **96.06% statements and 90.24% branches**. `git diff --check` passes.
+
+
+## CI follow-up
+
+The first PR run timed out while backfilling all four large table fixtures in one test. `convex-test` scans its in-memory document map for indexed lookups, so the combined fixture imposed quadratic emulator work. The expired test then restored real timers while the next test was running, causing its secondary timer failure.
+
+The growth regression now uses a fresh database for each historical table cap. It retains real scheduled backfill, exact counts, edits/deletes, replay, and the separate concurrent-write case. Focused coverage execution fell from 52.42 seconds to 17.52 seconds locally. Production code, the 60-second test timeout, and CI coverage thresholds are unchanged.
+
+After the CI repair, `pnpm run check` passes **852 tests**, lint, typechecks, and unchanged coverage gates. The isolated package consumer check also passes.

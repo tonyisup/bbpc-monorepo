@@ -304,7 +304,15 @@ describe("administrator dashboard API", () => {
   });
 });
 
-test("dashboard backfill crosses former table caps and maintains exact counts through edits and deletes", async () => {
+// convex-test implements even indexed lookups by scanning its in-memory rows.
+// Isolate each historical cap so unrelated tables do not multiply that cost.
+// Every case still runs the real scheduled backfill beyond its former limit.
+test.each([
+  { table: "users", users: 501, movies: 1, reviews: 0, episodes: 1 },
+  { table: "movies", users: 0, movies: 3001, reviews: 0, episodes: 1 },
+  { table: "reviews", users: 0, movies: 1, reviews: 3001, episodes: 1 },
+  { table: "episodes", users: 0, movies: 1, reviews: 0, episodes: 2001 },
+])("dashboard backfill crosses the former $table cap and maintains exact counts through edits and deletes", async (size) => {
   vi.useFakeTimers();
   try {
     const t = createTestBackend();
@@ -320,22 +328,23 @@ test("dashboard backfill crosses former table caps and maintains exact counts th
     expect(before.countsReady).toBe(false);
     expect(before.counts).toBeNull();
     await t.run(async (ctx) => {
-      for (let i = 0; i < 501; i++)
+      for (let i = 0; i < size.users; i++)
         await ctx.db.insert("users", {
           status: "active",
           createdAt: 1,
           updatedAt: 1,
         });
-      for (let i = 0; i < 3001; i++) {
+      for (let i = 0; i < size.movies; i++) {
         await ctx.db.insert("movies", {
           title: `Movie ${String(i)}`,
           normalizedTitle: `movie ${String(i)}`,
           year: 2026,
           url: "https://example.test",
         });
-        await ctx.db.insert("reviews", {});
       }
-      for (let i = 0; i < 2001; i++)
+      for (let i = 0; i < size.reviews; i++)
+        await ctx.db.insert("reviews", {});
+      for (let i = 0; i < size.episodes; i++)
         await ctx.db.insert("episodes", {
           number: i,
           title: "Episode",
@@ -350,7 +359,12 @@ test("dashboard backfill crosses former table caps and maintains exact counts th
           .withIdentity(ADMIN_IDENTITY)
           .query(api.admin.dashboard.overview, {})
       ).counts,
-    ).toEqual({ users: 502, movies: 3001, reviews: 3001, episodes: 2001 });
+    ).toEqual({
+      users: size.users + 1,
+      movies: size.movies,
+      reviews: size.reviews,
+      episodes: size.episodes,
+    });
     await t.run(async (original) => {
       const ctx = dashboardTriggers.wrapDB(original);
       const movie = await ctx.db.query("movies").first();
@@ -371,12 +385,12 @@ test("dashboard backfill crosses former table caps and maintains exact counts th
       .query(api.admin.dashboard.overview, {});
     expect(result.countsReady).toBe(true);
     expect(result.counts).toEqual({
-      users: 502,
-      movies: 3000,
-      reviews: 3002,
-      episodes: 2001,
+      users: size.users + 1,
+      movies: size.movies - 1,
+      reviews: size.reviews + 1,
+      episodes: size.episodes,
     });
-    expect(result.latestEpisode?.number).toBe(2000);
+    expect(result.latestEpisode?.number).toBe(size.episodes - 1);
   } finally {
     vi.useRealTimers();
   }
