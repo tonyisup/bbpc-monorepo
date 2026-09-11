@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { movieLinkPreferenceValidator } from "../lib/movieLinkPreference.js";
 
 const nullableStringValidator = v.union(v.string(), v.null());
 const nullableNumberValidator = v.union(v.number(), v.null());
@@ -36,6 +37,7 @@ export const identityProfileValidator = v.object({
   image: nullableStringValidator,
   isAdmin: v.boolean(),
   isHost: v.boolean(),
+  movieLinkPreference: movieLinkPreferenceValidator,
 });
 
 export const identityPublicHostValidator = v.object({

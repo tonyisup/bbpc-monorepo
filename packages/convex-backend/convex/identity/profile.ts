@@ -11,6 +11,7 @@ import { domainError } from "../lib/errors.js";
 import { enqueueUploadThingDelete } from "../sideEffects/intents.js";
 import { cutoverStageValidator } from "../lib/validators.js";
 import { identityProfileValidator } from "./validators.js";
+import { movieLinkPreferenceValidator } from "../lib/movieLinkPreference.js";
 
 const MAX_PROFILE_IMAGE_URL_LENGTH = 2_048;
 const MAX_PROFILE_IMAGE_UPLOAD_ID_LENGTH = 100;
@@ -74,6 +75,7 @@ export const me = authenticatedQuery({
     name: ctx.actor.user.name ?? null,
     email: ctx.actor.user.email ?? null,
     image: ctx.actor.user.image ?? null,
+    movieLinkPreference: ctx.actor.user.movieLinkPreference ?? "imdb",
     isAdmin: ctx.actor.isAdmin,
     isHost: ctx.actor.isHost,
   }),
@@ -87,9 +89,33 @@ export const administratorMe = adminQuery({
     name: ctx.actor.authenticatedUser.name ?? null,
     email: ctx.actor.authenticatedUser.email ?? null,
     image: ctx.actor.authenticatedUser.image ?? null,
+    movieLinkPreference: ctx.actor.authenticatedUser.movieLinkPreference ?? "imdb",
     isAdmin: true,
     isHost: ctx.actor.isHost,
   }),
+});
+
+export const updateMyMovieLinkPreference = authenticatedMutation({
+  args: { movieLinkPreference: movieLinkPreferenceValidator },
+  returns: v.object({
+    movieLinkPreference: movieLinkPreferenceValidator,
+    updatedAt: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const updatedAt = Date.now();
+    await ctx.db.patch("users", ctx.actor.user._id, {
+      movieLinkPreference: args.movieLinkPreference,
+      updatedAt,
+    });
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "identity.profile.movieLinkPreferenceUpdated",
+      targetType: "user",
+      targetId: ctx.actor.user._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+    });
+    return { movieLinkPreference: args.movieLinkPreference, updatedAt };
+  },
 });
 
 export const updateMyName = authenticatedMutation({

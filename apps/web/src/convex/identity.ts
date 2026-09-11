@@ -8,6 +8,7 @@ import { ConvexError } from "convex/values";
 import { z } from "zod";
 
 import { BBPC_API_VERSION } from "@tonyisup/bbpc-convex-api/contracts";
+import type { MovieLinkPreference } from "@/utils/movieLinks";
 
 export const BBPC_CLIENT_API_VERSION = BBPC_API_VERSION;
 
@@ -18,6 +19,7 @@ const identityProfileSchema = z.object({
   image: z.string().nullable(),
   isAdmin: z.boolean(),
   isHost: z.boolean(),
+  movieLinkPreference: z.enum(["imdb", "tmdb"]).default("imdb"),
 });
 
 const identityLinkResultSchema = identityProfileSchema.extend({
@@ -57,6 +59,11 @@ const discardMyProfileImageUploadReference =
 
 const updateMyNameResultSchema = z.object({
   name: z.string(),
+  updatedAt: z.number(),
+});
+
+const updateMovieLinkPreferenceResultSchema = z.object({
+  movieLinkPreference: z.enum(["imdb", "tmdb"]),
   updatedAt: z.number(),
 });
 
@@ -134,6 +141,18 @@ export async function updateConvexProfileName(
     await client.mutation(updateMyNameReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       name,
+    })
+  );
+}
+
+export async function updateConvexMovieLinkPreference(
+  client: ConvexReactClient,
+  movieLinkPreference: MovieLinkPreference
+) {
+  return updateMovieLinkPreferenceResultSchema.parse(
+    await client.mutation(api.identity.profile.updateMyMovieLinkPreference, {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      movieLinkPreference,
     })
   );
 }

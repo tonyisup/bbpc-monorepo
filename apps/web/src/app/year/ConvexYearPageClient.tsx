@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import RatingIcon from "@/components/RatingIcon";
 import UserTag from "@/components/UserTag";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { getMovieLink } from "@/utils/movieLinks";
 import { Button } from "@/components/ui/button";
 import { getConvexDomainErrorCode } from "@/convex/identity";
 import {
@@ -523,7 +524,7 @@ export function ConvexYearPageClient() {
               {groupedMovies.map((group, index) => (
                 <article key={group.movie.id} className="min-w-0">
                   <a
-                    href={group.movie.url}
+                    href={getMovieLink(group.movie, user?.movieLinkPreference)}
                     target="_blank"
                     rel="noreferrer"
                     className="block overflow-hidden rounded-lg bg-zinc-900 transition-opacity hover:opacity-80"
@@ -588,7 +589,7 @@ export function ConvexYearPageClient() {
                     )}
                     {group.movie.url && (
                       <a
-                        href={group.movie.url}
+                        href={getMovieLink(group.movie, user?.movieLinkPreference)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-white"
@@ -782,7 +783,7 @@ export function ConvexYearPageClient() {
                           )}
                           {group.movie.url && (
                             <a
-                              href={group.movie.url}
+                              href={getMovieLink(group.movie, user?.movieLinkPreference)}
                               target="_blank"
                               rel="noreferrer"
                               className="ml-auto rounded border border-yellow-600/50 bg-yellow-600/20 px-3 py-1 text-xs text-yellow-500 transition-colors hover:bg-yellow-600/30"

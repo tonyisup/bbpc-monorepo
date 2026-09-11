@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { movieLinkPreferenceValidator } from "./lib/movieLinkPreference.js";
 
 import {
   applicationWriteModeValidator,
@@ -46,6 +47,7 @@ export default defineSchema({
     image: v.optional(v.string()),
     imageFileKey: v.optional(v.string()),
     imageUploadId: v.optional(v.string()),
+    movieLinkPreference: v.optional(movieLinkPreferenceValidator),
     status: userStatus,
     createdAt: v.number(),
     updatedAt: v.number(),

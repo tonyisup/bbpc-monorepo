@@ -438,6 +438,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
                   ? result.movie
                   : {
                       id: String(result.movie.id),
+                      tmdbId: result.movie.id,
                       title: result.movie.title,
                       year: result.year,
                       poster: result.movie.poster_path,

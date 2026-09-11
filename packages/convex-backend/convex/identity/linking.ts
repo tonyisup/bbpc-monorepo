@@ -34,6 +34,7 @@ export const linkOrCreateMe = identityLinkMutation({
       name: actor.user.name ?? null,
       email: actor.user.email ?? null,
       image: actor.user.image ?? null,
+      movieLinkPreference: actor.user.movieLinkPreference ?? "imdb",
       isAdmin: actor.isAdmin,
       isHost: actor.isHost,
       linkMode: result.linkMode,

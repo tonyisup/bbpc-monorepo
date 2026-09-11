@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   reorder: vi.fn(),
   replace: vi.fn(),
   params: new URLSearchParams("y=2026&view=list"),
+  movieLinkPreference: "imdb" as "imdb" | "tmdb",
 }));
 vi.mock("convex/react", () => ({ useConvex: () => mocks.convex }));
 vi.mock("next/navigation", () => ({
@@ -28,7 +29,7 @@ vi.mock("@/components/auth/BbpcAuthContext", () => ({
   useBbpcAuth: () => ({
     status: "authenticated",
     accountStatus: "ready",
-    user: { appUserId: "user-1", isAdmin: true },
+    user: { appUserId: "user-1", isAdmin: true, movieLinkPreference: mocks.movieLinkPreference },
   }),
 }));
 vi.mock("@/convex/identity", () => ({ getConvexDomainErrorCode: () => null }));
@@ -93,6 +94,8 @@ async function renderRanking() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.params = new URLSearchParams("y=2026&view=list");
+  mocks.movieLinkPreference = "imdb";
   mocks.reviews.mockResolvedValue(
     [1, 2].map((id) => ({
       id: `review-${id}`,
@@ -108,6 +111,18 @@ beforeEach(() => {
 });
 afterEach(() => {
   if (renderer) act(() => renderer.unmount());
+});
+
+test.each(["list", "grid"])("uses the profile preference for every movie link in the %s archive", async (view) => {
+  mocks.params = new URLSearchParams(`y=2026&view=${view}`);
+  mocks.movieLinkPreference = "tmdb";
+  await act(async () => { renderer = create(<ConvexYearPageClient />); });
+  const movieLinks = () => renderer.root.findAllByType("a").filter((node) => node.props.target === "_blank");
+  expect(movieLinks().length).toBeGreaterThan(0);
+  expect(movieLinks().every((node) => node.props.href === "https://www.themoviedb.org/movie/329865")).toBe(true);
+  mocks.movieLinkPreference = "imdb";
+  act(() => { renderer.update(<ConvexYearPageClient />); });
+  expect(movieLinks().every((node) => node.props.href === movie.url)).toBe(true);
 });
 
 test("groups repeated movie reviews and saves only on submit, once while pending", async () => {

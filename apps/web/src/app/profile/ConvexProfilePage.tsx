@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ConvexProfileForm } from "./ConvexProfileForm";
 import { ConvexProfileSummary } from "./ConvexProfileSummary";
 import { ConvexPointHistory } from "./ConvexPointHistory";
+import { MovieLinkPreferenceForm } from "./MovieLinkPreferenceForm";
 
 function accountMessage(
   issue: ReturnType<typeof useBbpcAuth>["accountIssue"]
@@ -75,6 +76,11 @@ export function ConvexProfilePage() {
       <ConvexProfileForm
         initialName={user.name ?? ""}
         initialImage={user.image}
+      />
+
+      <MovieLinkPreferenceForm
+        key={`${user.appUserId}:${user.movieLinkPreference ?? "imdb"}`}
+        initialPreference={user.movieLinkPreference ?? "imdb"}
       />
 
       <ConvexProfileSummary appUserId={user.appUserId} />

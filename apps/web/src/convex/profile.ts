@@ -14,6 +14,7 @@ const syllabusEntrySchema = z.object({
     title: z.string(),
     poster: z.string().nullable(),
     url: z.string(),
+    tmdbId: z.number().nullable().optional(),
   }),
   assignment: z
     .object({
