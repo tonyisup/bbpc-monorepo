@@ -61,7 +61,34 @@ It resolves non-IMDb URLs, flags duplicate identities/destinations and title/yea
 mismatches, and leaves missing mappings unresolved. Existing IMDb URLs are retained;
 their external mappings are not re-fetched. The tool has no apply mode and refuses
 an inventory that reaches its 10,000-row limit. Keep reports and extracted rows out
-of commits. A future apply step must recheck the original URL/IDs and conflicts.
+of commits.
+
+After reviewing a report, `catalog/operations:applyStagingImdbUrls` can apply up to
+25 explicit movie updates in one transaction. This internal operation only accepts
+the staging deployment, current API version and cutover run. It checks each original
+URL, TMDB ID, title and year, rejects duplicate provider matches, patches only `url`,
+and audits each change. Replaying the same batch is safe. Save a private rollback
+snapshot before applying and verify the changed rows afterward.
+
+For reviewed duplicates, `catalog/operations:mergeStagingMovies` merges one group
+of 2–25 movies per transaction. It requires matching TMDB IDs, titles, years and
+non-conflicting IMDb identities, plus a fingerprint of every movie and its complete
+assignment, review, syllabus and ranking references (at most 100 references per
+group). It redirects only `movieId`, preserves history IDs and fields, and rejects
+cross-movie history/ranking collisions or changed snapshots. The survivor's URL
+becomes the reviewed canonical provider URL; redundant movies are deleted only
+after confirming they have no references. Each merge records an audit event and
+the snapshot fingerprint. A replay fails as stale; read the result before retrying.
+
+`catalog/operations:repairStagingMovieIdentity` separately repairs verified provider
+IDs and placeholder URLs. It preserves a known IMDb identity, checks the complete
+movie snapshot and destination uniqueness, and changes only `tmdbId` and `url`.
+Both maintenance operations enforce the same explicit staging target, API version,
+cutover run and application write gate. Before applying, save a private staging
+export and a manifest containing the original movies, full references and provider
+evidence. After applying, verify deleted IDs, unchanged history, corrected identities
+and audits. Ambiguous identities remain for review; shared placeholder URLs are
+never evidence that two films are duplicates.
 
 ### Development commands
 
