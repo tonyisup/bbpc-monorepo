@@ -90,6 +90,11 @@ evidence. After applying, verify deleted IDs, unchanged history, corrected ident
 and audits. Ambiguous identities remain for review; shared placeholder URLs are
 never evidence that two films are duplicates.
 
+Production cleanup has a separate, disabled-by-default internal entry point bound
+to an explicitly approved manifest and exact operation digests. Follow
+[the production catalog cleanup runbook](PRODUCTION_CATALOG_CLEANUP_RUNBOOK.md);
+the staging maintenance entry points continue to reject production.
+
 ### Development commands
 
 1. Use Node 22.6.0 or newer and run `pnpm install --frozen-lockfile` at the monorepo root.

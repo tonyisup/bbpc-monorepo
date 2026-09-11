@@ -3,7 +3,10 @@ import { convexTest } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { internal } from "./_generated/api.js";
-import { catalogSnapshotFingerprint } from "./lib/catalogSnapshot.js";
+import {
+  catalogOperationFingerprint,
+  catalogSnapshotFingerprint,
+} from "./lib/catalogSnapshot.js";
 import { backfillDashboardDocument } from "./lib/dashboardProjection.js";
 import schema from "./schema.js";
 
@@ -363,6 +366,194 @@ test("repairs placeholder URLs with a TMDB fallback and rolls back conflicting d
       row._id === sourceId
         ? { ...row, url: "https://www.themoviedb.org/movie/99" }
         : row
+    )
+  );
+});
+
+const productionApply =
+  internal.catalog.operations.applyProductionCatalogOperation;
+const approvedManifest = "a".repeat(64);
+function approveProduction(operation: Record<string, unknown>) {
+  vi.stubEnv("BBPC_ENVIRONMENT", "production");
+  vi.stubEnv("CONVEX_CLOUD_URL", "https://determined-wombat-872.convex.cloud");
+  vi.stubEnv("BBPC_CATALOG_APPROVED_MANIFEST_SHA256", approvedManifest);
+  vi.stubEnv(
+    "BBPC_CATALOG_APPROVED_OPERATIONS",
+    JSON.stringify([catalogOperationFingerprint(operation)])
+  );
+}
+
+test("production merges require exact approval and preserve every reference", async () => {
+  const { t, args, snapshot, sourceId, survivorId } = await setup();
+  const { cutoverRunId, clientApiVersion, ...input } = args;
+  const operation = { kind: "merge" as const, ...input };
+  const request = {
+    cutoverRunId,
+    clientApiVersion,
+    manifestSha256: approvedManifest,
+    operation,
+  };
+  approveProduction(operation);
+  const before = await snapshot();
+  for (const change of [
+    { newUrl: "https://www.imdb.com/title/tt9999999/" },
+    { survivorId: sourceId },
+    { expectedFingerprint: "wrong" },
+    { batchId: "another" },
+  ]) {
+    await expect(
+      t.mutation(productionApply, {
+        ...request,
+        operation: { ...operation, ...change },
+      })
+    ).rejects.toThrow(/not approved/);
+  }
+  expect(await snapshot()).toEqual(before);
+  expect(await t.mutation(productionApply, request)).toEqual({
+    deleted: 1,
+    movedReferences: 4,
+    repaired: 0,
+  });
+  expect(await snapshot()).toEqual(
+    before
+      .filter((row) => row._id !== sourceId)
+      .map((row) =>
+        row._id === survivorId
+          ? { ...row, url: args.newUrl }
+          : "movieId" in row && row.movieId === sourceId
+          ? { ...row, movieId: survivorId }
+          : row
+      )
+  );
+  await expect(t.mutation(productionApply, request)).rejects.toThrow(
+    /group changed/
+  );
+});
+
+test("production approval never enables the staging endpoints and rejects wrong targets, gates and missing approval", async () => {
+  const { t, args } = await setup();
+  const { cutoverRunId, clientApiVersion, ...input } = args;
+  const operation = { kind: "merge" as const, ...input };
+  const request = {
+    cutoverRunId,
+    clientApiVersion,
+    manifestSha256: approvedManifest,
+    operation,
+  };
+  approveProduction(operation);
+  await expect(t.mutation(merge, args)).rejects.toThrow(/staging-only/);
+  for (const [name, value] of [
+    ["BBPC_ENVIRONMENT", "staging"],
+    ["CONVEX_CLOUD_URL", "https://merry-shepherd-928.convex.cloud"],
+    ["BBPC_CATALOG_APPROVED_MANIFEST_SHA256", ""],
+    ["BBPC_CATALOG_APPROVED_OPERATIONS", "null"],
+    ["BBPC_CATALOG_APPROVED_OPERATIONS", "bad json"],
+    ["BBPC_CATALOG_APPROVED_OPERATIONS", "[]"],
+  ] as const) {
+    vi.stubEnv(name, value);
+    await expect(t.mutation(productionApply, request)).rejects.toThrow();
+    approveProduction(operation);
+  }
+  await expect(
+    t.mutation(productionApply, { ...request, clientApiVersion: "wrong" })
+  ).rejects.toThrow();
+  await expect(
+    t.mutation(productionApply, { ...request, cutoverRunId: "wrong" })
+  ).rejects.toThrow();
+  await t.run(async (ctx) => {
+    const state = await ctx.db.query("systemState").first();
+    if (!state) throw Error("Missing state");
+    await ctx.db.patch("systemState", state._id, { cutoverStage: "S3" });
+  });
+  await expect(t.mutation(productionApply, request)).rejects.toThrow(
+    /production target in S4/
+  );
+});
+
+test("approved production deletion still rejects references and stale snapshots", async () => {
+  const { t, sourceId, survivorId, snapshot } = await setup();
+  for (const id of [sourceId, survivorId]) {
+    await t.run(async (ctx) =>
+      ctx.db.patch("movies", id, { url: "https://www.imdb.com/title/None" })
+    );
+    const movie = await t.run(async (ctx) => ctx.db.get("movies", id));
+    if (!movie) throw Error("Missing movie");
+    const operation = {
+      kind: "delete" as const,
+      batchId: gate.batchId,
+      id,
+      expectedFingerprint: catalogSnapshotFingerprint([movie]),
+    };
+    approveProduction(operation);
+    const request = {
+      cutoverRunId: gate.cutoverRunId,
+      clientApiVersion: gate.clientApiVersion,
+      manifestSha256: approvedManifest,
+      operation,
+    };
+    const before = await snapshot();
+    if (id === sourceId) {
+      await expect(t.mutation(productionApply, request)).rejects.toThrow(
+        /referenced/
+      );
+      expect(await snapshot()).toEqual(before);
+    } else {
+      await t.run(async (ctx) => ctx.db.patch("movies", id, { year: 2001 }));
+      await expect(t.mutation(productionApply, request)).rejects.toThrow(
+        /changed/
+      );
+      await t.run(async (ctx) => ctx.db.patch("movies", id, { year: 2000 }));
+      expect(await t.mutation(productionApply, request)).toEqual({
+        deleted: 1,
+        movedReferences: 0,
+        repaired: 0,
+      });
+      expect(await snapshot()).toEqual(before.filter((row) => row._id !== id));
+    }
+  }
+});
+
+test("production repairs preserve history and roll back a conflicting provider destination", async () => {
+  const { t, sourceId, args, snapshot } = await setup();
+  await t.run(async (ctx) =>
+    ctx.db.patch("movies", sourceId, {
+      url: "https://www.imdb.com/title/None",
+      tmdbId: 99,
+    })
+  );
+  const movie = await t.run(async (ctx) => ctx.db.get("movies", sourceId));
+  if (!movie) throw Error("Missing movie");
+  const before = await snapshot();
+  const operation = {
+    kind: "repair" as const,
+    batchId: gate.batchId,
+    id: sourceId,
+    expectedFingerprint: catalogSnapshotFingerprint([movie]),
+    newTmdbId: 99,
+    newUrl: args.newUrl,
+  };
+  approveProduction(operation);
+  const request = {
+    cutoverRunId: gate.cutoverRunId,
+    clientApiVersion: gate.clientApiVersion,
+    manifestSha256: approvedManifest,
+    operation,
+  };
+  await expect(t.mutation(productionApply, request)).rejects.toThrow(
+    /Multiple catalog movies/
+  );
+  expect(await snapshot()).toEqual(before);
+  const fallback = {
+    ...operation,
+    newUrl: "https://www.themoviedb.org/movie/99",
+  };
+  approveProduction(fallback);
+  expect(
+    await t.mutation(productionApply, { ...request, operation: fallback })
+  ).toEqual({ deleted: 0, movedReferences: 0, repaired: 1 });
+  expect(await snapshot()).toEqual(
+    before.map((row) =>
+      row._id === sourceId ? { ...row, url: fallback.newUrl } : row
     )
   );
 });

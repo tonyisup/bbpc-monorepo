@@ -1,6 +1,22 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
+/** Bind an approval to every operation argument, including its original snapshot. */
+export function catalogOperationFingerprint(
+  operation: Record<string, unknown>
+): string {
+  return catalogSnapshotFingerprint([
+    Object.fromEntries(
+      Object.entries(operation).map(([key, value]) => {
+        if (!Array.isArray(value)) return [key, value];
+        if (!value.every((item) => typeof item === "string"))
+          throw new Error("Invalid operation array.");
+        return [key, JSON.stringify([...value].sort())];
+      })
+    ),
+  ]);
+}
+
 /** Catalog and movie-reference documents contain only scalar fields. */
 export function catalogSnapshotFingerprint(
   documents: ReadonlyArray<Record<string, unknown>>
