@@ -594,7 +594,7 @@ export function ConvexYearPageClient() {
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-semibold text-zinc-400 hover:text-white"
                       >
-                        IMDb <ExternalLink className="h-3 w-3" />
+                        Movie page <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
                   </div>
@@ -788,7 +788,7 @@ export function ConvexYearPageClient() {
                               rel="noreferrer"
                               className="ml-auto rounded border border-yellow-600/50 bg-yellow-600/20 px-3 py-1 text-xs text-yellow-500 transition-colors hover:bg-yellow-600/30"
                             >
-                              IMDb
+                              Movie page
                             </a>
                           )}
                         </div>
