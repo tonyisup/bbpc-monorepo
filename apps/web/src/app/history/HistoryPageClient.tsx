@@ -61,6 +61,7 @@ function episodeMatchesSubstring(
   return false;
 }
 
+/** Render the current title and transcript search results and empty states. */
 function SearchResults({
   rows,
   query,
@@ -121,6 +122,7 @@ function SearchResults({
   );
 }
 
+/** Coordinate episode metadata and transcript search on the history page. */
 export function HistoryPageClient({
   allEpisodes,
   isLoading = false,

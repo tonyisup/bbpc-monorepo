@@ -8,6 +8,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../contracts/generated/convexApi.js";
 import { assertImportTarget, requirePipelineToken } from "./import.mjs";
 
+/** Parse an exact UTC calendar date from a transcript filename. */
 export function recordingDate(file) {
   const match = /^(\d{4})(\d{2})(\d{2})\.json$/.exec(file);
   if (!match) throw new Error(`${file}: expected a YYYYMMDD.json filename.`);
@@ -18,6 +19,7 @@ export function recordingDate(file) {
   return date;
 }
 
+/** List and validate transcript filenames from a file or directory source. */
 export async function transcriptFiles(source) {
   const sourcePath = path.resolve(source);
   const info = await stat(sourcePath);
@@ -35,6 +37,7 @@ export async function transcriptFiles(source) {
   return files;
 }
 
+/** Map transcript filenames to unique episodes by exact recording date. */
 export async function createMapping(client, files, { complete = false } = {}) {
   if (!files.length || files.length > 1000 || new Set(files).size !== files.length)
     throw new Error("Expected 1–1000 unique transcript filenames.");
@@ -63,6 +66,7 @@ export async function createMapping(client, files, { complete = false } = {}) {
   return mapping;
 }
 
+/** Create a private mapping file without overwriting prior operator review. */
 export async function writeMapping(output, mapping) {
   // Exclusive creation prevents replacing an existing operator-reviewed mapping.
   await writeFile(path.resolve(output), `${JSON.stringify(mapping, null, 2)}\n`, {
@@ -70,6 +74,7 @@ export async function writeMapping(output, mapping) {
   });
 }
 
+/** Run the transcript-to-episode mapping command-line workflow. */
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { values } = parseArgs({
     args: argv,

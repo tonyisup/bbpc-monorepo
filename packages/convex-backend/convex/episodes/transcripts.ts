@@ -31,6 +31,7 @@ const passageValidator = v.object({
   text: v.string(),
 });
 
+/** Inspect the active transcript hash before a compare-and-swap import. */
 export const inspect = pipelineQuery({
   args: { episodeId: v.id("episodes") },
   returns: v.object({
@@ -55,12 +56,14 @@ export const inspect = pipelineQuery({
   },
 });
 
+/** Delete every indexed passage for an episode within the current mutation. */
 async function clearPassages(ctx: MutationCtx, episodeId: Id<"episodes">) {
   const old = await episodePassages(ctx, episodeId);
   for (const passage of old)
     await ctx.db.delete("transcriptPassages", passage._id);
 }
 
+/** Atomically replace an episode transcript when its expected hash matches. */
 export const replace = pipelineMutation({
   args: {
     episodeId: v.id("episodes"),
@@ -134,6 +137,7 @@ export const replace = pipelineMutation({
   },
 });
 
+/** Remove an episode transcript when its expected hash matches. */
 export const remove = pipelineMutation({
   args: { episodeId: v.id("episodes"), expectedHash: v.string() },
   returns: v.null(),
@@ -158,6 +162,7 @@ export const remove = pipelineMutation({
   },
 });
 
+/** Search passages belonging to currently published episodes. */
 export const search = anonymousQuery({
   args: { query: v.string() },
   returns: v.object({

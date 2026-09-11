@@ -7,6 +7,7 @@ export type TranscriptSearchResponse = {
   limited: boolean;
 };
 
+/** Search transcripts after a debounce while suppressing stale responses. */
 export function useTranscriptSearch(query: string) {
   const normalized = query.trim();
   const [attempt, setAttempt] = useState(0);
@@ -88,6 +89,7 @@ export function useTranscriptSearch(query: string) {
   };
 }
 
+/** Format a transcript offset as a compact hours, minutes, and seconds label. */
 export function formatTranscriptTime(seconds: number) {
   const total = Math.floor(seconds);
   const minutes = Math.floor(total / 60);
@@ -100,6 +102,7 @@ export function formatTranscriptTime(seconds: number) {
     : `${minutes}:${rest}`;
 }
 
+/** Highlight exact query terms and the final term's matching prefix. */
 function highlight(text: string, query: string) {
   const terms: string[] = query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   const prefix = terms.at(-1);
@@ -115,6 +118,7 @@ function highlight(text: string, query: string) {
   });
 }
 
+/** Render matching transcript passages with timestamps and term highlights. */
 export function TranscriptMatches({
   passages,
   query,

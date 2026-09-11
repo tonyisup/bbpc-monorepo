@@ -107,7 +107,7 @@ export async function backfillDashboardDocument(
 }
 
 export const dashboardTriggers = new Triggers<DataModel>();
-// Publication changes and deletion update transcript eligibility in the same transaction.
+/** Update transcript eligibility in the same transaction as episode visibility. */
 dashboardTriggers.register("episodes", async (ctx, change) => {
   if (
     change.newDoc === null ||
