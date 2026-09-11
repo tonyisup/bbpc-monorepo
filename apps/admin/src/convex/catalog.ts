@@ -175,6 +175,19 @@ export async function upsertConvexAdminMovie(
   client: ConvexReactClient,
   title: ConvexTmdbTitle
 ): Promise<ConvexAdminMovie> {
+  const details = z
+    .object({
+      id: z.number().int().positive(),
+      imdb_id: z
+        .string()
+        .regex(/^tt\d{7,}$/)
+        .nullable(),
+    })
+    .parse(
+      await client.action(api.catalog.external.getMovie, { id: title.id })
+    );
+  if (details.id !== title.id)
+    throw new Error("TMDB returned a different movie.");
   return catalogMovieSchema.parse(
     await client.mutation(upsertMovieReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
@@ -184,7 +197,10 @@ export async function upsertConvexAdminMovie(
         title.poster_path === null
           ? ""
           : `https://image.tmdb.org/t/p/w500${title.poster_path}`,
-      url: `https://www.themoviedb.org/movie/${String(title.id)}`,
+      url:
+        details.imdb_id === null
+          ? `https://www.themoviedb.org/movie/${String(title.id)}`
+          : `https://www.imdb.com/title/${details.imdb_id}/`,
       tmdbId: title.id,
     })
   );

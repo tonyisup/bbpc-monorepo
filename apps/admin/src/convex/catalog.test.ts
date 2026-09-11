@@ -68,13 +68,13 @@ describe("Convex admin media catalog adapter", () => {
       isDone: false,
       continueCursor: "movie-next",
     });
-    await expect(loadConvexAdminShowsPage(client, "show-cursor")).resolves.toEqual(
-      {
-        items: [show],
-        isDone: true,
-        continueCursor: "show-done",
-      }
-    );
+    await expect(
+      loadConvexAdminShowsPage(client, "show-cursor")
+    ).resolves.toEqual({
+      items: [show],
+      isDone: true,
+      continueCursor: "show-done",
+    });
     expect(query).toHaveBeenNthCalledWith(1, expect.anything(), {
       paginationOpts: {
         cursor: null,
@@ -109,9 +109,9 @@ describe("Convex admin media catalog adapter", () => {
     const query = vi.fn().mockResolvedValue([movie]);
     const client = { query } as unknown as ConvexReactClient;
 
-    await expect(
-      searchConvexCatalogMovies(client, "arrival")
-    ).resolves.toEqual([movie]);
+    await expect(searchConvexCatalogMovies(client, "arrival")).resolves.toEqual(
+      [movie]
+    );
     expect(query).toHaveBeenCalledWith(expect.anything(), {
       query: "arrival",
       limit: 10,
@@ -125,7 +125,8 @@ describe("Convex admin media catalog adapter", () => {
       .mockResolvedValueOnce(show)
       .mockResolvedValueOnce({ id: movie.id })
       .mockResolvedValueOnce({ id: show.id });
-    const client = { mutation } as unknown as ConvexReactClient;
+    const action = vi.fn().mockResolvedValue(tmdbTitle);
+    const client = { mutation, action } as unknown as ConvexReactClient;
 
     await upsertConvexAdminMovie(client, tmdbTitle);
     await upsertConvexAdminShow(client, {
@@ -145,6 +146,7 @@ describe("Convex admin media catalog adapter", () => {
         clientApiVersion: BBPC_CLIENT_API_VERSION,
         tmdbId: tmdbTitle.id,
         year: 2016,
+        url: "https://www.imdb.com/title/tt2543164/",
       })
     );
     expect(mutation).toHaveBeenNthCalledWith(
@@ -162,6 +164,29 @@ describe("Convex admin media catalog adapter", () => {
         })
       );
     }
+  });
+
+  test("fetches details for a search result and preserves TMDB fallback only when IMDb is absent", async () => {
+    const action = vi.fn().mockResolvedValue({ ...tmdbTitle, imdb_id: null });
+    const mutation = vi.fn().mockResolvedValue(movie);
+    const client = { action, mutation } as unknown as ConvexReactClient;
+    await upsertConvexAdminMovie(client, {
+      ...tmdbTitle,
+      imdb_id: null,
+      imdb_path: null,
+    });
+    expect(action).toHaveBeenCalledWith(expect.anything(), {
+      id: tmdbTitle.id,
+    });
+    expect(mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ url: movie.url })
+    );
+    action.mockRejectedValueOnce(new Error("TMDB unavailable"));
+    await expect(upsertConvexAdminMovie(client, tmdbTitle)).rejects.toThrow(
+      "TMDB unavailable"
+    );
+    expect(mutation).toHaveBeenCalledTimes(1);
   });
 
   test("rejects drifted catalog rows and TMDB payloads", async () => {

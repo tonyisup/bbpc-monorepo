@@ -27,6 +27,7 @@ export type PublicApiType = {
           image: string | null;
           isAdmin: boolean;
           isHost: boolean;
+          movieLinkPreference: "imdb" | "tmdb";
           name: string | null;
         }
       >;
@@ -46,8 +47,15 @@ export type PublicApiType = {
           image: string | null;
           isAdmin: boolean;
           isHost: boolean;
+          movieLinkPreference: "imdb" | "tmdb";
           name: string | null;
         }
+      >;
+      updateMyMovieLinkPreference: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; movieLinkPreference: "imdb" | "tmdb" },
+        { movieLinkPreference: "imdb" | "tmdb"; updatedAt: number }
       >;
       updateMyName: FunctionReference<
         "mutation",
@@ -438,6 +446,7 @@ export type PublicApiType = {
           image: string | null;
           isAdmin: boolean;
           isHost: boolean;
+          movieLinkPreference: "imdb" | "tmdb";
           linkMode: "alreadyLinked" | "existingUser" | "newUser";
           name: string | null;
         }

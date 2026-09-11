@@ -1,12 +1,17 @@
+"use client";
+
 import { type FC } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { getMovieLink } from "@/utils/movieLinks";
 
 interface SyllabusPreviewMovie {
   id: string;
   title: string;
   poster: string | null;
   url: string;
+  tmdbId?: number | null;
 }
 
 interface SyllabusPreviewProps {
@@ -17,6 +22,7 @@ interface SyllabusPreviewProps {
 }
 
 const SyllabusPreview: FC<SyllabusPreviewProps> = ({ count, syllabus }) => {
+  const { user } = useBbpcAuth();
   const totalMovies = syllabus.length;
 
   return (
@@ -27,7 +33,7 @@ const SyllabusPreview: FC<SyllabusPreviewProps> = ({ count, syllabus }) => {
           {syllabus.map((item) => (
             <Link
               key={item.movie.id}
-              href={item.movie.url}
+              href={getMovieLink(item.movie, user?.movieLinkPreference)}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:opacity-80"

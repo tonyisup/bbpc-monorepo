@@ -369,7 +369,7 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
               Search &amp; Add from TMDB
             </h3>
             <p className="text-sm text-muted-foreground">
-              Saving the same TMDB URL refreshes its existing catalog row.
+              Existing catalog movies are reused when a unique match is found.
             </p>
           </div>
           <div className="flex max-w-2xl gap-2">

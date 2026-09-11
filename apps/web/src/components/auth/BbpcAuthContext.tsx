@@ -18,6 +18,7 @@ import {
   getConvexIdentityIssue,
   resolveConvexIdentity,
 } from "@/convex/identity";
+import type { MovieLinkPreference } from "@/utils/movieLinks";
 
 export type BbpcAuthStatus = "loading" | "authenticated" | "unauthenticated";
 export type BbpcAccountStatus =
@@ -35,6 +36,7 @@ export interface BbpcAuthUser {
   isAdmin: boolean;
   isHost: boolean;
   isImpersonating: boolean;
+  movieLinkPreference: MovieLinkPreference;
 }
 
 export interface BbpcAuthState {
@@ -210,6 +212,7 @@ export function ClerkBbpcAuthProvider({
               isAdmin: profile?.isAdmin ?? false,
               isHost: profile?.isHost ?? false,
               isImpersonating: false,
+              movieLinkPreference: profile?.movieLinkPreference ?? "imdb",
             }
           : null,
       signIn,

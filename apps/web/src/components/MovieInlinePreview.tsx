@@ -6,6 +6,8 @@ import type { FC } from "react";
 import { highlightText, highlightTextByIndices } from "@/utils/text";
 import { cn } from "@/lib/utils";
 import type { EpisodeMovie } from "@/types/episode";
+import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { getMovieLink } from "@/utils/movieLinks";
 
 interface MovieInlinePreviewProps {
   movie: EpisodeMovie;
@@ -29,6 +31,7 @@ const MovieInlinePreview: FC<MovieInlinePreviewProps> = ({
   priority = false,
   sizes,
 }) => {
+  const { user } = useBbpcAuth();
   const imageSizes =
     sizes ??
     (responsive
@@ -39,7 +42,7 @@ const MovieInlinePreview: FC<MovieInlinePreviewProps> = ({
     (titleHighlightIndices !== undefined && titleHighlightIndices.length > 0);
   return (
     <Link
-      href={movie.url}
+      href={getMovieLink(movie, user?.movieLinkPreference)}
       target="_blank"
       rel="noopener noreferrer"
       className={cn("flex items-center gap-2 hover:opacity-80", className)}

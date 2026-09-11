@@ -8,6 +8,7 @@ import type { ConvexReactClient } from "convex/react";
 import { z } from "zod";
 
 import { BBPC_CLIENT_API_VERSION } from "@/convex/identity";
+import { resolveConvexMovieUrl } from "@/convex/movieUrl";
 import type { SyllabusInsertPosition } from "@/lib/syllabus";
 
 const catalogMovieSchema = z.object({
@@ -116,15 +117,14 @@ export async function upsertConvexTmdbMovie(
   if (movie.poster_path === null) {
     throw new Error("A poster is required to add this movie.");
   }
+  const url = await resolveConvexMovieUrl(client, movie.id);
   return catalogMovieSchema.parse(
     await client.mutation(upsertMovieReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       title: movie.title,
       year,
       poster: movie.poster_path,
-      url:
-        movie.imdb_path ??
-        `https://www.themoviedb.org/movie/${String(movie.id)}`,
+      url,
       tmdbId: movie.id,
     })
   );

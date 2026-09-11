@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import type { MutationCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
 import { normalizeLookupKey } from "../lib/normalize.js";
+import { canonicalImdbUrl, movieUrlAliases, tmdbIdFromMovieUrl } from "./movieUrls.js";
 
 const MAX_CATALOG_TITLE_LENGTH = 1000;
 const MAX_CATALOG_URL_LENGTH = 2048;
@@ -115,6 +116,62 @@ export async function requireMovie(
     domainError("NOT_FOUND", "The movie is unavailable.");
   }
   return movie;
+}
+
+export async function findMovieForUpsert(
+  ctx: MutationCtx,
+  url: string,
+  tmdbId: number | undefined
+): Promise<Doc<"movies"> | null> {
+  const matches = new Map<Id<"movies">, Doc<"movies">>();
+  const aliases = new Set(movieUrlAliases(url, tmdbId));
+  if (tmdbId !== undefined) {
+    const rows = await ctx.db
+      .query("movies")
+      .withIndex("by_tmdbId", (q) => q.eq("tmdbId", tmdbId))
+      .take(2);
+    for (const row of rows) {
+      matches.set(row._id, row);
+      // A legacy client can send TMDB while the stored movie already uses IMDb.
+      for (const alias of movieUrlAliases(row.url)) aliases.add(alias);
+    }
+  }
+  for (const alias of aliases) {
+    const rows = await ctx.db
+      .query("movies")
+      .withIndex("by_url", (q) => q.eq("url", alias))
+      .take(2);
+    for (const row of rows) matches.set(row._id, row);
+  }
+  if (matches.size > 1) {
+    domainError(
+      "CONFLICT",
+      "Multiple catalog movies match these provider IDs. Administrator review is required."
+    );
+  }
+  const existing = matches.values().next().value ?? null;
+  if (existing !== null) {
+    const existingUrlTmdbId = tmdbIdFromMovieUrl(existing.url);
+    const existingTmdbId = existing.tmdbId ?? existingUrlTmdbId;
+    const existingImdb = canonicalImdbUrl(existing.url);
+    const incomingImdb = canonicalImdbUrl(url);
+    if (
+      (existing.tmdbId !== undefined && existingUrlTmdbId !== undefined &&
+        existing.tmdbId !== existingUrlTmdbId) ||
+      (tmdbId !== undefined &&
+        existingTmdbId !== undefined &&
+        tmdbId !== existingTmdbId) ||
+      (existingImdb !== null &&
+        incomingImdb !== null &&
+        existingImdb !== incomingImdb)
+    ) {
+      domainError(
+        "CONFLICT",
+        "The movie provider IDs conflict with the existing catalog movie."
+      );
+    }
+  }
+  return existing;
 }
 
 export async function requireShow(

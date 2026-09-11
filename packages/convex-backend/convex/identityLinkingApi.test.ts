@@ -160,6 +160,7 @@ describe("Clerk identity linking", () => {
       name: "Clerk Member",
       email: "member@example.test",
       image: "https://images.example.test/member.png",
+      movieLinkPreference: "imdb",
       isAdmin: false,
       isHost: false,
       linkMode: "existingUser",

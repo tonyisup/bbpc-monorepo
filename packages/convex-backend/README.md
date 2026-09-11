@@ -24,15 +24,78 @@ details never belong in this repository.
 | Environment | Convex target | State |
 |---|---|---|
 | local | `local-tonyisup-bbpc_convex` | developer-only |
-| staging | project `bbpc-convex`, reference `staging` | synthetic S3, writes enabled for Vercel previews |
+| staging | project `bbpc-convex`, reference `staging` | S4 after backup restore, writes enabled for Vercel previews |
 | production | not provisioned for consumers | intentionally unavailable |
 
-The staging deployment is synthetic-data-only. It uses a deployment-scoped key named
+The staging workflow requires S4 after the development backup restore. Restores copy
+the lifecycle state and identity mappings; verify both before testing sign-in.
+It uses a deployment-scoped key named
 `github-actions-staging`; the key value belongs in the GitHub `staging` environment as
 `CONVEX_STAGING_DEPLOY_KEY`. All Vercel Preview deployments target this staging
 deployment; Vercel Production deployments retain the separate production selector.
 
 ## Local development
+
+### Movie URLs
+
+Movie saves from web syllabus/extras and the admin catalog/episode flows fetch TMDB
+details before writing. They prefer a canonical IMDb title URL, keep `tmdbId` for
+the user's TMDB link preference, and fall back to TMDB only when no IMDb ID exists.
+A failed detail lookup leaves the save unchanged so it can be retried.
+
+The movie upsert matches the TMDB ID and URL aliases in one transaction, retaining
+the existing movie ID and relationships. Duplicate matches or conflicting provider
+IDs require administrator review. Older clients cannot replace a known IMDb link
+with a TMDB fallback. Deploy the backend matching change before the updated clients.
+
+To inventory staging without changing movie data, run from the repository root:
+
+```sh
+pnpm --dir packages/convex-backend run catalog:urls:audit --deployment merry-shepherd-928
+```
+
+The tool uses the current Convex CLI login and staging's TMDB key, checks the explicit
+staging target/environment, and writes private `report.md` and `report.json` files
+under the ignored `packages/convex-backend/.local-migration/movie-url-audit/` directory.
+It resolves non-IMDb URLs, flags duplicate identities/destinations and title/year
+mismatches, and leaves missing mappings unresolved. Existing IMDb URLs are retained;
+their external mappings are not re-fetched. The tool has no apply mode and refuses
+an inventory that reaches its 10,000-row limit. Keep reports and extracted rows out
+of commits.
+
+After reviewing a report, `catalog/operations:applyStagingImdbUrls` can apply up to
+25 explicit movie updates in one transaction. This internal operation only accepts
+the staging deployment, current API version and cutover run. It checks each original
+URL, TMDB ID, title and year, rejects duplicate provider matches, patches only `url`,
+and audits each change. Replaying the same batch is safe. Save a private rollback
+snapshot before applying and verify the changed rows afterward.
+
+For reviewed duplicates, `catalog/operations:mergeStagingMovies` merges one group
+of 2–25 movies per transaction. It requires matching TMDB IDs, titles, years and
+non-conflicting IMDb identities, plus a fingerprint of every movie and its complete
+assignment, review, syllabus and ranking references (at most 100 references per
+group). It redirects only `movieId`, preserves history IDs and fields, and rejects
+cross-movie history/ranking collisions or changed snapshots. The survivor's URL
+becomes the reviewed canonical provider URL; redundant movies are deleted only
+after confirming they have no references. Each merge records an audit event and
+the snapshot fingerprint. A replay fails as stale; read the result before retrying.
+
+`catalog/operations:repairStagingMovieIdentity` separately repairs verified provider
+IDs and placeholder URLs. It preserves a known IMDb identity, checks the complete
+movie snapshot and destination uniqueness, and changes only `tmdbId` and `url`.
+Both maintenance operations enforce the same explicit staging target, API version,
+cutover run and application write gate. Before applying, save a private staging
+export and a manifest containing the original movies, full references and provider
+evidence. After applying, verify deleted IDs, unchanged history, corrected identities
+and audits. Ambiguous identities remain for review; shared placeholder URLs are
+never evidence that two films are duplicates.
+
+Production cleanup has a separate, disabled-by-default internal entry point bound
+to an explicitly approved manifest and exact operation digests. Follow
+[the production catalog cleanup runbook](PRODUCTION_CATALOG_CLEANUP_RUNBOOK.md);
+the staging maintenance entry points continue to reject production.
+
+### Development commands
 
 1. Use Node 22.6.0 or newer and run `pnpm install --frozen-lockfile` at the monorepo root.
 2. Copy `.env.example` to `.env.local` or configure a Convex local deployment.
