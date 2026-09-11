@@ -8,6 +8,7 @@ import {
   buildPassages,
   validatePassages,
   MAX_TRANSCRIPT_PASSAGES,
+  MAX_TRANSCRIPT_BYTES,
 } from "./lib/transcriptModel.js";
 const modules = import.meta.glob("./**/*.ts");
 const identity = {
@@ -181,6 +182,12 @@ describe("transcript import and public search", () => {
         complete: false as unknown as true,
       })
     ).rejects.toThrow();
+    const imported = await service.mutation(api.episodes.transcripts.replace, args);
+    expect(
+      await service.query(api.episodes.transcripts.inspect, {
+        episodeId: args.episodeId,
+      })
+    ).toEqual({ hash: imported.hash, number: 1, title: "Underwater cinema" });
     await t.run(async (ctx) => {
       const principal = await ctx.db.query("servicePrincipals").first();
       if (!principal) throw new Error("Missing service fixture");
@@ -304,6 +311,26 @@ describe("transcript import and public search", () => {
 });
 
 describe("pipeline transcript conversion", () => {
+  test.each(["x".repeat(800), "🐠".repeat(200)])(
+    "rejects source beyond grouping capacity before final passage validation",
+    (text) => {
+      const source = Array.from({ length: MAX_TRANSCRIPT_PASSAGES + 1 }, (_, i) => ({
+        start: i, end: i + 1, text,
+      }));
+      expect(new TextEncoder().encode(source.map((p) => p.text).join("")).length)
+        .toBeLessThan(MAX_TRANSCRIPT_BYTES);
+      expect(buildPassages(source.slice(0, MAX_TRANSCRIPT_PASSAGES)).passages)
+        .toHaveLength(MAX_TRANSCRIPT_PASSAGES);
+      expect(() => buildPassages(source)).toThrow(/exceeds the 400-passage capacity/);
+    }
+  );
+  test("counts overlap when checking passage capacity", () => {
+    const source = Array.from({ length: MAX_TRANSCRIPT_PASSAGES * 2 + 2 }, (_, i) => ({
+      start: i, end: i + 1, text: "x".repeat(399),
+    }));
+    expect(buildPassages(source.slice(0, -1)).passages).toHaveLength(MAX_TRANSCRIPT_PASSAGES);
+    expect(() => buildPassages(source)).toThrow(/exceeds the 400-passage capacity/);
+  });
   test("keeps adjacent segments together with original timestamps", () => {
     expect(
       buildPassages([

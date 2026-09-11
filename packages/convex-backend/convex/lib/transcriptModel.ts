@@ -106,6 +106,13 @@ export function buildPassages(value: unknown): {
   const flush = () => {
     const first = group.at(0);
     if (!first) return;
+    // The source byte ceiling alone cannot bound grouping with overlap. Reject
+    // at capacity before constructing another passage or calling validatePassages.
+    if (passages.length === MAX_TRANSCRIPT_PASSAGES) {
+      throw new Error(
+        `Transcript exceeds the ${String(MAX_TRANSCRIPT_PASSAGES)}-passage capacity after grouping and overlap, even if source text is within 512 KiB.`
+      );
+    }
     passages.push({
       start: first.start,
       end: Math.max(...group.map((p) => p.end)),

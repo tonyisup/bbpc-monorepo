@@ -34,7 +34,7 @@ deployment; Vercel Production deployments retain the separate production selecto
 
 ## Local development
 
-1. Use Node 22 and run `pnpm install --frozen-lockfile` at the monorepo root.
+1. Use Node 22.6.0 or newer and run `pnpm install --frozen-lockfile` at the monorepo root.
 2. Copy `.env.example` to `.env.local` or configure a Convex local deployment.
 3. Set `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_M2M_AUDIENCE`,
    `BBPC_ENVIRONMENT`, `BBPC_API_VERSION`, and `TMDB_API_KEY` on that
