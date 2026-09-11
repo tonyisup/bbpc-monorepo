@@ -51,9 +51,9 @@ export function assertExpectedStagingState(
   apiVersion,
   expectedState,
 ) {
-  if (!["uninitialized", "S2", "S3"].includes(expectedState)) {
+  if (!["uninitialized", "S2", "S3", "S4"].includes(expectedState)) {
     throw new Error(
-      "Expected staging state must be exactly uninitialized, S2, or S3.",
+      "Expected staging state must be exactly uninitialized, S2, S3, or S4.",
     );
   }
   const expected = {
@@ -73,6 +73,12 @@ export function assertExpectedStagingState(
       initialized: true,
       applicationWritesEnabled: true,
       cutoverStage: "S3",
+      requireNoFirstApplicationWrite: false,
+    },
+    S4: {
+      initialized: true,
+      applicationWritesEnabled: true,
+      cutoverStage: "S4",
       requireNoFirstApplicationWrite: false,
     },
   }[expectedState];
@@ -193,7 +199,7 @@ export async function verifyStagingDeployment({
   };
 
   const expectedWriteGateCode =
-    expectedState === "S3"
+    expectedState === "S3" || expectedState === "S4"
       ? "VALIDATION_FAILED"
       : "WRITE_DISABLED";
   const recordingWriteGateProbe = await expectDomainFailure(

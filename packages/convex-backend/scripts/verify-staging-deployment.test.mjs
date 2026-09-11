@@ -117,9 +117,36 @@ test("requires the explicitly expected safe staging lifecycle state", () => {
     );
   }
   assert.throws(
-    () => assertExpectedStagingState({}, apiVersion, "S4"),
-    /exactly uninitialized, S2, or S3/u,
+    () => assertExpectedStagingState({}, apiVersion, "S5"),
+    /Expected staging state must be exactly/u,
   );
+});
+
+test("accepts restored S4 only with the exact expected readiness invariants", () => {
+  const readiness = {
+    apiVersion,
+    initialized: true,
+    applicationWritesEnabled: true,
+    cutoverStage: "S4",
+    firstApplicationWriteRecorded: true,
+  };
+  assert.doesNotThrow(() =>
+    assertExpectedStagingState(readiness, apiVersion, "S4"),
+  );
+  assert.throws(() =>
+    assertExpectedStagingState(readiness, apiVersion, "S3"),
+  );
+  for (const mismatch of [
+    { apiVersion: "0.0.0" },
+    { initialized: false },
+    { applicationWritesEnabled: false },
+    { cutoverStage: "S3" },
+    { firstApplicationWriteRecorded: undefined },
+  ]) {
+    assert.throws(() =>
+      assertExpectedStagingState({ ...readiness, ...mismatch }, apiVersion, "S4"),
+    );
+  }
 });
 
 test("accepts only the expected structured domain failure", async () => {
@@ -230,56 +257,58 @@ test("verifies aggregate public, denial, and write-gate invariants", async () =>
   assert.equal(mutationCount, 1);
 });
 
-test("verifies the writable S3 gate without committing a probe write", async () => {
-  let queryCount = 0;
-  let mutationCount = 0;
-  const client = {
-    async query() {
-      queryCount += 1;
-      if (queryCount === 1) {
-        return {
-          apiVersion,
-          initialized: true,
-          applicationWritesEnabled: true,
-          cutoverStage: "S3",
-          firstApplicationWriteRecorded: false,
-        };
-      }
-      if (queryCount === 2 || queryCount === 3) {
-        return [];
-      }
-      throw new ConvexError({
-        code: "AUTHENTICATION_REQUIRED",
-        message: "Authentication is required.",
-        retryable: false,
-      });
-    },
-    async mutation(_reference, args) {
-      mutationCount += 1;
-      assert.equal(args.clientApiVersion, apiVersion);
-      throw new ConvexError({
-        code: "VALIDATION_FAILED",
-        message: "The non-writing probe reached its handler.",
-        retryable: false,
-      });
-    },
-  };
+for (const expectedState of ["S3", "S4"]) {
+  test(`verifies the writable ${expectedState} gate without committing a probe write`, async () => {
+    let queryCount = 0;
+    let mutationCount = 0;
+    const client = {
+      async query() {
+        queryCount += 1;
+        if (queryCount === 1) {
+          return {
+            apiVersion,
+            initialized: true,
+            applicationWritesEnabled: true,
+            cutoverStage: expectedState,
+            firstApplicationWriteRecorded: false,
+          };
+        }
+        if (queryCount === 2 || queryCount === 3) {
+          return [];
+        }
+        throw new ConvexError({
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication is required.",
+          retryable: false,
+        });
+      },
+      async mutation(_reference, args) {
+        mutationCount += 1;
+        assert.equal(args.clientApiVersion, apiVersion);
+        throw new ConvexError({
+          code: "VALIDATION_FAILED",
+          message: "The non-writing probe reached its handler.",
+          retryable: false,
+        });
+      },
+    };
 
-  const result = await verifyStagingDeployment({
-    client,
-    apiVersion,
-    expectedState: "S3",
+    const result = await verifyStagingDeployment({
+      client,
+      apiVersion,
+      expectedState,
+    });
+
+    assert.equal(result.readiness.applicationWritesEnabled, true);
+    assert.equal(result.readiness.cutoverStage, expectedState);
+    assert.equal(
+      result.recordingWriteGateProbe,
+      "VALIDATION_FAILED",
+    );
+    assert.equal(queryCount, 6);
+    assert.equal(mutationCount, 1);
   });
-
-  assert.equal(result.readiness.applicationWritesEnabled, true);
-  assert.equal(result.readiness.cutoverStage, "S3");
-  assert.equal(
-    result.recordingWriteGateProbe,
-    "VALIDATION_FAILED",
-  );
-  assert.equal(queryCount, 6);
-  assert.equal(mutationCount, 1);
-});
+}
 
 test("CLI target failure does not expose deploy-key secret material", () => {
   const secretSuffix = "never-print-staging-secret";

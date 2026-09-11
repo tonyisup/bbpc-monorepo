@@ -24,10 +24,12 @@ details never belong in this repository.
 | Environment | Convex target | State |
 |---|---|---|
 | local | `local-tonyisup-bbpc_convex` | developer-only |
-| staging | project `bbpc-convex`, reference `staging` | synthetic S3, writes enabled for Vercel previews |
+| staging | project `bbpc-convex`, reference `staging` | S4 after backup restore, writes enabled for Vercel previews |
 | production | not provisioned for consumers | intentionally unavailable |
 
-The staging deployment is synthetic-data-only. It uses a deployment-scoped key named
+The staging workflow requires S4 after the development backup restore. Restores copy
+the lifecycle state and identity mappings; verify both before testing sign-in.
+It uses a deployment-scoped key named
 `github-actions-staging`; the key value belongs in the GitHub `staging` environment as
 `CONVEX_STAGING_DEPLOY_KEY`. All Vercel Preview deployments target this staging
 deployment; Vercel Production deployments retain the separate production selector.
