@@ -26,6 +26,7 @@
     }
   },
   "scripts": {
+    "transcripts:backfill": "node --experimental-strip-types local-tools/transcripts/backfill.mjs",
     "transcripts:map": "node --experimental-strip-types local-tools/transcripts/map.mjs",
     "transcripts:import": "node --experimental-strip-types local-tools/transcripts/import.mjs",
     "transcripts:test": "node --experimental-strip-types --test local-tools/transcripts/*.test.mjs",

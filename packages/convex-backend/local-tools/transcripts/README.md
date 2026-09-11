@@ -120,3 +120,7 @@ pnpm --filter bbpc exec vitest run --config vitest.config.ts tests/TranscriptSea
 ```
 
 All test transcripts are synthetic. Do not commit real transcript files, import manifests, tokens, or session data.
+
+## Backfill missing transcripts
+
+Use [`backfill.mjs`](./backfill.mjs) to inventory Azure recordings, resolve episode identities, and generate missing transcripts without running the publishing pipeline. See [the backfill runbook](./BACKFILL.md) for planning, bounded execution, and resolving unmatched recordings.
