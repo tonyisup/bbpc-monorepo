@@ -274,10 +274,13 @@ describe("Convex episode detail adapter", () => {
   });
 
   test("searches TMDB and saves its movie before creating an assignment", async () => {
-    const action = vi.fn().mockResolvedValue({
-      page: 1,
-      results: [tmdbMovie],
-    });
+    const action = vi
+      .fn()
+      .mockResolvedValueOnce({
+        page: 1,
+        results: [tmdbMovie],
+      })
+      .mockResolvedValueOnce(tmdbMovie);
     const mutation = vi
       .fn()
       .mockResolvedValueOnce({

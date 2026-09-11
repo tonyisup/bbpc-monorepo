@@ -480,35 +480,36 @@ describe("catalog write API", () => {
     );
   });
 
-  test("updates only one preserved duplicate URL row", async () => {
+  test("rejects duplicate URL rows without changing either movie", async () => {
     const t = createTestBackend();
     await seedActors(t);
     const url = "https://catalog.example.test/preserved-duplicate";
-    const ids = await t.run(async (ctx) => {
-      const first = await ctx.db.insert("movies", {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("movies", {
         title: "First",
         normalizedTitle: "first",
         year: 2000,
         url,
       });
-      const second = await ctx.db.insert("movies", {
+      await ctx.db.insert("movies", {
         title: "Second",
         normalizedTitle: "second",
         year: 2001,
         url,
       });
-      return [first, second];
     });
     await advanceToS3(t);
 
-    const updated = await t.withIdentity(MEMBER_IDENTITY).mutation(
-      api.catalog.write.upsertMovieByUrl,
-      movieInput({
-        title: "Updated",
-        url,
-      }),
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).mutation(
+        api.catalog.write.upsertMovieByUrl,
+        movieInput({
+          title: "Updated",
+          url,
+        })
+      ),
+      "CONFLICT"
     );
-    expect(ids).toContain(updated.id);
     const rows = await t.run(async (ctx) => {
       return await ctx.db
         .query("movies")
@@ -516,9 +517,136 @@ describe("catalog write API", () => {
         .take(3);
     });
     expect(rows).toHaveLength(2);
-    expect(rows.filter((movie) => movie.title === "Updated")).toHaveLength(
-      1,
+    expect(rows.filter((movie) => movie.title === "Updated")).toHaveLength(0);
+  });
+
+  test("keeps movie identity and references when replacing a TMDB URL with IMDb", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await advanceToS3(t);
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    const created = await member.mutation(
+      api.catalog.write.upsertMovieByUrl,
+      movieInput({ url: "https://www.themoviedb.org/movie/329865" })
     );
+    const entryId = await t.run(async (ctx) =>
+      ctx.db.insert("syllabusEntries", {
+        userId: memberId,
+        movieId: created.id,
+        order: 1,
+        createdAt: 1,
+      })
+    );
+    const updated = await member.mutation(
+      api.catalog.write.upsertMovieByUrl,
+      movieInput({ url: "https://www.imdb.com/title/tt2543164?ref_=test" })
+    );
+    expect(updated).toMatchObject({
+      id: created.id,
+      url: "https://www.imdb.com/title/tt2543164/",
+    });
+    const replay = await member.mutation(
+      api.catalog.write.upsertMovieByUrl,
+      movieInput({ url: "https://www.themoviedb.org/movie/329865" })
+    );
+    expect(replay.url).toBe(updated.url);
+    expect(replay.id).toBe(created.id);
+    expect(
+      await t.run(
+        async (ctx) => (await ctx.db.get("syllabusEntries", entryId))?.movieId
+      )
+    ).toBe(created.id);
+    await expectDomainError(
+      member.mutation(
+        api.catalog.write.upsertMovieByUrl,
+        movieInput({ url: "https://www.imdb.com/title/tt0000001/" })
+      ),
+      "CONFLICT"
+    );
+  });
+
+  test("matches an IMDb URL alias without a TMDB ID and rejects conflicting IDs", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    await advanceToS3(t);
+    const id = await t.run(async (ctx) =>
+      ctx.db.insert("movies", {
+        title: "Arrival",
+        normalizedTitle: "arrival",
+        year: 2016,
+        url: "http://imdb.com/title/tt2543164",
+      })
+    );
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    const updated = await member.mutation(
+      api.catalog.write.upsertMovieByUrl,
+      movieInput({ url: "https://www.imdb.com/title/tt2543164/" })
+    );
+    expect(updated.id).toBe(id);
+    expect(updated.tmdbId).toBe(329865);
+    await expectDomainError(
+      member.mutation(
+        api.catalog.write.upsertMovieByUrl,
+        movieInput({ url: updated.url, tmdbId: 123 })
+      ),
+      "CONFLICT"
+    );
+    await expectDomainError(
+      member.mutation(
+        api.catalog.write.upsertMovieByUrl,
+        movieInput({ url: "https://www.themoviedb.org/movie/123" })
+      ),
+      "CONFLICT"
+    );
+  });
+
+  test("rejects duplicate TMDB identities and split IMDb/TMDB matches", async () => {
+    for (const secondTmdbId of [329865, undefined]) {
+      const t = createTestBackend();
+      await seedActors(t);
+      await advanceToS3(t);
+      await t.run(async (ctx) => {
+        await ctx.db.insert("movies", {
+          title: "Arrival",
+          normalizedTitle: "arrival",
+          year: 2016,
+          tmdbId: 329865,
+          url: "https://www.themoviedb.org/movie/329865",
+        });
+        await ctx.db.insert("movies", {
+          title: "Arrival",
+          normalizedTitle: "arrival",
+          year: 2016,
+          ...(secondTmdbId === undefined ? {} : { tmdbId: secondTmdbId }),
+          url: "https://www.imdb.com/title/tt2543164/",
+        });
+      });
+      await expectDomainError(
+        t
+          .withIdentity(MEMBER_IDENTITY)
+          .mutation(
+            api.catalog.write.upsertMovieByUrl,
+            movieInput({ url: "https://www.imdb.com/title/tt2543164/" })
+          ),
+        "CONFLICT"
+      );
+    }
+  });
+
+  test("older TMDB clients cannot bypass duplicate IMDb or inconsistent stored-ID checks", async () => {
+    for (const duplicate of [false, true]) {
+      const t = createTestBackend();
+      await seedActors(t);
+      await advanceToS3(t);
+      await t.run(async (ctx) => {
+        await ctx.db.insert("movies", { title: "Arrival", normalizedTitle: "arrival", year: 2016,
+          tmdbId: 329865, url: duplicate ? "https://www.imdb.com/title/tt2543164" : "https://www.themoviedb.org/movie/123" });
+        if (duplicate) await ctx.db.insert("movies", { title: "Arrival", normalizedTitle: "arrival", year: 2016,
+          url: "https://www.imdb.com/title/tt2543164/" });
+      });
+      await expectDomainError(t.withIdentity(MEMBER_IDENTITY).mutation(api.catalog.write.upsertMovieByUrl,
+        movieInput({ url: "https://www.themoviedb.org/movie/329865" })), "CONFLICT");
+    }
   });
 
   test("creates and updates shows by URL, then supports explicit admin editing", async () => {

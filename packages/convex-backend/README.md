@@ -36,6 +36,35 @@ deployment; Vercel Production deployments retain the separate production selecto
 
 ## Local development
 
+### Movie URLs
+
+Movie saves from web syllabus/extras and the admin catalog/episode flows fetch TMDB
+details before writing. They prefer a canonical IMDb title URL, keep `tmdbId` for
+the user's TMDB link preference, and fall back to TMDB only when no IMDb ID exists.
+A failed detail lookup leaves the save unchanged so it can be retried.
+
+The movie upsert matches the TMDB ID and URL aliases in one transaction, retaining
+the existing movie ID and relationships. Duplicate matches or conflicting provider
+IDs require administrator review. Older clients cannot replace a known IMDb link
+with a TMDB fallback. Deploy the backend matching change before the updated clients.
+
+To inventory staging without changing movie data, run from the repository root:
+
+```sh
+pnpm --dir packages/convex-backend run catalog:urls:audit --deployment merry-shepherd-928
+```
+
+The tool uses the current Convex CLI login and staging's TMDB key, checks the explicit
+staging target/environment, and writes private `report.md` and `report.json` files
+under the ignored `packages/convex-backend/.local-migration/movie-url-audit/` directory.
+It resolves non-IMDb URLs, flags duplicate identities/destinations and title/year
+mismatches, and leaves missing mappings unresolved. Existing IMDb URLs are retained;
+their external mappings are not re-fetched. The tool has no apply mode and refuses
+an inventory that reaches its 10,000-row limit. Keep reports and extracted rows out
+of commits. A future apply step must recheck the original URL/IDs and conflicts.
+
+### Development commands
+
 1. Use Node 22.6.0 or newer and run `pnpm install --frozen-lockfile` at the monorepo root.
 2. Copy `.env.example` to `.env.local` or configure a Convex local deployment.
 3. Set `CLERK_JWT_ISSUER_DOMAIN`, `CLERK_M2M_AUDIENCE`,

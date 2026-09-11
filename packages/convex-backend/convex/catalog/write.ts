@@ -2,8 +2,11 @@ import { v } from "convex/values";
 
 import { authenticatedMutation } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
+import { domainError } from "../lib/errors.js";
+import { canonicalImdbUrl, tmdbIdFromMovieUrl } from "./movieUrls.js";
 import { toCatalogMovie, toCatalogShow } from "./readModel.js";
 import {
+  findMovieForUpsert,
   validateCatalogPoster,
   validateCatalogTitle,
   validateCatalogUrl,
@@ -28,12 +31,18 @@ export const upsertMovieByUrl = authenticatedMutation({
     const title = validateCatalogTitle(args.title);
     const year = validateCatalogYear(args.year);
     const poster = validateCatalogPoster(args.poster);
-    const url = validateCatalogUrl(args.url);
-    const tmdbId = validateTmdbId(args.tmdbId);
-    const existing = await ctx.db
-      .query("movies")
-      .withIndex("by_url", (index) => index.eq("url", url))
-      .first();
+    const rawUrl = validateCatalogUrl(args.url);
+    const urlTmdbId = tmdbIdFromMovieUrl(rawUrl);
+    const tmdbId = validateTmdbId(args.tmdbId ?? urlTmdbId);
+    if (urlTmdbId !== undefined && tmdbId !== urlTmdbId) {
+      domainError("CONFLICT", "Movie URL and TMDB ID do not match.");
+    }
+    const existing = await findMovieForUpsert(ctx, rawUrl, tmdbId);
+    // Older clients may still submit TMDB links; retain a known IMDb link.
+    const url =
+      canonicalImdbUrl(rawUrl) ??
+      (existing === null ? null : canonicalImdbUrl(existing.url)) ??
+      rawUrl;
     if (existing !== null) {
       const patch = {
         ...title,
