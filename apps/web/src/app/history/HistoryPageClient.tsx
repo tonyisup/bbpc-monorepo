@@ -7,6 +7,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Fuse, { type FuseResultMatch } from "fuse.js";
 import { debounce } from "lodash";
+import {
+  TranscriptMatches,
+  useTranscriptSearch,
+  type TranscriptPassage,
+} from "./TranscriptMatches";
 
 const FUZZY_SEARCH_STORAGE_KEY = "bbpc-history-fuzzy-search";
 
@@ -15,6 +20,7 @@ type HistoryEpisode = CompleteEpisode;
 type HistorySearchRow = {
   episode: HistoryEpisode;
   fuseMatches?: ReadonlyArray<FuseResultMatch>;
+  passages?: TranscriptPassage[];
 };
 
 function episodeMatchesSubstring(
@@ -55,6 +61,7 @@ function episodeMatchesSubstring(
   return false;
 }
 
+/** Render the current title and transcript search results and empty states. */
 function SearchResults({
   rows,
   query,
@@ -84,7 +91,7 @@ function SearchResults({
     );
   }
 
-  if (isLoading) {
+  if (isLoading && rows.length === 0) {
     return <div className="text-center text-zinc-300">Searching...</div>;
   }
 
@@ -98,7 +105,7 @@ function SearchResults({
 
   return (
     <ul>
-      {rows.map(({ episode, fuseMatches }) => (
+      {rows.map(({ episode, fuseMatches, passages }) => (
         <li className="mb-8" key={episode.id}>
           <Episode
             episode={episode}
@@ -106,12 +113,16 @@ function SearchResults({
             searchQuery={query}
             fuseMatches={fuseMatches}
           />
+          {passages && passages.length > 0 && (
+            <TranscriptMatches passages={passages} query={query} />
+          )}
         </li>
       ))}
     </ul>
   );
 }
 
+/** Coordinate episode metadata and transcript search on the history page. */
 export function HistoryPageClient({
   allEpisodes,
   isLoading = false,
@@ -125,6 +136,7 @@ export function HistoryPageClient({
   // Initialize local query state from URL to allow immediate UI updates
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [fuzzySearch, setFuzzySearch] = useState(true);
+  const transcripts = useTranscriptSearch(query);
 
   useEffect(() => {
     try {
@@ -184,6 +196,21 @@ export function HistoryPageClient({
       .map((episode) => ({ episode }));
   }, [allEpisodes, query, fuse, fuzzySearch]);
 
+  const combinedRows = useMemo(() => {
+    const rows: HistorySearchRow[] = filteredRows.map((row) => ({ ...row }));
+    const byId = new Map(rows.map((row) => [row.episode.id, row]));
+    for (const match of transcripts.data?.results ?? []) {
+      const existing = byId.get(match.episode.id);
+      if (existing) existing.passages = match.passages;
+      else {
+        const row = { episode: match.episode, passages: match.passages };
+        rows.push(row);
+        byId.set(match.episode.id, row);
+      }
+    }
+    return rows;
+  }, [filteredRows, transcripts.data]);
+
   // Debounced URL updater to prevent browser history spam
   const debouncedUpdateUrl = useMemo(
     () =>
@@ -239,7 +266,9 @@ export function HistoryPageClient({
             className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
           />
           <span>
-            <span className="block font-semibold">Match close spellings</span>
+            <span className="block font-semibold">
+              Match close spellings in titles
+            </span>
             <span className="block text-xs text-zinc-400">
               Useful for names and movie titles you only half remember.
             </span>
@@ -251,18 +280,45 @@ export function HistoryPageClient({
             {trimmedQuery
               ? isLoading
                 ? "Searching..."
-                : `${filteredRows.length} ${
-                    filteredRows.length === 1 ? "result" : "results"
-                  }`
-              : "Search by episode title or movie name."}
+                : `${combinedRows.length} ${
+                    combinedRows.length === 1 ? "result" : "results"
+                  }${transcripts.loading ? " · Searching transcripts…" : ""}`
+              : "Search by episode title, movie name, or words from a transcript."}
           </p>
+          <p className="text-xs text-zinc-400">
+            Transcripts match words, including the beginning of the last word.
+            Coverage depends on available transcripts.
+          </p>
+          {transcripts.error && (
+            <div role="alert" className="text-sm text-red-200">
+              {transcripts.error}
+              {transcripts.enabled && (
+                <button
+                  type="button"
+                  onClick={transcripts.retry}
+                  className="ml-2 underline underline-offset-4"
+                >
+                  Retry transcript search
+                </button>
+              )}
+            </div>
+          )}
+          {transcripts.data?.limited && (
+            <p role="status" className="text-sm text-zinc-300">
+              Showing the top transcript matches. Narrow your search to find
+              more specific passages.
+            </p>
+          )}
+          {transcripts.data?.results.length === 0 && (
+            <p className="text-xs text-zinc-400">No transcript matches.</p>
+          )}
         </div>
       </div>
       <div className="w-full max-w-4xl">
         <SearchResults
-          rows={filteredRows}
+          rows={combinedRows}
           query={trimmedQuery}
-          isLoading={isLoading}
+          isLoading={isLoading || transcripts.loading}
         />
       </div>
     </div>

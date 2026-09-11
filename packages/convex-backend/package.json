@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.6.0"
   },
   "files": [
     "contracts/index.d.ts",
@@ -26,6 +26,9 @@
     }
   },
   "scripts": {
+    "transcripts:map": "node --experimental-strip-types local-tools/transcripts/map.mjs",
+    "transcripts:import": "node --experimental-strip-types local-tools/transcripts/import.mjs",
+    "transcripts:test": "node --experimental-strip-types --test local-tools/transcripts/*.test.mjs",
     "dev": "convex dev",
     "dev:local": "convex dev",
     "codegen": "convex codegen",
@@ -68,7 +71,7 @@
     "performance:test": "node --test local-tools/performance/*.test.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:queries && pnpm run lint:access && pnpm run deployment:test && pnpm run migration:test:extractor && pnpm run migration:test:recording && pnpm run staging:test && pnpm run performance:test && pnpm run test:coverage",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run lint:queries && pnpm run lint:access && pnpm run deployment:test && pnpm run migration:test:extractor && pnpm run migration:test:recording && pnpm run staging:test && pnpm run performance:test && pnpm run transcripts:test && pnpm run test:coverage",
     "package:check": "pnpm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {

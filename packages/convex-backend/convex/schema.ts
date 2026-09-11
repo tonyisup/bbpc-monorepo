@@ -232,6 +232,26 @@ export default defineSchema({
     .index("by_date_and_status", ["date", "status"])
     .searchIndex("search_title", { searchField: "title" }),
 
+  episodeTranscripts: defineTable({
+    episodeId: v.id("episodes"),
+    hash: v.string(),
+    version: v.string(),
+    passageCount: v.number(),
+    updatedAt: v.number(),
+  }).index("by_episodeId", ["episodeId"]),
+
+  transcriptPassages: defineTable({
+    episodeId: v.id("episodes"),
+    isPublic: v.boolean(),
+    hash: v.string(),
+    sequence: v.number(),
+    start: v.number(),
+    end: v.number(),
+    text: v.string(),
+  })
+    .index("by_episodeId_and_sequence", ["episodeId", "sequence"])
+    .searchIndex("search_text", { searchField: "text", filterFields: ["isPublic"] }),
+
   episodeLinks: defineTable({
     legacyId: v.optional(v.string()),
     url: v.string(),

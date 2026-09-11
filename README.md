@@ -19,7 +19,7 @@ is not part of this consolidation milestone.
 
 ## Development
 
-Use Node.js 22 or newer and install dependencies once from this directory:
+Use Node.js 22.6.0 or newer and install dependencies once from this directory:
 
 ```sh
 pnpm install --frozen-lockfile

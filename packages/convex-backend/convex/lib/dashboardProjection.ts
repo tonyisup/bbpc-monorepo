@@ -1,6 +1,10 @@
 import { Triggers } from "convex-helpers/server/triggers";
 import type { DataModel, Doc } from "../_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "../_generated/server.js";
+import {
+  isPublishedEpisode,
+  syncTranscriptVisibility,
+} from "./transcriptVisibility.js";
 
 export const dashboardSources = [
   "users",
@@ -103,6 +107,15 @@ export async function backfillDashboardDocument(
 }
 
 export const dashboardTriggers = new Triggers<DataModel>();
+/** Update transcript eligibility in the same transaction as episode visibility. */
+dashboardTriggers.register("episodes", async (ctx, change) => {
+  if (
+    change.newDoc === null ||
+    isPublishedEpisode(change.oldDoc) !== isPublishedEpisode(change.newDoc)
+  ) {
+    await syncTranscriptVisibility(ctx, change.id, change.newDoc);
+  }
+});
 for (const source of dashboardSources) {
   dashboardTriggers.register(source, async (ctx, change) => {
     if (change.newDoc === null) {
