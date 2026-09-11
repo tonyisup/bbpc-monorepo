@@ -18,6 +18,13 @@ class BackfillError(ValueError):
     """A fixed, operator-safe error message that contains no SDK credentials."""
 
 
+def etag_value(value):
+    """Azure lists unquoted ETags but returns HTTP-quoted ETags for properties."""
+    if not isinstance(value, str) or not value:
+        raise BackfillError("Missing audio ETag")
+    return value[1:-1] if value.startswith('"') and value.endswith('"') else value
+
+
 def save_json(path, value):
     temporary = path.with_suffix(path.suffix + ".tmp")
     with temporary.open("w", encoding="utf-8") as stream:
@@ -119,8 +126,8 @@ def transcribe(request):
     blob = request["blob"]
     client = container.get_blob_client(blob["name"])
     properties = client.get_blob_properties()
-    if properties.etag != blob["etag"] or properties.size != blob["size"]:
-        raise BackfillError("Audio changed since plan; create a new plan")
+    if etag_value(properties.etag) != etag_value(blob["etag"]) or properties.size != blob["size"]:
+        raise BackfillError("Audio metadata changed since plan (ETag or size); create a new plan")
     work = Path(request["work"])
     work.mkdir(parents=True, exist_ok=True)
     audio = work / "audio.mp3"
@@ -128,7 +135,7 @@ def transcribe(request):
     if not audio.is_file() or audio.stat().st_size != blob["size"]:
         partial = work / "audio.download"
         with partial.open("wb") as stream:
-            client.download_blob(etag=blob["etag"], match_condition=MatchConditions.IfNotModified).readinto(stream)
+            client.download_blob(etag=properties.etag, match_condition=MatchConditions.IfNotModified).readinto(stream)
         if partial.stat().st_size != blob["size"]:
             raise BackfillError("Incomplete audio download")
         os.replace(partial, audio)

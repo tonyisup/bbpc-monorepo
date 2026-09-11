@@ -49,9 +49,10 @@ class CompletionTests(unittest.TestCase):
             self.assertEqual(rows, json.loads(partial.read_text()))
 
     def test_download_and_completion_require_matching_audio_and_full_coverage(self):
-        for scenario in ("success", "changed-audio", "short-coverage", "decoder-failure"):
+        for scenario in ("success", "quoted-etag", "changed-audio", "changed-size", "short-coverage", "decoder-failure"):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
-                properties = SimpleNamespace(etag="changed" if scenario == "changed-audio" else "v1", size=1000)
+                current_etag = '"v1"' if scenario == "quoted-etag" else "changed" if scenario == "changed-audio" else "v1"
+                properties = SimpleNamespace(etag=current_etag, size=999 if scenario == "changed-size" else 1000)
                 client = Mock()
                 client.get_blob_properties.return_value = properties
                 client.download_blob.return_value.readinto.side_effect = lambda stream: stream.write(b"x" * 1000)
@@ -69,15 +70,15 @@ class CompletionTests(unittest.TestCase):
                            "blob": {"name": "synthetic.mp3", "etag": "v1", "size": 1000}, "work": directory, "model": "synthetic"}
                 with patch.dict("sys.modules", modules), patch.object(worker, "container_client", return_value=container), \
                         patch.object(worker.subprocess, "run", return_value=SimpleNamespace(stdout="100")):
-                    if scenario == "success":
+                    if scenario in ("success", "quoted-etag"):
                         self.assertTrue(worker.transcribe(request)["complete"])
                         self.assertTrue((Path(directory) / "candidate.json").is_file())
-                        client.download_blob.assert_called_once_with(etag="v1", match_condition="unchanged")
+                        client.download_blob.assert_called_once_with(etag=current_etag, match_condition="unchanged")
                     else:
                         with self.assertRaises((ValueError, RuntimeError)):
                             worker.transcribe(request)
                         self.assertFalse((Path(directory) / "candidate.json").exists())
-                    if scenario == "changed-audio":
+                    if scenario in ("changed-audio", "changed-size"):
                         client.download_blob.assert_not_called()
                         model_type.assert_not_called()
 
