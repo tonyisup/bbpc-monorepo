@@ -150,16 +150,15 @@ export function ConvexEpisodesPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [fuzzySearch, setFuzzySearch] = useState(true);
-  const [urlInitialized, setUrlInitialized] = useState(false);
   const urlTimer = useRef<ReturnType<typeof setTimeout>>();
   const pageGeneration = useRef(0);
   const isSearching = query.trim().length > 0;
 
   useEffect(() => {
-    if (!router.isReady || urlInitialized) return;
+    if (!router.isReady) return;
+    clearTimeout(urlTimer.current);
     setQuery(typeof router.query.q === "string" ? router.query.q : "");
-    setUrlInitialized(true);
-  }, [router.isReady, router.query.q, urlInitialized]);
+  }, [router.isReady, router.query.q]);
 
   useEffect(() => {
     try {

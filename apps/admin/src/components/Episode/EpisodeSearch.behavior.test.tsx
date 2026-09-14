@@ -83,6 +83,7 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  mocks.router.isReady = true;
   mocks.router.query = {};
   mocks.router.replace.mockResolvedValue(true);
   mocks.storage.getItem.mockReturnValue(null);
@@ -133,6 +134,56 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
+
+test("follows external query changes and clearing without replaying pending URL updates", async () => {
+  mocks.router.query = { q: "Interstellar" };
+  await render();
+  expect(text()).toContain(second.title);
+
+  await search("pending local search");
+  await act(async () => {
+    mocks.router.query = { q: "Underwater cinema" };
+    renderer.update(<ConvexEpisodesPage />);
+  });
+  expect(
+    renderer.root.findByProps({ "aria-label": "Search episodes" }).props.value
+  ).toBe("Underwater cinema");
+  expect(text()).toContain(first.title);
+  expect(text()).not.toContain(second.title);
+  await tick(500);
+  expect(mocks.router.replace).not.toHaveBeenCalled();
+
+  await search("another pending search");
+  await act(async () => {
+    mocks.router.query = {};
+    renderer.update(<ConvexEpisodesPage />);
+  });
+  expect(
+    renderer.root.findByProps({ "aria-label": "Search episodes" }).props.value
+  ).toBe("");
+  expect(renderer.root.findAllByType("article")).toHaveLength(0);
+  expect(button("Load More")).toBeDefined();
+  await tick(500);
+  expect(mocks.router.replace).not.toHaveBeenCalled();
+});
+
+test("waits for router readiness before applying the URL query", async () => {
+  mocks.router.isReady = false;
+  mocks.router.query = { q: "Interstellar" };
+  await render();
+  expect(
+    renderer.root.findByProps({ "aria-label": "Search episodes" }).props.value
+  ).toBe("");
+
+  await act(async () => {
+    mocks.router.isReady = true;
+    renderer.update(<ConvexEpisodesPage />);
+  });
+  expect(
+    renderer.root.findByProps({ "aria-label": "Search episodes" }).props.value
+  ).toBe("Interstellar");
+  expect(text()).toContain(second.title);
+});
 
 test("searches beyond the browse page, includes pending episodes, and restores browsing on clear", async () => {
   await render();
