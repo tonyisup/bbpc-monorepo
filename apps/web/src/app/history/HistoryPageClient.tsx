@@ -5,61 +5,19 @@ import { Episode, type CompleteEpisode } from "@/components/Episode";
 import SearchFilter from "@/components/common/SearchFilter";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Fuse, { type FuseResultMatch } from "fuse.js";
-import { debounce } from "lodash";
 import {
-  TranscriptMatches,
-  useTranscriptSearch,
-  type TranscriptPassage,
-} from "./TranscriptMatches";
+  mergeEpisodeSearchResults,
+  useEpisodeMetadataSearch,
+  type EpisodeSearchRow,
+} from "@bbpc/episode-search";
+import { debounce } from "lodash";
+import { TranscriptMatches, useTranscriptSearch } from "./TranscriptMatches";
 
 const FUZZY_SEARCH_STORAGE_KEY = "bbpc-history-fuzzy-search";
 
 type HistoryEpisode = CompleteEpisode;
 
-type HistorySearchRow = {
-  episode: HistoryEpisode;
-  fuseMatches?: ReadonlyArray<FuseResultMatch>;
-  passages?: TranscriptPassage[];
-};
-
-function episodeMatchesSubstring(
-  episode: HistoryEpisode,
-  needleLower: string
-): boolean {
-  if (episode.title.toLowerCase().includes(needleLower)) {
-    return true;
-  }
-  for (const a of episode.assignments) {
-    const t = a.movie?.title;
-    if (
-      t !== undefined &&
-      t !== null &&
-      t.toLowerCase().includes(needleLower)
-    ) {
-      return true;
-    }
-  }
-  for (const e of episode.extras) {
-    const movieTitle = e.review.movie?.title;
-    if (
-      movieTitle !== undefined &&
-      movieTitle !== null &&
-      movieTitle.toLowerCase().includes(needleLower)
-    ) {
-      return true;
-    }
-    const showTitle = e.review.show?.title;
-    if (
-      showTitle !== undefined &&
-      showTitle !== null &&
-      showTitle.toLowerCase().includes(needleLower)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
+type HistorySearchRow = EpisodeSearchRow<HistoryEpisode>;
 
 /** Render the current title and transcript search results and empty states. */
 function SearchResults({
@@ -160,56 +118,15 @@ export function HistoryPageClient({
     }
   };
 
-  // Initialize Fuse instance when data is available
-  const fuse = useMemo(() => {
-    if (!allEpisodes) return null;
-    return new Fuse(allEpisodes, {
-      keys: [
-        "title",
-        "assignments.movie.title",
-        "extras.review.movie.title",
-        "extras.review.show.title",
-      ],
-      threshold: 0.4,
-      ignoreLocation: true,
-      includeMatches: true,
-    });
-  }, [allEpisodes]);
-
-  // Compute filtered episodes based on local query
-  const filteredRows = useMemo((): HistorySearchRow[] => {
-    if (!allEpisodes) return [];
-    const trimmed = query.trim();
-    if (!trimmed) return [];
-
-    if (fuzzySearch) {
-      if (!fuse) return [];
-      return fuse.search(trimmed).map((result) => ({
-        episode: result.item,
-        fuseMatches: result.matches,
-      }));
-    }
-
-    const needle = trimmed.toLowerCase();
-    return allEpisodes
-      .filter((ep) => episodeMatchesSubstring(ep, needle))
-      .map((episode) => ({ episode }));
-  }, [allEpisodes, query, fuse, fuzzySearch]);
-
-  const combinedRows = useMemo(() => {
-    const rows: HistorySearchRow[] = filteredRows.map((row) => ({ ...row }));
-    const byId = new Map(rows.map((row) => [row.episode.id, row]));
-    for (const match of transcripts.data?.results ?? []) {
-      const existing = byId.get(match.episode.id);
-      if (existing) existing.passages = match.passages;
-      else {
-        const row = { episode: match.episode, passages: match.passages };
-        rows.push(row);
-        byId.set(match.episode.id, row);
-      }
-    }
-    return rows;
-  }, [filteredRows, transcripts.data]);
+  const filteredRows = useEpisodeMetadataSearch(
+    allEpisodes,
+    query,
+    fuzzySearch
+  );
+  const combinedRows = useMemo(
+    () => mergeEpisodeSearchResults(filteredRows, transcripts.data),
+    [filteredRows, transcripts.data]
+  );
 
   // Debounced URL updater to prevent browser history spam
   const debouncedUpdateUrl = useMemo(

@@ -121,6 +121,57 @@ export async function loadConvexAdminEpisodesPage(
   };
 }
 
+/** Load every authenticated catalog page for listener-style metadata matching. */
+export async function loadConvexAdminEpisodeSearchCatalog(
+  client: ConvexReactClient,
+  signal: AbortSignal
+): Promise<ConvexAdminEpisode[]> {
+  const episodes = new Map<string, ConvexAdminEpisode>();
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  while (true) {
+    signal.throwIfAborted();
+    const result = await loadConvexAdminEpisodesPage(client, cursor);
+    signal.throwIfAborted();
+    for (const episode of result.episodes) episodes.set(episode.id, episode);
+    if (result.isDone) return [...episodes.values()];
+    if (!result.continueCursor || seenCursors.has(result.continueCursor)) {
+      throw new Error("Episode catalog pagination did not advance.");
+    }
+    seenCursors.add(result.continueCursor);
+    cursor = result.continueCursor;
+  }
+}
+
+const transcriptSearchSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        episode: adminEpisodeSummarySchema,
+        passages: z
+          .array(
+            z.object({
+              start: z.number().finite().nonnegative(),
+              end: z.number().finite().nonnegative(),
+              text: z.string(),
+            })
+          )
+          .max(3),
+      })
+    )
+    .max(20),
+  limited: z.boolean(),
+});
+
+export async function searchConvexAdminEpisodeTranscripts(
+  client: ConvexReactClient,
+  query: string
+) {
+  return transcriptSearchSchema.parse(
+    await client.query(api.episodes.transcripts.search, { query })
+  );
+}
+
 export async function createConvexAdminEpisode(
   client: ConvexReactClient,
   input: { number: number; title: string }

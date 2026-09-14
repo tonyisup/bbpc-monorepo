@@ -11,6 +11,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@bbpc/episode-search": "workspace:*",
     "@bbpc/movie-search-hints": "workspace:*",
     "@clerk/nextjs": "6.39.6",
     "@ducanh2912/next-pwa": "10.2.9",
