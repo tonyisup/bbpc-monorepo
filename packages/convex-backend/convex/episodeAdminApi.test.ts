@@ -111,12 +111,14 @@ async function seedEpisode(
     title: string;
     slug?: string;
     status?: string;
+    date?: string;
   },
 ): Promise<Id<"episodes">> {
   return await t.run(async (ctx) => {
     return await ctx.db.insert("episodes", {
       number: input.number,
       title: input.title,
+      ...(input.date === undefined ? {} : { date: input.date }),
       ...(input.slug === undefined
         ? {}
         : {
@@ -229,6 +231,108 @@ describe("administrator episode API", () => {
     );
     expect(secondPage.page.map((episode) => episode.number)).toEqual([801]);
     expect(secondPage.page[0]?.status).toBe("published");
+  });
+
+  test("filters inclusive dates before pagination across all statuses", async () => {
+    const t = createTestBackend();
+    await seedAdmin(t);
+    for (const episode of [
+      { number: 900, status: "pending" },
+      { number: 800, date: "2026-06-30", status: "published" },
+      { number: 700, date: "2026-07-01", status: "published" },
+      { number: 600, date: "2026-07-15", status: "recording" },
+      { number: 500, date: "2026-07-31", status: "pending" },
+      { number: 400, date: "2026-08-01", status: "next" },
+    ]) {
+      await seedEpisode(t, {
+        ...episode,
+        title: `Episode ${String(episode.number)}`,
+      });
+    }
+    const admin = t.withIdentity(ADMIN_IDENTITY);
+    const dateRange = { dateFrom: "2026-07-01", dateTo: "2026-07-31" };
+    const first = await admin.query(api.episodes.admin.listPage, {
+      ...dateRange,
+      paginationOpts: { cursor: null, numItems: 2 },
+    });
+    expect(first.page.map((episode) => episode.number)).toEqual([500, 600]);
+    expect(first.isDone).toBe(false);
+    const second = await admin.query(api.episodes.admin.listPage, {
+      ...dateRange,
+      paginationOpts: { cursor: first.continueCursor, numItems: 2 },
+    });
+    expect(second.page.map((episode) => episode.number)).toEqual([700]);
+    expect(second.isDone).toBe(true);
+
+    const fromOnly = await admin.query(api.episodes.admin.listPage, {
+      dateFrom: "2026-07-31",
+      paginationOpts: { cursor: null, numItems: 20 },
+    });
+    expect(fromOnly.page.map((episode) => episode.number)).toEqual([400, 500]);
+    const toOnly = await admin.query(api.episodes.admin.listPage, {
+      dateTo: "2026-07-01",
+      paginationOpts: { cursor: null, numItems: 20 },
+    });
+    expect(toOnly.page.map((episode) => episode.number)).toEqual([700, 800]);
+    const unfiltered = await admin.query(api.episodes.admin.listPage, {
+      paginationOpts: { cursor: null, numItems: 20 },
+    });
+    expect(unfiltered.page.map((episode) => episode.number)).toEqual([
+      900, 800, 700, 600, 500, 400,
+    ]);
+    const empty = await admin.query(api.episodes.admin.listPage, {
+      dateFrom: "2027-01-01",
+      paginationOpts: { cursor: null, numItems: 20 },
+    });
+    expect(empty.page).toEqual([]);
+    expect(empty.isDone).toBe(true);
+  });
+
+  test("supports a single calendar day, including leap day", async () => {
+    const t = createTestBackend();
+    await seedAdmin(t);
+    for (const [index, date] of [
+      "2024-02-28",
+      "2024-02-29",
+      "2024-02-29",
+      "2024-03-01",
+    ].entries()) {
+      await seedEpisode(t, {
+        number: index,
+        title: `Episode ${String(index)}`,
+        date,
+      });
+    }
+    const result = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.episodes.admin.listPage, {
+        dateFrom: "2024-02-29",
+        dateTo: "2024-02-29",
+        paginationOpts: { cursor: null, numItems: 20 },
+      });
+    expect(result.page).toHaveLength(2);
+    expect(result.page.every((episode) => episode.date === "2024-02-29")).toBe(
+      true
+    );
+  });
+
+  test.each([
+    { dateFrom: "2026-07-31", dateTo: "2026-07-01" },
+    { dateFrom: "2026-02-29" },
+    { dateTo: "2026-04-31" },
+    { dateFrom: "07/01/2026" },
+    { dateTo: "2026-07-01T00:00:00Z" },
+    { dateFrom: "" },
+  ])("rejects invalid date bounds: %j", async (dateRange) => {
+    const t = createTestBackend();
+    await seedAdmin(t);
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).query(api.episodes.admin.listPage, {
+        ...dateRange,
+        paginationOpts: { cursor: null, numItems: 20 },
+      }),
+      "VALIDATION_FAILED"
+    );
   });
 
   test("requires administrator access and the application write gate", async () => {

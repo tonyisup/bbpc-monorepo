@@ -49,9 +49,7 @@ describe("Convex admin episode catalog adapter", () => {
     if (listCall === undefined) {
       throw new Error("Expected the episode list query to run.");
     }
-    expect(getFunctionName(listCall[0])).toBe(
-      "episodes/admin:listPage"
-    );
+    expect(getFunctionName(listCall[0])).toBe("episodes/admin:listPage");
 
     await createConvexAdminEpisode(client, {
       number: episode.number,
@@ -75,13 +73,37 @@ describe("Convex admin episode catalog adapter", () => {
     await expect(loadConvexAdminEpisodesPage(client, null)).rejects.toThrow();
   });
 
+  test.each([
+    { dateFrom: "2026-07-01", dateTo: "2026-07-31" },
+    { dateFrom: "2026-07-01" },
+    { dateTo: "2026-07-31" },
+  ])("passes date bounds with the pagination cursor: %j", async (dateRange) => {
+    const query = vi.fn().mockResolvedValue({
+      page: [episode],
+      isDone: true,
+      continueCursor: "done",
+    });
+    await loadConvexAdminEpisodesPage(
+      { query } as unknown as ConvexReactClient,
+      "next-page",
+      dateRange
+    );
+    expect(query).toHaveBeenCalledWith(expect.anything(), {
+      ...dateRange,
+      paginationOpts: {
+        cursor: "next-page",
+        numItems: ADMIN_EPISODES_PAGE_SIZE,
+      },
+    });
+  });
+
   test("validates bounded episode target search", async () => {
     const query = vi.fn().mockResolvedValue([episode]);
     const client = { query } as unknown as ConvexReactClient;
 
-    await expect(
-      searchConvexAdminEpisodes(client, "episode")
-    ).resolves.toEqual([episode]);
+    await expect(searchConvexAdminEpisodes(client, "episode")).resolves.toEqual(
+      [episode]
+    );
     expect(query).toHaveBeenCalledWith(expect.anything(), {
       query: "episode",
       limit: 10,

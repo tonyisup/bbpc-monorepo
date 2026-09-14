@@ -2016,6 +2016,8 @@ export type PublicApiType = {
                 splitCursor?: string | null;
             }>;
             listPage: FunctionReference<"query", "public", {
+                dateFrom?: string;
+                dateTo?: string;
                 paginationOpts: {
                     cursor: string | null;
                     endCursor?: string | null;

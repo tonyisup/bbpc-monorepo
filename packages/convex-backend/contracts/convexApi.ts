@@ -2227,6 +2227,8 @@ export type PublicApiType = {
         "query",
         "public",
         {
+          dateFrom?: string;
+          dateTo?: string;
           paginationOpts: {
             cursor: string | null;
             endCursor?: string | null;

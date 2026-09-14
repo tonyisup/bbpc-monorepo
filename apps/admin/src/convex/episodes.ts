@@ -102,12 +102,19 @@ export interface ConvexAdminEpisodesPage {
   continueCursor: string;
 }
 
+export interface ConvexAdminEpisodeDateRange {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export async function loadConvexAdminEpisodesPage(
   client: ConvexReactClient,
-  cursor: string | null
+  cursor: string | null,
+  dateRange: ConvexAdminEpisodeDateRange = {}
 ): Promise<ConvexAdminEpisodesPage> {
   const result = episodesPageSchema.parse(
     await client.query(listEpisodesReference, {
+      ...dateRange,
       paginationOpts: {
         cursor,
         numItems: ADMIN_EPISODES_PAGE_SIZE,

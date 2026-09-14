@@ -2,11 +2,12 @@ import { useConvex } from "convex/react";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
 import Head from "next/head";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
   type ConvexAdminEpisode,
+  type ConvexAdminEpisodeDateRange,
   createConvexAdminEpisode,
   loadConvexAdminEpisodesPage,
 } from "@/convex/episodes";
@@ -141,9 +142,7 @@ function statusVariant(
 
 export function ConvexEpisodesPage() {
   const convex = useConvex();
-  const [episodes, setEpisodes] = useState<ConvexAdminEpisode[] | null>(
-    null
-  );
+  const [episodes, setEpisodes] = useState<ConvexAdminEpisode[] | null>(null);
   const [continueCursor, setContinueCursor] = useState<string | null>(null);
   const [isDone, setIsDone] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -151,32 +150,40 @@ export function ConvexEpisodesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [dateRange, setDateRange] = useState<ConvexAdminEpisodeDateRange>({});
+  const requestVersion = useRef(0);
+  const rangeIsInvalid = dateFrom !== "" && dateTo !== "" && dateFrom > dateTo;
+  const hasDateFilter = Boolean(dateRange.dateFrom || dateRange.dateTo);
 
   useEffect(() => {
-    let active = true;
+    const version = ++requestVersion.current;
     setLoadFailed(false);
-    void loadConvexAdminEpisodesPage(convex, null)
+    void loadConvexAdminEpisodesPage(convex, null, dateRange)
       .then((result) => {
-        if (active) {
+        if (version === requestVersion.current) {
           setEpisodes(result.episodes);
           setContinueCursor(result.continueCursor);
           setIsDone(result.isDone);
         }
       })
       .catch(() => {
-        if (active) {
+        if (version === requestVersion.current) {
           setLoadFailed(true);
         }
       });
     return () => {
-      active = false;
+      requestVersion.current += 1;
     };
-  }, [convex, revision]);
+  }, [convex, revision, dateRange]);
 
   const refresh = () => {
+    requestVersion.current += 1;
     setEpisodes(null);
     setContinueCursor(null);
     setIsDone(true);
+    setIsLoadingMore(false);
     setRevision((value) => value + 1);
   };
 
@@ -184,20 +191,23 @@ export function ConvexEpisodesPage() {
     if (isDone || continueCursor === null || isLoadingMore) {
       return;
     }
+    const version = requestVersion.current;
     setIsLoadingMore(true);
-    void loadConvexAdminEpisodesPage(convex, continueCursor)
+    void loadConvexAdminEpisodesPage(convex, continueCursor, dateRange)
       .then((result) => {
-        setEpisodes((current) => [
-          ...(current ?? []),
-          ...result.episodes,
-        ]);
+        if (version !== requestVersion.current) return;
+        setEpisodes((current) => [...(current ?? []), ...result.episodes]);
         setContinueCursor(result.continueCursor);
         setIsDone(result.isDone);
       })
       .catch(() => {
-        toast.error("The next episode page could not be loaded.");
+        if (version === requestVersion.current) {
+          toast.error("The next episode page could not be loaded.");
+        }
       })
-      .finally(() => setIsLoadingMore(false));
+      .finally(() => {
+        if (version === requestVersion.current) setIsLoadingMore(false);
+      });
   };
 
   const createEpisode = (input: { number: number; title: string }) => {
@@ -245,6 +255,93 @@ export function ConvexEpisodesPage() {
           Open an episode to edit its assignments and extra reviews.
         </div>
 
+        <form
+          aria-label="Filter episodes by date"
+          className="space-y-3 rounded-md border bg-card p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (rangeIsInvalid) return;
+            setDateRange({
+              ...(dateFrom ? { dateFrom } : {}),
+              ...(dateTo ? { dateTo } : {}),
+            });
+            refresh();
+          }}
+        >
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid w-full gap-2 sm:w-auto">
+              <Label htmlFor="episode-date-from">From</Label>
+              <Input
+                aria-describedby={
+                  rangeIsInvalid ? "episode-date-error" : "episode-date-help"
+                }
+                aria-invalid={rangeIsInvalid}
+                id="episode-date-from"
+                max={dateTo || "9999-12-31"}
+                onChange={(event) => setDateFrom(event.target.value)}
+                type="date"
+                value={dateFrom}
+              />
+            </div>
+            <div className="grid w-full gap-2 sm:w-auto">
+              <Label htmlFor="episode-date-to">To</Label>
+              <Input
+                aria-describedby={
+                  rangeIsInvalid ? "episode-date-error" : "episode-date-help"
+                }
+                aria-invalid={rangeIsInvalid}
+                id="episode-date-to"
+                max="9999-12-31"
+                min={dateFrom || undefined}
+                onChange={(event) => setDateTo(event.target.value)}
+                type="date"
+                value={dateTo}
+              />
+            </div>
+            <Button disabled={rangeIsInvalid} type="submit">
+              Apply
+            </Button>
+            <Button
+              disabled={!dateFrom && !dateTo && !hasDateFilter}
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setDateRange({});
+                refresh();
+              }}
+              type="button"
+              variant="outline"
+            >
+              Clear
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground" id="episode-date-help">
+            Filter by episode date, including both dates. Leave either field
+            blank for an open-ended range.
+          </p>
+          {rangeIsInvalid && (
+            <p
+              className="text-sm text-destructive"
+              id="episode-date-error"
+              role="alert"
+            >
+              From must be on or before To.
+            </p>
+          )}
+          {hasDateFilter && (
+            <p className="text-sm" role="status">
+              Showing episodes{" "}
+              {dateRange.dateFrom
+                ? `from ${formatPlainDate(dateRange.dateFrom)} `
+                : ""}
+              {dateRange.dateTo
+                ? `through ${formatPlainDate(dateRange.dateTo)}`
+                : "onward"}
+              , newest date first.
+            </p>
+          )}
+        </form>
+
         {loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
             <p className="mb-4 text-sm text-muted-foreground">
@@ -278,7 +375,9 @@ export function ConvexEpisodesPage() {
                 {episodes?.length === 0 && (
                   <TableRow>
                     <TableCell className="h-24 text-center" colSpan={5}>
-                      No episodes found.
+                      {hasDateFilter
+                        ? "No episodes found in this date range."
+                        : "No episodes found."}
                     </TableCell>
                   </TableRow>
                 )}

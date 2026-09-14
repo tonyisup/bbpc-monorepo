@@ -142,21 +142,36 @@ export const getByNumber = adminQuery({
 });
 
 export const listPage = adminQuery({
-  args: { paginationOpts: paginationOptsValidator },
+  args: {
+    paginationOpts: paginationOptsValidator,
+    dateFrom: v.optional(v.string()),
+    dateTo: v.optional(v.string()),
+  },
   returns: paginationResultValidator(episodeAdminDetailValidator),
   handler: async (ctx, args) => {
     validateEpisodePageSize(args.paginationOpts.numItems);
-    const result = await ctx.db
-      .query("episodes")
-      .withIndex("by_number")
-      .order("desc")
-      .paginate(args.paginationOpts);
+    const dateFrom = validatePlainDate(args.dateFrom ?? null);
+    const dateTo = validatePlainDate(args.dateTo ?? null);
+    if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
+      domainError(
+        "VALIDATION_FAILED",
+        "The start date must be on or before the end date."
+      );
+    }
+    const episodes = ctx.db.query("episodes");
+    const filtered =
+      dateFrom === undefined && dateTo === undefined
+        ? episodes.withIndex("by_number")
+        : episodes.withIndex("by_date_and_status", (index) => {
+            // A lower bound also excludes episodes with no date for end-only ranges.
+            const range = index.gte("date", dateFrom ?? "0000-01-01");
+            return dateTo === undefined ? range : range.lte("date", dateTo);
+          });
+    const result = await filtered.order("desc").paginate(args.paginationOpts);
     return {
       ...result,
       page: await Promise.all(
-        result.page.map((episode) =>
-          hydrateAdminEpisode(ctx, episode),
-        ),
+        result.page.map((episode) => hydrateAdminEpisode(ctx, episode))
       ),
     };
   },
