@@ -69,6 +69,7 @@ import {
 } from "../ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
+import { EpisodeId } from "./EpisodeId";
 import { EpisodeRelationships } from "./EpisodeRelationships";
 
 function mutationMessage(error: unknown): string {
@@ -552,6 +553,9 @@ export function ConvexEpisodeDetailPage() {
             <h1 className="mt-4 text-4xl font-black tracking-tight">
               {episode.title}
             </h1>
+            <div className="mt-3">
+              <EpisodeId key={episode.id} id={episode.id} />
+            </div>
             <div className="mt-3 flex flex-wrap gap-5 text-sm text-muted-foreground">
               <span className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />

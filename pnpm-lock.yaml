@@ -20,6 +20,9 @@ importers:
 
   apps/admin:
     dependencies:
+      '@bbpc/episode-search':
+        specifier: workspace:*
+        version: link:../../packages/episode-search
       '@bbpc/movie-search-hints':
         specifier: workspace:*
         version: link:../../packages/movie-search-hints
@@ -235,6 +238,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@bbpc/episode-search':
+        specifier: workspace:*
+        version: link:../../packages/episode-search
       '@bbpc/movie-search-hints':
         specifier: workspace:*
         version: link:../../packages/movie-search-hints
@@ -456,6 +462,25 @@ importers:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@edge-runtime/vm@5.0.0)(@types/node@22.19.11)(@vitest/coverage-v8@4.1.10)(vite@8.1.5(@types/node@22.19.11)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0))
+
+  packages/episode-search:
+    dependencies:
+      fuse.js:
+        specifier: ^7.1.0
+        version: 7.5.0
+    devDependencies:
+      '@types/react':
+        specifier: 18.3.27
+        version: 18.3.27
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@edge-runtime/vm@5.0.0)(@types/node@22.19.11)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)
 
   packages/movie-search-hints:
     devDependencies:
