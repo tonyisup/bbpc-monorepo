@@ -44,6 +44,7 @@ const base = {
 const first = {
   ...base,
   id: "canonical-first",
+  date: "2026-09-15",
   number: 10,
   title: "Underwater cinema",
   slug: "underwater",
@@ -59,6 +60,7 @@ const movie = {
 const second = {
   ...base,
   id: "canonical-second",
+  date: "2026-09-01",
   number: 9,
   title: "Pending homework",
   slug: "pending",
@@ -119,6 +121,14 @@ async function search(value: string) {
       .props.onChange({ target: { value } });
   });
 }
+async function changeDate(bound: "from" | "to", value: string) {
+  await act(async () => {
+    renderer.root
+      .findByProps({ "aria-label": `Episode date ${bound}` })
+      .props.onChange({ target: { value } });
+  });
+}
+
 async function tick(ms = 300) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms);
@@ -134,6 +144,151 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
+
+test("restores bookmarked dates, resets pagination, and preserves the search when clearing dates", async () => {
+  mocks.router.query = { from: "2026-09-01", to: "2026-09-15", keep: "yes" };
+  await render();
+  expect(
+    renderer.root.findByProps({ "aria-label": "Episode date from" }).props.value
+  ).toBe("2026-09-01");
+  expect(
+    renderer.root.findByProps({ "aria-label": "Episode date to" }).props.value
+  ).toBe("2026-09-15");
+  expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-15",
+    paginationOpts: { cursor: null, numItems: 20 },
+  });
+  await act(async () => {
+    button("Load More").props.onClick();
+  });
+  expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-15",
+    paginationOpts: { cursor: "second-page", numItems: 20 },
+  });
+  await changeDate("to", "2026-09-30");
+  expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-30",
+    paginationOpts: { cursor: null, numItems: 20 },
+  });
+  expect(text()).not.toContain(second.title);
+  await search("Interstellar");
+  await tick(500);
+  expect(mocks.router.replace).toHaveBeenLastCalledWith(
+    {
+      pathname: "/episode",
+      query: {
+        q: "Interstellar",
+        from: "2026-09-01",
+        to: "2026-09-30",
+        keep: "yes",
+      },
+    },
+    undefined,
+    { shallow: true, scroll: false }
+  );
+  const transcriptCall = mocks.client.query.mock.calls.find(
+    ([ref]) => getFunctionName(ref) === "episodes/transcripts:search"
+  );
+  expect(transcriptCall?.[1]).toEqual({
+    query: "Interstellar",
+    dateFrom: "2026-09-01",
+    dateTo: "2026-09-30",
+  });
+  await act(async () => {
+    button("Clear dates").props.onClick();
+  });
+  await tick(500);
+  expect(mocks.router.replace).toHaveBeenLastCalledWith(
+    { pathname: "/episode", query: { q: "Interstellar", keep: "yes" } },
+    undefined,
+    { shallow: true, scroll: false }
+  );
+  expect(text()).toContain(second.title);
+});
+
+test("blocks reversed and invalid ranges and recovers to an empty filtered list", async () => {
+  await render();
+  await changeDate("from", "2026-09-15");
+  mocks.client.query.mockClear();
+  await changeDate("to", "2026-09-01");
+  expect(text()).toContain("start date must be on or before");
+  expect(renderer.root.findAllByType("table")).toHaveLength(0);
+  expect(mocks.client.query).not.toHaveBeenCalled();
+  mocks.client.query.mockResolvedValueOnce({
+    page: [],
+    isDone: true,
+    continueCursor: "done",
+  });
+  await changeDate("to", "2026-09-30");
+  expect(text()).toContain("No episodes found in this date range.");
+  expect(renderer.root.findAllByProps({ role: "alert" })).toHaveLength(0);
+  mocks.client.query.mockClear();
+  await act(async () => {
+    mocks.router.query = { from: "2026-02-30" };
+    renderer.update(<ConvexEpisodesPage />);
+  });
+  expect(text()).toContain("Enter valid dates");
+  expect(mocks.client.query).not.toHaveBeenCalled();
+});
+
+test("external date navigation cancels pending URL writes and clearing search keeps the range", async () => {
+  await render();
+  await search("pending local search");
+  await act(async () => {
+    mocks.router.query = { from: "2026-09-01", q: "Interstellar" };
+    renderer.update(<ConvexEpisodesPage />);
+  });
+  await tick(500);
+  expect(mocks.router.replace).not.toHaveBeenCalled();
+  await search("");
+  await tick(500);
+  expect(mocks.router.replace).toHaveBeenLastCalledWith(
+    { pathname: "/episode", query: { from: "2026-09-01" } },
+    undefined,
+    { shallow: true, scroll: false }
+  );
+  expect(
+    renderer.root.findByProps({ "aria-label": "Episode date from" }).props.value
+  ).toBe("2026-09-01");
+});
+
+test("discards a pending browse page and transcript response when the date range changes", async () => {
+  await render();
+  let resolvePage!: (value: unknown) => void;
+  mocks.client.query.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolvePage = resolve;
+    })
+  );
+  await act(async () => {
+    button("Load More").props.onClick();
+  });
+  await changeDate("from", "2026-09-15");
+  await act(async () => {
+    resolvePage({ page: [second], isDone: true, continueCursor: "done" });
+  });
+  expect(text()).not.toContain(second.title);
+  expect(button("Load More").props.disabled).toBe(false);
+
+  let resolveTranscript!: (value: unknown) => void;
+  mocks.transcripts.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveTranscript = resolve;
+    })
+  );
+  await search("jellyfish");
+  await tick();
+  await changeDate("from", "2026-09-16");
+  await act(async () => {
+    resolveTranscript({ results: [match], limited: false });
+  });
+  await tick();
+  expect(renderer.root.findAllByType("article")).toHaveLength(0);
+  expect(text()).not.toContain("jellyfish appears");
+});
 
 test("follows external query changes and clearing without replaying pending URL updates", async () => {
   mocks.router.query = { q: "Interstellar" };

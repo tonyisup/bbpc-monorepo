@@ -78,6 +78,51 @@ async function setup() {
 }
 
 describe("transcript import and public search", () => {
+  test("applies inclusive episode date bounds and excludes undated transcript matches", async () => {
+    const { t, service, args, episodeId } = await setup();
+    await service.mutation(api.episodes.transcripts.replace, args);
+    for (const [range, count] of [
+      [{ dateFrom: "2026-01-01", dateTo: "2026-01-01" }, 1],
+      [{ dateFrom: "2026-01-02" }, 0],
+      [{ dateTo: "2025-12-31" }, 0],
+      [{ dateTo: "2026-01-01" }, 1],
+    ] as const) {
+      const result = await t.query(api.episodes.transcripts.search, {
+        query: "jellyfish",
+        ...range,
+      });
+      expect(result.results).toHaveLength(count);
+    }
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", episodeId, { date: undefined });
+    });
+    expect(
+      (
+        await t.query(api.episodes.transcripts.search, {
+          query: "jellyfish",
+          dateTo: "2026-12-31",
+        })
+      ).results,
+    ).toEqual([]);
+    expect(
+      (await t.query(api.episodes.transcripts.search, { query: "jellyfish" }))
+        .results,
+    ).toHaveLength(1);
+    await expect(
+      t.query(api.episodes.transcripts.search, {
+        query: "jellyfish",
+        dateFrom: "2026-02-30",
+      }),
+    ).rejects.toThrow("real calendar date");
+    await expect(
+      t.query(api.episodes.transcripts.search, {
+        query: "jellyfish",
+        dateFrom: "2026-02-01",
+        dateTo: "2026-01-01",
+      }),
+    ).rejects.toThrow("start date");
+  });
+
   test("finds transcript-only words, returns source timing, and replaces without stale hits", async () => {
     const { t, service, args } = await setup();
     const first = await service.mutation(
