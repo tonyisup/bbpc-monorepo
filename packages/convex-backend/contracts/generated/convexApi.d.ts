@@ -1700,6 +1700,8 @@ export type PublicApiType = {
                 passageCount: number;
             }>;
             search: FunctionReference<"query", "public", {
+                dateFrom?: string;
+                dateTo?: string;
                 query: string;
             }, {
                 limited: boolean;
@@ -2016,6 +2018,8 @@ export type PublicApiType = {
                 splitCursor?: string | null;
             }>;
             listPage: FunctionReference<"query", "public", {
+                dateFrom?: string;
+                dateTo?: string;
                 paginationOpts: {
                     cursor: string | null;
                     endCursor?: string | null;

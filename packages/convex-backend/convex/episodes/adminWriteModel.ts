@@ -97,6 +97,20 @@ export function validatePlainDate(
   return value;
 }
 
+export function validateEpisodeDateRange(args: {
+  dateFrom?: string;
+  dateTo?: string;
+}): void {
+  validatePlainDate(args.dateFrom ?? null);
+  validatePlainDate(args.dateTo ?? null);
+  if (args.dateFrom && args.dateTo && args.dateFrom > args.dateTo) {
+    domainError(
+      "VALIDATION_FAILED",
+      "The start date must be on or before the end date.",
+    );
+  }
+}
+
 export function validateEpisodeStatus(value: string): string {
   const status = value.trim().normalize("NFKC").toLowerCase();
   if (!WRITABLE_STATUSES.has(status)) {

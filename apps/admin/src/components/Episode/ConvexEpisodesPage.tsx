@@ -40,6 +40,23 @@ import { EpisodeSearchResults } from "./EpisodeSearchResults";
 
 const FUZZY_SEARCH_STORAGE_KEY = "bbpc-admin-episode-fuzzy-search";
 
+function dateRangeError(from: string, to: string): string | null {
+  for (const value of [from, to]) {
+    if (!value) continue;
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== value
+    ) {
+      return "Enter valid dates in YYYY-MM-DD format.";
+    }
+  }
+  return from && to && from > to
+    ? "The start date must be on or before the end date."
+    : null;
+}
+
 function mutationFailureMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
     case "CONFLICT":
@@ -149,16 +166,22 @@ export function ConvexEpisodesPage() {
   const convex = useConvex();
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [fuzzySearch, setFuzzySearch] = useState(true);
   const urlTimer = useRef<ReturnType<typeof setTimeout>>();
   const pageGeneration = useRef(0);
   const isSearching = query.trim().length > 0;
+  const hasDateRange = Boolean(dateFrom || dateTo);
+  const rangeError = dateRangeError(dateFrom, dateTo);
 
   useEffect(() => {
     if (!router.isReady) return;
     clearTimeout(urlTimer.current);
     setQuery(typeof router.query.q === "string" ? router.query.q : "");
-  }, [router.isReady, router.query.q]);
+    setDateFrom(typeof router.query.from === "string" ? router.query.from : "");
+    setDateTo(typeof router.query.to === "string" ? router.query.to : "");
+  }, [router.isReady, router.query.q, router.query.from, router.query.to]);
 
   useEffect(() => {
     try {
@@ -170,13 +193,16 @@ export function ConvexEpisodesPage() {
     return () => clearTimeout(urlTimer.current);
   }, []);
 
-  const changeQuery = (value: string) => {
-    setQuery(value);
+  const updateFilterUrl = (search: string, from: string, to: string) => {
     clearTimeout(urlTimer.current);
     urlTimer.current = setTimeout(() => {
       const params = { ...router.query };
-      if (value.trim()) params.q = value;
+      if (search.trim()) params.q = search;
       else delete params.q;
+      if (from) params.from = from;
+      else delete params.from;
+      if (to) params.to = to;
+      else delete params.to;
       void router
         .replace({ pathname: router.pathname, query: params }, undefined, {
           shallow: true,
@@ -186,6 +212,17 @@ export function ConvexEpisodesPage() {
           // A cancelled navigation must not interrupt local search.
         });
     }, 500);
+  };
+
+  const changeQuery = (value: string) => {
+    setQuery(value);
+    updateFilterUrl(value, dateFrom, dateTo);
+  };
+
+  const changeDateRange = (from: string, to: string) => {
+    setDateFrom(from);
+    setDateTo(to);
+    updateFilterUrl(query, from, to);
   };
 
   const changeFuzzySearch = (enabled: boolean) => {
@@ -209,7 +246,15 @@ export function ConvexEpisodesPage() {
     let active = true;
     pageGeneration.current += 1;
     setLoadFailed(false);
-    void loadConvexAdminEpisodesPage(convex, null)
+    setEpisodes(null);
+    setContinueCursor(null);
+    setIsDone(true);
+    setIsLoadingMore(false);
+    if (rangeError || !router.isReady) return;
+    void loadConvexAdminEpisodesPage(convex, null, {
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+    })
       .then((result) => {
         if (active) {
           setEpisodes(result.episodes);
@@ -226,7 +271,7 @@ export function ConvexEpisodesPage() {
       active = false;
       pageGeneration.current += 1;
     };
-  }, [convex, revision]);
+  }, [convex, revision, dateFrom, dateTo, rangeError, router.isReady]);
 
   const refresh = () => {
     pageGeneration.current += 1;
@@ -243,7 +288,10 @@ export function ConvexEpisodesPage() {
     }
     const generation = pageGeneration.current;
     setIsLoadingMore(true);
-    void loadConvexAdminEpisodesPage(convex, continueCursor)
+    void loadConvexAdminEpisodesPage(convex, continueCursor, {
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+    })
       .then((result) => {
         if (generation !== pageGeneration.current) return;
         setEpisodes((current) => [...(current ?? []), ...result.episodes]);
@@ -350,11 +398,73 @@ export function ConvexEpisodesPage() {
           </p>
         </div>
 
-        {isSearching ? (
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium">Episode date</legend>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid min-w-0 flex-1 gap-2 sm:flex-none">
+              <Label htmlFor="episode-date-from">From</Label>
+              <Input
+                id="episode-date-from"
+                aria-label="Episode date from"
+                aria-describedby={
+                  rangeError ? "episode-date-error" : "episode-date-help"
+                }
+                aria-invalid={Boolean(rangeError)}
+                className="w-full sm:w-44"
+                type="date"
+                min="0001-01-01"
+                max={dateTo || "9999-12-31"}
+                value={dateFrom}
+                onChange={(event) => changeDateRange(event.target.value, dateTo)}
+              />
+            </div>
+            <div className="grid min-w-0 flex-1 gap-2 sm:flex-none">
+              <Label htmlFor="episode-date-to">To</Label>
+              <Input
+                id="episode-date-to"
+                aria-label="Episode date to"
+                aria-describedby={
+                  rangeError ? "episode-date-error" : "episode-date-help"
+                }
+                aria-invalid={Boolean(rangeError)}
+                className="w-full sm:w-44"
+                type="date"
+                min={dateFrom || "0001-01-01"}
+                max="9999-12-31"
+                value={dateTo}
+                onChange={(event) =>
+                  changeDateRange(dateFrom, event.target.value)
+                }
+              />
+            </div>
+            {hasDateRange && (
+              <Button variant="outline" onClick={() => changeDateRange("", "")}>
+                Clear dates
+              </Button>
+            )}
+          </div>
+          <p id="episode-date-help" className="text-xs text-muted-foreground">
+            Includes both dates. Leave either date blank for an open-ended range.
+            Episodes without a date are excluded when filtering.
+          </p>
+          {rangeError && (
+            <p
+              id="episode-date-error"
+              role="alert"
+              className="text-sm text-destructive"
+            >
+              {rangeError}
+            </p>
+          )}
+        </fieldset>
+
+        {rangeError ? null : isSearching ? (
           <EpisodeSearchResults
-            key={revision}
+            key={`${revision}:${dateFrom}:${dateTo}`}
             query={query}
             fuzzy={fuzzySearch}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
           />
         ) : loadFailed ? (
           <div className="rounded-md border bg-card p-8 text-center">
@@ -389,7 +499,9 @@ export function ConvexEpisodesPage() {
                 {episodes?.length === 0 && (
                   <TableRow>
                     <TableCell className="h-24 text-center" colSpan={5}>
-                      No episodes found.
+                      {hasDateRange
+                        ? "No episodes found in this date range."
+                        : "No episodes found."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -438,7 +550,7 @@ export function ConvexEpisodesPage() {
           </div>
         )}
 
-        {!isSearching && !loadFailed && !isDone && episodes !== null && (
+        {!rangeError && !isSearching && !loadFailed && !isDone && episodes !== null && (
           <div className="flex justify-center py-4">
             <Button
               className="w-full max-w-xs"

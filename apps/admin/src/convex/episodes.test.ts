@@ -114,6 +114,40 @@ describe("Convex admin episode catalog adapter", () => {
     expect(query.mock.calls[1]?.[1].paginationOpts.cursor).toBe("next");
   });
 
+  test("preserves date bounds through every catalog page and transcript search", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        page: [episode],
+        isDone: false,
+        continueCursor: "next",
+      })
+      .mockResolvedValueOnce({ page: [], isDone: true, continueCursor: "done" });
+    const client = { query } as unknown as ConvexReactClient;
+    const dateRange = { dateFrom: "2026-09-01", dateTo: "2026-09-15" };
+    await loadConvexAdminEpisodeSearchCatalog(
+      client,
+      new AbortController().signal,
+      dateRange
+    );
+    expect(query.mock.calls.map((call) => call[1])).toEqual([
+      {
+        ...dateRange,
+        paginationOpts: { cursor: null, numItems: ADMIN_EPISODES_PAGE_SIZE },
+      },
+      {
+        ...dateRange,
+        paginationOpts: { cursor: "next", numItems: ADMIN_EPISODES_PAGE_SIZE },
+      },
+    ]);
+    query.mockResolvedValueOnce({ results: [], limited: false });
+    await searchConvexAdminEpisodeTranscripts(client, "hello", dateRange);
+    expect(query).toHaveBeenLastCalledWith(expect.anything(), {
+      query: "hello",
+      ...dateRange,
+    });
+  });
+
   test("rejects incomplete catalogs and stops pagination after cancellation", async () => {
     const query = vi
       .fn()
