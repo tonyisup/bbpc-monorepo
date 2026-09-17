@@ -1904,7 +1904,7 @@ export type PublicApiType = {
       search: FunctionReference<
         "query",
         "public",
-        { query: string },
+        { dateFrom?: string; dateTo?: string; query: string },
         {
           limited: boolean;
           results: Array<{
@@ -2227,6 +2227,8 @@ export type PublicApiType = {
         "query",
         "public",
         {
+          dateFrom?: string;
+          dateTo?: string;
           paginationOpts: {
             cursor: string | null;
             endCursor?: string | null;

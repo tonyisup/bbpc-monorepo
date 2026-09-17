@@ -96,6 +96,11 @@ export const ADMIN_EPISODES_PAGE_SIZE = 20;
 
 export type ConvexAdminEpisode = z.infer<typeof adminEpisodeSummarySchema>;
 
+export interface EpisodeDateRange {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 export interface ConvexAdminEpisodesPage {
   episodes: ConvexAdminEpisode[];
   isDone: boolean;
@@ -104,10 +109,12 @@ export interface ConvexAdminEpisodesPage {
 
 export async function loadConvexAdminEpisodesPage(
   client: ConvexReactClient,
-  cursor: string | null
+  cursor: string | null,
+  dateRange: EpisodeDateRange = {}
 ): Promise<ConvexAdminEpisodesPage> {
   const result = episodesPageSchema.parse(
     await client.query(listEpisodesReference, {
+      ...dateRange,
       paginationOpts: {
         cursor,
         numItems: ADMIN_EPISODES_PAGE_SIZE,
@@ -124,14 +131,15 @@ export async function loadConvexAdminEpisodesPage(
 /** Load every authenticated catalog page for listener-style metadata matching. */
 export async function loadConvexAdminEpisodeSearchCatalog(
   client: ConvexReactClient,
-  signal: AbortSignal
+  signal: AbortSignal,
+  dateRange: EpisodeDateRange = {}
 ): Promise<ConvexAdminEpisode[]> {
   const episodes = new Map<string, ConvexAdminEpisode>();
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
   while (true) {
     signal.throwIfAborted();
-    const result = await loadConvexAdminEpisodesPage(client, cursor);
+    const result = await loadConvexAdminEpisodesPage(client, cursor, dateRange);
     signal.throwIfAborted();
     for (const episode of result.episodes) episodes.set(episode.id, episode);
     if (result.isDone) return [...episodes.values()];
@@ -165,10 +173,11 @@ const transcriptSearchSchema = z.object({
 
 export async function searchConvexAdminEpisodeTranscripts(
   client: ConvexReactClient,
-  query: string
+  query: string,
+  dateRange: EpisodeDateRange = {}
 ) {
   return transcriptSearchSchema.parse(
-    await client.query(api.episodes.transcripts.search, { query })
+    await client.query(api.episodes.transcripts.search, { query, ...dateRange })
   );
 }
 

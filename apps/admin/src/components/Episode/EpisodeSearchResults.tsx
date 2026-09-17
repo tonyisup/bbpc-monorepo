@@ -84,9 +84,13 @@ function HighlightPassage({ text, query }: { text: string; query: string }) {
 export function EpisodeSearchResults({
   query,
   fuzzy,
+  dateFrom,
+  dateTo,
 }: {
   query: string;
   fuzzy: boolean;
+  dateFrom?: string;
+  dateTo?: string;
 }) {
   const convex = useConvex();
   const [catalog, setCatalog] = useState<ConvexAdminEpisode[]>();
@@ -95,7 +99,10 @@ export function EpisodeSearchResults({
   useEffect(() => {
     const controller = new AbortController();
     setFailed(false);
-    void loadConvexAdminEpisodeSearchCatalog(convex, controller.signal)
+    void loadConvexAdminEpisodeSearchCatalog(convex, controller.signal, {
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+    })
       .then((episodes) => {
         if (!controller.signal.aborted) setCatalog(episodes);
       })
@@ -103,11 +110,15 @@ export function EpisodeSearchResults({
         if (!controller.signal.aborted) setFailed(true);
       });
     return () => controller.abort();
-  }, [convex, attempt]);
+  }, [convex, attempt, dateFrom, dateTo]);
 
   const searchTranscripts = useCallback(
-    (text: string) => searchConvexAdminEpisodeTranscripts(convex, text),
-    [convex]
+    (text: string) =>
+      searchConvexAdminEpisodeTranscripts(convex, text, {
+        ...(dateFrom ? { dateFrom } : {}),
+        ...(dateTo ? { dateTo } : {}),
+      }),
+    [convex, dateFrom, dateTo]
   );
   const transcripts = useTranscriptSearch(query, searchTranscripts);
   const metadata = useEpisodeMetadataSearch(catalog, query, fuzzy);
@@ -180,6 +191,8 @@ export function EpisodeSearchResults({
             ? "Searching…"
             : failed || transcripts.error
             ? "Search is incomplete. Retry the unavailable search above."
+            : dateFrom || dateTo
+            ? "No episodes found matching your search in this date range."
             : "No episodes found matching your search."}
         </p>
       )}

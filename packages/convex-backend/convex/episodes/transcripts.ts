@@ -19,6 +19,7 @@ import {
 import type { MutationCtx } from "../_generated/server.js";
 import type { Id } from "../_generated/dataModel.js";
 import { hydrateEpisode } from "./readModel.js";
+import { validateEpisodeDateRange } from "./adminWriteModel.js";
 import { episodeDetailValidator } from "./validators.js";
 import {
   episodePassages,
@@ -164,7 +165,11 @@ export const remove = pipelineMutation({
 
 /** Search passages belonging to currently published episodes. */
 export const search = anonymousQuery({
-  args: { query: v.string() },
+  args: {
+    query: v.string(),
+    dateFrom: v.optional(v.string()),
+    dateTo: v.optional(v.string()),
+  },
   returns: v.object({
     results: v.array(
       v.object({
@@ -175,6 +180,7 @@ export const search = anonymousQuery({
     limited: v.boolean(),
   }),
   handler: async (ctx, args) => {
+    validateEpisodeDateRange(args);
     let query;
     try {
       query = validateTranscriptQuery(args.query);
@@ -206,6 +212,13 @@ export const search = anonymousQuery({
       if (
         !episode ||
         !["published", "Published"].includes(episode.status ?? "")
+      )
+        continue;
+      if (
+        (args.dateFrom || args.dateTo) &&
+        (!episode.date ||
+          (args.dateFrom && episode.date < args.dateFrom) ||
+          (args.dateTo && episode.date > args.dateTo))
       )
         continue;
       if (results.length === 20) {

@@ -23,6 +23,8 @@ This feature allows admins to manage all aspects of podcast episodes.
 
 - **List Episodes (`/episode`)**:
     - Displays a table of all podcast episodes, showing the episode number, title, and air date.
+    - Filters episodes by an inclusive air-date range using **From** and **To**. Either end can be left blank; episodes without a date are excluded while filtering. Filtered browsing shows the latest dates first and supports pagination.
+    - Applies the date range to episode, movie, and transcript searches. Search text and dates are saved in the URL; **Clear dates** keeps the search text.
     - **Create**: A modal allows for the creation of new episodes.
     - **Read**: Each episode title links to a detailed edit page (`/episode/[id]`).
     - **Delete**: A button allows for the removal of an episode.
