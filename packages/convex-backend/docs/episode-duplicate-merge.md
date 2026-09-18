@@ -65,6 +65,23 @@ replay rejection and rollback after a late trigger failure.
    donor absence, and dashboard counts. Start with one pair. Stop on any failure;
    no batch orchestrator silently advances past a failed pair.
 
-The shared API contract includes the two admin-only endpoints, but no app UI or
-remote execution client is added by this change. Existing deployment safeguards
-are unchanged. Production-derived review lists remain in ignored local storage.
+## Admin UI
+
+Open an episode detail page and select **Merge duplicate**. Copy the other
+episode's ID from the episode list, then choose which episode to retain. The
+retained episode must have the only transcript. **Preview merge** checks the
+pair and shows the retained/deleted records, copied fields, relationship counts,
+retained transcript passage count, and regenerated slug.
+
+Download the private preview before proceeding. Its JSON contains the complete
+`snapshotJson` and `fingerprint`; it is still only an inspection snapshot, not a
+full database backup. Enter the receipt for a separately verified full backup
+and acknowledge the deletion and lack of redirects to enable the merge.
+After success, **View retained episode** opens its new slug. A rejected or
+uncertain mutation clears the preview and acknowledgements; inspect the episode
+before explicitly requesting another preview. The UI does not automatically
+refresh and retry a merge.
+
+Existing deployment and production execution safeguards are unchanged.
+Production-derived review lists and downloaded previews must remain private and
+outside version control.

@@ -71,6 +71,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
 import { EpisodeId } from "./EpisodeId";
 import { EpisodeRelationships } from "./EpisodeRelationships";
+import { EpisodeMergeDialog } from "./EpisodeMergeDialog";
 
 function mutationMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -365,6 +366,7 @@ export function ConvexEpisodeDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingMoreAudio, setIsLoadingMoreAudio] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
   const [audioNotes, setAudioNotes] = useState("");
   const [notes, setNotes] = useState("");
@@ -526,6 +528,22 @@ export function ConvexEpisodeDetailPage() {
           }}
         />
       )}
+      {mergeDialogOpen && (
+        <EpisodeMergeDialog
+          key={episode.id}
+          episode={episode}
+          onClose={() => setMergeDialogOpen(false)}
+          onMerged={(result) => {
+            setMergeDialogOpen(false);
+            toast.success("Duplicate episode merged.");
+            if (result.slug === slug) refresh();
+            else
+              void router.replace(
+                `/episode/${encodeURIComponent(result.slug)}`
+              );
+          }}
+        />
+      )}
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8">
         <div className="flex items-center justify-between">
@@ -535,10 +553,19 @@ export function ConvexEpisodeDetailPage() {
               Back to episodes
             </Link>
           </Button>
-          <Button className="gap-2" onClick={refresh} variant="outline">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              disabled={isSaving}
+              onClick={() => setMergeDialogOpen(true)}
+              variant="outline"
+            >
+              Merge duplicate
+            </Button>
+            <Button className="gap-2" onClick={refresh} variant="outline">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <section className="relative overflow-hidden rounded-2xl border bg-card p-8 shadow-sm">
