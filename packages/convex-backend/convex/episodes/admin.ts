@@ -8,6 +8,7 @@ import type { Doc } from "../_generated/dataModel.js";
 import { adminMutation, adminQuery } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
+import { buildMergePreview } from "./mergeModel.js";
 import {
   enqueueUploadThingDelete,
   findUploadThingDeleteIntent,
@@ -228,6 +229,46 @@ export const createEpisode = adminMutation({
     });
     const episode = await requireEpisode(ctx, episodeId);
     return await hydrateAdminEpisode(ctx, episode);
+  },
+});
+
+/** Export the preview/backup privately before requesting a destructive commit. */
+export const previewDuplicateMerge = adminQuery({
+  args: { keeperId: v.id("episodes"), donorId: v.id("episodes") },
+  returns: v.object({ fingerprint: v.string(), snapshotJson: v.string(), slug: v.string() }),
+  handler: async (ctx, args) => {
+    const plan = await buildMergePreview(ctx, args.keeperId, args.donorId);
+    return { fingerprint: plan.fingerprint, snapshotJson: plan.snapshotJson, slug: plan.slug };
+  },
+});
+
+/** One pair per transaction; no redirect or alias is created. */
+export const mergeDuplicateEpisode = adminMutation({
+  args: {
+    keeperId: v.id("episodes"), donorId: v.id("episodes"),
+    expectedFingerprint: v.string(), backupReceipt: v.string(),
+    confirmation: v.literal("MERGE_WITHOUT_REDIRECTS_AND_REBUILD_SLUG"),
+  },
+  returns: v.object({ keeperId: v.id("episodes"), removedId: v.id("episodes"), slug: v.string() }),
+  handler: async (ctx, args) => {
+    if (!args.backupReceipt.trim() || args.backupReceipt.length > 512) domainError("VALIDATION_FAILED", "A private backup receipt is required.");
+    const plan = await buildMergePreview(ctx, args.keeperId, args.donorId);
+    if (plan.fingerprint !== args.expectedFingerprint) domainError("CONFLICT", "Merge data changed. Preview and back up again.");
+    for (const table of ["archivePosts", "assignments", "extraReviews", "episodeLinks"] as const) {
+      for (const row of plan.donorRelations[table]) await ctx.db.patch(table, row._id, { episodeId: args.keeperId });
+    }
+    // Release the base slug first. Deletion, regeneration and all child moves are atomic.
+    await ctx.db.delete("episodes", args.donorId);
+    await ctx.db.patch("episodes", args.keeperId, { ...plan.patch, slug: undefined, normalizedSlug: undefined });
+    const slug = await allocateEpisodeSlug(ctx, { number: plan.keeper.number, title: plan.keeper.title, excludeId: args.keeperId });
+    if (slug.slug !== plan.slug) domainError("CONFLICT", "Expected unsuffixed slug was unavailable.");
+    await ctx.db.patch("episodes", args.keeperId, slug);
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor, action: "episodes.admin.duplicateMerged", targetType: "episode", targetId: args.keeperId,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: { donorId: args.donorId, donorSnapshot: JSON.stringify(plan.donor), fingerprint: plan.fingerprint, backupReceipt: args.backupReceipt, slug: slug.slug, redirects: false },
+    });
+    return { keeperId: args.keeperId, removedId: args.donorId, slug: slug.slug };
   },
 });
 

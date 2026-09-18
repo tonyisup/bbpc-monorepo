@@ -1801,6 +1801,26 @@ export type PublicApiType = {
                 text: string;
                 url: string;
             }>;
+            previewDuplicateMerge: FunctionReference<"query", "public", {
+                keeperId: Id<"episodes">;
+                donorId: Id<"episodes">;
+            }, {
+                fingerprint: string;
+                snapshotJson: string;
+                slug: string;
+            }>;
+            mergeDuplicateEpisode: FunctionReference<"mutation", "public", {
+                keeperId: Id<"episodes">;
+                donorId: Id<"episodes">;
+                expectedFingerprint: string;
+                backupReceipt: string;
+                confirmation: "MERGE_WITHOUT_REDIRECTS_AND_REBUILD_SLUG";
+                clientApiVersion: string;
+            }, {
+                keeperId: Id<"episodes">;
+                removedId: Id<"episodes">;
+                slug: string;
+            }>;
             createEpisode: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
                 number: number;
