@@ -184,8 +184,8 @@ export async function searchConvexAdminEpisodeTranscripts(
 export async function createConvexAdminEpisode(
   client: ConvexReactClient,
   input: { number: number; title: string }
-): Promise<void> {
-  adminEpisodeSummarySchema.parse(
+): Promise<ConvexAdminEpisode> {
+  return adminEpisodeSummarySchema.parse(
     await client.mutation(createEpisodeReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       number: input.number,
