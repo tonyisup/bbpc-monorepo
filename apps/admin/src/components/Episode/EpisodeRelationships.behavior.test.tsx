@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   client: { mutation: vi.fn() },
   users: vi.fn(),
   search: vi.fn(),
+  catalogMovies: vi.fn(),
+  catalogShows: vi.fn(),
   upsert: vi.fn(),
   refresh: vi.fn(),
   error: vi.fn(),
@@ -31,8 +33,8 @@ vi.mock("sonner", () => ({
 vi.mock("@/convex/catalog", () => ({
   searchConvexTmdbMovies: mocks.search,
   upsertConvexAdminMovie: mocks.upsert,
-  searchConvexCatalogMovies: vi.fn(),
-  searchConvexCatalogShows: vi.fn(),
+  searchConvexCatalogMovies: mocks.catalogMovies,
+  searchConvexCatalogShows: mocks.catalogShows,
 }));
 vi.mock("@/convex/users", () => ({ loadConvexAdminUsersPage: mocks.users }));
 vi.mock("@/components/ui/dialog", () => {
@@ -97,12 +99,11 @@ function button(text: string) {
   if (!found) throw new Error(`Button missing: ${text}`);
   return found;
 }
-function submitButton() {
+function submitButton(label = "Add assignment") {
   const found = renderer.root
     .findAllByType("button")
     .find(
-      (node) =>
-        node.props.type === "button" && node.children.includes("Add assignment")
+      (node) => node.props.type === "button" && node.children.includes(label)
     );
   if (!found) throw new Error("Submit button missing");
   return found;
@@ -141,6 +142,10 @@ beforeEach(() => {
     continueCursor: "",
   });
   mocks.search.mockResolvedValue([movie]);
+  mocks.catalogMovies.mockResolvedValue([]);
+  mocks.catalogShows.mockResolvedValue([
+    { id: "show-1", title: "Example Show", year: 2021 },
+  ]);
   mocks.client.mutation.mockResolvedValue({ id: "assignment-1" });
 });
 afterEach(() => {
@@ -217,4 +222,139 @@ test("a failed assignment save keeps the dialog open without reporting success",
   expect(mocks.error).toHaveBeenCalledTimes(1);
   expect(mocks.refresh).not.toHaveBeenCalled();
   expect(submitButton().props.disabled).toBe(false);
+});
+
+const extraMovie = {
+  ...movie,
+  id: 482321,
+  title: "Ron's Gone Wrong",
+  release_date: "2021-10-14",
+};
+
+async function selectExtraMovie() {
+  mocks.search.mockResolvedValue([extraMovie]);
+  await act(async () => {
+    renderer = create(
+      <EpisodeRelationships episode={episode} onRefresh={mocks.refresh} />
+    );
+  });
+  await act(async () => button("Add extra").props.onClick());
+  act(() => button("Alice").props.onClick());
+  act(() => {
+    const input = renderer.root
+      .findAllByType("input")
+      .find((input) => /Search .*movies/u.test(input.props.placeholder));
+    if (!input) throw new Error("Movie search input missing");
+    input.props.onChange({ target: { value: "ron's gone wrong" } });
+  });
+  await act(async () => button("Search").props.onClick());
+  expect(mocks.search).toHaveBeenCalledWith(mocks.client, "ron's gone wrong");
+  expect(mocks.catalogMovies).not.toHaveBeenCalled();
+  act(() => button("Ron's Gone Wrong (2021)").props.onClick());
+}
+
+test("extras find movies outside the saved catalog and await the movie save before creating one extra", async () => {
+  const savedMovie = deferred<{ id: string }>();
+  const extra = deferred<{ id: string }>();
+  mocks.upsert.mockReturnValue(savedMovie.promise);
+  mocks.client.mutation.mockReturnValue(extra.promise);
+  await selectExtraMovie();
+  expect(mocks.upsert).not.toHaveBeenCalled();
+  const submit = submitButton("Add extra").props.onClick;
+  act(() => {
+    submit();
+    submit();
+  });
+  expect(mocks.upsert).toHaveBeenCalledTimes(1);
+  expect(mocks.upsert).toHaveBeenCalledWith(mocks.client, extraMovie);
+  expect(mocks.client.mutation).not.toHaveBeenCalled();
+  expect(submitButton("Add extra").props.disabled).toBe(true);
+  await act(async () => savedMovie.resolve({ id: "saved-ron" }));
+  expect(mocks.client.mutation).toHaveBeenCalledTimes(1);
+  const call = mocks.client.mutation.mock.calls[0];
+  if (!call) throw new Error("Extra mutation missing");
+  expect(getFunctionName(call[0])).toBe("reviews/admin:createExtra");
+  expect(call[1]).toMatchObject({
+    episodeId: "episode-1",
+    userId: "user-1",
+    movieId: "saved-ron",
+  });
+  expect(call[1].showId).toBeUndefined();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  await act(async () => extra.resolve({ id: "extra-1" }));
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  expect(
+    renderer.root.findAllByProps({ placeholder: "Search TMDB movies" })
+  ).toHaveLength(0);
+});
+
+test("a failed extra movie save preserves the selection and does not create a review", async () => {
+  mocks.upsert
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValueOnce({ id: "saved-ron" });
+  await selectExtraMovie();
+  await act(async () => submitButton("Add extra").props.onClick());
+  expect(mocks.client.mutation).not.toHaveBeenCalled();
+  expect(mocks.error).toHaveBeenCalledTimes(1);
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  expect(submitButton("Add extra").props.disabled).toBe(false);
+  await act(async () => submitButton("Add extra").props.onClick());
+  expect(mocks.client.mutation).toHaveBeenCalledTimes(1);
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+});
+
+test("editing an extra movie search clears its selection, and TV extras still use saved shows", async () => {
+  await selectExtraMovie();
+  act(() => {
+    renderer.root
+      .findByProps({ placeholder: "Search TMDB movies" })
+      .props.onChange({ target: { value: "Arrival" } });
+  });
+  expect(submitButton("Add extra").props.disabled).toBe(true);
+  act(() =>
+    renderer.root.findByProps({ value: "movie" }).props.onValueChange("show")
+  );
+  act(() => {
+    renderer.root
+      .findByProps({ placeholder: "Search migrated shows" })
+      .props.onChange({ target: { value: "Example Show" } });
+  });
+  await act(async () => button("Search").props.onClick());
+  act(() => button("Example Show (2021)").props.onClick());
+  await act(async () => submitButton("Add extra").props.onClick());
+  expect(mocks.upsert).not.toHaveBeenCalled();
+  const call = mocks.client.mutation.mock.calls[0];
+  if (!call) throw new Error("Extra mutation missing");
+  expect(call[1]).toMatchObject({
+    episodeId: "episode-1",
+    userId: "user-1",
+    showId: "show-1",
+  });
+  expect(call[1].movieId).toBeUndefined();
+});
+
+test("a failed extra save keeps the movie available for retry without reporting success", async () => {
+  mocks.upsert.mockResolvedValue({ id: "saved-ron" });
+  mocks.client.mutation.mockRejectedValueOnce(new Error("offline"));
+  await selectExtraMovie();
+  await act(async () => submitButton("Add extra").props.onClick());
+  expect(mocks.success).not.toHaveBeenCalled();
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  expect(mocks.error).toHaveBeenCalledTimes(1);
+  expect(submitButton("Add extra").props.disabled).toBe(false);
+  await act(async () => submitButton("Add extra").props.onClick());
+  expect(mocks.refresh).toHaveBeenCalledTimes(1);
+});
+
+test("switching media types clears the selected extra movie", async () => {
+  await selectExtraMovie();
+  expect(submitButton("Add extra").props.disabled).toBe(false);
+  act(() =>
+    renderer.root.findByProps({ value: "movie" }).props.onValueChange("show")
+  );
+  expect(submitButton("Add extra").props.disabled).toBe(true);
+  act(() =>
+    renderer.root.findByProps({ value: "show" }).props.onValueChange("movie")
+  );
+  expect(submitButton("Add extra").props.disabled).toBe(true);
 });

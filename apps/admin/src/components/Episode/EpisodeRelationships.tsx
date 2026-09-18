@@ -23,6 +23,7 @@ import {
   type ConvexAdminEpisodeDetail,
   addConvexAdminEpisodeAssignmentFromTmdb,
   addConvexAdminEpisodeExtra,
+  addConvexAdminEpisodeMovieExtraFromTmdb,
   removeConvexAdminEpisodeAssignment,
   searchConvexAdminAssignmentMovies,
 } from "@/convex/episodeDetails";
@@ -616,22 +617,24 @@ function AddExtraDialog({
 }: {
   saving: boolean;
   onClose: () => void;
-  onSave: (input: {
-    userId: string;
-    kind: CatalogKind;
-    mediaId: string;
-  }) => void;
+  onSave: (
+    input: { userId: string } & (
+      | { kind: "movie"; movie: ConvexTmdbTitle }
+      | { kind: "show"; mediaId: string }
+    )
+  ) => void;
 }) {
   const [user, setUser] = useState<ConvexAdminUser | null>(null);
   const [kind, setKind] = useState<CatalogKind>("movie");
   const [media, setMedia] = useState<CatalogSelection | null>(null);
+  const [movie, setMovie] = useState<ConvexTmdbTitle | null>(null);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Add extra</DialogTitle>
           <DialogDescription>
-            Choose the reviewer and a migrated movie or TV show.
+            Choose the reviewer and a movie from TMDB or a saved TV show.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5 py-2">
@@ -642,6 +645,7 @@ function AddExtraDialog({
               onValueChange={(value) => {
                 setKind(value as CatalogKind);
                 setMedia(null);
+                setMovie(null);
               }}
               value={kind}
             >
@@ -654,12 +658,19 @@ function AddExtraDialog({
               </SelectContent>
             </Select>
           </div>
-          <CatalogPicker
-            key={kind}
-            kind={kind}
-            onSelect={setMedia}
-            selection={media}
-          />
+          {kind === "movie" ? (
+            <TmdbMoviePicker
+              onClearSelection={() => setMovie(null)}
+              onSelect={setMovie}
+              selection={movie}
+            />
+          ) : (
+            <CatalogPicker
+              kind="show"
+              onSelect={setMedia}
+              selection={media}
+            />
+          )}
         </div>
         <DialogFooter>
           <Button
@@ -671,9 +682,16 @@ function AddExtraDialog({
             Cancel
           </Button>
           <Button
-            disabled={saving || user === null || media === null}
+            disabled={
+              saving ||
+              user === null ||
+              (kind === "movie" ? movie === null : media === null)
+            }
             onClick={() => {
-              if (user !== null && media !== null) {
+              if (user === null) return;
+              if (kind === "movie" && movie !== null) {
+                onSave({ userId: user.id, kind, movie });
+              } else if (kind === "show" && media !== null) {
                 onSave({ userId: user.id, kind, mediaId: media.id });
               }
             }}
@@ -737,7 +755,11 @@ export function EpisodeRelationships({
             if (savingRef.current) return;
             savingRef.current = true;
             setSaving(true);
-            void addConvexAdminEpisodeExtra(convex, episode.id, input)
+            const request =
+              input.kind === "movie"
+                ? addConvexAdminEpisodeMovieExtraFromTmdb(convex, episode.id, input)
+                : addConvexAdminEpisodeExtra(convex, episode.id, input);
+            void request
               .then(() => {
                 toast.success("Extra added.");
                 setDialog(null);

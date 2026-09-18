@@ -350,6 +350,19 @@ export async function removeConvexAdminEpisodeAssignment(
   );
 }
 
+export async function addConvexAdminEpisodeMovieExtraFromTmdb(
+  client: ConvexReactClient,
+  episodeId: string,
+  input: { userId: string; movie: ConvexTmdbTitle }
+): Promise<void> {
+  const movie = await upsertConvexAdminMovie(client, input.movie);
+  await addConvexAdminEpisodeExtra(client, episodeId, {
+    userId: input.userId,
+    kind: "movie",
+    mediaId: movie.id,
+  });
+}
+
 export async function addConvexAdminEpisodeExtra(
   client: ConvexReactClient,
   episodeId: string,
