@@ -278,20 +278,29 @@ test.each(["episode", "relationship", "new-link", "transcript"])(
 );
 
 test.each([
-  "zero",
-  "title",
-  "date",
-  "status",
-  "recording",
-  "third",
-  "slug",
-  "donor-transcript",
-  "orphan",
-  "integrity",
-  "duplicate-link",
-  "capacity",
-  "unsupported",
-])("blocks unsafe %s pair", async (kind) => {
+  ["zero", "Only matching-title, non-zero episode pairs can merge."],
+  ["title", "Only matching-title, non-zero episode pairs can merge."],
+  ["date", "Dates need separate review (missing or more than seven days apart)."],
+  ["status", "Both episodes must share published status."],
+  ["recording", "Conflicting recording; review separately."],
+  ["third", "This number must have exactly two episode entries."],
+  ["slug", "Unsuffixed slug is occupied by an unrelated episode."],
+  [
+    "donor-transcript",
+    "Keeper must have the only transcript; donor must have no metadata or passages.",
+  ],
+  [
+    "orphan",
+    "Keeper must have the only transcript; donor must have no metadata or passages.",
+  ],
+  ["integrity", "Keeper transcript integrity check failed."],
+  ["duplicate-link", "Duplicate link URLs require review."],
+  ["capacity", "Combined episodeLinks exceeds the supported bound."],
+  [
+    "unsupported",
+    "Unsupported episodeAudioMessages relationship; review this pair separately.",
+  ],
+])("blocks unsafe %s pair", async (kind, expectedMessage) => {
   const f = await fixture();
   await f.t.run(async (ctx) => {
     if (kind === "zero")
@@ -364,7 +373,7 @@ test.each([
         createdAt: 1,
       });
   });
-  await expect(f.preview()).rejects.toThrow();
+  await expect(f.preview()).rejects.toThrow(expectedMessage);
   expect(
     await f.t.run((ctx) => ctx.db.get("episodes", f.ids.donorId))
   ).not.toBeNull();
@@ -411,7 +420,9 @@ test("late trigger failure rolls back child moves, donor deletion and slug clear
       createdAt: 1,
     })
   );
-  await expect(f.commit(p.fingerprint)).rejects.toThrow();
+  await expect(f.commit(p.fingerprint)).rejects.toThrow(
+    "unique() query returned more than one result"
+  );
   await f.t.run(async (ctx) => {
     expect(await ctx.db.get("episodes", f.ids.donorId)).not.toBeNull();
     expect(await ctx.db.get("archivePosts", f.ids.archiveId)).toMatchObject({
