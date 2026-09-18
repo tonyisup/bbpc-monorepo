@@ -310,8 +310,18 @@ export function ConvexEpisodesPage() {
   const createEpisode = (input: { number: number; title: string }) => {
     setIsCreating(true);
     void createConvexAdminEpisode(convex, input)
-      .then(() => {
-        toast.success("Pending episode created.");
+      .then((episode) => {
+        toast.success("Pending episode created.", {
+          duration: 5000,
+          description: episode.slug ? (
+            <Link
+              className="font-medium underline underline-offset-4"
+              href={`/episode/${episode.slug}`}
+            >
+              View episode
+            </Link>
+          ) : undefined,
+        });
         setDialogOpen(false);
         refresh();
       })
@@ -391,10 +401,10 @@ export function ConvexEpisodesPage() {
             Match close spellings in titles
           </label>
           <p className="text-xs text-muted-foreground">
-            Search titles, assigned movies, and extra-review movies and shows
-            across all episode statuses. Transcripts match words, including the
-            beginning of the last word. Coverage depends on available published
-            transcripts.
+            Search episode numbers, titles, assigned movies, and extra-review
+            movies and shows across all episode statuses. Transcripts match
+            words, including the beginning of the last word. Coverage depends on
+            available published transcripts.
           </p>
         </div>
 

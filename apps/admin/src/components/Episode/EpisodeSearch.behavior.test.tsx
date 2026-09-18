@@ -30,6 +30,19 @@ vi.mock("next/link", () => ({
 vi.mock("sonner", () => ({
   toast: { success: mocks.success, error: mocks.error },
 }));
+vi.mock("@/components/ui/dialog", () => {
+  const Element = ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  );
+  return {
+    Dialog: Element,
+    DialogContent: Element,
+    DialogDescription: Element,
+    DialogFooter: Element,
+    DialogHeader: Element,
+    DialogTitle: Element,
+  };
+});
 import { ConvexEpisodesPage } from "./ConvexEpisodesPage";
 
 const base = {
@@ -144,6 +157,61 @@ function button(label: string) {
   if (!found) throw new Error(`Missing button ${label}`);
   return found;
 }
+
+test.each([true, false])(
+  "matches episode numbers with fuzzy search %s",
+  async (fuzzy) => {
+    mocks.storage.getItem.mockReturnValue(String(fuzzy));
+    await render();
+    for (const query of ["10", "1", "#10", " #1 "]) {
+      await search(query);
+      expect(
+        renderer.root
+          .findAllByType("article")
+          .map((node) => node.props["aria-label"])
+      ).toEqual(["Episode 10: Underwater cinema"]);
+    }
+    await search("#9");
+    expect(text()).toContain(second.title);
+    await search("#999");
+    expect(renderer.root.findAllByType("article")).toHaveLength(0);
+    await search("#");
+    expect(renderer.root.findAllByType("article")).toHaveLength(0);
+  }
+);
+
+test("links to the created episode in a five-second success toast", async () => {
+  const created = { ...second, slug: "pending-homework-2" };
+  mocks.client.mutation.mockResolvedValueOnce(created);
+  await render();
+  await act(async () => button("Add Episode").props.onClick());
+  await act(async () => {
+    renderer.root
+      .findByProps({ id: "convex-episode-number" })
+      .props.onChange({ target: { value: "9" } });
+    renderer.root
+      .findByProps({ id: "convex-episode-title" })
+      .props.onChange({ target: { value: second.title } });
+  });
+  await act(async () => button("Create Episode").props.onClick());
+  expect(mocks.error).not.toHaveBeenCalled();
+  expect(mocks.success).toHaveBeenCalledWith(
+    "Pending episode created.",
+    expect.objectContaining({ duration: 5000, description: expect.anything() })
+  );
+  const options = mocks.success.mock.calls[0]?.[1];
+  let toastRenderer!: ReactTestRenderer;
+  act(() => {
+    toastRenderer = create(options.description);
+  });
+  const link = toastRenderer.root.findByType("a");
+  expect(link.props.href).toBe("/episode/pending-homework-2");
+  expect(link.children).toEqual(["View episode"]);
+  act(() => toastRenderer.unmount());
+  expect(
+    renderer.root.findAllByProps({ id: "convex-episode-title" })
+  ).toHaveLength(0);
+});
 
 test("restores bookmarked dates, resets pagination, and preserves the search when clearing dates", async () => {
   mocks.router.query = { from: "2026-09-01", to: "2026-09-15", keep: "yes" };

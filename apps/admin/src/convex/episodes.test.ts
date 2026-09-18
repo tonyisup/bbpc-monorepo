@@ -53,10 +53,12 @@ describe("Convex admin episode catalog adapter", () => {
     }
     expect(getFunctionName(listCall[0])).toBe("episodes/admin:listPage");
 
-    await createConvexAdminEpisode(client, {
-      number: episode.number,
-      title: episode.title,
-    });
+    await expect(
+      createConvexAdminEpisode(client, {
+        number: episode.number,
+        title: episode.title,
+      })
+    ).resolves.toEqual(episode);
     expect(mutation).toHaveBeenCalledWith(expect.anything(), {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       number: episode.number,

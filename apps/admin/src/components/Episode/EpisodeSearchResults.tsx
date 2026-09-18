@@ -123,11 +123,15 @@ export function EpisodeSearchResults({
   const transcripts = useTranscriptSearch(query, searchTranscripts);
   const metadata = useEpisodeMetadataSearch(catalog, query, fuzzy);
   const rows = useMemo(() => {
-    // Exact numbers and canonical IDs are useful additional admin lookup keys.
+    // Match partial episode numbers (optionally prefixed with #) and exact IDs.
+    const trimmed = query.trim();
+    const numberQuery = /^#?(-?\d+)$/.exec(trimmed)?.[1];
     const direct =
       catalog?.filter(
         (episode) =>
-          episode.id === query.trim() || String(episode.number) === query.trim()
+          episode.id === trimmed ||
+          (numberQuery !== undefined &&
+            String(episode.number).includes(numberQuery))
       ) ?? [];
     const directIds = new Set(direct.map((episode) => episode.id));
     return mergeEpisodeSearchResults(
