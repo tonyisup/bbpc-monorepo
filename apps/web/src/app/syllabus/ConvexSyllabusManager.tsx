@@ -96,6 +96,9 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [busyOperation, setBusyOperation] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(
+    null
+  );
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
   const [entryToRemove, setEntryToRemove] =
@@ -160,7 +163,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
     setIsLoading(true);
-    setErrorMessage(null);
+    setLoadErrorMessage(null);
     try {
       const result = await listConvexSyllabus(convex);
       if (loadGenerationRef.current === generation) {
@@ -168,7 +171,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
       }
     } catch {
       if (loadGenerationRef.current === generation) {
-        setErrorMessage("Your syllabus could not be loaded.");
+        setLoadErrorMessage("Your syllabus could not be loaded.");
       }
     } finally {
       if (loadGenerationRef.current === generation) {
@@ -255,10 +258,11 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   const filteredPending = pending
     .map((entry, index) => ({ entry, index }))
     .filter(({ entry }) =>
-      `${entry.movie.title} ${entry.notes ?? ""}`
+      `${entry.movie.title} ${notesDrafts[entry.id] ?? entry.notes ?? ""}`
         .toLowerCase()
         .includes(queueFilter.trim().toLowerCase())
     );
+  const displayedErrorMessage = errorMessage ?? loadErrorMessage;
   const searchAnalysis = analyzeMovieYearQuery(searchInput);
   const currentSearchSnapshot =
     searchSnapshot?.generation === searchGeneration &&
@@ -535,13 +539,13 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         </section>
       ) : null}
 
-      {errorMessage ? (
+      {displayedErrorMessage ? (
         <div
           className="flex items-center gap-3 text-sm text-red-300"
           role="alert"
         >
-          <p>{errorMessage}</p>
-          {entries.length === 0 && !entryToRemove ? (
+          <p>{displayedErrorMessage}</p>
+          {loadErrorMessage !== null && !entryToRemove ? (
             <Button
               variant="outline"
               disabled={isLoading || busyOperation !== null}
@@ -585,7 +589,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
             Positions and order controls refer to your full queue.
           </p>
         ) : null}
-        {pending.length === 0 && !errorMessage ? (
+        {pending.length === 0 && !displayedErrorMessage ? (
           <p className="bbpc-panel p-5 text-muted-foreground">
             Add your first movie. The movie at the top is your next assignment
             when you win the bonus spin.

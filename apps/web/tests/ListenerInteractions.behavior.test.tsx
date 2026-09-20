@@ -355,6 +355,55 @@ test("switching note editors preserves drafts, and cancel discards only the curr
   expect(renderer.root.findByType("textarea").props.value).toBe("");
 });
 
+test("queue filtering uses an unsaved notes draft", async () => {
+  await render(<ConvexSyllabusManager appUserId="user" />);
+  await click("Edit notes Movie a");
+  act(() =>
+    renderer.root
+      .findByType("textarea")
+      .props.onChange({ target: { value: "Draft note" } })
+  );
+  await click("Edit notes Movie b");
+  act(() =>
+    renderer.root
+      .findByProps({ "aria-label": "Filter your queue" })
+      .props.onChange({ target: { value: "draft" } })
+  );
+  expect(renderer.root.findAllByType("h3").map(text)).toEqual(["Movie a"]);
+});
+
+test("only a failed syllabus load offers a retry", async () => {
+  mocks.list.mockRejectedValueOnce(new Error("offline"));
+  await render(<ConvexSyllabusManager appUserId="user" />);
+  expect(screenText()).toContain("Your syllabus could not be loaded.");
+  expect(button("Retry loading").props.disabled).toBe(false);
+
+  mocks.list.mockResolvedValueOnce([]);
+  await click("Retry loading");
+  expect(mocks.list).toHaveBeenCalledTimes(2);
+  expect(screenText()).not.toContain("Retry loading");
+});
+
+test("a failed syllabus write does not offer a loading retry", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("window", { setTimeout, clearTimeout });
+  mocks.list.mockResolvedValueOnce([]);
+  mocks.add.mockRejectedValueOnce(new Error("offline"));
+  await render(<ConvexSyllabusManager appUserId="user" />);
+  await click("Add movie");
+  act(() => {
+    renderer.root
+      .findByProps({ id: "convex-movie-search" })
+      .props.onChange({ target: { value: "Movie c" } });
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300);
+  });
+  await click("Add");
+  expect(screenText()).toContain("The syllabus change could not be saved.");
+  expect(screenText()).not.toContain("Retry loading");
+});
+
 test("removal requires confirmation and preserves the entry after a failed delete", async () => {
   mocks.remove.mockRejectedValueOnce(new Error("offline"));
   await render(<ConvexSyllabusManager appUserId="user" />);
