@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "project": {
+    "name": "bbpc",
+    "productType": "Podcast listener app with rating predictions and a personal movie queue",
+    "stack": [
+      "nextjs",
+      "react",
+      "shadcn",
+      "tailwind-v3"
+    ]
+  },
+  "sources": {
+    "tokens": [
+      "src/styles/globals.css"
+    ],
+    "components": [
+      "src/components/ui"
+    ],
+    "assets": [],
+    "instructions": [
+      "../../AGENTS.md"
+    ]
+  },
+  "design": {
+    "colorMode": "dark",
+    "colors": {
+      "--background": {
+        "value": "240 6% 4%",
+        "source": "src/styles/globals.css"
+      },
+      "--foreground": {
+        "value": "0 0% 96%",
+        "source": "src/styles/globals.css"
+      },
+      "--card": {
+        "value": "240 5% 7%",
+        "source": "src/styles/globals.css"
+      },
+      "--card-foreground": {
+        "value": "0 0% 96%",
+        "source": "src/styles/globals.css"
+      },
+      "--popover": {
+        "value": "240 5% 7%",
+        "source": "src/styles/globals.css"
+      },
+      "--popover-foreground": {
+        "value": "0 0% 96%",
+        "source": "src/styles/globals.css"
+      },
+      "--primary": {
+        "value": "0 72% 56%",
+        "source": "src/styles/globals.css"
+      },
+      "--primary-foreground": {
+        "value": "0 0% 100%",
+        "source": "src/styles/globals.css"
+      },
+      "--secondary": {
+        "value": "240 4% 14%",
+        "source": "src/styles/globals.css"
+      },
+      "--secondary-foreground": {
+        "value": "0 0% 96%",
+        "source": "src/styles/globals.css"
+      },
+      "--muted": {
+        "value": "240 4% 14%",
+        "source": "src/styles/globals.css"
+      },
+      "--muted-foreground": {
+        "value": "240 5% 68%",
+        "source": "src/styles/globals.css"
+      },
+      "--accent": {
+        "value": "0 72% 56%",
+        "source": "src/styles/globals.css"
+      },
+      "--accent-foreground": {
+        "value": "0 0% 100%",
+        "source": "src/styles/globals.css"
+      },
+      "--destructive": {
+        "value": "0 72% 51%",
+        "source": "src/styles/globals.css"
+      },
+      "--destructive-foreground": {
+        "value": "0 0% 98%",
+        "source": "src/styles/globals.css"
+      },
+      "--border": {
+        "value": "240 4% 19%",
+        "source": "src/styles/globals.css"
+      },
+      "--input": {
+        "value": "240 4% 19%",
+        "source": "src/styles/globals.css"
+      },
+      "--ring": {
+        "value": "0 72% 56%",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-bg": {
+        "value": "#09090b",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-surface": {
+        "value": "#111113",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-surface-raised": {
+        "value": "#19191d",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-border": {
+        "value": "rgb(255 255 255 / 0.12)",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-text": {
+        "value": "#f4f4f5",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-muted": {
+        "value": "#a1a1aa",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-accent": {
+        "value": "#ef4444",
+        "source": "src/styles/globals.css"
+      },
+      "--bbpc-accent-soft": {
+        "value": "rgb(239 68 68 / 0.14)",
+        "source": "src/styles/globals.css"
+      }
+    },
+    "typography": {},
+    "spacing": {},
+    "radius": {
+      "--radius": {
+        "value": "0.75rem",
+        "source": "src/styles/globals.css"
+      }
+    },
+    "shadows": {},
+    "motion": {},
+    "density": "Compact movie queues; comfortable game controls"
+  },
+  "components": {
+    "installed": [
+      "accordion",
+      "alert",
+      "aspect-ratio",
+      "avatar",
+      "badge",
+      "button",
+      "card",
+      "command",
+      "dialog",
+      "input",
+      "label",
+      "navigation-menu",
+      "popover",
+      "radio-group",
+      "scroll-area",
+      "separator",
+      "sheet",
+      "skeleton",
+      "sonner",
+      "textarea",
+      "tooltip"
+    ],
+    "preferredPrimitives": [
+      "headless-ui",
+      "radix-ui"
+    ],
+    "patterns": []
+  },
+  "constraints": {
+    "must": [],
+    "avoid": []
+  },
+  "decisions": [
+    "Preserve BBPC dark surfaces and red accents using src/styles/globals.css.",
+    "Use compact numbered syllabus rows and collapsed assignment history.",
+    "Use BBPC dark neutral surfaces and red accents for Quotabunga, matching the rest of the listener game.",
+    "Keep all prediction cards closed initially; show every assignment in a completion checklist and offer a next-unfinished-movie action.",
+    "Rating picks and wagers share a deadline ten minutes after the episode enters recording; show the live countdown and enforce the deadline on the server."
+  ],
+  "evidence": [
+    {
+      "fact": "components.installed",
+      "source": "src/components/ui"
+    },
+    {
+      "fact": "project.stack:nextjs",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:react",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:shadcn",
+      "source": "components.json"
+    },
+    {
+      "fact": "project.stack:tailwind-v3",
+      "source": "package.json"
+    },
+    {
+      "fact": "design.tokens and dark color mode",
+      "source": "src/styles/globals.css"
+    }
+  ],
+  "generatedAt": "2026-09-19T21:04:16.027Z"
+}

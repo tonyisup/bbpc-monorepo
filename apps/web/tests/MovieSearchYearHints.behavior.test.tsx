@@ -79,7 +79,11 @@ vi.mock("@/components/MovieInlinePreview", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({
+  Button: forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {
+    children?: ReactNode;
+    size?: string;
+    variant?: string;
+  }>(({
     children,
     variant: _variant,
     size: _size,
@@ -88,7 +92,7 @@ vi.mock("@/components/ui/button", () => ({
     children?: ReactNode;
     size?: string;
     variant?: string;
-  }) => <button {...props}>{children}</button>,
+  }, ref) => <button ref={ref} {...props}>{children}</button>),
 }));
 
 vi.mock("@/components/ui/input", () => ({
@@ -258,6 +262,7 @@ describe("public movie year search hints", () => {
       "No available movie results for “Imposter.” Try adding the release year.",
     );
     const action = rendered.root.findByProps({ "aria-label": "Add y:year" });
+    inputNodes.get("convex-movie-search")?.focus.mockClear();
     act(() => action.props.onClick());
 
     expect(

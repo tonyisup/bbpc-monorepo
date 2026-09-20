@@ -32,7 +32,7 @@ test("Convex wagering uses bounded and owner-derived game functions", () => {
 test("the Convex wager board reuses neutral controls without SQL dependencies", () => {
   assert.doesNotMatch(board, /next-auth|trpc|prisma|server\/db/u);
   assert.doesNotMatch(wager, /@prisma\/client/u);
-  assert.match(board, /getPredictionRoundState\(episodeStatus, playable\)/u);
+  assert.match(board, /getPredictionRoundState\(episodeStatus, playable, closesAt, now\)/u);
   assert.match(board, /await reload\(\)[\s\S]*throw error/u);
   assert.match(board, /formatSubmissionError=\{wagerError\}/u);
   assert.match(board, /Wagers can lose points/u);
@@ -49,7 +49,7 @@ test("wagering is exposed only after every host prediction is present", () => {
   );
   assert.match(
     prediction,
-    /<ConvexAssignmentVoiceMessages assignmentId=\{assignment\.id\}/u
+    /<ConvexAssignmentVoiceMessages\s+assignmentId=\{assignment\.id\}/u
   );
   assert.doesNotMatch(
     prediction,

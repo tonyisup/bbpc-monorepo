@@ -89,6 +89,7 @@ export function ConvexAssignmentGameSegment({
         <h2 className="text-2xl font-black text-white">Submit your guesses</h2>
       </div>
       <ConvexPredictionGame
+        episodeId={assignment.episode.id}
         key={`${user.appUserId}:${assignment.id}`}
         assignments={[
           {

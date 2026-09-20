@@ -8,12 +8,14 @@ import type { PredictionGameAssignment } from "@/types/prediction";
 import { useEffect, useState } from "react";
 
 interface GameParticipationProps {
+  episodeId: string;
   assignments: PredictionGameAssignment[];
   episodeStatus: string;
   searchQuery?: string;
 }
 
 export function GameParticipation({
+  episodeId,
   assignments,
   episodeStatus,
   searchQuery = "",
@@ -72,21 +74,19 @@ export function GameParticipation({
       accountIssue === "account-disabled"
         ? "This account is disabled."
         : accountIssue === "identity-conflict"
-          ? "This sign-in is already linked to another account."
-          : accountIssue === "linking-disabled"
-            ? "New account linking is paused in this environment."
-            : accountIssue === "stale-client"
-              ? "This page is out of date."
-              : "Your game account could not be resolved.";
+        ? "This sign-in is already linked to another account."
+        : accountIssue === "linking-disabled"
+        ? "New account linking is paused in this environment."
+        : accountIssue === "stale-client"
+        ? "This page is out of date."
+        : "Your game account could not be resolved.";
 
     return (
       <section className="mt-5 rounded-lg border border-red-500/20 bg-red-500/[0.06] p-5 text-center">
         <h3 className="text-lg font-bold text-white">
           Game account needs attention
         </h3>
-        <p className="mx-auto mt-1 max-w-lg text-sm text-zinc-300">
-          {message}
-        </p>
+        <p className="mx-auto mt-1 max-w-lg text-sm text-zinc-300">{message}</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={refreshAccount}>
             Try again
@@ -103,16 +103,14 @@ export function GameParticipation({
     <div className="mt-5 space-y-5">
       {assignments.length > 0 ? (
         <ConvexPredictionGame
+          episodeId={episodeId}
           key={`${user.appUserId}:predictions`}
           assignments={assignments}
           searchQuery={searchQuery}
           episodeStatus={episodeStatus}
         />
       ) : null}
-      <ConvexQuotabungaSubmission
-        key={user.appUserId}
-        isAdmin={user.isAdmin}
-      />
+      <ConvexQuotabungaSubmission key={user.appUserId} isAdmin={user.isAdmin} />
     </div>
   );
 }

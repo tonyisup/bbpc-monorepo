@@ -218,6 +218,7 @@ export default defineSchema({
     date: v.optional(v.string()),
     description: v.optional(v.string()),
     status: v.optional(v.string()),
+    predictionClosesAt: v.optional(v.number()),
     notes: v.optional(v.string()),
     seoDescription: v.optional(v.string()),
     seoKeywords: v.optional(v.string()),

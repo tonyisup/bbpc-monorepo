@@ -34,9 +34,7 @@ test("the Convex prediction UI is independent of the SQL transport and auth stac
   assert.doesNotMatch(component, /next-auth|trpc|prisma|server\/db/u);
   assert.match(component, /getPredictionRoundState/u);
   assert.match(component, /submitConvexPrediction/u);
-  assert.match(component, /onGuessSaved\(optimisticGuess\)/u);
-  assert.match(component, /onGuessSaved\(previousGuess\)/u);
-  assert.match(component, /onGuessRemoved\(hostId\)/u);
+  // Pending, confirmed, and failed saves are exercised by ListenerInteractions.behavior.test.tsx.
   assert.match(component, /ConvexAssignmentGamblingBoard/u);
   for (const name of [
     "assignments/public:listMyAudioMessages",

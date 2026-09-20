@@ -2432,6 +2432,12 @@ export type PublicApiType = {
             }>;
         };
         public: {
+            predictionWindow: FunctionReference<"query", "public", {
+                episodeId: Id<"episodes">;
+            }, {
+                status: string | null;
+                closesAt: number | null;
+            } | null>;
             getByLegacyId: FunctionReference<"query", "public", {
                 legacyId: string;
             }, {

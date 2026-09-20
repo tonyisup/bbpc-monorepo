@@ -11,6 +11,7 @@ import {
 import type { EpisodeAssignment } from "@/types/episode";
 
 interface AssignmentProps {
+  compact?: boolean;
   assignment: EpisodeAssignment;
   showMovieTitles?: boolean;
   searchQuery?: string;
@@ -20,6 +21,7 @@ interface AssignmentProps {
 
 const Assignment: FC<AssignmentProps> = ({
   assignment,
+  compact = false,
   showMovieTitles = false,
   searchQuery = "",
   fuseMatches,
@@ -41,10 +43,16 @@ const Assignment: FC<AssignmentProps> = ({
           movie={assignment.movie}
           searchQuery={searchQuery}
           titleHighlightIndices={titleIdx}
+          imageClassName={
+            compact
+              ? "h-[90px] w-[60px] rounded-md md:h-[90px] md:w-[60px]"
+              : undefined
+          }
+          sizes={compact ? "60px" : undefined}
         />
       )}
-      {showMovieTitles && assignment.movie && (
-        <div className="text-sm text-gray-500">
+      {(showMovieTitles || compact) && assignment.movie && (
+        <div className="text-sm text-muted-foreground">
           {titleIdx.length > 0
             ? highlightTextByIndices(assignment.movie.title, titleIdx)
             : highlightText(assignment.movie.title, searchQuery)}{" "}
