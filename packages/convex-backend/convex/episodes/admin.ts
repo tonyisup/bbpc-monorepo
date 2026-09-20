@@ -5,7 +5,9 @@ import {
 import { v } from "convex/values";
 
 import type { Doc } from "../_generated/dataModel.js";
-import { adminMutation, adminQuery } from "../functions.js";
+import { internal } from "../_generated/api.js";
+import { BBPC_API_VERSION } from "../../contracts/index.js";
+import { adminMutation, adminQuery, internalAppMutation } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import { buildMergePreview } from "./mergeModel.js";
@@ -32,6 +34,7 @@ import {
 } from "./adminWriteModel.js";
 import {
   MAX_AUDIO_MESSAGES_PER_USER_EPISODE,
+  MAX_GAMBLING_ENTRIES_PER_EPISODE_UPDATE,
   validateEpisodeAudioPageSize,
   validateEpisodePageSize,
 } from "./limits.js";
@@ -41,6 +44,45 @@ import {
   episodeAdminDetailValidator,
   episodeLinkValidator,
 } from "./validators.js";
+
+const PREDICTION_GRACE_PERIOD_MS = 10 * 60 * 1000;
+
+export const closePredictionWindow = internalAppMutation({
+  args: { episodeId: v.id("episodes"), closesAt: v.number() },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const episode = await ctx.db.get("episodes", args.episodeId);
+    // A stale job must not lock wagers after an administrator reopens the round.
+    if (
+      episode?.status !== "recording" ||
+      episode.predictionClosesAt !== args.closesAt ||
+      Date.now() < args.closesAt
+    ) return 0;
+    const locked = await lockPendingGamblingForEpisode(ctx, episode._id, true);
+    if (locked > 0) {
+      await writeAuditEvent(ctx, {
+        actor: ctx.actor,
+        action: "episodes.predictions.closed",
+        targetType: "episode",
+        targetId: episode._id,
+        cutoverRunId: ctx.systemState.cutoverRunId,
+        metadata: { closesAt: args.closesAt, lockedGamblingEntries: locked },
+      });
+    }
+    if (locked === MAX_GAMBLING_ENTRIES_PER_EPISODE_UPDATE) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.episodes.admin.closePredictionWindow,
+        {
+          ...args,
+          cutoverRunId: ctx.systemState.cutoverRunId,
+          clientApiVersion: BBPC_API_VERSION,
+        },
+      );
+    }
+    return locked;
+  },
+});
 
 function nullable<T>(value: T | undefined): T | null {
   return value ?? null;
@@ -315,6 +357,7 @@ export const updateEpisode = adminMutation({
       date?: string | undefined;
       description?: string | undefined;
       status?: string;
+      predictionClosesAt?: number | undefined;
       notes?: string | undefined;
       seoDescription?: string | undefined;
       seoKeywords?: string | undefined;
@@ -375,12 +418,24 @@ export const updateEpisode = adminMutation({
     let lockedGamblingEntries = 0;
     if (args.status !== undefined) {
       patch.status = validateEpisodeStatus(args.status);
-      if (
-        patch.status === "recording" ||
-        patch.status === "published"
-      ) {
+      if (patch.status === "recording" && episode.status !== "recording") {
+        patch.predictionClosesAt = Date.now() + PREDICTION_GRACE_PERIOD_MS;
+        await ctx.scheduler.runAt(
+          patch.predictionClosesAt,
+          internal.episodes.admin.closePredictionWindow,
+          {
+            episodeId: episode._id,
+            closesAt: patch.predictionClosesAt,
+            cutoverRunId: ctx.systemState.cutoverRunId,
+            clientApiVersion: BBPC_API_VERSION,
+          },
+        );
+      } else if (patch.status === "published") {
+        patch.predictionClosesAt = undefined;
         lockedGamblingEntries =
           await lockPendingGamblingForEpisode(ctx, episode._id);
+      } else if (patch.status !== "recording") {
+        patch.predictionClosesAt = undefined;
       }
     }
 

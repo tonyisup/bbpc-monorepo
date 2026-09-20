@@ -99,6 +99,27 @@ export const nextScheduled = anonymousQuery({
   },
 });
 
+/** A reactive deadline; elapsed time is evaluated by clients and write gates. */
+export const predictionWindow = anonymousQuery({
+  args: { episodeId: v.id("episodes") },
+  returns: v.union(
+    v.object({
+      status: v.union(v.string(), v.null()),
+      closesAt: v.union(v.number(), v.null()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { episodeId }) => {
+    const episode = await ctx.db.get("episodes", episodeId);
+    return episode === null
+      ? null
+      : {
+          status: episode.status ?? null,
+          closesAt: episode.predictionClosesAt ?? null,
+        };
+  },
+});
+
 export const getBySlug = anonymousQuery({
   args: { slug: v.string() },
   returns: v.union(episodeDetailValidator, v.null()),

@@ -68,7 +68,14 @@ export async function requireOpenPredictionAssignment(
       { details: { assignmentId: assignment._id } },
     );
   }
-  if (!assignment.playable || episode.status !== "next") {
+  const withinRecordingGracePeriod =
+    episode.status === "recording" &&
+    episode.predictionClosesAt !== undefined &&
+    Date.now() < episode.predictionClosesAt;
+  if (
+    !assignment.playable ||
+    (episode.status !== "next" && !withinRecordingGracePeriod)
+  ) {
     domainError(
       "CONFLICT",
       "Prediction round is not open.",

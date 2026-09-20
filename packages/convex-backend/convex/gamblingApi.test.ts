@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -310,6 +310,83 @@ async function seedBalance(
 }
 
 describe("gambling API", () => {
+  test("picks and wagers remain editable during recording grace and reject writes at the exact deadline", async () => {
+    vi.useFakeTimers();
+    const startedAt = Date.parse("2026-07-24T12:00:00Z");
+    vi.setSystemTime(startedAt);
+    try {
+      const t = createTestBackend();
+      const { adminId, memberId, hostId } = await seedActors(t);
+      const { seasonId, ratingId } = await seedFoundation(t);
+      const round = await seedRound(t, {
+        ownerId: adminId,
+        hostId,
+        ratingId,
+        suffix: "91",
+      });
+      await seedBalance(t, { userId: memberId, seasonId, adjustment: 100 });
+      await advanceToS3(t);
+      const admin = t.withIdentity(ADMIN_IDENTITY);
+      const member = t.withIdentity(MEMBER_IDENTITY);
+      await admin.mutation(api.episodes.admin.updateEpisode, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: round.episodeId,
+        status: "recording",
+      });
+      const window = await t.query(api.episodes.public.predictionWindow, {
+        episodeId: round.episodeId,
+      });
+      expect(window).toEqual({
+        status: "recording",
+        closesAt: startedAt + 600_000,
+      });
+      const wager = {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        today: "2026-07-24",
+        points: 10,
+      };
+      const pick = {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: round.assignmentId,
+        hostId,
+        ratingId,
+        today: "2026-07-24",
+      };
+      await member.mutation(api.games.gambling.submit, wager);
+      vi.setSystemTime(startedAt + 599_999);
+      await expect(
+        member.mutation(api.games.gambling.submit, { ...wager, points: 20 }),
+      ).resolves.toMatchObject({ status: "pending", points: 20 });
+      await expect(
+        member.mutation(api.games.guesses.submit, pick),
+      ).resolves.toMatchObject({ rating: { id: ratingId } });
+      vi.setSystemTime(startedAt + 600_000);
+      await expectDomainError(
+        member.mutation(api.games.gambling.submit, { ...wager, points: 30 }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+      await expectDomainError(
+        member.mutation(api.games.gambling.submit, { ...wager, points: 0 }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+      await expectDomainError(
+        member.mutation(api.games.guesses.submit, pick),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+      await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+      const saved = await member.query(api.games.gambling.mineForAssignment, {
+        assignmentId: round.assignmentId,
+      });
+      expect(saved[0]).toMatchObject({ status: "locked", points: 20 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("derives the current user's episode-win banner", async () => {
     const t = createTestBackend();
     const { memberId, otherId, hostId } = await seedActors(t);

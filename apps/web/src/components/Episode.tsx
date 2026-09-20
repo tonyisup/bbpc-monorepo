@@ -53,6 +53,7 @@ interface EpisodeProps {
   showExtras?: boolean;
   /** Whether to explicitly show movie titles under the movie/show previews. */
   showMovieTitles?: boolean;
+  compactAssignments?: boolean;
   /** Search query for highlighting relevant text within the episode details. */
   searchQuery?: string;
   /** When set (e.g. fuzzy search), highlights matched character ranges from Fuse `includeMatches`. */
@@ -70,6 +71,7 @@ export const Episode: FC<EpisodeProps> = ({
   allowGuesses: isNextEpisode,
   showExtras = true,
   showMovieTitles = false,
+  compactAssignments = false,
   searchQuery = "",
   fuseMatches,
 }) => {
@@ -126,6 +128,7 @@ export const Episode: FC<EpisodeProps> = ({
           <p>{highlightText(episode?.description ?? "", searchQuery)}</p>
         </div>
         <EpisodeAssignments
+          compact={compactAssignments}
           assignments={episode.assignments}
           showMovieTitles={showMovieTitles}
           searchQuery={searchQuery}
@@ -133,6 +136,7 @@ export const Episode: FC<EpisodeProps> = ({
         />
         {showGames && (
           <GameParticipation
+            episodeId={episode.id}
             assignments={predictionAssignments}
             searchQuery={searchQuery}
             episodeStatus={episode.status ?? ""}
@@ -163,6 +167,7 @@ export const Episode: FC<EpisodeProps> = ({
  * Props for the EpisodeAssignments component.
  */
 interface EpisodeAssignments {
+  compact?: boolean;
   showMovieTitles?: boolean;
   assignments: EpisodeAssignment[];
   searchQuery?: string;
@@ -174,6 +179,7 @@ interface EpisodeAssignments {
  */
 
 const EpisodeAssignments: FC<EpisodeAssignments> = ({
+  compact = false,
   assignments,
   showMovieTitles = false,
   searchQuery = "",
@@ -200,6 +206,7 @@ const EpisodeAssignments: FC<EpisodeAssignments> = ({
               className="flex flex-col items-center justify-between gap-2"
             >
               <Assignment
+                compact={compact}
                 assignment={assignment}
                 showMovieTitles={showMovieTitles}
                 searchQuery={searchQuery}

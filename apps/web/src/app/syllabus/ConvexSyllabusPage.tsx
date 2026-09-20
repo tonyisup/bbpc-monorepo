@@ -54,21 +54,31 @@ export function ConvexSyllabusPage() {
   }
 
   return (
-    <div className="container flex flex-col items-center gap-4 p-4">
-      <h1 className="flex items-center justify-center gap-2 text-center text-3xl font-extrabold tracking-tight">
-        My Syllabus
-        <Popover>
-          <PopoverTrigger aria-label="About the syllabus">
-            <Info className="h-4 w-4" />
-          </PopoverTrigger>
-          <PopoverContent>
-            <p>
-              When you win the weekly bonus spin, we will assign the next movie
-              from this list.
-            </p>
-          </PopoverContent>
-        </Popover>
-      </h1>
+    <div className="bbpc-page max-w-4xl space-y-6">
+      <header>
+        <p className="bbpc-kicker">Your movie queue</p>
+        <h1 className="mt-1 flex items-center gap-2 text-3xl font-black tracking-tight sm:text-4xl">
+          My Syllabus
+          <Popover>
+            <PopoverTrigger
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md"
+              aria-label="About the syllabus"
+            >
+              <Info className="h-4 w-4" />
+            </PopoverTrigger>
+            <PopoverContent>
+              <p>
+                When you win the weekly bonus spin, we will assign the next
+                movie from this list.
+              </p>
+            </PopoverContent>
+          </Popover>
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          Keep your next pick at the top. Add notes and reorder movies until
+          they’re assigned.
+        </p>
+      </header>
       <ConvexSyllabusManager appUserId={user.appUserId} />
     </div>
   );

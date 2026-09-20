@@ -63,6 +63,8 @@ const BettingCoin: FC<BettingCoinProps> = ({
   const isLocked = !isRoundOpen || isResolved;
   const currentAmount = existingBet?.points ?? 0;
   const maximumAmount = userPoints + currentAmount;
+  // Settlement awards whole points, rounding fractional profits down.
+  const reviewProfit = Math.floor((reviewAmount ?? 0) * type.multiplier);
   const payoutBorder =
     payoutTone === "standard"
       ? "border-cyan-400/20"
@@ -255,8 +257,9 @@ const BettingCoin: FC<BettingCoinProps> = ({
         <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-3">
           <p className="font-bold text-white">Confirm {reviewAmount} points?</p>
           <p className="mt-1 text-xs leading-relaxed text-zinc-300">
-            A loss costs {reviewAmount} points. A win returns your wager plus a{" "}
-            {type.multiplier}x payout.
+            A loss costs {reviewAmount} points. A win earns {reviewProfit}{" "}
+            points in profit and returns {reviewAmount + reviewProfit} points
+            total, including your wager.
           </p>
           {error && (
             <p className="mt-2 text-xs font-semibold text-red-300" role="alert">

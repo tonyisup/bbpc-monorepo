@@ -67,14 +67,24 @@ export const ConvexAssignmentGamblingBoard: FC<{
   guesses: ConvexPredictionGuess[];
   episodeStatus: string;
   playable: boolean;
-}> = ({ assignmentId, hosts, guesses, episodeStatus, playable }) => {
+  closesAt: number | null;
+  now: number;
+}> = ({
+  assignmentId,
+  hosts,
+  guesses,
+  episodeStatus,
+  playable,
+  closesAt,
+  now,
+}) => {
   const convex = useConvex();
   const [data, setData] = useState<ConvexAssignmentWagerData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
   const isRoundOpen =
-    getPredictionRoundState(episodeStatus, playable) ===
+    getPredictionRoundState(episodeStatus, playable, closesAt, now) ===
     PredictionRoundState.OPEN;
 
   const reload = useCallback(async () => {

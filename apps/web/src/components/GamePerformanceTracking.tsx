@@ -150,36 +150,36 @@ export default function GamePerformanceTracking({
                   <CartesianGrid
                     strokeDasharray="3 3"
                     vertical={false}
-                    stroke="rgba(255,255,255,0.08)"
+                    stroke="var(--bbpc-border)"
                   />
                   <XAxis
                     dataKey="date"
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                    tick={{ fontSize: 11, fill: "var(--bbpc-muted)" }}
                     dy={10}
                   />
                   <YAxis
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                    tick={{ fontSize: 11, fill: "var(--bbpc-muted)" }}
                     allowDecimals={false}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#09090b",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: "14px",
-                      color: "#fafafa",
+                      backgroundColor: "var(--bbpc-bg)",
+                      border: "1px solid var(--bbpc-border)",
+                      borderRadius: "var(--radius)",
+                      color: "var(--bbpc-text)",
                       boxShadow: "0 24px 48px rgba(0, 0, 0, 0.45)",
                     }}
                     itemStyle={{
                       fontSize: "12px",
                       fontWeight: 700,
-                      color: "#fafafa",
+                      color: "var(--bbpc-text)",
                     }}
                     labelStyle={{
-                      color: "#a1a1aa",
+                      color: "var(--bbpc-muted)",
                       fontSize: "12px",
                       fontWeight: 600,
                     }}

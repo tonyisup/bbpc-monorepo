@@ -26,6 +26,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   type ConvexCatalogMovie,
   type ConvexSyllabusEntry,
   type ConvexTmdbMovie,
@@ -88,15 +96,22 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [busyOperation, setBusyOperation] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(
+    null
+  );
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
-  const [notesText, setNotesText] = useState("");
+  const [notesDrafts, setNotesDrafts] = useState<Record<string, string>>({});
+  const [entryToRemove, setEntryToRemove] =
+    useState<ConvexSyllabusEntry | null>(null);
+  const [queueFilter, setQueueFilter] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchInput, setSearchInput] = useState("");
-  const [searchSnapshot, setSearchSnapshot] =
-    useState<SearchSnapshot | null>(null);
-  const [searchingGeneration, setSearchingGeneration] = useState<
-    number | null
-  >(null);
+  const [searchSnapshot, setSearchSnapshot] = useState<SearchSnapshot | null>(
+    null
+  );
+  const [searchingGeneration, setSearchingGeneration] = useState<number | null>(
+    null
+  );
   const [searchGeneration, setSearchGeneration] = useState(0);
   const [insertPosition, setInsertPosition] =
     useState<SyllabusInsertPosition>("END");
@@ -104,6 +119,35 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   const searchGenerationRef = useRef(0);
   const entriesRef = useRef(entries);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const addMovieButtonRef = useRef<HTMLButtonElement>(null);
+  const removeTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const noteButtonsRef = useRef(new Map<string, HTMLButtonElement>());
+  const notesReturnFocusRef = useRef<string | null>(null);
+
+  const notesText =
+    editingNotes === null ? "" : notesDrafts[editingNotes] ?? "";
+  const discardNotesDraft = (id: string) => {
+    setNotesDrafts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  };
+  const closeNotes = (id: string) => {
+    notesReturnFocusRef.current = id;
+    setEditingNotes(null);
+    discardNotesDraft(id);
+  };
+  useEffect(() => {
+    if (editingNotes === null && notesReturnFocusRef.current !== null) {
+      noteButtonsRef.current.get(notesReturnFocusRef.current)?.focus();
+      notesReturnFocusRef.current = null;
+    }
+  }, [editingNotes]);
+
+  useEffect(() => {
+    if (showSearch) searchInputRef.current?.focus();
+  }, [showSearch]);
 
   useEffect(() => {
     entriesRef.current = entries;
@@ -119,7 +163,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
     setIsLoading(true);
-    setErrorMessage(null);
+    setLoadErrorMessage(null);
     try {
       const result = await listConvexSyllabus(convex);
       if (loadGenerationRef.current === generation) {
@@ -127,7 +171,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
       }
     } catch {
       if (loadGenerationRef.current === generation) {
-        setErrorMessage("Your syllabus could not be loaded.");
+        setLoadErrorMessage("Your syllabus could not be loaded.");
       }
     } finally {
       if (loadGenerationRef.current === generation) {
@@ -181,17 +225,17 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         ];
         const syllabusEntries = entriesRef.current;
         const syllabusMovieIds = new Set(
-          syllabusEntries.map((entry) => entry.movie.id),
+          syllabusEntries.map((entry) => entry.movie.id)
         );
         const syllabusTmdbIds = new Set(
           syllabusEntries.flatMap((entry) =>
-            entry.movie.tmdbId === null ? [] : [entry.movie.tmdbId],
-          ),
+            entry.movie.tmdbId === null ? [] : [entry.movie.tmdbId]
+          )
         );
         const visibleResults = combinedResults.filter((result) =>
           result.kind === "catalog"
             ? !syllabusMovieIds.has(result.movie.id)
-            : !syllabusTmdbIds.has(result.movie.id),
+            : !syllabusTmdbIds.has(result.movie.id)
         );
         setSearchSnapshot({
           generation,
@@ -211,6 +255,14 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
 
   const pending = useMemo(() => pendingEntries(entries), [entries]);
   const assigned = useMemo(() => assignedEntries(entries), [entries]);
+  const filteredPending = pending
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) =>
+      `${entry.movie.title} ${notesDrafts[entry.id] ?? entry.notes ?? ""}`
+        .toLowerCase()
+        .includes(queueFilter.trim().toLowerCase())
+    );
+  const displayedErrorMessage = errorMessage ?? loadErrorMessage;
   const searchAnalysis = analyzeMovieYearQuery(searchInput);
   const currentSearchSnapshot =
     searchSnapshot?.generation === searchGeneration &&
@@ -222,8 +274,8 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   const searchPhase = isSearching
     ? "searching"
     : currentSearchSnapshot
-      ? "settled"
-      : "idle";
+    ? "settled"
+    : "idle";
   const visibleSearchResults = currentSearchSnapshot?.visibleResults ?? [];
   const movieYearHint = useMovieYearHint({
     mediaKind: "movie",
@@ -255,7 +307,6 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
   };
 
   const addMovie = async (result: SearchResult) => {
-    invalidateSearch();
     setBusyOperation(`add:${String(result.movie.id)}`);
     setErrorMessage(null);
     try {
@@ -264,6 +315,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
           ? result.movie
           : await upsertConvexTmdbMovie(convex, result.movie, result.year);
       await addConvexSyllabusEntry(convex, movie.id, insertPosition);
+      invalidateSearch();
       setSearchInput("");
       setShowSearch(false);
       await reload();
@@ -280,6 +332,9 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
     try {
       await removeConvexSyllabusEntry(convex, id);
       setEntries((current) => current.filter((entry) => entry.id !== id));
+      discardNotesDraft(id);
+      if (editingNotes === id) setEditingNotes(null);
+      setEntryToRemove(null);
     } catch (error) {
       setErrorMessage(operationError(error));
     } finally {
@@ -342,8 +397,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
       setEntries((current) =>
         current.map((entry) => (entry.id === id ? updated : entry))
       );
-      setEditingNotes(null);
-      setNotesText("");
+      closeNotes(id);
     } catch (error) {
       setErrorMessage(operationError(error));
     } finally {
@@ -364,7 +418,9 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
     <div className="flex w-full max-w-4xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Button
+          ref={addMovieButtonRef}
           variant="outline"
+          disabled={busyOperation !== null}
           onClick={() => {
             invalidateSearch();
             if (showSearch) {
@@ -380,6 +436,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
           <label className="flex items-center gap-2 text-sm">
             Add position
             <select
+              disabled={busyOperation !== null}
               value={insertPosition}
               onChange={(event) =>
                 setInsertPosition(event.target.value as SyllabusInsertPosition)
@@ -406,6 +463,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
               id="convex-movie-search"
               ref={searchInputRef}
               value={searchInput}
+              disabled={busyOperation !== null}
               onChange={(event) => updateSearchInput(event.target.value)}
               placeholder="Search for a movie..."
               className="pl-9"
@@ -481,10 +539,22 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         </section>
       ) : null}
 
-      {errorMessage ? (
-        <p className="text-sm text-red-300" role="alert">
-          {errorMessage}
-        </p>
+      {displayedErrorMessage ? (
+        <div
+          className="flex items-center gap-3 text-sm text-red-300"
+          role="alert"
+        >
+          <p>{displayedErrorMessage}</p>
+          {loadErrorMessage !== null && !entryToRemove ? (
+            <Button
+              variant="outline"
+              disabled={isLoading || busyOperation !== null}
+              onClick={() => void reload()}
+            >
+              Retry loading
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {busyOperation === "reorder" ? (
@@ -497,12 +567,44 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-4">
-        {pending.map((entry, index) => (
+      <section
+        className="flex flex-col gap-3"
+        aria-labelledby="syllabus-queue-heading"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 id="syllabus-queue-heading" className="text-lg font-bold">
+            Up next{" "}
+            <span className="text-muted-foreground">({pending.length})</span>
+          </h2>
+          <Input
+            aria-label="Filter your queue"
+            placeholder="Filter your queue…"
+            value={queueFilter}
+            onChange={(event) => setQueueFilter(event.target.value)}
+            className="sm:max-w-xs"
+          />
+        </div>
+        {queueFilter.trim() ? (
+          <p className="text-sm text-muted-foreground">
+            Positions and order controls refer to your full queue.
+          </p>
+        ) : null}
+        {pending.length === 0 && !displayedErrorMessage ? (
+          <p className="bbpc-panel p-5 text-muted-foreground">
+            Add your first movie. The movie at the top is your next assignment
+            when you win the bonus spin.
+          </p>
+        ) : null}
+        {pending.length > 0 && filteredPending.length === 0 ? (
+          <p role="status" className="text-muted-foreground">
+            No queued movies match this filter.
+          </p>
+        ) : null}
+        {filteredPending.map(({ entry, index }) => (
           <div
             key={entry.id}
             className={cn(
-              "flex items-start gap-4 rounded-lg border p-4",
+              "flex items-start gap-2 rounded-lg border p-3 sm:gap-4 sm:p-4",
               index === 0 && "border-red-500/70 bg-red-500/5"
             )}
           >
@@ -539,11 +641,23 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-4">
-                <MovieInlinePreview movie={entry.movie} responsive />
-                <div>
+              <div className="flex items-start gap-3">
+                <MovieInlinePreview
+                  movie={entry.movie}
+                  responsive
+                  className="shrink-0"
+                  imageClassName="h-[72px] w-12 rounded-md sm:h-24 sm:w-16 md:h-24 md:w-16"
+                  sizes="(min-width: 640px) 64px, 48px"
+                />
+                <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-semibold">
+                    <span
+                      className="text-xs font-bold tabular-nums text-muted-foreground"
+                      aria-label={`Position ${index + 1}`}
+                    >
+                      #{index + 1}
+                    </span>
+                    <h3 className="break-words text-lg font-semibold">
                       {entry.movie.title}
                     </h3>
                     {index === 0 ? (
@@ -561,11 +675,19 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
                   <div className="space-y-2">
                     <Textarea
                       value={notesText}
+                      aria-label={`Notes for ${entry.movie.title}`}
+                      autoFocus
+                      disabled={busyOperation !== null}
                       maxLength={5000}
-                      onChange={(event) => setNotesText(event.target.value)}
+                      onChange={(event) =>
+                        setNotesDrafts((current) => ({
+                          ...current,
+                          [entry.id]: event.target.value,
+                        }))
+                      }
                       placeholder="Add your notes here..."
                     />
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"
                         disabled={busyOperation !== null}
@@ -579,8 +701,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
                         variant="outline"
                         disabled={busyOperation !== null}
                         onClick={() => {
-                          setEditingNotes(null);
-                          setNotesText("");
+                          closeNotes(entry.id);
                         }}
                       >
                         <X className="mr-1 h-3 w-3" />
@@ -590,16 +711,31 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
                   </div>
                 ) : (
                   <div className="flex items-start gap-2">
-                    <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm text-gray-400">
-                      {entry.notes ?? "No notes yet"}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                        {notesDrafts[entry.id] ?? entry.notes ?? "No notes yet"}
+                      </p>
+                      {notesDrafts[entry.id] !== undefined &&
+                      notesDrafts[entry.id] !== (entry.notes ?? "") ? (
+                        <p className="mt-1 text-xs text-amber-200">
+                          Unsaved notes
+                        </p>
+                      ) : null}
+                    </div>
                     <Button
+                      ref={(node) => {
+                        if (node) noteButtonsRef.current.set(entry.id, node);
+                        else noteButtonsRef.current.delete(entry.id);
+                      }}
                       variant="ghost"
                       size="sm"
                       disabled={busyOperation !== null}
                       onClick={() => {
                         setEditingNotes(entry.id);
-                        setNotesText(entry.notes ?? "");
+                        setNotesDrafts((current) => ({
+                          ...current,
+                          [entry.id]: current[entry.id] ?? entry.notes ?? "",
+                        }));
                       }}
                       aria-label={`Edit notes ${entry.movie.title}`}
                     >
@@ -614,7 +750,11 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
               variant="ghost"
               size="icon"
               disabled={busyOperation !== null}
-              onClick={() => void removeEntry(entry.id)}
+              onClick={(event) => {
+                removeTriggerRef.current = event.currentTarget;
+                setErrorMessage(null);
+                setEntryToRemove(entry);
+              }}
               aria-label={`Remove movie ${entry.movie.title}`}
             >
               <X className="h-4 w-4 text-red-500" />
@@ -623,29 +763,95 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         ))}
       </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">Assigned</h2>
-        {assigned.map((entry) => (
-          <div key={entry.id} className="rounded-lg border p-4">
-            <div className="flex items-center gap-4">
-              <MovieInlinePreview movie={entry.movie} responsive />
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-semibold">{entry.movie.title}</h3>
-                <p className="text-gray-400">{entry.movie.year}</p>
+      <details className="bbpc-panel p-3 sm:p-4">
+        <summary className="min-h-11 cursor-pointer py-2 font-bold">
+          Assigned ({assigned.length})
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
+          {assigned.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Your assigned movies will appear here.
+            </p>
+          ) : null}
+          {assigned.map((entry) => (
+            <div key={entry.id} className="rounded-lg border p-4">
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+                <MovieInlinePreview
+                  movie={entry.movie}
+                  responsive
+                  className="row-span-2 shrink-0 sm:row-span-1"
+                  imageClassName="h-[72px] w-12 rounded-md sm:h-24 sm:w-16 md:h-24 md:w-16"
+                  sizes="(min-width: 640px) 64px, 48px"
+                />
+                <div className="min-w-0">
+                  <h3 className="break-words text-lg font-semibold">
+                    {entry.movie.title}
+                  </h3>
+                  <p className="text-gray-400">{entry.movie.year}</p>
+                </div>
+                <p className="col-start-2 min-w-0 break-words text-sm text-muted-foreground sm:col-start-auto">
+                  Reviewed in Episode {entry.assignment?.episode.number}:{" "}
+                  {entry.assignment?.episode.title}
+                </p>
               </div>
-              <p className="text-sm text-zinc-400">
-                Reviewed in Episode {entry.assignment?.episode.number}:{" "}
-                {entry.assignment?.episode.title}
-              </p>
+              {entry.notes ? (
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                  {entry.notes}
+                </p>
+              ) : null}
             </div>
-            {entry.notes ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-400">
-                {entry.notes}
-              </p>
-            ) : null}
-          </div>
-        ))}
-      </section>
+          ))}
+        </div>
+      </details>
+      <Dialog
+        open={entryToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && busyOperation === null) setEntryToRemove(null);
+        }}
+      >
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            const trigger = removeTriggerRef.current;
+            if (trigger?.isConnected) trigger.focus();
+            else addMovieButtonRef.current?.focus();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Remove {entryToRemove?.movie.title}?</DialogTitle>
+            <DialogDescription>
+              This removes the movie from your queue. Its notes, including any
+              unsaved draft, will be deleted. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {errorMessage ? (
+            <p role="alert" className="text-sm text-red-300">
+              {errorMessage}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              autoFocus
+              disabled={busyOperation !== null}
+              onClick={() => setEntryToRemove(null)}
+            >
+              Keep movie
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busyOperation !== null}
+              onClick={() =>
+                entryToRemove && void removeEntry(entryToRemove.id)
+              }
+            >
+              {busyOperation?.startsWith("remove:")
+                ? "Removing…"
+                : "Remove movie"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

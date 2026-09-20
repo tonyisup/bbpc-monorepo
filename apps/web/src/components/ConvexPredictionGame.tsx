@@ -3,7 +3,7 @@ import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
 
 import { api } from "@tonyisup/bbpc-convex-api";
 
-import { useConvex } from "convex/react";
+import { useConvex, useQuery } from "convex/react";
 import type { ConvexReactClient } from "convex/react";
 
 import {
@@ -69,16 +69,21 @@ const assignmentAudioMessagesSchema = z.array(assignmentAudioMessageSchema);
 type AssignmentAudioMessage = z.infer<typeof assignmentAudioMessageSchema>;
 
 const listMyAudioMessagesReference = api.assignments.public.listMyAudioMessages;
-const createMyAudioMessageReference = api.assignments.public.createMyAudioMessage;
-const deleteMyAudioMessageReference = api.assignments.public.deleteMyAudioMessage;
-const discardMyAudioUploadReference = api.assignments.public.discardMyAudioUpload;
+const createMyAudioMessageReference =
+  api.assignments.public.createMyAudioMessage;
+const deleteMyAudioMessageReference =
+  api.assignments.public.deleteMyAudioMessage;
+const discardMyAudioUploadReference =
+  api.assignments.public.discardMyAudioUpload;
 
 async function loadMyAssignmentAudioMessages(
   convex: ConvexReactClient,
   assignmentId: string
 ) {
   return assignmentAudioMessagesSchema.parse(
-    await convex.query(listMyAudioMessagesReference, { assignmentId: documentId("assignments", assignmentId) })
+    await convex.query(listMyAudioMessagesReference, {
+      assignmentId: documentId("assignments", assignmentId),
+    })
   );
 }
 
@@ -103,8 +108,10 @@ function findGuessForHost(guesses: ConvexPredictionGuess[], hostId: string) {
 
 function ConvexAssignmentVoiceMessages({
   assignmentId,
+  isVisible,
 }: {
   assignmentId: string;
+  isVisible: boolean;
 }) {
   const convex = useConvex();
   const [messages, setMessages] = useState<AssignmentAudioMessage[]>([]);
@@ -126,6 +133,13 @@ function ConvexAssignmentVoiceMessages({
     resetRecording,
   } = useAudioRecorder();
   const { startUpload, isUploading } = useUploadThing("audioUploader");
+
+  useEffect(() => {
+    if (!isVisible) {
+      if (isRecording) stopRecording();
+      if (isPlaying) stopPlayback();
+    }
+  }, [isVisible, isRecording, isPlaying, stopRecording, stopPlayback]);
 
   const reload = useCallback(async () => {
     setIsLoading(true);
@@ -150,8 +164,7 @@ function ConvexAssignmentVoiceMessages({
     let uploadedFile: { key: string; url: string } | undefined;
     const uploadId = crypto.randomUUID();
     try {
-      const extension =
-        audioBlob.type.split("/")[1]?.split(";")[0] ?? "webm";
+      const extension = audioBlob.type.split("/")[1]?.split(";")[0] ?? "webm";
       const file = new File(
         [audioBlob],
         `assignment-${assignmentId}-voice-${Date.now()}.${extension}`,
@@ -185,9 +198,7 @@ function ConvexAssignmentVoiceMessages({
             assignmentId
           );
           if (
-            adopted.some(
-              (message) => message.fileKey === uploadedFile?.key
-            )
+            adopted.some((message) => message.fileKey === uploadedFile?.key)
           ) {
             setMessages(adopted);
             resetRecording();
@@ -227,9 +238,7 @@ function ConvexAssignmentVoiceMessages({
         clientApiVersion: BBPC_CLIENT_API_VERSION,
         id: documentId("assignmentAudioMessages", id),
       });
-      setMessages((current) =>
-        current.filter((message) => message.id !== id)
-      );
+      setMessages((current) => current.filter((message) => message.id !== id));
       toast.success("Recording deleted");
     } catch {
       setErrorMessage("Couldn’t delete the recording. Please retry.");
@@ -328,13 +337,20 @@ function ConvexAssignmentVoiceMessages({
         </Button>
       ) : audioBlob !== null ? (
         <div className="grid grid-cols-3 gap-2">
-          <Button type="button" variant="outline" onClick={resetRecording}>
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="Discard recording"
+            disabled={busy}
+            onClick={resetRecording}
+          >
             <X className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Cancel</span>
           </Button>
           <Button
             type="button"
             variant="outline"
+            aria-label={isPlaying ? "Stop preview" : "Preview recording"}
             onClick={isPlaying ? stopPlayback : playRecording}
           >
             {isPlaying ? (
@@ -346,7 +362,12 @@ function ConvexAssignmentVoiceMessages({
               {isPlaying ? "Stop" : "Preview"}
             </span>
           </Button>
-          <Button type="button" disabled={busy} onClick={() => void submit()}>
+          <Button
+            type="button"
+            aria-label="Send voice message"
+            disabled={busy}
+            onClick={() => void submit()}
+          >
             {busy ? (
               <Loader2 className="h-4 w-4 animate-spin sm:mr-2" />
             ) : (
@@ -371,18 +392,56 @@ function ConvexAssignmentVoiceMessages({
 }
 
 export function ConvexPredictionGame({
+  episodeId,
   assignments,
-  episodeStatus,
+  episodeStatus: initialEpisodeStatus,
   searchQuery = "",
 }: {
+  episodeId: string;
   assignments: PredictionGameAssignment[];
   episodeStatus: string;
   searchQuery?: string;
 }) {
   const convex = useConvex();
+  const liveWindow = useQuery(api.episodes.public.predictionWindow, {
+    episodeId: documentId("episodes", episodeId),
+  });
+  const episodeStatus =
+    liveWindow === undefined ? initialEpisodeStatus : liveWindow?.status ?? "";
+  const closesAt = liveWindow?.closesAt ?? null;
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const currentTime = Date.now();
+    setNow(currentTime);
+    if (
+      episodeStatus !== "recording" ||
+      closesAt === null ||
+      currentTime >= closesAt
+    )
+      return;
+    const timer = window.setInterval(() => {
+      const currentTime = Date.now();
+      setNow(currentTime);
+      if (currentTime >= closesAt) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [episodeStatus, closesAt]);
   const [data, setData] = useState<ConvexPredictionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [savingHosts, setSavingHosts] = useState<Record<string, string | null>>(
+    {}
+  );
+  const [openRequest, setOpenRequest] = useState({
+    assignmentId: "",
+    sequence: 0,
+  });
+  const openAssignment = (assignmentId: string) => {
+    setOpenRequest((current) => ({
+      assignmentId,
+      sequence: current.sequence + 1,
+    }));
+  };
   const loadGenerationRef = useRef(0);
   const assignmentIds = useMemo(
     () => assignments.map((assignment) => assignment.id),
@@ -475,13 +534,32 @@ export function ConvexPredictionGame({
   const savedPickCount = assignments.reduce(
     (total, assignment) =>
       total +
-      data.hosts.filter((host) =>
-        findGuessForHost(data.guessesByAssignment[assignment.id] ?? [], host.id)
+      data.hosts.filter(
+        (host) =>
+          host.id !== savingHosts[assignment.id] &&
+          findGuessForHost(
+            data.guessesByAssignment[assignment.id] ?? [],
+            host.id
+          )
       ).length,
     0
   );
   const isRoundOpen =
-    getPredictionRoundState(episodeStatus) === PredictionRoundState.OPEN;
+    getPredictionRoundState(episodeStatus, true, closesAt, now) ===
+    PredictionRoundState.OPEN;
+  const remainingSeconds =
+    closesAt === null ? 0 : Math.max(0, Math.ceil((closesAt - now) / 1000));
+  const assignmentProgress = assignments.map((assignment) => {
+    const saved = data.hosts.filter(
+      (host) =>
+        host.id !== savingHosts[assignment.id] &&
+        findGuessForHost(data.guessesByAssignment[assignment.id] ?? [], host.id)
+    ).length;
+    return { assignment, saved, complete: saved === data.hosts.length };
+  });
+  const completedMovies = assignmentProgress.filter(
+    (item) => item.complete
+  ).length;
 
   return (
     <section className="space-y-4" aria-label="Rating predictions">
@@ -491,12 +569,16 @@ export function ConvexPredictionGame({
             <span
               className={cn(
                 "rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
-                isRoundOpen
+                isRoundOpen && episodeStatus !== "recording"
                   ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
                   : "border-amber-400/30 bg-amber-400/10 text-amber-200"
               )}
             >
-              {isRoundOpen ? "Round open" : "Picks locked"}
+              {isRoundOpen
+                ? episodeStatus === "recording"
+                  ? "Closing soon"
+                  : "Round open"
+                : "Picks locked"}
             </span>
             <p className="text-sm font-semibold text-white" aria-live="polite">
               {savedPickCount} of {totalPickCount} picks saved
@@ -511,8 +593,53 @@ export function ConvexPredictionGame({
         </div>
         <p className="mt-3 text-sm leading-relaxed text-zinc-300">
           Choose the rating you think each host will give. Changes save
-          automatically.
+          automatically. Picks and wagers stay editable until 10 minutes after
+          recording starts.
         </p>
+        {episodeStatus === "recording" && isRoundOpen ? (
+          <p className="mt-2 font-semibold tabular-nums text-amber-200">
+            Picks and wagers close in {Math.floor(remainingSeconds / 60)}:
+            {String(remainingSeconds % 60).padStart(2, "0")}.
+          </p>
+        ) : null}
+        {assignments.length > 1 ? (
+          <nav className="mt-4 space-y-2" aria-label="Movie pick checklist">
+            <p className="text-sm font-semibold text-white" aria-live="polite">
+              {completedMovies} of {assignments.length} movies complete.{" "}
+              {isRoundOpen
+                ? "Pick ratings for every movie."
+                : "Review your saved picks."}
+            </p>
+            <ol className="grid gap-2 sm:grid-cols-2">
+              {assignmentProgress.map(
+                ({ assignment, saved, complete }, index) => (
+                  <li key={assignment.id}>
+                    <button
+                      type="button"
+                      className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      onClick={() => openAssignment(assignment.id)}
+                    >
+                      <span className="min-w-0 break-words font-semibold">
+                        {index + 1}.{" "}
+                        {assignment.movie?.title ?? "Unknown movie"}
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 text-xs",
+                          complete ? "text-emerald-300" : "text-amber-200"
+                        )}
+                      >
+                        {complete
+                          ? "Complete"
+                          : `${saved}/${data.hosts.length} saved`}
+                      </span>
+                    </button>
+                  </li>
+                )
+              )}
+            </ol>
+          </nav>
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-white/10 pt-4">
           {data.ratings.map((rating) => (
             <div
@@ -566,8 +693,27 @@ export function ConvexPredictionGame({
           ratings={data.ratings}
           guesses={data.guessesByAssignment[assignment.id] ?? []}
           episodeStatus={episodeStatus}
+          closesAt={closesAt}
+          now={now}
           searchQuery={searchQuery}
           initiallyExpanded={false}
+          openRequest={
+            openRequest.assignmentId === assignment.id
+              ? openRequest.sequence
+              : 0
+          }
+          nextIncompleteAssignment={
+            assignmentProgress.find(
+              (item) => !item.complete && item.assignment.id !== assignment.id
+            )?.assignment
+          }
+          onContinue={openAssignment}
+          onSavingChange={(hostId) => {
+            setSavingHosts((current) => ({
+              ...current,
+              [assignment.id]: hostId,
+            }));
+          }}
           onGuessSaved={(guess) => {
             setData((current) => {
               if (current === null) {
@@ -584,22 +730,6 @@ export function ConvexPredictionGame({
                     ),
                     guess,
                   ],
-                },
-              };
-            });
-          }}
-          onGuessRemoved={(hostId) => {
-            setData((current) => {
-              if (current === null) {
-                return current;
-              }
-              return {
-                ...current,
-                guessesByAssignment: {
-                  ...current.guessesByAssignment,
-                  [assignment.id]: (
-                    current.guessesByAssignment[assignment.id] ?? []
-                  ).filter((candidate) => candidate.hostId !== hostId),
                 },
               };
             });
@@ -633,10 +763,15 @@ interface ConvexAssignmentPredictionProps {
   ratings: ConvexPredictionRating[];
   guesses: ConvexPredictionGuess[];
   episodeStatus: string;
+  closesAt: number | null;
+  now: number;
   searchQuery: string;
   initiallyExpanded: boolean;
   onGuessSaved: (guess: ConvexPredictionGuess) => void;
-  onGuessRemoved: (hostId: string) => void;
+  onSavingChange: (hostId: string | null) => void;
+  openRequest: number;
+  nextIncompleteAssignment?: PredictionGameAssignment;
+  onContinue: (assignmentId: string) => void;
 }
 
 const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
@@ -645,13 +780,29 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
   ratings,
   guesses,
   episodeStatus,
+  closesAt,
+  now,
   searchQuery,
   initiallyExpanded,
   onGuessSaved,
-  onGuessRemoved,
+  onSavingChange,
+  openRequest,
+  nextIncompleteAssignment,
+  onContinue,
 }) => {
   const convex = useConvex();
   const [isExpanded, setIsExpanded] = useState(initiallyExpanded);
+  const [hasExpanded, setHasExpanded] = useState(initiallyExpanded);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (openRequest === 0) return;
+    setHasExpanded(true);
+    setIsExpanded(true);
+    headingRef.current?.scrollIntoView({ block: "start" });
+    headingRef.current?.focus({ preventScroll: true });
+  }, [openRequest]);
+  const [optimisticGuess, setOptimisticGuess] =
+    useState<ConvexPredictionGuess | null>(null);
   const [savingHostId, setSavingHostId] = useState<string | null>(null);
   const [lastSavedHostId, setLastSavedHostId] = useState<string | null>(null);
   const [failedPick, setFailedPick] = useState<{
@@ -663,9 +814,14 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
     findGuessForHost(guesses, host.id)
   ).length;
   const hasAllGuesses = hosts.length > 0 && selectedCount === hosts.length;
+  const allPicksSaved = hasAllGuesses && savingHostId === null;
   const isRoundOpen =
-    getPredictionRoundState(episodeStatus, assignment.playable) ===
-    PredictionRoundState.OPEN;
+    getPredictionRoundState(
+      episodeStatus,
+      assignment.playable,
+      closesAt,
+      now
+    ) === PredictionRoundState.OPEN;
 
   const chooseRating = async (hostId: string, ratingId: string) => {
     if (!isRoundOpen || savingHostId !== null) {
@@ -682,10 +838,11 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
       rating,
     };
     setSavingHostId(hostId);
+    onSavingChange(hostId);
     setLastSavedHostId(null);
     setFailedPick(null);
     setErrorMessage(null);
-    onGuessSaved(optimisticGuess);
+    setOptimisticGuess(optimisticGuess);
     try {
       const saved = await submitConvexPrediction(convex, {
         assignmentId: assignment.id,
@@ -695,15 +852,12 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
       onGuessSaved(saved);
       setLastSavedHostId(hostId);
     } catch (error) {
-      if (previousGuess !== undefined) {
-        onGuessSaved(previousGuess);
-      } else {
-        onGuessRemoved(hostId);
-      }
       setFailedPick({ hostId, ratingId });
       setErrorMessage(saveError(error));
     } finally {
       setSavingHostId(null);
+      setOptimisticGuess(null);
+      onSavingChange(null);
     }
   };
 
@@ -730,7 +884,11 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
           )}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-black text-white">
+              <h3
+                ref={headingRef}
+                tabIndex={-1}
+                className="scroll-mt-24 text-xl font-black text-white"
+              >
                 {assignment.movie
                   ? highlightText(assignment.movie.title, searchQuery)
                   : "Unknown movie"}
@@ -738,12 +896,14 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs font-bold",
-                  hasAllGuesses
+                  allPicksSaved
                     ? "bg-emerald-400/10 text-emerald-300"
                     : "bg-amber-400/10 text-amber-200"
                 )}
               >
-                {hasAllGuesses
+                {savingHostId !== null
+                  ? "Saving…"
+                  : allPicksSaved
                   ? "Complete"
                   : selectedCount === 0
                   ? "Needs picks"
@@ -752,7 +912,9 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
             </div>
             <p className="mt-1 text-sm text-zinc-400">
               {isRoundOpen
-                ? hasAllGuesses
+                ? savingHostId !== null
+                  ? "Saving your choice. Wait for confirmation before leaving."
+                  : allPicksSaved
                   ? "Your choices are saved. You can edit them while the round is open."
                   : `Choose ${hosts.length - selectedCount} more ${
                       hosts.length - selectedCount === 1 ? "rating" : "ratings"
@@ -766,7 +928,10 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
           variant={isExpanded ? "ghost" : "outline"}
           className="min-h-11 shrink-0 justify-between sm:justify-center"
           aria-expanded={isExpanded}
-          onClick={() => setIsExpanded((value) => !value)}
+          onClick={() => {
+            setHasExpanded(true);
+            setIsExpanded((value) => !value);
+          }}
         >
           {isExpanded
             ? "Hide picks"
@@ -802,10 +967,16 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
         </ul>
       ) : null}
 
-      {isExpanded ? (
-        <div className="space-y-4 border-t border-white/10 p-4 sm:p-5">
+      {hasExpanded ? (
+        <div
+          hidden={!isExpanded}
+          className="space-y-4 border-t border-white/10 p-4 sm:p-5"
+        >
           {hosts.map((host) => {
-            const guess = findGuessForHost(guesses, host.id);
+            const guess =
+              optimisticGuess?.hostId === host.id
+                ? optimisticGuess
+                : findGuessForHost(guesses, host.id);
             const isSaving = savingHostId === host.id;
             const didFail = failedPick?.hostId === host.id;
             const isSaved = !isSaving && !didFail && Boolean(guess?.rating.id);
@@ -815,10 +986,10 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
                 className="rounded-lg border border-white/10 bg-black/20 p-3 sm:p-4"
                 disabled={!isRoundOpen || savingHostId !== null}
               >
+                <legend className="px-1 font-bold text-white">
+                  {host.name ?? "Host"}
+                </legend>
                 <div className="mb-3 flex min-h-6 items-center justify-between gap-3">
-                  <legend className="font-bold text-white">
-                    {host.name ?? "Host"}
-                  </legend>
                   <span
                     className={cn(
                       "text-xs font-semibold",
@@ -900,6 +1071,22 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
             </div>
           ) : null}
 
+          {allPicksSaved && nextIncompleteAssignment && isRoundOpen ? (
+            <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
+              <p className="text-sm text-foreground">
+                This movie is complete. There are still picks to make for
+                another movie.
+              </p>
+              <Button
+                className="mt-2 h-auto min-h-11 whitespace-normal text-left"
+                onClick={() => onContinue(nextIncompleteAssignment.id)}
+              >
+                Continue to{" "}
+                {nextIncompleteAssignment.movie?.title ?? "the next movie"}
+              </Button>
+            </div>
+          ) : null}
+
           {hasAllGuesses ? (
             <details className="rounded-lg border border-white/10 bg-black/20">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 [&::-webkit-details-marker]:hidden">
@@ -912,18 +1099,33 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
                 />
               </summary>
               <div className="border-t border-white/10 p-3 sm:p-4">
-                <ConvexAssignmentGamblingBoard
-                  assignmentId={assignment.id}
-                  hosts={hosts}
-                  guesses={guesses}
-                  episodeStatus={episodeStatus}
-                  playable={assignment.playable}
-                />
+                {savingHostId !== null ? (
+                  <p role="status" className="mb-3 text-sm text-amber-200">
+                    Wagering will be available after your pick finishes saving.
+                  </p>
+                ) : null}
+                <fieldset
+                  disabled={savingHostId !== null}
+                  aria-label="Wager options"
+                >
+                  <ConvexAssignmentGamblingBoard
+                    assignmentId={assignment.id}
+                    hosts={hosts}
+                    guesses={guesses}
+                    episodeStatus={episodeStatus}
+                    closesAt={closesAt}
+                    now={now}
+                    playable={assignment.playable}
+                  />
+                </fieldset>
               </div>
             </details>
           ) : null}
 
-          <ConvexAssignmentVoiceMessages assignmentId={assignment.id} />
+          <ConvexAssignmentVoiceMessages
+            assignmentId={assignment.id}
+            isVisible={isExpanded}
+          />
         </div>
       ) : null}
     </article>

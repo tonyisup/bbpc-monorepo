@@ -291,10 +291,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
   };
 
   return (
-    <section
-      id="quotabunga-submit"
-      className="rounded-lg border border-blue-500/30 bg-gray-900 p-6 shadow-lg"
-    >
+    <section id="quotabunga-submit" className="bbpc-panel p-4 sm:p-5">
       <AdminCollapsibleHeader
         isAdmin={isAdmin}
         isAdminCollapsed={isAdminCollapsed}
@@ -305,7 +302,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
         )}
         titleWrapperClassName={cn(!isAdmin && "w-full text-center")}
         title={
-          <h2 className="text-2xl font-bold text-blue-400">
+          <h2 className="text-2xl font-black text-foreground">
             Submit to Quotabunga
           </h2>
         }
@@ -374,7 +371,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
                     href={submission.clipUrl}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-blue-400 underline"
+                    className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
                   >
                     View submitted clip
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -475,15 +472,19 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
 
               {hasPossibleDuplicate ? (
                 <DuplicateStatusPanel>
-                  <span className="font-semibold">Possible duplicate.</span>{" "}
-                  A similar quote may have been submitted before. You can still submit it, but duplicate entries may be judged less favorably.
+                  <span className="font-semibold">Possible duplicate.</span> A
+                  similar quote may have been submitted before. You can still
+                  submit it, but duplicate entries may be judged less favorably.
                 </DuplicateStatusPanel>
               ) : null}
 
               {isDuplicateCheckUnavailable ? (
                 <DuplicateStatusPanel>
-                  <span className="font-semibold">Couldn&apos;t check for duplicates.</span>{" "}
-                  You can still submit, but it may be judged less favorably if a similar quote was already entered.
+                  <span className="font-semibold">
+                    Couldn&apos;t check for duplicates.
+                  </span>{" "}
+                  You can still submit, but it may be judged less favorably if a
+                  similar quote was already entered.
                 </DuplicateStatusPanel>
               ) : null}
 

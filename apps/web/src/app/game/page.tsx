@@ -54,7 +54,12 @@ export default async function GamePage() {
           Play the current round
         </h2>
         {episode ? (
-          <Episode episode={episode} showExtras={false} allowGuesses />
+          <Episode
+            episode={episode}
+            showExtras={false}
+            compactAssignments
+            allowGuesses
+          />
         ) : (
           <div className="bbpc-panel p-5 text-zinc-300" role="status">
             No current round is available.
@@ -254,9 +259,10 @@ export default async function GamePage() {
                 points before the wager is doubled or tripled.
               </p>
               <p>
-                Confirmed bets are locked. Before January 12, 2026, the retired
-                format used a 1x return for guessing all three hosts&apos;
-                ratings.
+                Confirmed bets can be edited or cleared until picks close, 10
+                minutes after the episode enters recording. Before January 12,
+                2026, the retired format used a 1x return for guessing all three
+                hosts&apos; ratings.
               </p>
               <p>
                 Missing two episodes in a row begins a 1-point penalty for each

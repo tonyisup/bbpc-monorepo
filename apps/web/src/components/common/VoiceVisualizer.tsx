@@ -34,7 +34,7 @@ export const VoiceVisualizer: React.FC<VoiceVisualizerProps> = ({ volume, isReco
 								<div
 									key={j}
 									className={cn(
-										"w-5 h-1 rounded-[1px] transition-all duration-75",
+                                        "w-5 h-1 rounded-[1px] transition-[background-color,box-shadow] duration-75",
 										isLit
 											? "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]"
 											: "bg-red-950/20"

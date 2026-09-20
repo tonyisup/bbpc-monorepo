@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -521,7 +521,7 @@ describe("administrator episode API", () => {
     expect(unchanged.id).toBe(episodeId);
   });
 
-  test("locks pending gambling entries when recording or publishing", async () => {
+  test("locks pending gambling entries immediately when publishing", async () => {
     const t = createTestBackend();
     const adminId = await seedAdmin(t);
     const episodeId = await seedEpisode(t, {
@@ -574,7 +574,7 @@ describe("administrator episode API", () => {
       {
         clientApiVersion: BBPC_API_VERSION,
         id: episodeId,
-        status: "recording",
+        status: "published",
       },
     );
     const snapshot = await t.run(async (ctx) => {
@@ -600,6 +600,132 @@ describe("administrator episode API", () => {
     expect(updateAudit?.metadata).toMatchObject({
       lockedGamblingEntries: 1,
     });
+  });
+
+
+  test("recording edits preserve the deadline and stale closing jobs cannot affect a restarted round", async () => {
+    vi.useFakeTimers();
+    const startedAt = Date.parse("2026-09-19T12:00:00Z");
+    vi.setSystemTime(startedAt);
+    try {
+      const t = createTestBackend();
+      const adminId = await seedAdmin(t);
+      const episodeId = await seedEpisode(t, {
+        number: 99,
+        title: "Deadline",
+        status: "next",
+      });
+      const setup = await t.run(async (ctx) => {
+        const movieId = await ctx.db.insert("movies", {
+          title: "Deadline movie",
+          normalizedTitle: "deadline movie",
+          year: 2026,
+          url: "https://example.test/deadline",
+        });
+        const assignmentId = await ctx.db.insert("assignments", {
+          userId: adminId,
+          episodeId,
+          movieId,
+          type: "HOMEWORK",
+          playable: true,
+        });
+        const gamblingTypeId = await ctx.db.insert("gamblingTypes", {
+          lookupId: "deadline",
+          normalizedLookupId: "deadline",
+          title: "Deadline",
+          multiplier: 1,
+          isActive: true,
+          createdAt: 1,
+        });
+        return { assignmentId, gamblingTypeId };
+      });
+      const wagerId = await seedGamblingEntry(t, {
+        userId: adminId,
+        ...setup,
+        status: "pending",
+        sequence: 1,
+      });
+      await advanceToS3(t);
+      const admin = t.withIdentity(ADMIN_IDENTITY);
+      const update = { clientApiVersion: BBPC_API_VERSION, id: episodeId };
+      await admin.mutation(api.episodes.admin.updateEpisode, {
+        ...update,
+        status: "recording",
+      });
+      vi.setSystemTime(startedAt + 60_000);
+      await admin.mutation(api.episodes.admin.updateEpisode, {
+        ...update,
+        status: "recording",
+        title: "Updated title",
+      });
+      expect(
+        await t.query(api.episodes.public.predictionWindow, { episodeId }),
+      ).toEqual({ status: "recording", closesAt: startedAt + 600_000 });
+      await admin.mutation(api.episodes.admin.updateEpisode, {
+        ...update,
+        status: "next",
+      });
+      expect(
+        await t.query(api.episodes.public.predictionWindow, { episodeId }),
+      ).toEqual({ status: "next", closesAt: null });
+      await admin.mutation(api.episodes.admin.updateEpisode, {
+        ...update,
+        status: "recording",
+      });
+      vi.setSystemTime(startedAt + 600_000);
+      expect(
+        await t.mutation(internal.episodes.admin.closePredictionWindow, {
+          episodeId,
+          closesAt: startedAt + 600_000,
+          cutoverRunId: CUTOVER_RUN_ID,
+          clientApiVersion: BBPC_API_VERSION,
+        }),
+      ).toBe(0);
+      expect(
+        await t.query(api.episodes.public.predictionWindow, { episodeId }),
+      ).toEqual({ status: "recording", closesAt: startedAt + 660_000 });
+      expect(
+        await t.run(
+          async (ctx) =>
+            (
+              await ctx.db.get("gamblingEntries", wagerId)
+            )?.status,
+        ),
+      ).toBe("pending");
+      await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+      expect(
+        await t.run(
+          async (ctx) =>
+            (
+              await ctx.db.get("gamblingEntries", wagerId)
+            )?.status,
+        ),
+      ).toBe("locked");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("an already recording legacy episode does not get a new grace period from an ordinary save", async () => {
+    const t = createTestBackend();
+    await seedAdmin(t);
+    const episodeId = await seedEpisode(t, {
+      number: 98,
+      title: "Legacy recording",
+      status: "recording",
+    });
+    await advanceToS3(t);
+    await t
+      .withIdentity(ADMIN_IDENTITY)
+      .mutation(api.episodes.admin.updateEpisode, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: episodeId,
+        status: "recording",
+        title: "Edited",
+      });
+    expect(
+      await t.query(api.episodes.public.predictionWindow, { episodeId }),
+    ).toEqual({ status: "recording", closesAt: null });
   });
 
   test("validates episode inputs and missing targets", async () => {
@@ -787,11 +913,21 @@ describe("administrator episode API", () => {
         {
           clientApiVersion: BBPC_API_VERSION,
           id: gamblingEpisodeId,
-          status: "recording",
+          status: "published",
         },
       ),
       "CONFLICT",
     );
+    vi.useFakeTimers();
+    try {
+      await gamblingOverflow.withIdentity(ADMIN_IDENTITY).mutation(api.episodes.admin.updateEpisode, {
+        clientApiVersion: BBPC_API_VERSION, id: gamblingEpisodeId, status: "recording",
+      });
+      await gamblingOverflow.finishAllScheduledFunctions(() => vi.runAllTimers());
+      const pending = await gamblingOverflow.run(async (ctx) => ctx.db.query("gamblingEntries").withIndex("by_assignmentId_and_status", (q) => q.eq("assignmentId", setup.assignmentId).eq("status", "pending")).take(1));
+      expect(pending).toEqual([]);
+    } finally { vi.useRealTimers(); }
+
   });
 
   test("adds and removes validated episode links with audit evidence", async () => {

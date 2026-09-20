@@ -299,6 +299,7 @@ export async function assertEpisodeLinkCapacity(
 export async function lockPendingGamblingForEpisode(
   ctx: MutationCtx,
   episodeId: Id<"episodes">,
+  allowPartial = false,
 ): Promise<number> {
   const assignments = await ctx.db
     .query("assignments")
@@ -327,7 +328,7 @@ export async function lockPendingGamblingForEpisode(
           .eq("status", "pending"),
       )
       .take(remaining + 1);
-    if (entries.length > remaining) {
+    if (entries.length > remaining && !allowPartial) {
       domainError(
         "CONFLICT",
         "Episode gambling entries exceed the supported status-update limit.",
@@ -338,13 +339,18 @@ export async function lockPendingGamblingForEpisode(
         },
       );
     }
-    inspectedCount += entries.length;
-    for (const entry of entries) {
+    const batch = entries.slice(0, remaining);
+    inspectedCount += batch.length;
+    for (const entry of batch) {
       await ctx.db.patch("gamblingEntries", entry._id, {
         status: "locked",
       });
       lockedCount += 1;
     }
+    if (
+      allowPartial &&
+      inspectedCount === MAX_GAMBLING_ENTRIES_PER_EPISODE_UPDATE
+    ) break;
   }
   return lockedCount;
 }
