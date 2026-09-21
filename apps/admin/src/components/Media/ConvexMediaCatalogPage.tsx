@@ -4,6 +4,7 @@ import {
   type MovieYearHintAction,
   useMovieYearHint,
 } from "@bbpc/movie-search-hints";
+import { prioritizeExactMovieMatches } from "@bbpc/movie-search-hints/search-order";
 import { useConvex } from "convex/react";
 import {
   ExternalLink,
@@ -180,10 +181,13 @@ export function ConvexMediaCatalogPage({ kind }: { kind: MediaKind }) {
     if (normalizedFilter.length === 0) {
       return items ?? [];
     }
-    return (items ?? []).filter((item) =>
+    const matches = (items ?? []).filter((item) =>
       item.title.toLocaleLowerCase().includes(normalizedFilter)
     );
-  }, [filter, items]);
+    return kind === "movie"
+      ? prioritizeExactMovieMatches(matches, filter, (item) => item.title)
+      : matches;
+  }, [filter, items, kind]);
 
   const refresh = () => {
     setItems(null);

@@ -6,6 +6,7 @@ import {
   type MovieYearHintAction,
   useMovieYearHint,
 } from "@bbpc/movie-search-hints";
+import { prioritizeExactMovieMatches } from "@bbpc/movie-search-hints/search-order";
 import { useConvex } from "convex/react";
 import { ArrowLeft, Loader2, Search } from "lucide-react";
 import Image from "next/image";
@@ -237,7 +238,14 @@ export function ConvexAddExtraPageClient({
         mediaKind: kind,
         tmdbStatus:
           tmdbResult.status === "fulfilled" ? "fulfilled" : "rejected",
-        visibleResults: [...catalogResults, ...externalResults],
+        visibleResults:
+          kind === "movie"
+            ? prioritizeExactMovieMatches(
+                [...catalogResults, ...externalResults],
+                query,
+                (result) => result.item.title
+              )
+            : [...catalogResults, ...externalResults],
       });
       setSearchingGeneration(null);
     });

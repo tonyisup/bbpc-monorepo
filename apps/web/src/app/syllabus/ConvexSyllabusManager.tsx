@@ -6,6 +6,7 @@ import {
   type MovieYearHintAction,
   useMovieYearHint,
 } from "@bbpc/movie-search-hints";
+import { prioritizeExactMovieMatches } from "@bbpc/movie-search-hints/search-order";
 import { useConvex } from "convex/react";
 import {
   ArrowDown,
@@ -243,7 +244,11 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
           mediaKind: "movie",
           tmdbStatus:
             tmdbResult.status === "fulfilled" ? "fulfilled" : "rejected",
-          visibleResults,
+          visibleResults: prioritizeExactMovieMatches(
+            visibleResults,
+            query,
+            (result) => result.movie.title
+          ),
         });
         setSearchingGeneration(null);
       });

@@ -284,6 +284,24 @@ describe("authenticated TMDB catalog actions", () => {
     });
   });
 
+  test.each(["Arrival", "  ＡＲＲＩＶＡＬ y:2016  "])("prioritizes exact movie titles for %s while preserving other TMDB order", async (query) => {
+    const t = createTestBackend();
+    await seedUser(t);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({
+      page: 1,
+      results: [
+        validMovie(1, { title: "Z Arrival" }),
+        validMovie(2, { title: "Arrival" }),
+        validMovie(3, { title: "A Arrival" }),
+        validMovie(4, { title: "ARRIVAL" }),
+      ],
+    })));
+    const response = await t.withIdentity(USER_IDENTITY).action(
+      api.catalog.external.searchMovies, { query },
+    );
+    expect(response.results.map((movie) => movie.id)).toEqual([2, 4, 1, 3]);
+  });
+
   test("translates TMDB year modifiers into API filters", async () => {
     const t = createTestBackend();
     await seedUser(t);

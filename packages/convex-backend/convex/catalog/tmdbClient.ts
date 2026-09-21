@@ -1,3 +1,5 @@
+import { prioritizeExactMovieMatches } from "@bbpc/movie-search-hints/search-order";
+
 import { domainError } from "../lib/errors.js";
 import { env } from "../_generated/server.js";
 import { parseMovieYearSearchQuery } from "./movieSearchQuery.js";
@@ -284,15 +286,19 @@ export async function searchTmdb(
     );
   }
   const responsePage = payload.page;
+  const results = payload.results
+    .slice(0, MAX_TMDB_RESULTS)
+    .map((result) => toTmdbTitle(result, kind));
   return {
     page:
       typeof responsePage === "number" &&
       Number.isSafeInteger(responsePage)
         ? responsePage
         : page,
-    results: payload.results
-      .slice(0, MAX_TMDB_RESULTS)
-      .map((result) => toTmdbTitle(result, kind)),
+    results:
+      kind === "movie"
+        ? prioritizeExactMovieMatches(results, query, (movie) => movie.title)
+        : results,
   };
 }
 
