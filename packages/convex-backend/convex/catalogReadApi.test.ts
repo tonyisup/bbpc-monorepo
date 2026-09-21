@@ -126,7 +126,7 @@ describe("public catalog read API", () => {
     ).resolves.toBeNull();
   });
 
-  test("searches movie titles and returns deterministic title/year order", async () => {
+  test("puts exact movie titles first with deterministic year order", async () => {
     const t = createTestBackend();
     await seedMovie(t, { title: "The Matrix", year: 1999 });
     await seedMovie(t, { title: "Matrix", year: 2003 });
@@ -145,6 +145,53 @@ describe("public catalog read API", () => {
       { title: "Matrix", year: 2003 },
       { title: "The Matrix", year: 1999 },
     ]);
+  });
+
+  test.each([1, 20])("ranks Wrath of Man first with limit %s", async (limit) => {
+    const t = createTestBackend();
+    await seedMovie(t, { title: "A Wrath of Man Story", year: 2021 });
+    const exactId = await seedMovie(t, { title: "Wrath of Man", year: 2021 });
+
+    const result = await t.query(api.catalog.public.searchMovies, {
+      query: "  ＷＲＡＴＨ of Man  ",
+      limit,
+    });
+
+    expect(result[0]?.id).toBe(exactId);
+    expect(result).toHaveLength(limit === 1 ? 1 : 2);
+    expect(new Set(result.map((movie) => movie.id)).size).toBe(result.length);
+  });
+
+  test("preserves search relevance for non-exact movie matches", async () => {
+    const t = createTestBackend();
+    await seedMovie(t, { title: "Z Wrath of Man", year: 2021 });
+    await seedMovie(t, { title: "A Wrath of Man Story", year: 2021 });
+    const expectedIds = await t.run(async (ctx) =>
+      (await ctx.db.query("movies")
+        .withSearchIndex("search_title", (search) => search.search("title", "wrath of man"))
+        .take(20)).map((movie) => movie._id),
+    );
+
+    const result = await t.query(api.catalog.public.searchMovies, {
+      query: "wrath of man",
+      limit: 20,
+    });
+
+    expect(result.map((movie) => movie.id)).toEqual(expectedIds);
+  });
+
+  test("applies the year filter to exact title matches before limiting", async () => {
+    const t = createTestBackend();
+    await seedMovie(t, { title: "Wrath of Man", year: 2000 });
+    await seedMovie(t, { title: "A Wrath of Man Story", year: 2021 });
+    const exactId = await seedMovie(t, { title: "Wrath of Man", year: 2021 });
+
+    const result = await t.query(api.catalog.public.searchMovies, {
+      query: "wrath of man y:2021",
+      limit: 1,
+    });
+
+    expect(result.map((movie) => movie.id)).toEqual([exactId]);
   });
 
   test("adds exact-year movie matches without duplicates", async () => {
