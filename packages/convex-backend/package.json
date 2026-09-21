@@ -77,12 +77,12 @@
     "package:check": "pnpm run contract:build && node scripts/check-package.mjs"
   },
   "dependencies": {
+    "@bbpc/movie-search-hints": "workspace:*",
     "@noble/hashes": "2.2.0",
     "convex": "1.42.3",
     "convex-helpers": "0.1.120"
   },
   "devDependencies": {
-    "@bbpc/movie-search-hints": "workspace:*",
     "@edge-runtime/vm": "5.0.0",
     "@eslint/js": "9.39.5",
     "@types/node": "22.19.11",

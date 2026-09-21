@@ -250,6 +250,30 @@ describe("public movie year search hints", () => {
     vi.clearAllMocks();
   });
 
+  test.each(["syllabus", "extras"])("%s puts exact TMDB matches ahead of partial catalog matches", async (surface) => {
+    const catalog = [{
+      id: "catalog-1", title: "The Imposter Returns", year: 2001,
+      poster: tmdbMovie.poster_path, url: "https://www.imdb.com/title/tt1234567/",
+      tmdbId: 456,
+    }];
+    const external = [
+      { ...tmdbMovie, id: 789, title: "The Imposter Again" },
+      tmdbMovie,
+      { ...tmdbMovie, id: 456, title: "The Imposter Returns" },
+    ];
+    mocks.searchSyllabusCatalog.mockResolvedValue(catalog);
+    mocks.searchSyllabusTmdb.mockResolvedValue(external);
+    mocks.searchExtraMovies.mockResolvedValue(catalog);
+    mocks.searchExtraTmdb.mockResolvedValue(external);
+    const rendered = surface === "syllabus" ? await renderSyllabus() : await renderAddExtra();
+    changeInput(rendered, surface === "syllabus" ? "convex-movie-search" : "extra-search", "  THE IMPOSTER y:2001  ");
+    await advance(350);
+    const titles = rendered.root.findAllByType("p")
+      .map((node) => node.children.join(""))
+      .filter((text) => text.startsWith("The Imposter"));
+    expect(titles).toEqual(["The Imposter", "The Imposter Returns", "The Imposter Again"]);
+  });
+
   test("syllabus offers an immediate action when returned rows are not usable", async () => {
     mocks.searchSyllabusTmdb.mockResolvedValueOnce([
       { ...tmdbMovie, poster_path: null },

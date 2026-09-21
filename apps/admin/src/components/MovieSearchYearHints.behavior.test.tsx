@@ -224,6 +224,22 @@ describe("admin movie year search hints", () => {
     vi.clearAllMocks();
   });
 
+  test.each(["movie", "show"] as const)("loaded %s filtering only promotes exact movie titles", async (kind) => {
+    const items = ["The Imposter Returns", "The Imposter", "The Imposter Again"]
+      .map((title, index) => ({ id: String(index), title, year: 2001, poster: null, url: "https://example.test" }));
+    const page = { items, continueCursor: null, isDone: true };
+    mocks.loadMovies.mockResolvedValue(page);
+    mocks.loadShows.mockResolvedValue(page);
+    const rendered = await renderCatalog(kind);
+    changeInput(rendered, { placeholder: "Filter loaded titles..." }, "the imposter");
+    const titles = rendered.root.findAllByType("a")
+      .map((node) => node.children.join(""))
+      .filter((text) => text.startsWith("The Imposter"));
+    expect(titles).toEqual(kind === "movie"
+      ? ["The Imposter", "The Imposter Returns", "The Imposter Again"]
+      : items.map((item) => item.title));
+  });
+
   test("catalog appends an incomplete modifier, focuses it, and pauses search", async () => {
     const rendered = await renderCatalog();
     changeInput(rendered, { "aria-label": "Search TMDB for a movie" }, "Imposter");

@@ -11,6 +11,10 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
+    "./search-order": {
+      "types": "./src/search-order.ts",
+      "import": "./src/search-order.ts"
+    },
     "./conformance-fixtures": {
       "types": "./src/conformance-fixtures.ts",
       "import": "./src/conformance-fixtures.ts"
