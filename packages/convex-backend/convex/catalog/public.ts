@@ -4,8 +4,8 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
-import type { Doc } from "../_generated/dataModel.js";
 import { anonymousQuery } from "../functions.js";
+import { normalizeLookupKey } from "../lib/normalize.js";
 import {
   preparePublicSearchQuery,
   requirePublicSearchLimit,
@@ -20,17 +20,6 @@ import {
   toCatalogShow,
 } from "./readModel.js";
 import { parseMovieYearSearchQuery } from "./movieSearchQuery.js";
-
-function compareMovies(
-  left: Doc<"movies">,
-  right: Doc<"movies">,
-): number {
-  return (
-    left.normalizedTitle.localeCompare(right.normalizedTitle) ||
-    left.year - right.year ||
-    left._creationTime - right._creationTime
-  );
-}
 
 export const getMovie = anonymousQuery({
   args: { id: v.id("movies") },
@@ -64,6 +53,17 @@ export const searchMovies = anonymousQuery({
     if (query === null) {
       return [];
     }
+    // Fetch exact titles separately so they cannot fall outside the search limit.
+    const normalizedTitle = normalizeLookupKey(query, "Movie search");
+    const exactMatches = await ctx.db
+      .query("movies")
+      .withIndex("by_normalizedTitle_and_year", (index) => {
+        const titleIndex = index.eq("normalizedTitle", normalizedTitle);
+        return yearFilter === null
+          ? titleIndex
+          : titleIndex.eq("year", yearFilter);
+      })
+      .take(limit);
     const titleSearch = ctx.db
       .query("movies")
       .withSearchIndex("search_title", (search) => {
@@ -87,13 +87,13 @@ export const searchMovies = anonymousQuery({
             )
             .take(limit);
     const byId = new Map(
-      [...titleMatches, ...yearMatches].map((movie) => [
+      [...exactMatches, ...titleMatches, ...yearMatches].map((movie) => [
         movie._id,
         movie,
       ]),
     );
+    // Map preserves the first occurrence: exact titles, relevance, then year-only hits.
     return [...byId.values()]
-      .sort(compareMovies)
       .slice(0, limit)
       .map(toCatalogMovie);
   },
