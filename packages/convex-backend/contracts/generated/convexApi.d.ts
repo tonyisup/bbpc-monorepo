@@ -8738,6 +8738,10 @@ export type PublicApiType = {
             }, Id<"recordingSessionManifests">>;
         };
         recordings: {
+            acknowledgeBlobDeletions: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                ids: Array<Id<"recordingBlobDeletions">>;
+            }, number>;
             listBySession: FunctionReference<"query", "public", {
                 accessToken: string;
                 clientId: string;
@@ -8755,6 +8759,12 @@ export type PublicApiType = {
                 trackType: "mic" | "sounders";
                 uploadedAt: number;
                 url: string;
+            }>>;
+            listPendingBlobDeletions: FunctionReference<"query", "public", {
+                limit: number;
+            }, Array<{
+                blobName: string;
+                id: Id<"recordingBlobDeletions">;
             }>>;
             saveUpload: FunctionReference<"mutation", "public", {
                 accessToken: string;

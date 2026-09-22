@@ -9170,6 +9170,12 @@ export type PublicApiType = {
       >;
     };
     recordings: {
+      acknowledgeBlobDeletions: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; ids: Array<Id<"recordingBlobDeletions">> },
+        number
+      >;
       listBySession: FunctionReference<
         "query",
         "public",
@@ -9188,6 +9194,12 @@ export type PublicApiType = {
           uploadedAt: number;
           url: string;
         }>
+      >;
+      listPendingBlobDeletions: FunctionReference<
+        "query",
+        "public",
+        { limit: number },
+        Array<{ blobName: string; id: Id<"recordingBlobDeletions"> }>
       >;
       saveUpload: FunctionReference<
         "mutation",
