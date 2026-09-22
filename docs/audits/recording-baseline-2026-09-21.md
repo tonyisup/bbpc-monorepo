@@ -179,6 +179,21 @@ Recommended order:
 3. Repair marker continuity, mobile transport, merge CLI, cookie bounds and completeness reporting (R08–R13).
 4. Validate the complete target workflow before using it as the only copy of an episode.
 
+## Remediation status
+
+Step 1 of the recommended order landed on September 22, 2026, each fix with a regression test that fails on the audited code:
+
+| Finding | Status |
+| --- | --- |
+| R01 | Fixed. Browser event, signal and disconnect IDs use the shared `RECORDING_PORTABLE_ID_PATTERN` from the contracts package, which the backend validator also uses. |
+| R02 | Fixed. Each mounted tab uses a random event source instead of `useId`. |
+| R07 | Fixed. Observers may report a disconnect of another participant in the same session. The event queue also drops and counts permanently rejected events instead of blocking on them. |
+| R05 | Fixed. The invite route resolves the invited session first and reuses a still-valid grant. |
+| R06 | Fixed. Uploads record their participant; `saveUpload` refuses another participant's row or blob-name namespace. The recording URL host is still not verified. |
+| Next.js advisories | Fixed. Recording upgraded to Next.js 16.3.6; `pnpm audit --prod` reports no recording matches. |
+
+R03, R04, R08–R13 and the architecture limits remain open.
+
 ## Acceptance baseline for the next iteration
 
 - Two independent browsers create/join one session and exchange real notes, sounders, start/stop and disconnect events through the actual backend.
