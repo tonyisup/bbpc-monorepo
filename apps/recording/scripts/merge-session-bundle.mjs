@@ -216,6 +216,17 @@ function buildFfmpegArgs({ inputs, outputPath, format }) {
   return args;
 }
 
+const hasFfprobe = spawnSync('ffprobe', ['-version'], { stdio: 'ignore' }).status === 0;
+
+// Actual audio length, for comparing with the run window during rehearsals:
+// a take much shorter than its window lost audio or drifted.
+function audioDurationMs(filePath) {
+  if (!hasFfprobe) return null;
+  const result = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', filePath], { encoding: 'utf8' });
+  const seconds = Number(result.stdout);
+  return result.status === 0 && Number.isFinite(seconds) ? Math.round(seconds * 1000) : null;
+}
+
 async function runFfmpeg(args) {
   const ffmpeg = spawn('ffmpeg', args, { stdio: 'inherit' });
   const exitCode = await new Promise(resolve => ffmpeg.on('close', resolve));
@@ -270,6 +281,7 @@ for (const recording of bundle.recordings ?? []) {
     id: recording.id,
     path: result.path,
     ...placement,
+    audioDurationMs: audioDurationMs(result.path),
   });
 }
 

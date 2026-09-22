@@ -112,6 +112,8 @@ describe('merge-session CLI', () => {
 
     const plan = JSON.parse(await fs.readFile(path.join(outDir, 'merge-plan.json'), 'utf8'));
     expect(plan.inputs.map((input: { delayMs: number; maxDurationMs: number }) => [input.delayMs, input.maxDurationMs])).toEqual([[0, 2_000], [2_000, 2_000]]);
+    // Recorded length beside the run window, for rehearsal drift checks.
+    expect(plan.inputs.map((input: { audioDurationMs: number | null }) => input.audioDurationMs)).toEqual(hasFfmpeg ? [2_000, 2_000] : [null, null]);
     expect(plan.ffmpeg.args).toContain('[0:a]atrim=duration=2.000,adelay=0:all=1,aresample=48000,asetpts=PTS-STARTPTS[a0];[1:a]atrim=duration=2.000,adelay=2000:all=1,aresample=48000,asetpts=PTS-STARTPTS[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0,alimiter=limit=0.95[out]');
     expect(plan.warnings).toEqual([]);
   }, 15_000);
