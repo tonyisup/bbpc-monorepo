@@ -196,7 +196,7 @@ As of September 22, 2026. Each fix has a regression test that fails on the audit
 | R09 | Fixed. Ranges cannot end before they start, markers made while paused sit at the pause point, and open markers export to the end of the timeline with a warning. |
 | R10 | Fixed. The header wraps at narrow widths with transport controls first; at 390px nothing is off-screen. |
 | R11 | Fixed. The CLI accepts `--option value`, and an integration test runs the documented command. |
-| R12 | Bounded. The grants cookie evicts the oldest guest, then owner, grants to stay under 4 KB. An evicted grant is still unrecoverable in that browser; owner recovery through Clerk remains open. |
+| R12 | Fixed. The grants cookie evicts the oldest guest, then owner, grants to stay under 4 KB, and a signed-in owner can recover a lost grant from the session page. Recovery replaces the owner's token (one device per owner) and, for an active session, adds an invite link rather than revoking shared ones. |
 | R13 | Fixed. Completeness is checked per participant and run by client ID. |
 | Next.js advisories | Fixed. Recording upgraded to Next.js 16.3.6; `pnpm audit --prod` reports no recording matches. |
 

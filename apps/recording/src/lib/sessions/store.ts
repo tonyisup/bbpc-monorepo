@@ -82,6 +82,35 @@ export async function getSession(
   });
 }
 
+/**
+ * Issue the signed-in owner a fresh grant for a session this browser lost
+ * (audit R12). The previous owner grant stops working. Active sessions also
+ * gain an additional invite link, since the original is stored only as a digest.
+ */
+export async function recoverOwnerAccess(
+  convexToken: string,
+  sessionId: string,
+): Promise<SessionAccessGrant> {
+  const accessToken = createAccessToken();
+  const inviteToken = createInviteToken();
+  const result = await mutateSharedConvexAsUser(
+    recordingApi.sessions.recoverOwnerAccess,
+    {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      publicId: sessionId,
+      accessToken,
+      inviteToken,
+    },
+    convexToken,
+  );
+  return {
+    sessionId,
+    clientId: result.participant.clientId,
+    accessToken,
+    ...(result.inviteIssued ? { inviteToken } : {}),
+  };
+}
+
 /** The public ID of the session a valid, active invite admits to, or null. */
 export async function resolveInviteSession(inviteToken: string): Promise<string | null> {
   const session = await querySharedConvex(

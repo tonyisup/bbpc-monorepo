@@ -312,6 +312,97 @@ export const createSession = authenticatedMutation({
   },
 });
 
+// The signed-in owner of a session gets a fresh capability after losing the
+// browser's grant (audit R12). This replaces the owner's access token, so a
+// grant held elsewhere stops working. Invite tokens are stored only as
+// digests, so an active session gains an additional invite instead of
+// revoking the links already shared.
+export const recoverOwnerAccess = authenticatedMutation({
+  args: {
+    publicId: v.string(),
+    accessToken: v.string(),
+    inviteToken: v.string(),
+  },
+  returns: v.object({
+    participant: recordingParticipantValidator,
+    inviteIssued: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const publicId = requirePortableId(
+      args.publicId,
+      "Recording session ID",
+    );
+    const accessToken = requireCapabilityToken(
+      args.accessToken,
+      "Recording access token",
+    );
+    const inviteToken = requireCapabilityToken(
+      args.inviteToken,
+      "Recording invite token",
+    );
+    const session = await sessionByPublicId(ctx, publicId);
+    if (
+      session === null ||
+      session.deleting === true ||
+      session.ownerUserId !== ctx.actor.user._id
+    ) {
+      domainError(
+        "FORBIDDEN",
+        "Only the recording session owner can recover its access.",
+      );
+    }
+    const owners = (
+      await participantsForSession(ctx, session.publicId)
+    ).filter(
+      (participant) =>
+        participant.role === "owner" &&
+        participant.userId === ctx.actor.user._id,
+    );
+    const owner = owners.at(0);
+    if (owners.length !== 1 || owner === undefined) {
+      domainError(
+        "CONFLICT",
+        "The recording session owner is ambiguous.",
+      );
+    }
+    await ctx.db.patch("recordingParticipants", owner._id, {
+      accessTokenDigest: digestRecordingCapability(accessToken),
+    });
+    let inviteIssued = false;
+    if (session.status === "active") {
+      const tokenDigest = digestRecordingCapability(inviteToken);
+      const inUse = await ctx.db
+        .query("recordingSessionInvites")
+        .withIndex("by_tokenDigest", (query) =>
+          query.eq("tokenDigest", tokenDigest),
+        )
+        .take(1);
+      if (inUse.length > 0) {
+        domainError(
+          "CONFLICT",
+          "The recording invite token is already in use.",
+        );
+      }
+      await ctx.db.insert("recordingSessionInvites", {
+        tokenDigest,
+        sessionId: session._id,
+        publicSessionId: session.publicId,
+        createdAt: Date.now(),
+      });
+      inviteIssued = true;
+    }
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "recording.session.owner_access_recovered",
+      targetType: "recordingSession",
+      targetId: session._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: { inviteIssued },
+    });
+    return { participant: toParticipant(owner), inviteIssued };
+  },
+});
+
 export const joinSessionByInviteToken = recordingMutation({
   args: {
     inviteToken: v.string(),
