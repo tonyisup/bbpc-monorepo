@@ -28,13 +28,17 @@ export function RecordingAdminControls() {
         message?: string;
         count?: number;
         sessions?: number;
+        audioDeleted?: number;
+        audioFailed?: number;
       };
       if (!response.ok) {
         throw new Error(result.message ?? `Request failed (${response.status})`);
       }
       setMessage(
         operation === 'cleanup'
-          ? `Deleted ${String(result.sessions ?? 0)} ended sessions.`
+          ? `Deleted ${String(result.sessions ?? 0)} ended sessions and ${String(result.audioDeleted ?? 0)} audio files.${
+            result.audioFailed ? ` ${String(result.audioFailed)} audio files could not be deleted; run cleanup again.` : ''
+          }`
           : `Updated ${String(result.count ?? 0)} ${operation}.`,
       );
     } catch (error) {

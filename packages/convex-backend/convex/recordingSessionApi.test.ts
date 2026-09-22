@@ -1260,6 +1260,93 @@ describe("shared recording session boundary", () => {
       participants: 1,
     });
   });
+
+  test("queues deleted sessions' audio for removal from storage", async () => {
+    const t = createTestBackend();
+    await seedUser(t, {
+      identity: HOST_IDENTITY,
+      name: "Host",
+      email: "host@example.test",
+      role: "host",
+    });
+    await seedUser(t, {
+      identity: ADMIN_IDENTITY,
+      name: "Admin",
+      email: "admin@example.test",
+      role: "admin",
+    });
+    await initializeAtS1(t);
+    await advanceToS3(t);
+    const input = ownerInput("blob_delete");
+    await t
+      .withIdentity(HOST_IDENTITY)
+      .mutation(api.recording.sessions.createSession, input);
+    const blobNames = ["mic", "sounders"].map(
+      (track) => `${input.publicId}/take/take-${input.participant.clientId}-${track}.webm`,
+    );
+    await t.run(async (ctx) => {
+      for (const blobName of blobNames) {
+        await ctx.db.insert("recordingUploads", {
+          publicSessionId: input.publicId,
+          clientId: input.participant.clientId,
+          episode: input.episode,
+          hostName: "Recording Host",
+          trackType: blobName.endsWith("mic.webm") ? "mic" : "sounders",
+          startedAt: 1_001,
+          blobName,
+          url: `https://storage.example.test/recordings/${blobName}`,
+          size: 1,
+          contentType: "audio/webm",
+          uploadedAt: 1_002,
+        });
+      }
+    });
+
+    // Audit: cleanup removed metadata but left the audio in storage.
+    await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.recording.sessions.deleteSessionData,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        publicId: input.publicId,
+        confirmation: "delete-session-data",
+      },
+    );
+    await expectDomainError(
+      t.withIdentity(HOST_IDENTITY).query(
+        api.recording.recordings.listPendingBlobDeletions,
+        { limit: 10 },
+      ),
+      "FORBIDDEN",
+    );
+    const pending = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.recording.recordings.listPendingBlobDeletions, { limit: 10 });
+    expect(pending.map((row) => row.blobName).sort()).toEqual(blobNames.sort());
+    const first = pending.at(0);
+    const second = pending.at(1);
+    if (first === undefined || second === undefined) {
+      throw new Error("Expected two queued blob deletions.");
+    }
+
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.recording.recordings.acknowledgeBlobDeletions,
+        { clientApiVersion: BBPC_API_VERSION, ids: [first.id] },
+      ),
+    ).resolves.toBe(1);
+    await expect(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.recording.recordings.listPendingBlobDeletions, { limit: 10 }),
+    ).resolves.toEqual([second]);
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.recording.recordings.acknowledgeBlobDeletions,
+        { clientApiVersion: BBPC_API_VERSION, ids: [] },
+      ),
+      "VALIDATION_FAILED",
+    );
+  });
 });
 
 test("retention completes a session with more than 2000 child rows without deleting newer sessions", async () => {

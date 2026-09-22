@@ -1064,7 +1064,17 @@ async function deleteRecordingSessionsBatch(
           q.eq("publicSessionId", session.publicId),
         )
         .take(budget);
-      for (const row of rows) await ctx.db.delete(table, row._id);
+      for (const row of rows) {
+        // Queue the audio itself for deletion with its metadata row.
+        if ("blobName" in row) {
+          await ctx.db.insert("recordingBlobDeletions", {
+            blobName: row.blobName,
+            publicSessionId: session.publicId,
+            requestedAt: Date.now(),
+          });
+        }
+        await ctx.db.delete(table, row._id);
+      }
       deleted[key] += rows.length;
       budget -= rows.length;
     }

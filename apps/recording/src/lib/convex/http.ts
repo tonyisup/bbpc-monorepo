@@ -47,3 +47,16 @@ export async function mutateSharedConvexAsUser<
     token,
   });
 }
+
+export async function querySharedConvexAsUser<
+  Query extends FunctionReference<'query', 'public'>,
+>(
+  query: Query,
+  args: FunctionArgs<Query>,
+  token: string,
+): Promise<FunctionReturnType<Query>> {
+  return await fetchQuery(query, args, {
+    url: requireConvexUrl(),
+    token,
+  });
+}

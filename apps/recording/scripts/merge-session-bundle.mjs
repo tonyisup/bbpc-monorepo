@@ -102,8 +102,11 @@ async function downloadFile(url, targetPath, { force }) {
 
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   const response = await fetch(url);
+  if (response.status === 403) {
+    throw new Error(`Download refused for ${new URL(url).pathname}. Recording links expire; download a new merge bundle from the session and run the merge again.`);
+  }
   if (!response.ok || !response.body) {
-    throw new Error(`Download failed ${response.status} for ${url}`);
+    throw new Error(`Download failed ${response.status} for ${new URL(url).pathname}`);
   }
 
   await pipeline(Readable.fromWeb(response.body), createWriteStream(targetPath));
