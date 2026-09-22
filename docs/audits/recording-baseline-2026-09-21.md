@@ -181,18 +181,26 @@ Recommended order:
 
 ## Remediation status
 
-Step 1 of the recommended order landed on September 22, 2026, each fix with a regression test that fails on the audited code:
+As of September 22, 2026. Each fix has a regression test that fails on the audited code.
 
 | Finding | Status |
 | --- | --- |
 | R01 | Fixed. Browser event, signal and disconnect IDs use the shared `RECORDING_PORTABLE_ID_PATTERN` from the contracts package, which the backend validator also uses. |
 | R02 | Fixed. Each mounted tab uses a random event source instead of `useId`. |
-| R07 | Fixed. Observers may report a disconnect of another participant in the same session. The event queue also drops and counts permanently rejected events instead of blocking on them. |
+| R03 | Fixed. The mic recorder records the audio graph, so switching input or leaving call audio swaps its source instead of ending the take; an unplugged device falls back to the default microphone or shows an error. Where the audio context cannot run, input changes are locked until Stop. An unexpected recorder stop finalizes the take for recovery. Checked in Chromium with the synthetic-tone harness. |
+| R04 | Fixed, as one session timeline with pauses (product decision). Manifest 1.2 records each Start/Stop run; paused time is excluded; bundle 1.1 gives each upload its timeline offset and run length, and the CLI places and trims by them. Two 2-second takes now merge to 4 seconds. |
 | R05 | Fixed. The invite route resolves the invited session first and reuses a still-valid grant. |
 | R06 | Fixed. Uploads record their participant; `saveUpload` refuses another participant's row or blob-name namespace. The recording URL host is still not verified. |
+| R07 | Fixed. Observers may report a disconnect of another participant in the same session. The event queue also drops and counts permanently rejected events instead of blocking on them. |
+| R08 | Fixed. The open segment or edit cue is derived from session state. |
+| R09 | Fixed. Ranges cannot end before they start, markers made while paused sit at the pause point, and open markers export to the end of the timeline with a warning. |
+| R10 | Fixed. The header wraps at narrow widths with transport controls first; at 390px nothing is off-screen. |
+| R11 | Fixed. The CLI accepts `--option value`, and an integration test runs the documented command. |
+| R12 | Bounded. The grants cookie evicts the oldest guest, then owner, grants to stay under 4 KB. An evicted grant is still unrecoverable in that browser; owner recovery through Clerk remains open. |
+| R13 | Fixed. Completeness is checked per participant and run by client ID. |
 | Next.js advisories | Fixed. Recording upgraded to Next.js 16.3.6; `pnpm audit --prod` reports no recording matches. |
 
-R03, R04, R08–R13 and the architecture limits remain open.
+Still open: durable local capture and resumable upload, whole-file upload limits on Vercel, audio privacy and retention, clock-skew calibration, TURN credentials for ended sessions, and the real-device rehearsal.
 
 ## Acceptance baseline for the next iteration
 
