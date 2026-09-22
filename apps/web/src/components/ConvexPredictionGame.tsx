@@ -530,8 +530,11 @@ export function ConvexPredictionGame({
     );
   }
 
-  const totalPickCount = assignments.length * data.hosts.length;
-  const savedPickCount = assignments.reduce(
+  const playableAssignments = assignments.filter(
+    (assignment) => assignment.playable
+  );
+  const totalPickCount = playableAssignments.length * data.hosts.length;
+  const savedPickCount = playableAssignments.reduce(
     (total, assignment) =>
       total +
       data.hosts.filter(
@@ -551,7 +554,7 @@ export function ConvexPredictionGame({
   const missedPickCount = totalPickCount - savedPickCount;
   const remainingSeconds =
     closesAt === null ? 0 : Math.max(0, Math.ceil((closesAt - now) / 1000));
-  const assignmentProgress = assignments.map((assignment) => {
+  const assignmentProgress = playableAssignments.map((assignment) => {
     const saved = data.hosts.filter(
       (host) =>
         host.id !== savingHosts[assignment.id] &&
@@ -617,10 +620,11 @@ export function ConvexPredictionGame({
             {String(remainingSeconds % 60).padStart(2, "0")}.
           </p>
         ) : null}
-        {assignments.length > 1 ? (
+        {playableAssignments.length > 1 ? (
           <nav className="mt-4 space-y-2" aria-label="Movie pick checklist">
             <p className="text-sm font-semibold text-white" aria-live="polite">
-              {completedMovies} of {assignments.length} movies{" "}
+              {completedMovies} of {playableAssignments.length}{" "}
+              {playableAssignments.length === 1 ? "movie" : "movies"}{" "}
               {isRoundOpen
                 ? "complete. Pick ratings for every movie."
                 : "picked."}

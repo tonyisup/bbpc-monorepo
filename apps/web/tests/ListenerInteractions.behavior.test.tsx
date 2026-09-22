@@ -462,6 +462,50 @@ test("all movie cards start closed and finishing one points to the remaining mov
   ).toHaveLength(2);
 });
 
+test("only playable movies contribute to prediction progress and Continue", async () => {
+  await render(
+    <ConvexPredictionGame
+      episodeId="episode"
+      assignments={[
+        {
+          id: "first",
+          playable: true,
+          movie: { title: "First movie", poster: null },
+        },
+        {
+          id: "bonus",
+          playable: false,
+          movie: { title: "Bonus movie", poster: null },
+        },
+        {
+          id: "second",
+          playable: true,
+          movie: { title: "Second movie", poster: null },
+        },
+      ]}
+      episodeStatus="next"
+    />
+  );
+  expect(screenText()).toContain("0 of 2 picks saved");
+  expect(screenText()).toContain("0 of 2 movies complete");
+  expect(screenText()).not.toContain("0 of 3 movies complete");
+
+  await click("Make picks");
+  mocks.savePick.mockResolvedValueOnce({
+    id: "saved",
+    hostId: "host",
+    rating: ratings[0],
+  });
+  await act(async () =>
+    renderer.root.findAllByType("input")[0]!.props.onChange()
+  );
+
+  expect(screenText()).toContain("1 of 2 picks saved");
+  expect(screenText()).toContain("1 of 2 movies complete");
+  expect(screenText()).toContain("Continue to Second movie");
+  expect(screenText()).not.toContain("Continue to Bonus movie");
+});
+
 test("live recording changes start a visible countdown and lock an already-open page at its deadline", async () => {
   vi.useFakeTimers();
   vi.stubGlobal("window", {
