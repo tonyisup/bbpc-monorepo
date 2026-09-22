@@ -278,6 +278,7 @@ export const PORTABLE_BACKUP_TABLES = [
   "recordingSessionFavorites",
   "recordingSounders",
   "recordingUploads",
+  "recordingBlobDeletions",
 ] as const;
 
 // Rebuilt from canonical rows when the administrator opens the dashboard.

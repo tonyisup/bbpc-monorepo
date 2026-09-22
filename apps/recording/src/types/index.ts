@@ -132,6 +132,8 @@ export interface RecordingUploadMetadata {
   size: number;
   contentType: string;
   uploadedAt: number;
+  /** When the signed `url` stops working. */
+  urlExpiresAt?: number;
 }
 
 export interface Manifest {

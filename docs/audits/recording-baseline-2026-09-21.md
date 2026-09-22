@@ -198,9 +198,12 @@ As of September 22, 2026. Each fix has a regression test that fails on the audit
 | R11 | Fixed. The CLI accepts `--option value`, and an integration test runs the documented command. |
 | R12 | Fixed. The grants cookie evicts the oldest guest, then owner, grants to stay under 4 KB, and a signed-in owner can recover a lost grant from the session page. Recovery replaces the owner's token (one device per owner) and, for an active session, adds an invite link rather than revoking shared ones. |
 | R13 | Fixed. Completeness is checked per participant and run by client ID. |
+| Durable capture | Fixed. Each recorder chunk is written to IndexedDB as captured, with a Web Lock marking live takes; after a crash or reload the session offers the take for upload, download or discard. Checked in Chromium: a take interrupted by reload recovered 9 seconds of decodable audio and uploaded. |
+| Whole-file upload limit | Fixed. Uploads go in 3 MiB blocks with a separate commit, resume from staged blocks, and never exceed the hosting body limit. The old base64 route is removed, and the per-recording cap is 1 GiB. |
+| Audio privacy and retention | Fixed in code. New containers are private and participants get read-only links that expire (24 hours by default); deleting a session queues its audio, and admin cleanup deletes it from storage. The existing production container stays public until an operator turns public access off (README). |
 | Next.js advisories | Fixed. Recording upgraded to Next.js 16.3.6; `pnpm audit --prod` reports no recording matches. |
 
-Still open: durable local capture and resumable upload, whole-file upload limits on Vercel, audio privacy and retention, clock-skew calibration, TURN credentials for ended sessions, and the real-device rehearsal.
+Still open: turning off public access on the existing container, clock-skew calibration, TURN credentials for ended sessions, and the real-device rehearsal.
 
 ## Acceptance baseline for the next iteration
 
