@@ -9,3 +9,11 @@ export function documentId(table, value) {
   }
   return value;
 }
+
+// Recording session, client, event and RTC signal identifiers. Browser-generated
+// IDs must satisfy this before they reach the recording backend.
+export const RECORDING_PORTABLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
+
+export function isRecordingPortableId(value) {
+  return typeof value === "string" && RECORDING_PORTABLE_ID_PATTERN.test(value);
+}

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import { RECORDING_PORTABLE_ID_PATTERN } from "../../contracts/index.js";
 import { domainError } from "../lib/errors.js";
 
 export const recordingRoleValidator = v.union(
@@ -29,8 +30,6 @@ export const recordingSessionValidator = v.object({
   participants: v.array(recordingParticipantValidator),
 });
 
-const PORTABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
-
 function requireBoundedString(
   value: string,
   label: string,
@@ -59,7 +58,7 @@ export function requirePortableId(
     label,
     maximumLength,
   );
-  if (!PORTABLE_ID.test(normalized)) {
+  if (!RECORDING_PORTABLE_ID_PATTERN.test(normalized)) {
     domainError(
       "VALIDATION_FAILED",
       `${label} must be a portable identifier.`,

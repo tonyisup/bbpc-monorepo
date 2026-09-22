@@ -408,6 +408,46 @@ export const joinSessionByInviteToken = recordingMutation({
   },
 });
 
+// Lets the invite route reuse a grant the browser already holds for the
+// invited session instead of joining it again as a new participant.
+export const resolveInviteSession = recordingQuery({
+  args: {
+    inviteToken: v.string(),
+  },
+  returns: v.union(v.object({ id: v.string() }), v.null()),
+  handler: async (ctx, args) => {
+    const inviteToken = requireCapabilityToken(
+      args.inviteToken,
+      "Recording invite token",
+    );
+    const invites = await ctx.db
+      .query("recordingSessionInvites")
+      .withIndex("by_tokenDigest", (query) =>
+        query.eq(
+          "tokenDigest",
+          digestRecordingCapability(inviteToken),
+        ),
+      )
+      .take(2);
+    const invite = invites.at(0);
+    if (invites.length !== 1 || invite === undefined) {
+      return null;
+    }
+    const session = await ctx.db.get(
+      "recordingSessions",
+      invite.sessionId,
+    );
+    if (
+      session?.publicId !== invite.publicSessionId ||
+      session.status !== "active" ||
+      session.deleting === true
+    ) {
+      return null;
+    }
+    return { id: session.publicId };
+  },
+});
+
 export const getSession = recordingQuery({
   args: {
     publicId: v.string(),
@@ -726,18 +766,37 @@ export const appendSessionEvent = recordingMutation({
           participant.clientId) ||
       (payload.kind === "audio-left" &&
         payload.participant.clientId !==
-          participant.clientId) ||
-      (payload.kind === "audio-disconnect-started" &&
-        payload.disconnect.clientId !==
-          participant.clientId) ||
-      (payload.kind === "audio-disconnect-ended" &&
-        payload.disconnect.clientId !==
           participant.clientId)
     ) {
       domainError(
         "FORBIDDEN",
         "The recording event participant does not match the caller.",
       );
+    }
+    // Any participant may observe that its connection to another participant
+    // dropped. The stored actorId records the observer; the subject must still
+    // belong to this session.
+    if (
+      (payload.kind === "audio-disconnect-started" ||
+        payload.kind === "audio-disconnect-ended") &&
+      payload.disconnect.clientId !== participant.clientId
+    ) {
+      const subjects = await ctx.db
+        .query("recordingParticipants")
+        .withIndex(
+          "by_publicSessionId_and_clientId",
+          (query) =>
+            query
+              .eq("publicSessionId", session.publicId)
+              .eq("clientId", payload.disconnect.clientId),
+        )
+        .take(1);
+      if (subjects.length === 0) {
+        domainError(
+          "FORBIDDEN",
+          "The disconnected participant is not in this recording session.",
+        );
+      }
     }
     if (
       (payload.kind === "recording-joined" ||

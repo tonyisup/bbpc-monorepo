@@ -9304,6 +9304,11 @@ export type PublicApiType = {
                     kind: "audio-disconnect-ended";
                 };
             }>>;
+            resolveInviteSession: FunctionReference<"query", "public", {
+                inviteToken: string;
+            }, {
+                id: string;
+            } | null>;
             updateParticipantDisplayName: FunctionReference<"mutation", "public", {
                 accessToken: string;
                 clientApiVersion: string;

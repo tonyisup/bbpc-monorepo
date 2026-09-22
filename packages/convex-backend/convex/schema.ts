@@ -1007,6 +1007,8 @@ export default defineSchema({
 
   recordingUploads: defineTable({
     publicSessionId: v.optional(v.string()),
+    // Absent on rows saved before uploads recorded their participant.
+    clientId: v.optional(v.string()),
     episode: v.string(),
     hostName: v.string(),
     trackType: v.union(v.literal("mic"), v.literal("sounders")),

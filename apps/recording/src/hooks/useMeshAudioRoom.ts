@@ -194,7 +194,7 @@ export function useMeshAudioRoom({
       clientId,
       accessToken,
       toClientId,
-      signalId: createRtcId(`${clientId}->${toClientId}:${type}`),
+      signalId: createRtcId(clientId, 'to', toClientId, type),
       type,
       payload: stripUndefined(payload),
     });
@@ -232,7 +232,7 @@ export function useMeshAudioRoom({
     reason: Exclude<AudioDisconnectReason, 'left'>,
   ) => {
     if (!recordingRef.current || disconnectsRef.current.has(remoteClientId)) return;
-    const disconnectId = createRtcId(`disconnect:${clientId}:${remoteClientId}`);
+    const disconnectId = createRtcId('disconnect', clientId, remoteClientId);
     disconnectsRef.current.set(remoteClientId, disconnectId);
     onDisconnectStartedRef.current({
       disconnectId,
@@ -608,7 +608,7 @@ export function useMeshAudioRoom({
       if (document.visibilityState === 'hidden' && recordingRef.current) {
         hiddenTimerRef.current = setTimeout(() => {
           if (!joinedRef.current || !recordingRef.current || hiddenDisconnectIdRef.current) return;
-          const disconnectId = createRtcId(`hidden:${clientId}`);
+          const disconnectId = createRtcId('hidden', clientId);
           hiddenDisconnectIdRef.current = disconnectId;
           onDisconnectStartedRef.current({
             disconnectId,

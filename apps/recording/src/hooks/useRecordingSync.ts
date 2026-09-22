@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useId, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { createPortableId } from '@/lib/portable-ids';
 import { useSessionSync } from './useSessionSync';
 import type { SessionSyncEvent } from '@/types';
 import type { SessionRole } from '@/lib/sessions/types';
@@ -25,8 +26,10 @@ export function useRecordingSync({
   onRemoteStart,
   onRemoteStop,
 }: RecordingSyncOptions) {
-  const reactId = useId();
-  const sessionIdRef = useRef(`rec-${reactId}`);
+  // Per mounted tab, so another participant's (or tab's) commands are never
+  // mistaken for this tab's own echo.
+  const [eventSourceId] = useState(() => createPortableId('rec'));
+  const sessionIdRef = useRef(eventSourceId);
 
   const handleRemoteEvent = useCallback((event: SessionSyncEvent) => {
     if (

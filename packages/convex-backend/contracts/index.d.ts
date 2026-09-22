@@ -10,6 +10,11 @@ export declare function documentId<Table extends string, Value extends string | 
   value: Value,
 ): Value extends string ? GenericId<Table> : Value;
 
+/** Recording session, client, event and RTC signal identifier format. */
+export declare const RECORDING_PORTABLE_ID_PATTERN: RegExp;
+
+export declare function isRecordingPortableId(value: unknown): value is string;
+
 export type DomainErrorCode =
   | "AUTHENTICATION_REQUIRED"
   | "IDENTITY_NOT_LINKED"

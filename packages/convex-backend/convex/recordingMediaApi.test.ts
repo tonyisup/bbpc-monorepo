@@ -155,6 +155,39 @@ async function createHostSession(
   };
 }
 
+// Mirrors the upload route's blob naming, which the backend requires.
+function participantBlobName(
+  grant: { publicSessionId: string; clientId: string },
+  label: string,
+  trackType: "mic" | "sounders" = "mic",
+): string {
+  return `${grant.publicSessionId}/${label}/Media-Host-${grant.clientId}-${trackType}.webm`;
+}
+
+async function joinGuest(
+  t: TestBackend,
+  host: Awaited<ReturnType<typeof createHostSession>>,
+  suffix: string,
+) {
+  const participant = {
+    clientId: `client_guest_${suffix}`,
+    accessToken: `access_guest_${suffix}_abcdefghijklmnopqrstuvwxyz`,
+    displayName: "Guest",
+    joinedAt: 1_100,
+  };
+  await t.mutation(api.recording.sessions.joinSessionByInviteToken, {
+    clientApiVersion: BBPC_API_VERSION,
+    inviteToken: host.input.inviteToken,
+    participant,
+  });
+  return {
+    clientApiVersion: BBPC_API_VERSION,
+    publicSessionId: host.input.publicId,
+    clientId: participant.clientId,
+    accessToken: participant.accessToken,
+  };
+}
+
 describe("shared recording media and catalogs", () => {
   test("keeps upload ownership canonical and idempotent", async () => {
     const t = createTestBackend();
@@ -172,7 +205,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: "session/host-mic.webm",
+      blobName: participantBlobName(first.grant, "host-mic"),
       url: "https://audio.example.test/host-mic.webm",
       size: 123,
       contentType: "audio/webm",
@@ -215,7 +248,7 @@ describe("shared recording media and catalogs", () => {
         ...upload,
         episode: second.input.episode,
       }),
-      "CONFLICT",
+      "FORBIDDEN",
     );
     await expectDomainError(
       t.mutation(api.recording.recordings.saveUpload, {
@@ -225,6 +258,160 @@ describe("shared recording media and catalogs", () => {
       }),
       "CONFLICT",
     );
+  });
+
+  test("keeps each upload bound to the participant that saved it", async () => {
+    const t = createTestBackend();
+    await seedIdentity(t, {
+      identity: HOST_IDENTITY,
+      name: "Host",
+      email: "host@example.test",
+      role: "host",
+    });
+    await seedS3(t);
+    const host = await createHostSession(t, "upload_owner");
+    const guest = await joinGuest(t, host, "upload_owner");
+    const ownerUpload = {
+      episode: host.input.episode,
+      hostName: "Media Host",
+      trackType: "mic" as const,
+      startedAt: 1_001,
+      blobName: participantBlobName(host.grant, "owner"),
+      url: "https://audio.example.test/owner-mic.webm",
+      size: 123,
+      contentType: "audio/webm",
+      uploadedAt: 1_002,
+    };
+    const ownerUploadId = await t.mutation(
+      api.recording.recordings.saveUpload,
+      { ...host.grant, ...ownerUpload },
+    );
+
+    // Audit R06: a guest reusing the owner's blob name must not replace it.
+    await expectDomainError(
+      t.mutation(api.recording.recordings.saveUpload, {
+        ...guest,
+        ...ownerUpload,
+        hostName: "Guest",
+        url: "https://attacker.example.test/replacement.webm",
+      }),
+      "FORBIDDEN",
+    );
+    // Nor may a guest claim a name in the owner's namespace before the owner.
+    await expectDomainError(
+      t.mutation(api.recording.recordings.saveUpload, {
+        ...guest,
+        ...ownerUpload,
+        hostName: "Guest",
+        blobName: participantBlobName(host.grant, "later"),
+      }),
+      "FORBIDDEN",
+    );
+    const guestUploadId = await t.mutation(
+      api.recording.recordings.saveUpload,
+      {
+        ...guest,
+        ...ownerUpload,
+        hostName: "Guest",
+        blobName: participantBlobName(guest, "guest"),
+        url: "https://audio.example.test/guest-mic.webm",
+      },
+    );
+    expect(guestUploadId).not.toBe(ownerUploadId);
+
+    const listed = await t.query(
+      api.recording.recordings.listBySession,
+      {
+        publicSessionId: host.grant.publicSessionId,
+        clientId: host.grant.clientId,
+        accessToken: host.grant.accessToken,
+      },
+    );
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: ownerUploadId,
+          hostName: "Media Host",
+          url: "https://audio.example.test/owner-mic.webm",
+        }),
+      ]),
+    );
+    const rows = await t.run(async (ctx) =>
+      await ctx.db
+        .query("recordingUploads")
+        .withIndex("by_publicSessionId", (query) =>
+          query.eq("publicSessionId", host.input.publicId),
+        )
+        .take(10),
+    );
+    expect(
+      rows.map((row) => [row.blobName, row.clientId]),
+    ).toEqual(
+      expect.arrayContaining([
+        [ownerUpload.blobName, host.grant.clientId],
+        [participantBlobName(guest, "guest"), guest.clientId],
+      ]),
+    );
+  });
+
+  test("lets a participant retry an upload saved before ownership was recorded", async () => {
+    const t = createTestBackend();
+    await seedIdentity(t, {
+      identity: HOST_IDENTITY,
+      name: "Host",
+      email: "host@example.test",
+      role: "host",
+    });
+    await seedS3(t);
+    const host = await createHostSession(t, "upload_legacy");
+    const guest = await joinGuest(t, host, "upload_legacy");
+    const blobName = participantBlobName(host.grant, "legacy");
+    const legacyId = await t.run(async (ctx) =>
+      await ctx.db.insert("recordingUploads", {
+        publicSessionId: host.input.publicId,
+        episode: host.input.episode,
+        hostName: "Media Host",
+        trackType: "mic",
+        startedAt: 1_001,
+        blobName,
+        url: "https://audio.example.test/legacy.webm",
+        size: 1,
+        contentType: "audio/webm",
+        uploadedAt: 1_002,
+      }),
+    );
+    const upload = {
+      episode: host.input.episode,
+      hostName: "Media Host",
+      trackType: "mic" as const,
+      startedAt: 1_001,
+      blobName,
+      url: "https://audio.example.test/legacy.webm",
+      size: 2,
+      contentType: "audio/webm",
+      uploadedAt: 1_003,
+    };
+    await expectDomainError(
+      t.mutation(api.recording.recordings.saveUpload, {
+        ...guest,
+        ...upload,
+        hostName: "Guest",
+      }),
+      "FORBIDDEN",
+    );
+    expect(
+      await t.mutation(api.recording.recordings.saveUpload, {
+        ...host.grant,
+        ...upload,
+      }),
+    ).toBe(legacyId);
+    const row = await t.run(async (ctx) =>
+      await ctx.db.get("recordingUploads", legacyId),
+    );
+    expect(row).toMatchObject({
+      clientId: host.grant.clientId,
+      size: 2,
+    });
   });
 
   test("allows only the owner to persist a bounded manifest", async () => {
@@ -488,7 +675,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: "session/valid.webm",
+      blobName: participantBlobName(session.grant, "valid"),
       url: "https://audio.example.test/valid.webm",
       size: 123,
       contentType: "audio/webm",
@@ -534,7 +721,7 @@ describe("shared recording media and catalogs", () => {
       t.mutation(api.recording.recordings.saveUpload, {
         ...session.grant,
         ...upload,
-        blobName: "session/over-capacity.webm",
+        blobName: participantBlobName(session.grant, "over-capacity"),
       }),
       "CONFLICT",
     );
@@ -578,7 +765,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: "session/ambiguous.webm",
+      blobName: participantBlobName(first.grant, "ambiguous"),
       url: "https://audio.example.test/ambiguous.webm",
       size: 123,
       contentType: "audio/webm",

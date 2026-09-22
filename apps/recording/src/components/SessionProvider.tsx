@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   useEffect,
-  useId,
 } from 'react';
 import { useQuery } from 'convex/react';
 import { useSessionSync } from '@/hooks/useSessionSync';
@@ -23,6 +22,7 @@ import {
   syncEventToAction,
 } from '@/lib/session-state';
 import { recordingApi } from '@/lib/convex/api';
+import { createPortableId } from '@/lib/portable-ids';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -42,6 +42,8 @@ interface SessionContextValue {
   endedAt: string | null;
   pendingEventCount: number;
   syncError: string | null;
+  /** Changes the server permanently rejected; they were dropped, not saved. */
+  rejectedEventCount: number;
   retryPendingEvents: () => Promise<void>;
 }
 
@@ -103,8 +105,10 @@ export function SessionProvider({
     return () => cancelAnimationFrame(rafRef.current);
   }, [state.isRecording, state.recordingStart]);
 
-  const reactId = useId();
-  const sessionIdRef = useRef(`sess-${reactId}`);
+  // Identifies this mounted tab, not the participant: events it dispatched
+  // locally are skipped when they echo back, while a reload replays them.
+  const [eventSourceId] = useState(() => createPortableId('sess'));
+  const sessionIdRef = useRef(eventSourceId);
 
   const handleRemoteEvent = useCallback((event: SessionSyncEvent) => {
     if (event.from === sessionIdRef.current) return;
@@ -117,7 +121,7 @@ export function SessionProvider({
     play(event.sounder.url, { record: false });
   }, [play]);
 
-  const { sendEvent, pendingCount, syncError, retryPendingEvents } = useSessionSync({
+  const { sendEvent, pendingCount, syncError, rejectedCount, retryPendingEvents } = useSessionSync({
     sessionId,
     clientId: participantClientId,
     accessToken: participantAccessToken,
@@ -162,6 +166,7 @@ export function SessionProvider({
         endedAt,
         pendingEventCount: pendingCount,
         syncError,
+        rejectedEventCount: rejectedCount,
         retryPendingEvents,
       }}
     >

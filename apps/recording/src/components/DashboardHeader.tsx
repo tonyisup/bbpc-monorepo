@@ -80,6 +80,7 @@ export function DashboardHeader() {
     sessionStatus,
     pendingEventCount,
     syncError,
+    rejectedEventCount,
     retryPendingEvents,
   } = useSession();
   const { stopAll } = useAudio();
@@ -675,6 +676,9 @@ export function DashboardHeader() {
               void Promise.all([retryPendingEvents(), recordingSync.retryPendingEvents()]).then(() => setSaveError(null)).catch(() => {});
             }}>Retry saving</button>}
           </div>}
+          {rejectedEventCount > 0 && <span role="alert">
+            {rejectedEventCount === 1 ? '1 session change was' : `${rejectedEventCount} session changes were`} rejected and not saved.
+          </span>}
           {saveError && <span role="alert">{saveError}</span>}
         </div>
 

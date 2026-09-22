@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { createElement } from 'react';
+import { ConvexError } from 'convex/values';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deliverSessionEvents, useSessionSync } from './useSessionSync';
 import type { SessionSyncEvent } from '@/types';
@@ -137,5 +138,39 @@ it('shares in-flight event sends across remounts and drains newly queued events 
   expect(mutation.mock.calls[0][0].eventId).toBe(originalId);
   expect(mutation.mock.calls[1][0].payload.kind).toBe('recording-stopped');
   expect(hook.pendingCount).toBe(0);
+  await act(async () => root.unmount());
+});
+
+it('drops permanently rejected events so later events still save', async () => {
+  vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  let hook!: ReturnType<typeof useSessionSync>;
+  function Harness() {
+    hook = useSessionSync({ sessionId: 'rejected-events', clientId: 'host', accessToken: 'test', onRemoteEvent: () => {} });
+    return null;
+  }
+  let root!: ReturnType<typeof create>;
+  await act(async () => { root = create(createElement(Harness)); });
+  // Audit R01/R07: one event the server will never accept must not jam the queue.
+  mutation
+    .mockRejectedValueOnce(new ConvexError({ code: 'FORBIDDEN', message: 'The recording event participant does not match the caller.', retryable: false }))
+    .mockResolvedValue(null);
+  await act(async () => {
+    await expect(hook.sendEvent(startEvent)).rejects.toThrow('does not match the caller');
+  });
+  expect(hook.pendingCount).toBe(0);
+  expect(hook.rejectedCount).toBe(1);
+  await act(async () => { await hook.sendEvent({ kind: 'note-delete', id: 'note_1' }); });
+  expect(mutation).toHaveBeenCalledTimes(2);
+  expect(mutation.mock.calls[1][0].payload.kind).toBe('note-delete');
+  expect(hook.syncError).toBeNull();
+  expect(hook.rejectedCount).toBe(1);
+
+  // Retryable domain errors still hold the event in order.
+  mutation.mockReset();
+  mutation.mockRejectedValueOnce(new ConvexError({ code: 'SERVICE_UNAVAILABLE', message: 'Try again.', retryable: true }));
+  await act(async () => { await expect(hook.sendEvent(startEvent)).rejects.toThrow(); });
+  expect(hook.pendingCount).toBe(1);
+  expect(hook.rejectedCount).toBe(1);
   await act(async () => root.unmount());
 });

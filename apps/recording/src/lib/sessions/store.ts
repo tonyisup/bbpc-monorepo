@@ -82,6 +82,15 @@ export async function getSession(
   });
 }
 
+/** The public ID of the session a valid, active invite admits to, or null. */
+export async function resolveInviteSession(inviteToken: string): Promise<string | null> {
+  const session = await querySharedConvex(
+    recordingApi.sessions.resolveInviteSession,
+    { inviteToken },
+  );
+  return session?.id ?? null;
+}
+
 export async function joinSessionByInviteToken(
   inviteToken: string,
   displayName?: string,
