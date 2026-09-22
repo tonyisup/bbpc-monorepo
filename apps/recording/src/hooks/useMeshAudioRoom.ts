@@ -7,7 +7,7 @@ import {
   recordingApi,
 } from '@/lib/convex/api';
 import type { AudioDisconnectReason, RtcPresence, RtcSignal } from '@/types';
-import { createRtcId, shouldCreateInitialOffer } from '@/lib/rtc/mesh';
+import { createRtcId, iceTransportPolicyFor, shouldCreateInitialOffer } from '@/lib/rtc/mesh';
 import { serverNow } from '@/lib/clock';
 
 export interface MeshAudioParticipant {
@@ -258,7 +258,10 @@ export function useMeshAudioRoom({
     const existing = peerConnectionsRef.current.get(remoteClientId);
     if (existing) return existing;
 
-    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    const pc = new RTCPeerConnection({
+      iceServers: iceServersRef.current,
+      iceTransportPolicy: iceTransportPolicyFor(globalThis.location?.search ?? ''),
+    });
     peerConnectionsRef.current.set(remoteClientId, pc);
     setConnectionStates(prev => ({ ...prev, [remoteClientId]: pc.connectionState }));
 

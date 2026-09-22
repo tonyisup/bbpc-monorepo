@@ -204,7 +204,7 @@ As of September 22, 2026. Each fix has a regression test that fails on the audit
 | Timeline clock skew | Fixed. Browsers align to the server clock and stamp every timeline timestamp with it; takes are stamped when capture begins. This also fixes call presence and signal windows, which compared device time with server time. Audio-clock drift over long takes is still unmeasured. |
 | Next.js advisories | Fixed. Recording upgraded to Next.js 16.3.6; `pnpm audit --prod` reports no recording matches. |
 
-Still open: turning off public access on the existing container, TURN credentials for ended sessions (#35), and the real-device rehearsal.
+Still open: turning off public access on the existing container, TURN credentials for ended sessions (#35), and the real-device rehearsal ([runbook](../recording-rehearsal.md)).
 
 ## Acceptance baseline for the next iteration
 
