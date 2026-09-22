@@ -53,6 +53,14 @@ export interface SegmentTemplate {
   sortOrder?: number;
 }
 
+/** One Start/Stop run on the session timeline; paused time is excluded. */
+export interface RecordingRun {
+  started_at_epoch_ms: number;
+  stopped_at_epoch_ms: number | null;
+  /** Timeline position where this run begins: total length of earlier runs. */
+  timeline_start_ms: number;
+}
+
 export interface RecordingParticipantInterval {
   client_id: string;
   name: string;
@@ -113,6 +121,8 @@ export interface RtcSignal {
 export interface RecordingUploadMetadata {
   id: string;
   publicSessionId: string | null;
+  /** Null for uploads saved before uploads recorded their participant. */
+  clientId: string | null;
   episode: string;
   hostName: string;
   trackType: 'mic' | 'sounders';
@@ -129,9 +139,12 @@ export interface Manifest {
   episode: string;
   date: string;
   hosts: string[];
+  /** Wall-clock start of the first run: the session timeline origin. */
   recording_start: number | null;
   recording_end: number | null;
-  manifest_version: '1.1';
+  manifest_version: '1.2';
+  /** Absent before 1.2, when each Start replaced the timeline origin. */
+  recording_runs?: RecordingRun[];
   recording_participants: RecordingParticipantInterval[];
   audio_participants: AudioParticipantInterval[];
   sounders_used: Array<{ id: string; name: string; played_at_ms: number; played_by: string }>;
@@ -140,8 +153,15 @@ export interface Manifest {
   edit_cues: EditCue[];
 }
 
+/** An upload placed on the session timeline for merging. */
+export interface MergeBundleRecording extends RecordingUploadMetadata {
+  timeline_offset_ms: number | null;
+  /** Audio after this length ran past its run's stop and is trimmed. */
+  timeline_max_duration_ms: number | null;
+}
+
 export interface SessionMergeBundle {
-  bundle_version: '1.0';
+  bundle_version: '1.1';
   generated_at: string;
   session_id: string;
   episode: string;
@@ -151,7 +171,7 @@ export interface SessionMergeBundle {
     filename: string;
     text: string;
   };
-  recordings: RecordingUploadMetadata[];
+  recordings: MergeBundleRecording[];
   sounder_assets: SounderAsset[];
   merge_notes: string[];
 }
@@ -162,9 +182,10 @@ export interface SessionState {
   episode: string;
   date: string;
   hostName: string;
-  recordingStart: number | null; // Date.now() when recording started, null if not started
+  recordingStart: number | null; // Start of the current (or last) run, null if never started
   recordingEnd: number | null;
   isRecording: boolean;
+  recordingRuns: RecordingRun[];
   sounders: Sounder[];
   soundersUsed: Manifest['sounders_used'];
   recordingParticipants: RecordingParticipantInterval[];
@@ -187,6 +208,7 @@ export type SessionAction =
     }
   | {
       type: 'STOP_RECORDING';
+      stoppedAt?: number;
       participant?: {
         clientId: string;
         leftAt: number;

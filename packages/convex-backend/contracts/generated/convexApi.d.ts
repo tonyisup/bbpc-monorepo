@@ -8744,6 +8744,7 @@ export type PublicApiType = {
                 publicSessionId: string;
             }, Array<{
                 blobName: string;
+                clientId: string | null;
                 contentType: string;
                 episode: string;
                 hostName: string;

@@ -333,6 +333,7 @@ describe("shared recording media and catalogs", () => {
           id: ownerUploadId,
           hostName: "Media Host",
           url: "https://audio.example.test/owner-mic.webm",
+          clientId: host.grant.clientId,
         }),
       ]),
     );

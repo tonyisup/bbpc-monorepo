@@ -19,6 +19,7 @@ const MAX_CONTENT_TYPE_LENGTH = 100;
 const recordingUploadValidator = v.object({
   id: v.id("recordingUploads"),
   publicSessionId: v.union(v.string(), v.null()),
+  clientId: v.union(v.string(), v.null()),
   episode: v.string(),
   hostName: v.string(),
   trackType: v.union(v.literal("mic"), v.literal("sounders")),
@@ -278,6 +279,7 @@ export const listBySession = recordingQuery({
         id: upload._id,
         publicSessionId:
           upload.publicSessionId ?? null,
+        clientId: upload.clientId ?? null,
         episode: upload.episode,
         hostName: upload.hostName,
         trackType: upload.trackType,

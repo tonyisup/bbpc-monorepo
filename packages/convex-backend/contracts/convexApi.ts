@@ -9176,6 +9176,7 @@ export type PublicApiType = {
         { accessToken: string; clientId: string; publicSessionId: string },
         Array<{
           blobName: string;
+          clientId: string | null;
           contentType: string;
           episode: string;
           hostName: string;

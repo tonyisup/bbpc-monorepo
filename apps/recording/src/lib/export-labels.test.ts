@@ -17,7 +17,7 @@ function baseManifest(overrides: Partial<Manifest> = {}): Manifest {
     hosts: ['tony', 'fonso', 'harley'],
     recording_start: 0,
     recording_end: 7200000,
-    manifest_version: '1.1',
+    manifest_version: '1.2',
     sounders_used: [],
     notes: [],
     segments: [],
@@ -148,7 +148,7 @@ describe('manifestToAudacityLabels', () => {
       hosts: ['tony', 'fonso', 'harley'],
       recording_start: 0,
       recording_end: 7200000,
-      manifest_version: '1.1',
+      manifest_version: '1.2',
       recording_participants: [],
       audio_participants: [],
       sounders_used: [

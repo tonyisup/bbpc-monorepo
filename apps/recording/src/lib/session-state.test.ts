@@ -112,6 +112,7 @@ describe('session event replay', () => {
       },
     }), {
       type: 'STOP_RECORDING',
+      stoppedAt: 1456,
       participant: {
         clientId: 'host-1',
         leftAt: 1456,
@@ -195,6 +196,7 @@ describe('session event replay', () => {
   it('replays audio participant intervals and disconnects', () => {
     const initial = createInitialState('EP', '2026-06-23', 'Harley');
     const state = applySessionSyncEvents(initial, [
+      { kind: 'recording-started', startedAt: 1000, startedByRole: 'owner' },
       {
         kind: 'audio-joined',
         participant: {

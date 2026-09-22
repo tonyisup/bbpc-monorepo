@@ -8,13 +8,13 @@ import { pipeline } from 'node:stream/promises';
 
 const HELP = `
 Usage:
-  npm run merge-session -- --bundle ./EP-merge-bundle.json [options]
+  pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json [options]
 
-Options:
-  --bundle=<path>       Required. Merge bundle JSON downloaded from the app.
-  --out=<dir>           Output workspace directory. Defaults to ./merged/<session_id>.
-  --format=<wav|mp3>    Final output format. Defaults to wav.
-  --sounders=<mode>     auto, recorded, reconstruct, both, or none. Defaults to auto.
+Options (values may follow "=" or a space):
+  --bundle <path>       Required. Merge bundle JSON downloaded from the app.
+  --out <dir>           Output workspace directory. Defaults to ./merged/<session_id>.
+  --format <wav|mp3>    Final output format. Defaults to wav.
+  --sounders <mode>     auto, recorded, reconstruct, both, or none. Defaults to auto.
   --dry-run             Download/write files and merge plan, but do not run ffmpeg.
   --force               Re-download existing assets and overwrite output.
   --help                Show this help.
@@ -27,15 +27,28 @@ Sounder modes:
   none          Mix only participant mic tracks.
 `;
 
+const FLAGS = new Set(['help', 'dry-run', 'force']);
+
 function parseArgs(argv) {
   const args = new Map();
-  for (const arg of argv) {
-    if (arg === '--help' || arg === '-h') args.set('help', 'true');
-    else if (arg === '--dry-run') args.set('dry-run', 'true');
-    else if (arg === '--force') args.set('force', 'true');
-    else if (arg.startsWith('--')) {
-      const [key, ...rest] = arg.slice(2).split('=');
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '-h') {
+      args.set('help', 'true');
+      continue;
+    }
+    // pnpm forwards the `--` separator; it carries no option.
+    if (!arg.startsWith('--') || arg === '--') continue;
+    const [key, ...rest] = arg.slice(2).split('=');
+    if (FLAGS.has(key)) {
+      args.set(key, 'true');
+    } else if (rest.length) {
       args.set(key, rest.join('='));
+    } else if (index + 1 < argv.length && !argv[index + 1].startsWith('--')) {
+      args.set(key, argv[index + 1]);
+      index += 1;
+    } else {
+      throw new Error(`--${key} needs a value`);
     }
   }
   return args;
@@ -110,16 +123,33 @@ function resolveSounderMode(mode, recordings) {
   return recordings.some(recording => recording.trackType === 'sounders') ? 'recorded' : 'reconstruct';
 }
 
-function recordingDelayMs(bundle, recording) {
+// Bundles from 1.1 place each upload on the session timeline, which leaves out
+// paused time. Older bundles only have the latest Start as their origin.
+function recordingPlacement(bundle, recording) {
+  if (typeof recording.timeline_offset_ms === 'number') {
+    return {
+      delayMs: Math.max(0, Math.round(recording.timeline_offset_ms)),
+      maxDurationMs: typeof recording.timeline_max_duration_ms === 'number' ? recording.timeline_max_duration_ms : null,
+    };
+  }
   const start = bundle.manifest.recording_start;
-  if (typeof start !== 'number') return 0;
-  return Math.max(0, Math.round(recording.startedAt - start));
+  return {
+    delayMs: typeof start === 'number' ? Math.max(0, Math.round(recording.startedAt - start)) : 0,
+    maxDurationMs: null,
+  };
 }
 
 function buildMergeWarnings(bundle) {
   const manifest = bundle.manifest ?? {};
   const recordings = bundle.recordings ?? [];
   const warnings = [...(bundle.merge_notes ?? []).filter(note => String(note).startsWith('Warning:'))];
+  // The app already checked completeness per participant and run.
+  if (Array.isArray(manifest.recording_runs)) {
+    if (manifest.recording_runs.length > 1 && recordings.some(recording => typeof recording.timeline_offset_ms !== 'number')) {
+      warnings.push('Warning: some recordings have no timeline placement and were aligned to the first run.');
+    }
+    return Array.from(new Set(warnings));
+  }
   const micRecordingNames = new Set(
     recordings
       .filter(recording => recording.trackType === 'mic')
@@ -154,7 +184,11 @@ function buildFfmpegArgs({ inputs, outputPath, format }) {
     args.push('-i', input.path);
     const label = `a${index}`;
     const delay = Math.max(0, Math.round(input.delayMs));
-    filterParts.push(`[${index}:a]adelay=${delay}:all=1,aresample=48000,asetpts=PTS-STARTPTS[${label}]`);
+    // Audio recorded after its run stopped would overlap the next run.
+    const trim = typeof input.maxDurationMs === 'number'
+      ? `atrim=duration=${(Math.max(0, input.maxDurationMs) / 1000).toFixed(3)},`
+      : '';
+    filterParts.push(`[${index}:a]${trim}adelay=${delay}:all=1,aresample=48000,asetpts=PTS-STARTPTS[${label}]`);
     labels.push(`[${label}]`);
   }
 
@@ -222,7 +256,7 @@ for (const recording of bundle.recordings ?? []) {
     kind: 'recording',
     id: recording.id,
     path: result.path,
-    delayMs: recordingDelayMs(bundle, recording),
+    ...recordingPlacement(bundle, recording),
   });
 }
 

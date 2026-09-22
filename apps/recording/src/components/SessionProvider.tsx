@@ -23,6 +23,7 @@ import {
 } from '@/lib/session-state';
 import { recordingApi } from '@/lib/convex/api';
 import { createPortableId } from '@/lib/portable-ids';
+import { timelineLengthMs } from '@/lib/session-timeline';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -89,21 +90,24 @@ export function SessionProvider({
     () => createInitialState(episode, date, hostName, sounders)
   );
 
-  // Elapsed timer
-  const [elapsedMs, setElapsedMs] = useState(0);
+  // Session timeline position: advances while recording, frozen while paused.
+  const [liveElapsedMs, setLiveElapsedMs] = useState(0);
   const rafRef = useRef<number>(0);
+  const runs = state.recordingRuns;
 
   useEffect(() => {
-    if (!state.isRecording || state.recordingStart === null) {
+    if (!state.isRecording) {
       return;
     }
     const tick = () => {
-      setElapsedMs(Date.now() - state.recordingStart!);
+      setLiveElapsedMs(timelineLengthMs(runs, Date.now()));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [state.isRecording, state.recordingStart]);
+  }, [state.isRecording, runs]);
+  // Every run is closed while paused, so the length no longer depends on now.
+  const elapsedMs = state.isRecording ? liveElapsedMs : timelineLengthMs(runs, 0);
 
   // Identifies this mounted tab, not the participant: events it dispatched
   // locally are skipped when they echo back, while a reload replays them.
@@ -141,9 +145,9 @@ export function SessionProvider({
     if (sessionStatus === 'ended' && action.type !== 'UPDATE_HOST_NAME') return;
 
     rawDispatch(action);
-    const event = actionToSyncEvent(action, state.hostName, state.recordingStart, sessionIdRef.current);
+    const event = actionToSyncEvent(action, state.hostName, timelineLengthMs(runs, Date.now()), sessionIdRef.current);
     if (event) void sendEvent(event).catch(() => { /* The sync banner retains and exposes the failed event. */ });
-  }, [rawDispatch, sendEvent, sessionStatus, state.hostName, state.recordingStart]);
+  }, [rawDispatch, runs, sendEvent, sessionStatus, state.hostName]);
 
   const toManifest = useCallback(
     (): Manifest => sessionStateToManifest(state, sessionId),
@@ -155,7 +159,7 @@ export function SessionProvider({
       value={{
         state,
         dispatch,
-        elapsedMs: state.isRecording ? elapsedMs : 0,
+        elapsedMs,
         toManifest,
         sessionId,
         inviteUrl,

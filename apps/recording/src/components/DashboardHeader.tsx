@@ -460,6 +460,7 @@ export function DashboardHeader() {
   const localRecordingActive = recording.state.isRecording;
   const isRecording = isOwner ? (hostRecordingActive || localRecordingActive) : localRecordingActive;
   const sessionEnded = sessionStatus === 'ended';
+  const timelinePaused = !isRecording && state.recordingRuns.length > 0;
   const canEditEpisode = isOwner && !sessionEnded && !hostRecordingActive && !recovery.pending;
   const guestCanJoinRecording = !isOwner && !sessionEnded && hostRecordingActive && !localRecordingActive && !recovery.pending;
   const canEndSession = isOwner && !sessionEnded;
@@ -733,9 +734,10 @@ export function DashboardHeader() {
           </button>
         )}
 
-        {/* Session timer */}
+        {/* Session timeline: frozen while paused between runs */}
         <div className={`font-mono text-xl font-bold tabular-nums ${isRecording ? 'text-[var(--danger)]' : 'text-[var(--muted)]'}`}>
-          {isRecording ? formatElapsed(elapsedMs) : '--:--:--'}
+          {isRecording || timelinePaused ? formatElapsed(elapsedMs) : '--:--:--'}
+          {timelinePaused && <span className="ml-2 font-sans text-xs font-medium uppercase">Paused</span>}
         </div>
 
 	        {/* Recording controls */}
@@ -757,7 +759,7 @@ export function DashboardHeader() {
             disabled={transportBusy || !!recovery.pending || pendingEventCount > 0 || recordingSync.pendingCount > 0}
             className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--success)] text-white hover:opacity-90 transition-opacity"
           >
-            Start Recording
+            {timelinePaused ? 'Resume Recording' : 'Start Recording'}
           </button>
         ) : localRecordingActive ? (
           <button
