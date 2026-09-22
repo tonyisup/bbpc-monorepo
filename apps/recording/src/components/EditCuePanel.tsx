@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from './SessionProvider';
+import { openEditCueId } from '@/lib/session-state';
 import { useUniqueId } from '@/hooks/useUniqueId';
 import type { EditCue } from '@/types';
 
@@ -19,13 +20,12 @@ export function EditCuePanel() {
   const { state, dispatch, elapsedMs } = useSession();
   const [activeType, setActiveType] = useState<EditCue['type']>('doxx-bleep');
   const [reason, setReason] = useState('');
-  const [activeCueId, setActiveCueId] = useState<string | null>(null);
+  const activeCueId = openEditCueId(state);
   const newId = useUniqueId('edit');
 
   const handleStartCue = () => {
     if (activeCueId) return;
     const id = newId();
-    setActiveCueId(id);
     dispatch({
       type: 'ADD_EDIT_CUE',
       cue: {
@@ -42,7 +42,6 @@ export function EditCuePanel() {
   const handleEndCue = () => {
     if (!activeCueId) return;
     dispatch({ type: 'UPDATE_EDIT_CUE', id: activeCueId, end_ms: elapsedMs });
-    setActiveCueId(null);
     setReason('');
   };
 

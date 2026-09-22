@@ -232,6 +232,18 @@ function applyAudioDisconnectEnd(
   };
 }
 
+/**
+ * The open segment or edit cue comes from session state, not panel state, so
+ * it can still be ended after a tab switch, reload or reconnect (audit R08).
+ */
+export function openSegmentId(state: SessionState): string | null {
+  return state.segments.findLast(segment => segment.end_ms === null)?.id ?? null;
+}
+
+export function openEditCueId(state: SessionState): string | null {
+  return state.editCues.findLast(cue => cue.end_ms === null)?.id ?? null;
+}
+
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case 'START_RECORDING': {
