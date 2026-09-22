@@ -24,6 +24,7 @@ import {
 import { recordingApi } from '@/lib/convex/api';
 import { createPortableId } from '@/lib/portable-ids';
 import { timelineLengthMs } from '@/lib/session-timeline';
+import { serverNow, syncServerClock } from '@/lib/clock';
 
 // ---------------------------------------------------------------------------
 // Context
@@ -49,6 +50,7 @@ interface SessionContextValue {
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+const CLOCK_RESYNC_MS = 10 * 60 * 1000;
 
 interface SessionProviderProps {
   children: React.ReactNode;
@@ -90,6 +92,19 @@ export function SessionProvider({
     () => createInitialState(episode, date, hostName, sounders)
   );
 
+  // Align this device with the server clock that every participant's
+  // timestamps use; refresh it over long sessions and after sleeping.
+  useEffect(() => {
+    void syncServerClock();
+    const timer = setInterval(() => { void syncServerClock(); }, CLOCK_RESYNC_MS);
+    const onVisible = () => { if (document.visibilityState === 'visible') void syncServerClock(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   // Session timeline position: advances while recording, frozen while paused.
   const [liveElapsedMs, setLiveElapsedMs] = useState(0);
   const rafRef = useRef<number>(0);
@@ -100,7 +115,7 @@ export function SessionProvider({
       return;
     }
     const tick = () => {
-      setLiveElapsedMs(timelineLengthMs(runs, Date.now()));
+      setLiveElapsedMs(timelineLengthMs(runs, serverNow()));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -145,7 +160,7 @@ export function SessionProvider({
     if (sessionStatus === 'ended' && action.type !== 'UPDATE_HOST_NAME') return;
 
     rawDispatch(action);
-    const event = actionToSyncEvent(action, state.hostName, timelineLengthMs(runs, Date.now()), sessionIdRef.current);
+    const event = actionToSyncEvent(action, state.hostName, timelineLengthMs(runs, serverNow()), sessionIdRef.current);
     if (event) void sendEvent(event).catch(() => { /* The sync banner retains and exposes the failed event. */ });
   }, [rawDispatch, runs, sendEvent, sessionStatus, state.hostName]);
 

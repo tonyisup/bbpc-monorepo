@@ -54,6 +54,12 @@ Each participant records their own microphone and sounders in the browser. Every
 
 Uploads go to Azure Blob Storage in 3 MiB blocks through `/api/recordings/blocks`, then `/api/recordings/commit` joins them and records the upload. Every request stays under Vercel's 4.5 MB body limit, and a retry resumes from the blocks already staged. If the browser cannot store the take (for example, IndexedDB is unavailable), the header says so and the take exists only in that tab until it uploads.
 
+## Clock Alignment
+
+Participants' device clocks can differ by seconds, and every timeline timestamp is compared across devices. Each browser estimates its offset from the server clock (`/api/time`, keeping the fastest of several round trips) when a session opens, every 10 minutes, and when the tab becomes visible again, and stamps takes, joins, leaves, disconnects, sounders and event order with server-referenced time. The same clock drives call presence and signaling windows, so a skewed device no longer drops signals or reports false disconnects. A take is stamped when capture actually begins, after microphone startup.
+
+The offset is only as accurate as half the fastest round trip, typically tens of milliseconds. Drift between a device's audio clock and real time over a long take is not measured or corrected; the real-device rehearsal should listen for it at the end of a long recording.
+
 ## Audio Privacy and Retention
 
 Recordings are private. The recordings container is created without public access, and the app hands session participants read-only links that expire after 24 hours (`RECORDING_URL_TTL_HOURS`, at most 7 days). A merge bundle's links expire with them; download a new bundle if the merge CLI reports an expired link. Signing needs the account key in `AZURE_STORAGE_ACCOUNT_CONNECTION_STRING`.

@@ -267,3 +267,25 @@ it('passes each chunk to its sink and tags the finished take', async () => {
   expect(tracks.takeId).toBe('take-test');
   await act(async () => root.unmount());
 });
+
+it('stamps a take when capture begins, after microphone startup', async () => {
+  // Audit: the start time was taken before the microphone was acquired.
+  vi.useFakeTimers({ now: 10_000 });
+  const audio = installAudio();
+  audio.getUserMedia.mockImplementationOnce(() => new Promise(resolve => {
+    setTimeout(() => resolve(fakeStream()), 300);
+  }));
+  let engine!: ReturnType<typeof useRecordingEngine>;
+  function Harness() { engine = useRecordingEngine(); return null; }
+  let root!: { unmount: () => void };
+  await act(async () => { root = create(createElement(Harness)); });
+  await act(async () => {
+    const starting = engine.startRecording();
+    await vi.advanceTimersByTimeAsync(300);
+    await starting;
+  });
+  let tracks!: Awaited<ReturnType<typeof engine.stopRecording>>;
+  await act(async () => { tracks = await engine.stopRecording(); });
+  expect(tracks.startedAt).toBe(10_300);
+  await act(async () => root.unmount());
+});

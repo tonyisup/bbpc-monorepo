@@ -1,5 +1,6 @@
 import type { Manifest, SessionAction, SessionState, SessionSyncEvent, Sounder } from '@/types';
 import { startRecordingRun, stopRecordingRun, timelineMsAt } from './session-timeline';
+import { serverNow } from './clock';
 
 export function createInitialState(
   episode: string,
@@ -247,7 +248,7 @@ export function openEditCueId(state: SessionState): string | null {
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case 'START_RECORDING': {
-      const startedAt = action.startedAt ?? Date.now();
+      const startedAt = action.startedAt ?? serverNow();
       const nextState = {
         ...state,
         isRecording: true,
@@ -264,7 +265,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
 
     case 'STOP_RECORDING': {
-      const stoppedAt = action.stoppedAt ?? action.participant?.leftAt ?? Date.now();
+      const stoppedAt = action.stoppedAt ?? action.participant?.leftAt ?? serverNow();
       const nextState = {
         ...state,
         isRecording: false,
@@ -293,7 +294,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return applyAudioDisconnectEnd(state, action.disconnect);
 
     case 'TRIGGER_SOUNDER': {
-      const playedAt = action.played_at_ms ?? timelineMsAt(state.recordingRuns, Date.now());
+      const playedAt = action.played_at_ms ?? timelineMsAt(state.recordingRuns, serverNow());
       return {
         ...state,
         soundersUsed: [
