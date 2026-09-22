@@ -530,8 +530,11 @@ export function ConvexPredictionGame({
     );
   }
 
-  const totalPickCount = assignments.length * data.hosts.length;
-  const savedPickCount = assignments.reduce(
+  const playableAssignments = assignments.filter(
+    (assignment) => assignment.playable
+  );
+  const totalPickCount = playableAssignments.length * data.hosts.length;
+  const savedPickCount = playableAssignments.reduce(
     (total, assignment) =>
       total +
       data.hosts.filter(
@@ -544,12 +547,14 @@ export function ConvexPredictionGame({
       ).length,
     0
   );
-  const isRoundOpen =
-    getPredictionRoundState(episodeStatus, true, closesAt, now) ===
-    PredictionRoundState.OPEN;
+  const roundState = getPredictionRoundState(episodeStatus, true, closesAt, now);
+  const isRoundOpen = roundState === PredictionRoundState.OPEN;
+  const isRoundLocked = roundState === PredictionRoundState.LOCKED;
+  const isClosingSoon = isRoundOpen && episodeStatus === "recording";
+  const missedPickCount = totalPickCount - savedPickCount;
   const remainingSeconds =
     closesAt === null ? 0 : Math.max(0, Math.ceil((closesAt - now) / 1000));
-  const assignmentProgress = assignments.map((assignment) => {
+  const assignmentProgress = playableAssignments.map((assignment) => {
     const saved = data.hosts.filter(
       (host) =>
         host.id !== savingHosts[assignment.id] &&
@@ -569,19 +574,24 @@ export function ConvexPredictionGame({
             <span
               className={cn(
                 "rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
-                isRoundOpen && episodeStatus !== "recording"
+                isClosingSoon
+                  ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                  : isRoundOpen
                   ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                  : "border-amber-400/30 bg-amber-400/10 text-amber-200"
+                  : "border-white/15 bg-white/[0.06] text-zinc-300"
               )}
             >
-              {isRoundOpen
-                ? episodeStatus === "recording"
-                  ? "Closing soon"
-                  : "Round open"
-                : "Picks locked"}
+              {isClosingSoon
+                ? "Closing soon"
+                : isRoundOpen
+                ? "Round open"
+                : isRoundLocked
+                ? "Picks locked"
+                : "Picks not open yet"}
             </span>
             <p className="text-sm font-semibold text-white" aria-live="polite">
-              {savedPickCount} of {totalPickCount} picks saved
+              {savedPickCount} of {totalPickCount} picks{" "}
+              {isRoundLocked ? "locked in" : "saved"}
             </p>
           </div>
           {savedPickCount === totalPickCount && totalPickCount > 0 ? (
@@ -592,23 +602,32 @@ export function ConvexPredictionGame({
           ) : null}
         </div>
         <p className="mt-3 text-sm leading-relaxed text-zinc-300">
-          Choose the rating you think each host will give. Changes save
-          automatically. Picks and wagers stay editable until 10 minutes after
-          recording starts.
+          {isRoundOpen
+            ? "Choose the rating you think each host will give. Changes save automatically. Picks and wagers stay editable until 10 minutes after recording starts."
+            : isRoundLocked
+            ? "Picks and wagers are locked for this round. Your saved choices are shown below."
+            : "Picks aren’t open for this episode yet."}
         </p>
-        {episodeStatus === "recording" && isRoundOpen ? (
+        {isRoundLocked && missedPickCount > 0 ? (
+          <p className="mt-2 text-sm text-zinc-400">
+            You missed {missedPickCount}{" "}
+            {missedPickCount === 1 ? "pick" : "picks"} this round.
+          </p>
+        ) : null}
+        {isClosingSoon ? (
           <p className="mt-2 font-semibold tabular-nums text-amber-200">
             Picks and wagers close in {Math.floor(remainingSeconds / 60)}:
             {String(remainingSeconds % 60).padStart(2, "0")}.
           </p>
         ) : null}
-        {assignments.length > 1 ? (
+        {playableAssignments.length > 1 ? (
           <nav className="mt-4 space-y-2" aria-label="Movie pick checklist">
             <p className="text-sm font-semibold text-white" aria-live="polite">
-              {completedMovies} of {assignments.length} movies complete.{" "}
+              {completedMovies} of {playableAssignments.length}{" "}
+              {playableAssignments.length === 1 ? "movie" : "movies"}{" "}
               {isRoundOpen
-                ? "Pick ratings for every movie."
-                : "Review your saved picks."}
+                ? "complete. Pick ratings for every movie."
+                : "picked."}
             </p>
             <ol className="grid gap-2 sm:grid-cols-2">
               {assignmentProgress.map(
@@ -626,12 +645,22 @@ export function ConvexPredictionGame({
                       <span
                         className={cn(
                           "shrink-0 text-xs",
-                          complete ? "text-emerald-300" : "text-amber-200"
+                          complete
+                            ? "text-emerald-300"
+                            : isRoundOpen
+                            ? "text-amber-200"
+                            : "text-zinc-400"
                         )}
                       >
                         {complete
-                          ? "Complete"
-                          : `${saved}/${data.hosts.length} saved`}
+                          ? isRoundOpen
+                            ? "Complete"
+                            : "All picked"
+                          : isRoundOpen
+                          ? `${saved}/${data.hosts.length} saved`
+                          : saved === 0
+                          ? "No picks"
+                          : `${saved} of ${data.hosts.length} picked`}
                       </span>
                     </button>
                   </li>
@@ -822,6 +851,7 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
       closesAt,
       now
     ) === PredictionRoundState.OPEN;
+  const isUnplayable = !assignment.playable;
 
   const chooseRating = async (hostId: string, ratingId: string) => {
     if (!isRoundOpen || savingHostId !== null) {
@@ -896,22 +926,36 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
               <span
                 className={cn(
                   "rounded-full px-2 py-0.5 text-xs font-bold",
-                  allPicksSaved
+                  isUnplayable
+                    ? "bg-white/[0.06] text-zinc-300"
+                    : allPicksSaved
                     ? "bg-emerald-400/10 text-emerald-300"
-                    : "bg-amber-400/10 text-amber-200"
+                    : isRoundOpen
+                    ? "bg-amber-400/10 text-amber-200"
+                    : "bg-white/[0.06] text-zinc-300"
                 )}
               >
                 {savingHostId !== null
                   ? "Saving…"
+                  : isUnplayable
+                  ? "Not in play"
                   : allPicksSaved
-                  ? "Complete"
+                  ? isRoundOpen
+                    ? "Complete"
+                    : "All picked"
+                  : isRoundOpen
+                  ? selectedCount === 0
+                    ? "Needs picks"
+                    : `${selectedCount} of ${hosts.length} saved`
                   : selectedCount === 0
-                  ? "Needs picks"
-                  : `${selectedCount} of ${hosts.length} saved`}
+                  ? "No picks made"
+                  : `${selectedCount} of ${hosts.length} picked`}
               </span>
             </div>
             <p className="mt-1 text-sm text-zinc-400">
-              {isRoundOpen
+              {isUnplayable
+                ? "This movie isn’t part of the game."
+                : isRoundOpen
                 ? savingHostId !== null
                   ? "Saving your choice. Wait for confirmation before leaving."
                   : allPicksSaved
@@ -919,7 +963,9 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
                   : `Choose ${hosts.length - selectedCount} more ${
                       hosts.length - selectedCount === 1 ? "rating" : "ratings"
                     }.`
-                : "This round is closed. Your saved choices are shown below."}
+                : selectedCount === 0
+                ? "This round is closed. You didn’t make picks for this movie."
+                : "This round is closed. Your picks are shown below."}
             </p>
           </div>
         </div>
@@ -934,10 +980,16 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
           }}
         >
           {isExpanded
-            ? "Hide picks"
+            ? isRoundOpen || selectedCount > 0
+              ? "Hide picks"
+              : "Hide details"
+            : isRoundOpen
+            ? selectedCount > 0
+              ? "View or edit picks"
+              : "Make picks"
             : selectedCount > 0
-            ? "View or edit picks"
-            : "Make picks"}
+            ? "View picks"
+            : "View details"}
           {isExpanded ? (
             <ChevronUp aria-hidden="true" />
           ) : (
@@ -977,6 +1029,36 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
               optimisticGuess?.hostId === host.id
                 ? optimisticGuess
                 : findGuessForHost(guesses, host.id);
+            if (!isRoundOpen) {
+              return (
+                <div
+                  key={host.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:p-4"
+                >
+                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+                    <span className="font-bold text-white">
+                      {host.name ?? "Host"}
+                    </span>
+                    {guess ? (
+                      <>
+                        <span aria-hidden="true" className="text-zinc-500">
+                          —
+                        </span>
+                        <RatingIcon value={guess.rating.value} />
+                        <span className="text-zinc-300">{guess.rating.name}</span>
+                      </>
+                    ) : (
+                      <span className="text-zinc-400">No pick made</span>
+                    )}
+                  </div>
+                  {guess ? (
+                    <span className="text-xs font-semibold text-zinc-400">
+                      Locked
+                    </span>
+                  ) : null}
+                </div>
+              );
+            }
             const isSaving = savingHostId === host.id;
             const didFail = failedPick?.hostId === host.id;
             const isSaved = !isSaving && !didFail && Boolean(guess?.rating.id);
@@ -984,7 +1066,7 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
               <fieldset
                 key={host.id}
                 className="rounded-lg border border-white/10 bg-black/20 p-3 sm:p-4"
-                disabled={!isRoundOpen || savingHostId !== null}
+                disabled={savingHostId !== null}
               >
                 <legend className="px-1 font-bold text-white">
                   {host.name ?? "Host"}
@@ -1025,7 +1107,7 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
                           value={rating.id}
                           checked={isSelected}
                           onChange={() => void chooseRating(host.id, rating.id)}
-                          disabled={!isRoundOpen || savingHostId !== null}
+                          disabled={savingHostId !== null}
                           className="peer sr-only"
                         />
                         <span
@@ -1034,7 +1116,7 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
                             isSelected
                               ? "border-red-400 bg-red-500/15 text-white"
                               : "border-white/15 bg-white/[0.035] text-zinc-300 hover:border-white/30 hover:bg-white/[0.07]",
-                            (!isRoundOpen || savingHostId !== null) &&
+                            savingHostId !== null &&
                               "cursor-not-allowed opacity-60"
                           )}
                         >
@@ -1091,7 +1173,14 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
             <details className="rounded-lg border border-white/10 bg-black/20">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2">
-                  Wager points <span className="text-zinc-500">— optional</span>
+                  {isRoundOpen ? (
+                    <>
+                      Wager points{" "}
+                      <span className="text-zinc-500">— optional</span>
+                    </>
+                  ) : (
+                    "Your wagers"
+                  )}
                 </span>
                 <ChevronDown
                   className="h-4 w-4 text-zinc-400"
