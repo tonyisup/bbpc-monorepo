@@ -10,6 +10,7 @@ import {
   recordingApi,
 } from '@/lib/convex/api';
 import { createPortableId } from '@/lib/portable-ids';
+import { serverNow } from '@/lib/clock';
 import type { SessionSyncEvent } from '@/types';
 
 interface UseSessionSyncOptions {
@@ -224,7 +225,8 @@ export function useSessionSync({
       clientId,
       accessToken,
       eventId,
-      createdAt: Date.now(),
+      // Server-referenced, so events from different devices order correctly.
+      createdAt: serverNow(),
       payload: removeUndefined(event) as SessionSyncEvent,
     });
     publishQueue(queue);

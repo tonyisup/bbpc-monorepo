@@ -8,6 +8,7 @@ import {
 } from '@/lib/convex/api';
 import type { AudioDisconnectReason, RtcPresence, RtcSignal } from '@/types';
 import { createRtcId, shouldCreateInitialOffer } from '@/lib/rtc/mesh';
+import { serverNow } from '@/lib/clock';
 
 export interface MeshAudioParticipant {
   clientId: string;
@@ -120,8 +121,8 @@ export function useMeshAudioRoom({
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [connectionStates, setConnectionStates] = useState<Record<string, RTCPeerConnectionState>>({});
   const [audioLevels, setAudioLevels] = useState<Record<string, number>>({});
-  const [now, setNow] = useState(() => Date.now());
-  const [signalReadAt, setSignalReadAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => serverNow());
+  const [signalReadAt, setSignalReadAt] = useState(() => serverNow());
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -237,7 +238,7 @@ export function useMeshAudioRoom({
     onDisconnectStartedRef.current({
       disconnectId,
       clientId: remoteClientId,
-      startedAt: Date.now(),
+      startedAt: serverNow(),
       reason,
     });
   }, [clientId]);
@@ -249,7 +250,7 @@ export function useMeshAudioRoom({
     onDisconnectEndedRef.current({
       disconnectId,
       clientId: remoteClientId,
-      endedAt: Date.now(),
+      endedAt: serverNow(),
     });
   }, []);
 
@@ -349,7 +350,7 @@ export function useMeshAudioRoom({
 
   const leaveAudio = useCallback(async () => {
     if (!joinedRef.current) return;
-    const leftAt = Date.now();
+    const leftAt = serverNow();
     const remotes = Array.from(peerConnectionsRef.current.keys());
     await Promise.allSettled(remotes.map(remoteClientId => sendSignal(remoteClientId, 'leave', { leftAt })));
     teardownLocal();
@@ -414,10 +415,10 @@ export function useMeshAudioRoom({
       });
       localStreamRef.current = stream;
       setLocalStream(stream);
-      setSignalReadAt(Date.now());
+      setSignalReadAt(serverNow());
       setJoined(true);
       await refreshInputDevices();
-      onAudioJoinedRef.current(Date.now());
+      onAudioJoinedRef.current(serverNow());
       void tryPlayAll();
     } catch (err) {
       await leaveAudioMutation({
@@ -492,7 +493,7 @@ export function useMeshAudioRoom({
   useEffect(() => {
     if (!joined) return;
     const timer = setInterval(
-      () => setSignalReadAt(Date.now()),
+      () => setSignalReadAt(serverNow()),
       SIGNAL_WINDOW_REFRESH_MS,
     );
     return () => clearInterval(timer);
@@ -523,7 +524,7 @@ export function useMeshAudioRoom({
 
   useEffect(() => {
     if (!joined || !presence) return;
-    const now = Date.now();
+    const now = serverNow();
     const remoteRows = presence.filter(row => row.clientId !== clientId);
     const remoteIds = new Set(remoteRows.map(row => row.clientId));
 
@@ -598,7 +599,7 @@ export function useMeshAudioRoom({
   }, [joined, leaveAudio, sessionEnded]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(serverNow()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -613,7 +614,7 @@ export function useMeshAudioRoom({
           onDisconnectStartedRef.current({
             disconnectId,
             clientId,
-            startedAt: Date.now(),
+            startedAt: serverNow(),
             reason: 'page-hidden-timeout',
           });
         }, PAGE_HIDDEN_TIMEOUT_MS);
@@ -626,7 +627,7 @@ export function useMeshAudioRoom({
         onDisconnectEndedRef.current({
           disconnectId: hiddenDisconnectIdRef.current,
           clientId,
-          endedAt: Date.now(),
+          endedAt: serverNow(),
         });
         hiddenDisconnectIdRef.current = null;
       }

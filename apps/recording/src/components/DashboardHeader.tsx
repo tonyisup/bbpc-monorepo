@@ -9,6 +9,7 @@ import { useRecordingSync } from '@/hooks/useRecordingSync';
 import { useMeshAudioRoom } from '@/hooks/useMeshAudioRoom';
 import { createDurableSink } from '@/lib/recordings/durable-sink';
 import { durableRecordingStore } from '@/lib/recordings/durable-store';
+import { serverNow } from '@/lib/clock';
 
 function formatElapsed(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -310,7 +311,7 @@ export function DashboardHeader() {
         return;
       }
       recordingStartRef.current = recordingStartedAt;
-      dispatchRecordingJoin(recordingStartedAt, Date.now());
+      dispatchRecordingJoin(recordingStartedAt, serverNow());
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not join recording');
     } finally {
@@ -327,7 +328,7 @@ export function DashboardHeader() {
     transportBusyRef.current = true;
     setTransportBusy(true);
     try {
-      dispatchRecordingLeave(recordingStartedAt, Date.now(), reason);
+      dispatchRecordingLeave(recordingStartedAt, serverNow(), reason);
       const tracks = await recording.stopRecording();
       recordingStartRef.current = reason === 'host-stopped' ? 0 : recordingStartedAt;
       await uploadTracks(tracks);
@@ -398,7 +399,7 @@ export function DashboardHeader() {
       }
       setMicPermissionOk(true);
 
-      const now = Date.now();
+      const now = serverNow();
       recordingStartRef.current = now;
 
       try {
@@ -445,8 +446,8 @@ export function DashboardHeader() {
     transportBusyRef.current = true;
     setTransportBusy(true);
     try {
-      const recordingStartedAt = recordingStartRef.current || state.recordingStart || Date.now();
-      const stoppedAt = Date.now();
+      const recordingStartedAt = recordingStartRef.current || state.recordingStart || serverNow();
+      const stoppedAt = serverNow();
 
       // Stop session recording
       dispatch({

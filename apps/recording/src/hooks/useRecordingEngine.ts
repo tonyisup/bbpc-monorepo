@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useAudio } from '@/components/AudioProvider';
+import { serverNow } from '@/lib/clock';
 
 export interface RecordingState {
   isRecording: boolean;
@@ -44,7 +45,7 @@ export interface RecordingEngine {
 export interface RecordingTracks {
   mic: Blob;        // The recorder-selected audio format
   sounders: Blob;
-  startedAt: number; // Date.now() when recording started
+  startedAt: number; // serverNow() when both recorders started
   durationMs: number;
   /** Set when a sink kept this take, so its upload progress can be kept too. */
   takeId?: string;
@@ -203,7 +204,7 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
     startingRef.current = true;
     try {
       setState(prev => ({ ...prev, error: null, isRecording: true, micLevel: 0, durationMs: 0 }));
-      startedAtRef.current = Date.now();
+      startedAtRef.current = serverNow();
       recorderErrorRef.current = null;
 
       const ctx = createAudioContext();
@@ -264,6 +265,9 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       sounderRecorder.onstop = () => onUnexpectedStopRef.current();
       sounderRecorder.start(1000);
       sounderRecorderRef.current = sounderRecorder;
+      // Stamp the take when capture begins, after microphone and recorder
+      // startup, so that latency does not shift this track on the timeline.
+      startedAtRef.current = serverNow();
       sinkRef.current = options?.sink ?? null;
       sinkRef.current?.begin(startedAtRef.current, { mic: micRecorder.mimeType, sounders: sounderRecorder.mimeType });
       setState(prev => ({ ...prev, inputSwitchable }));
@@ -271,7 +275,7 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       startVU();
 
       timerRef.current = setInterval(() => {
-        setState(prev => ({ ...prev, durationMs: Date.now() - startedAtRef.current }));
+        setState(prev => ({ ...prev, durationMs: serverNow() - startedAtRef.current }));
       }, 250);
     } catch (err) {
       await teardown();
@@ -292,7 +296,7 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
     if (mountedRef.current) setState(prev => ({ ...prev, isRecording: false, micLevel: 0, inputSwitchable: false }));
-    const durationMs = Date.now() - startedAtRef.current;
+    const durationMs = serverNow() - startedAtRef.current;
     const stopTrack = (rec: MediaRecorder | null, chunks: Blob[]) => new Promise<Blob>(resolve => {
       const finish = () => resolve(new Blob(chunks, { type: rec?.mimeType || chunks[0]?.type || '' }));
       if (!rec || rec.state === 'inactive') finish();
