@@ -14,7 +14,7 @@
 /bbpc-pipeline/
 
 # Root workspace artifacts.
-/node_modules/
+node_modules/
 /.pnpm-store/
 /coverage/
 /.turbo/
