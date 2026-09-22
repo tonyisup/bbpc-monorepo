@@ -324,14 +324,22 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
     if (stream === micStreamRef.current) return;
     // Already on a microphone of its own: nothing was taken away.
     if (stream === null && ownsMicStreamRef.current && micStreamRef.current?.getAudioTracks?.().some(track => track.readyState !== 'ended')) return;
+    // Another replacement (such as the call's newly selected microphone) may
+    // land while the default microphone is being opened; that one wins.
+    const replacing = micStreamRef.current;
     let next = stream;
     try {
       next ??= await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS });
     } catch {
-      if (mountedRef.current) setState(prev => ({ ...prev, error: MIC_LOST_ERROR }));
+      if (mountedRef.current && micStreamRef.current === replacing) setState(prev => ({ ...prev, error: MIC_LOST_ERROR }));
       return;
     }
-    if (audioCtxRef.current !== ctx || !micRecorderRef.current) {
+    if (
+      audioCtxRef.current !== ctx
+      || !micRecorderRef.current
+      || stoppingRef.current
+      || micStreamRef.current !== replacing
+    ) {
       if (stream === null) next.getTracks().forEach(track => track.stop());
       return;
     }

@@ -217,7 +217,7 @@ Still open: turning off public access on the existing container, clock-skew cali
 - Critical recording controls remain visible at 390px.
 - Run the specified four-person rehearsal on real Windows Chrome and iPhone Chrome, including TURN-only connectivity, a disconnect/rejoin, mobile backgrounding and listening to the final merged output.
 
-An overall numerical health score is intentionally not assigned: live auth/storage/relay paths and target hardware were not tested, and several fundamental workflow failures outweigh a cosmetic average. **Audit status: DONE_WITH_CONCERNS. Release readiness: blocked by confirmed defects.**
+An overall numerical health score is intentionally not assigned: live auth/storage/relay paths and target hardware were not tested, and several fundamental workflow failures outweigh a cosmetic average. **Audit status: DONE_WITH_CONCERNS. Release readiness at audit time: blocked by confirmed defects.** Those defects are addressed (see Remediation status); release readiness now depends on the open operational items listed there and the real-device validation in the acceptance baseline above.
 
 ## Local evidence
 

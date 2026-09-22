@@ -126,8 +126,13 @@ function resolveSounderMode(mode, recordings) {
   return recordings.some(recording => recording.trackType === 'sounders') ? 'recorded' : 'reconstruct';
 }
 
-// Bundles from 1.1 place each upload on the session timeline, which leaves out
-// paused time. Older bundles only have the latest Start as their origin.
+// Bundles with recording runs place each upload on the session timeline, which
+// leaves out paused time; a null offset there means the upload fits no run and
+// is left out. Older bundles only have the latest Start as their origin.
+function hasSessionTimeline(bundle) {
+  return Array.isArray(bundle.manifest?.recording_runs);
+}
+
 function recordingPlacement(bundle, recording) {
   if (typeof recording.timeline_offset_ms === 'number') {
     return {
@@ -135,6 +140,7 @@ function recordingPlacement(bundle, recording) {
       maxDurationMs: typeof recording.timeline_max_duration_ms === 'number' ? recording.timeline_max_duration_ms : null,
     };
   }
+  if (hasSessionTimeline(bundle)) return null;
   const start = bundle.manifest.recording_start;
   return {
     delayMs: typeof start === 'number' ? Math.max(0, Math.round(recording.startedAt - start)) : 0,
@@ -147,9 +153,11 @@ function buildMergeWarnings(bundle) {
   const recordings = bundle.recordings ?? [];
   const warnings = [...(bundle.merge_notes ?? []).filter(note => String(note).startsWith('Warning:'))];
   // The app already checked completeness per participant and run.
-  if (Array.isArray(manifest.recording_runs)) {
-    if (manifest.recording_runs.length > 1 && recordings.some(recording => typeof recording.timeline_offset_ms !== 'number')) {
-      warnings.push('Warning: some recordings have no timeline placement and were aligned to the first run.');
+  if (hasSessionTimeline(bundle)) {
+    for (const recording of recordings) {
+      if (typeof recording.timeline_offset_ms !== 'number') {
+        warnings.push(`Warning: ${recording.hostName}'s ${recording.trackType} upload fits no recording run and was left out of the merge.`);
+      }
     }
     return Array.from(new Set(warnings));
   }
@@ -249,6 +257,8 @@ const downloadedSounders = [];
 for (const recording of bundle.recordings ?? []) {
   if (recording.trackType === 'sounders' && !shouldUseRecordedSounders) continue;
   if (recording.trackType !== 'sounders' && recording.trackType !== 'mic') continue;
+  const placement = recordingPlacement(bundle, recording);
+  if (placement === null) continue;
 
   const extension = extFromUrl(recording.url, recording.contentType);
   const filename = `${safeName(recording.hostName)}-${recording.trackType}-${recording.startedAt}${extension}`;
@@ -259,7 +269,7 @@ for (const recording of bundle.recordings ?? []) {
     kind: 'recording',
     id: recording.id,
     path: result.path,
-    ...recordingPlacement(bundle, recording),
+    ...placement,
   });
 }
 
