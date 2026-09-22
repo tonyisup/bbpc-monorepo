@@ -48,6 +48,24 @@ shared `bbpc-convex` project. The legacy standalone deployment is retained only
 through its approved private backup archive and must not receive new deployments
 or imports.
 
+## Capture and Upload
+
+Each participant records their own microphone and sounders in the browser. Every second of audio is written to the browser's IndexedDB as it is captured, so a crash, reload or closed tab does not lose the take: the next time the session opens in that browser, it offers the recording to upload, download or discard. A take stays on the device until it has uploaded.
+
+Uploads go to Azure Blob Storage in 3 MiB blocks through `/api/recordings/blocks`, then `/api/recordings/commit` joins them and records the upload. Every request stays under Vercel's 4.5 MB body limit, and a retry resumes from the blocks already staged. If the browser cannot store the take (for example, IndexedDB is unavailable), the header says so and the take exists only in that tab until it uploads.
+
+## Audio Privacy and Retention
+
+Recordings are private. The recordings container is created without public access, and the app hands session participants read-only links that expire after 24 hours (`RECORDING_URL_TTL_HOURS`, at most 7 days). A merge bundle's links expire with them; download a new bundle if the merge CLI reports an expired link. Signing needs the account key in `AZURE_STORAGE_ACCOUNT_CONNECTION_STRING`.
+
+A container created before this change keeps public access until an operator turns it off. After deploying this version, and after checking that merge bundles still download:
+
+```bash
+az storage container set-permission --name recordings --public-access off --connection-string "$AZURE_STORAGE_ACCOUNT_CONNECTION_STRING"
+```
+
+Deleting a recording session, by retention cleanup or explicitly, queues its audio for deletion. The admin page's cleanup deletes queued audio from storage after deleting sessions and keeps anything it could not delete queued for the next run.
+
 ## Merge Bundle Workflow
 
 After a recording session, use the app's `Download Merge Bundle` button. The bundle includes the manifest, Audacity labels, uploaded recording URLs, participant join/leave intervals, and sounder asset URLs.

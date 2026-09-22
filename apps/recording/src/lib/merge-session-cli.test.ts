@@ -47,6 +47,12 @@ beforeAll(async () => {
     }
   }
   server = http.createServer(async (request, response) => {
+    // Storage refuses a signed link after it expires.
+    if (request.url?.includes('expired')) {
+      response.statusCode = 403;
+      response.end();
+      return;
+    }
     try {
       response.end(await fs.readFile(path.join(workDir, path.basename(request.url ?? ''))));
     } catch {
@@ -63,7 +69,7 @@ afterAll(async () => {
   await fs.rm(workDir, { recursive: true, force: true });
 });
 
-async function writeBundle(): Promise<string> {
+async function writeBundle(urlFor = (index: number) => `${baseUrl}/take-${index + 1}.wav`): Promise<string> {
   const manifest = sessionStateToManifest(applySessionSyncEvents(createInitialState('EP-CLI', '2026-09-22', 'Host'), events), 'sess_cli');
   const recordings: RecordingUploadMetadata[] = [1_000, 4_000].map((startedAt, index) => ({
     id: `upload-${index + 1}`,
@@ -74,7 +80,7 @@ async function writeBundle(): Promise<string> {
     trackType: 'mic',
     startedAt,
     blobName: `sess_cli/${startedAt}/Host-${host.clientId}-mic.wav`,
-    url: `${baseUrl}/take-${index + 1}.wav`,
+    url: urlFor(index),
     size: 1,
     contentType: 'audio/wav',
     uploadedAt: startedAt + 2_000,
@@ -108,6 +114,14 @@ describe('merge-session CLI', () => {
     expect(plan.inputs.map((input: { delayMs: number; maxDurationMs: number }) => [input.delayMs, input.maxDurationMs])).toEqual([[0, 2_000], [2_000, 2_000]]);
     expect(plan.ffmpeg.args).toContain('[0:a]atrim=duration=2.000,adelay=0:all=1,aresample=48000,asetpts=PTS-STARTPTS[a0];[1:a]atrim=duration=2.000,adelay=2000:all=1,aresample=48000,asetpts=PTS-STARTPTS[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0,alimiter=limit=0.95[out]');
     expect(plan.warnings).toEqual([]);
+  }, 15_000);
+
+  it('explains an expired recording link without printing its signature', async () => {
+    const bundlePath = await writeBundle(index => `${baseUrl}/expired-${index}.wav?sv=2024&sig=SECRET`);
+    const result = await runCli(['--bundle', bundlePath, '--out', path.join(workDir, 'expired'), '--sounders', 'none', '--dry-run', '--force']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('download a new merge bundle');
+    expect(result.stderr).not.toContain('SECRET');
   }, 15_000);
 
   it('leaves out an upload that fits no recording run instead of placing it by wall clock', async () => {

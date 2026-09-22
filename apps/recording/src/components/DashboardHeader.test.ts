@@ -58,7 +58,7 @@ describe('DashboardHeader persistence controls', () => {
   it('keeps failed audio visible and recoverable and refuses to end or start a new recording until upload succeeds', async () => {
     session = { ...session, isRecording: true, recordingStart: 1000 };
     recording.state.isRecording = true;
-    const fetchMock = vi.fn(async () => ({ ok: false, status: 500 }));
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 500 }));
     vi.stubGlobal('fetch', fetchMock);
     let root: ReturnType<typeof create>;
     await act(async () => { root = create(createElement(DashboardHeader)); });
@@ -71,11 +71,12 @@ describe('DashboardHeader persistence controls', () => {
     // Even a direct invocation of the handler cannot overwrite unsaved audio.
     await act(async () => button(root, 'Start Recording').props.onClick());
     expect(recording.startRecording).not.toHaveBeenCalled();
-    fetchMock.mockResolvedValue({ ok: true, status: 200 });
+    fetchMock.mockImplementation(async () => new Response('{}'));
     await act(async () => button(root, 'Retry upload').props.onClick());
     expect(button(root, 'Start Recording').props.disabled).toBe(false);
     await act(async () => button(root, 'End Session').props.onClick());
-    expect(fetchMock.mock.calls).toHaveLength(5);
+    // Two failed blocks, then a block and a commit per track, then ending.
+    expect(fetchMock.mock.calls).toHaveLength(7);
     await act(async () => root.unmount());
   });
 
@@ -104,7 +105,7 @@ it.each(['permission', 'recorder'] as const)('does not keep recording when host 
   } else {
     recording.startRecording.mockImplementationOnce(async () => { recording.state.isRecording = true; await waiting; });
   }
-  const fetchMock = vi.fn(async () => ({ ok: true, status: 200 }));
+  const fetchMock = vi.fn(async () => new Response('{}'));
   vi.stubGlobal('fetch', fetchMock);
   let root: ReturnType<typeof create>;
   await act(async () => { root = create(createElement(DashboardHeader)); });
@@ -118,7 +119,8 @@ it.each(['permission', 'recorder'] as const)('does not keep recording when host 
     expect(recording.startRecording).not.toHaveBeenCalled();
   } else {
     expect(recording.stopRecording).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // A block and a commit for each track.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   }
   await act(async () => root.unmount());
 });

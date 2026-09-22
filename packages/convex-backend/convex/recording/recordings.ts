@@ -1,9 +1,12 @@
 import { v } from "convex/values";
 
 import {
+  adminMutation,
+  adminQuery,
   recordingMutation,
   recordingQuery,
 } from "../functions.js";
+import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
 import { requireRecordingParticipant } from "./access.js";
 import {
@@ -12,7 +15,8 @@ import {
 } from "./validators.js";
 
 const MAX_RECORDINGS_PER_SESSION = 100;
-const MAX_RECORDING_BYTES = 100 * 1024 * 1024;
+// About 18 hours of Opus at the browser default of 128 kbps.
+const MAX_RECORDING_BYTES = 1024 * 1024 * 1024;
 const MAX_BLOB_NAME_LENGTH = 1_024;
 const MAX_CONTENT_TYPE_LENGTH = 100;
 
@@ -290,5 +294,62 @@ export const listBySession = recordingQuery({
         contentType: upload.contentType,
         uploadedAt: upload.uploadedAt,
       }));
+  },
+});
+
+const MAX_BLOB_DELETION_BATCH = 100;
+
+function requireBatchSize(count: number): void {
+  if (
+    !Number.isSafeInteger(count) ||
+    count < 1 ||
+    count > MAX_BLOB_DELETION_BATCH
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      `Recording blob deletion batches must contain 1 through ${String(MAX_BLOB_DELETION_BATCH)} items.`,
+    );
+  }
+}
+
+/** Oldest recording blobs whose session data was deleted, awaiting removal. */
+export const listPendingBlobDeletions = adminQuery({
+  args: { limit: v.number() },
+  returns: v.array(
+    v.object({
+      id: v.id("recordingBlobDeletions"),
+      blobName: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    requireBatchSize(args.limit);
+    const pending = await ctx.db
+      .query("recordingBlobDeletions")
+      .withIndex("by_requestedAt")
+      .take(args.limit);
+    return pending.map((row) => ({ id: row._id, blobName: row.blobName }));
+  },
+});
+
+/** Removes queue entries whose blobs the recording app has deleted. */
+export const acknowledgeBlobDeletions = adminMutation({
+  args: { ids: v.array(v.id("recordingBlobDeletions")) },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    requireBatchSize(args.ids.length);
+    let removed = 0;
+    for (const id of args.ids) {
+      if ((await ctx.db.get("recordingBlobDeletions", id)) === null) continue;
+      await ctx.db.delete("recordingBlobDeletions", id);
+      removed += 1;
+    }
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "recording.blobs.deleted",
+      targetType: "recordingBlobBatch",
+      targetId: `count:${String(removed)}`,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+    });
+    return removed;
   },
 });

@@ -7,6 +7,8 @@ import { useRecordingEngine } from '@/hooks/useRecordingEngine';
 import { useRecordingUpload } from '@/hooks/useRecordingUpload';
 import { useRecordingSync } from '@/hooks/useRecordingSync';
 import { useMeshAudioRoom } from '@/hooks/useMeshAudioRoom';
+import { createDurableSink } from '@/lib/recordings/durable-sink';
+import { durableRecordingStore } from '@/lib/recordings/durable-store';
 
 function formatElapsed(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -89,6 +91,8 @@ export function DashboardHeader() {
   const uploadStatus = recovery.status;
   const uploadTracks = recovery.upload;
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Whether the current take is also being written to this device.
+  const [savingOnDevice, setSavingOnDevice] = useState<boolean | null>(null);
   const savingEditRef = useRef(false);
   const transportBusyRef = useRef(false);
   const [transportBusy, setTransportBusy] = useState(false);
@@ -268,6 +272,18 @@ export function DashboardHeader() {
     });
   }, [dispatch, participantClientId]);
 
+  // Each take is written to this device as it is captured, so a crash or
+  // reload does not lose it; without IndexedDB it stays in memory only.
+  const createTakeSink = useCallback(() => {
+    const store = durableRecordingStore();
+    setSavingOnDevice(store !== null);
+    if (!store) return undefined;
+    return createDurableSink(store, { sessionId, episode: state.episode, hostName }, error => {
+      console.error('[Recording] Could not save audio on this device:', error);
+      setSavingOnDevice(false);
+    });
+  }, [hostName, sessionId, state.episode]);
+
   const joinActiveRecording = useCallback(async (recordingStartedAt: number) => {
     if (sessionStatus === 'ended' || recording.state.isRecording || recovery.hasPending() || transportBusyRef.current || stoppedTakesRef.current.has(recordingStartedAt)) return;
     const attempt = { startedAt: recordingStartedAt, canceled: false };
@@ -286,7 +302,7 @@ export function DashboardHeader() {
       }
       if (attempt.canceled) return;
       setMicPermissionOk(true);
-      await recording.startRecording({ mediaStream: micStream ?? undefined, ownsMediaStream: !micStream });
+      await recording.startRecording({ mediaStream: micStream ?? undefined, ownsMediaStream: !micStream, sink: createTakeSink() });
       if (attempt.canceled) {
         // The host stopped while microphone/recorder startup was pending.
         // Finalize any capture immediately and preserve it through upload recovery.
@@ -303,7 +319,7 @@ export function DashboardHeader() {
       transportBusyRef.current = false;
       setTransportBusy(false);
     }
-  }, [dispatchRecordingJoin, meshAudio, recording, rtcAudioEnabled, sessionStatus, recovery, uploadTracks]);
+  }, [createTakeSink, dispatchRecordingJoin, meshAudio, recording, rtcAudioEnabled, sessionStatus, recovery, uploadTracks]);
 
   const leaveActiveRecording = useCallback(async (reason: 'left' | 'host-stopped') => {
     const recordingStartedAt = recordingStartRef.current || state.recordingStart;
@@ -390,6 +406,7 @@ export function DashboardHeader() {
         await recording.startRecording({
           mediaStream: micStream ?? undefined,
           ownsMediaStream: !micStream,
+          sink: createTakeSink(),
         });
       } catch (err) {
         recordingStartRef.current = 0;
@@ -673,16 +690,19 @@ export function DashboardHeader() {
         </div>
 
         <div className="flex flex-col gap-1 text-xs" aria-live="polite">
-          {uploadStatus === 'uploading' && <span>Uploading audio…</span>}
+          {localRecordingActive && savingOnDevice === false && (
+            <span role="alert" className="text-[var(--warning)]">Not saved on this device. Keep this tab open until the upload finishes.</span>
+          )}
+          {uploadStatus === 'uploading' && <span>Uploading audio…{recovery.progress !== null && ` ${Math.floor(recovery.progress * 100)}%`}</span>}
           {uploadStatus === 'done' && <span>Audio uploaded</span>}
           {recovery.pending && <>
-            <span role={uploadStatus === 'error' ? 'alert' : undefined}>{recovery.error ?? 'Audio is saved in this tab. Upload it before ending the session.'}</span>
+            <span role={uploadStatus === 'error' ? 'alert' : undefined}>{recovery.error ?? recovery.notice ?? 'Audio is saved on this device. Upload it before ending the session.'}</span>
             <div className="flex gap-2">
               <button disabled={uploadStatus === 'uploading'} onClick={() => void recovery.retry()}>Retry upload</button>
               <button onClick={() => recovery.download('mic')}>Download mic</button>
               <button onClick={() => recovery.download('sounders')}>Download sounders</button>
               <button disabled={uploadStatus === 'uploading'} onClick={() => {
-                if (window.confirm('Discard the audio still in this tab? Download both tracks first if you want to keep them. This cannot be undone.')) recovery.discard();
+                if (window.confirm('Discard this audio from this device? Download both tracks first if you want to keep them. This cannot be undone.')) recovery.discard();
               }}>Discard audio</button>
             </div>
           </>}

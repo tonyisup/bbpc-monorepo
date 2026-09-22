@@ -1023,6 +1023,14 @@ export default defineSchema({
     .index("by_episode", ["episode"])
     .index("by_blobName", ["blobName"]),
 
+  // Azure blobs to delete after their session's rows were removed. Convex
+  // holds no storage credentials; the recording app drains this queue.
+  recordingBlobDeletions: defineTable({
+    blobName: v.string(),
+    publicSessionId: v.string(),
+    requestedAt: v.number(),
+  }).index("by_requestedAt", ["requestedAt"]),
+
   migrationRuns: defineTable({
     runId: v.string(),
     sourceSchemaFingerprint: v.string(),

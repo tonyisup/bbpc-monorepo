@@ -3,6 +3,7 @@ import { readSessionGrantsFromCookieHeader } from '@/lib/sessions/cookies';
 import { hasSessionAccess } from '@/lib/sessions/store';
 import { recordingApi } from '@/lib/convex/api';
 import { querySharedConvex } from '@/lib/convex/http';
+import { signedRecordingUrl } from '@/lib/recordings/storage';
 
 export async function GET(
   request: NextRequest,
@@ -23,5 +24,15 @@ export async function GET(
     accessToken: grant!.accessToken,
   });
 
-  return NextResponse.json({ recordings });
+  // Stored URLs are unsigned and stop working once the container is private.
+  try {
+    const signed = await Promise.all(recordings.map(async recording => {
+      const { url, expiresAt } = await signedRecordingUrl(recording.blobName);
+      return { ...recording, url, urlExpiresAt: expiresAt };
+    }));
+    return NextResponse.json({ recordings: signed });
+  } catch (error) {
+    console.error('[Recording Session] Could not sign recording URLs:', error);
+    return NextResponse.json({ message: 'Recording links are unavailable' }, { status: 503 });
+  }
 }
