@@ -103,6 +103,7 @@ export function downloadSessionMergeBundle(
   const labels = manifestToAudacityLabels(manifest);
   const labelsFilename = `${manifest.episode}-labels.txt`;
   const mergeWarnings = buildMergeWarnings(manifest, recordings);
+  const linksExpireAt = Math.min(...recordings.map(recording => recording.urlExpiresAt ?? Infinity));
   const bundle: SessionMergeBundle = {
     bundle_version: '1.1',
     generated_at: new Date().toISOString(),
@@ -118,6 +119,9 @@ export function downloadSessionMergeBundle(
     sounder_assets: sounderAssets,
     merge_notes: [
       'Download each recordings[].url before merging.',
+      ...(Number.isFinite(linksExpireAt)
+        ? [`Recording links are private and expire at ${new Date(linksExpireAt).toISOString()}; download a new merge bundle after that.`]
+        : []),
       'Download each sounder_assets[].downloadUrl for sounder reconstruction.',
       'Place each recording at recordings[].timeline_offset_ms and trim it to timeline_max_duration_ms; paused time is not part of the timeline.',
       'Use labels.text as the Audacity label track contents.',
