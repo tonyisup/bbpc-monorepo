@@ -231,6 +231,14 @@ export function DashboardHeader() {
     },
   });
 
+  // Keep recording the call's microphone when it changes or goes away.
+  const meshLocalStream = meshAudio.localStream;
+  const replaceMicStream = recording.replaceMicStream;
+  useEffect(() => {
+    if (!rtcAudioEnabled || !recording.state.isRecording || !recording.state.inputSwitchable) return;
+    void replaceMicStream(meshLocalStream);
+  }, [meshLocalStream, recording.state.inputSwitchable, recording.state.isRecording, replaceMicStream, rtcAudioEnabled]);
+
   const dispatchRecordingJoin = useCallback((recordingStartedAt: number, joinedAt: number) => {
     dispatch({
       type: 'JOIN_RECORDING',
@@ -438,8 +446,9 @@ export function DashboardHeader() {
       const tracks = await recording.stopRecording();
       recordingStartRef.current = 0;
 
-      // Retain/upload audio before attempting the shared stop event.
-      const upload = uploadTracks(tracks);
+      // Retain/upload audio before attempting the shared stop event. After an
+      // interruption the take is already retained and this one is empty.
+      const upload = tracks.mic.size || tracks.sounders.size ? uploadTracks(tracks) : Promise.resolve(true);
       const broadcast = recordingSync.broadcastStop(recordingStartedAt, stoppedAt - recordingStartedAt, {
         clientId: participantClientId,
         leftAt: stoppedAt,
@@ -458,6 +467,9 @@ export function DashboardHeader() {
 
   const hostRecordingActive = state.isRecording;
   const localRecordingActive = recording.state.isRecording;
+  // Without a running audio graph the recorder holds the call's input track,
+  // so changing or leaving it would silently end the take (audit R03).
+  const inputLocked = localRecordingActive && !recording.state.inputSwitchable;
   const isRecording = isOwner ? (hostRecordingActive || localRecordingActive) : localRecordingActive;
   const sessionEnded = sessionStatus === 'ended';
   const timelinePaused = !isRecording && state.recordingRuns.length > 0;
@@ -564,7 +576,9 @@ export function DashboardHeader() {
             ) : (
               <button
                 onClick={() => void meshAudio.leaveAudio()}
-                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] transition-colors"
+                disabled={inputLocked}
+                title={inputLocked ? 'Stop recording before leaving audio' : undefined}
+                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Leave Audio
               </button>
@@ -581,9 +595,9 @@ export function DashboardHeader() {
             <select
               value={meshAudio.state.selectedInputDeviceId ?? ''}
               onChange={event => void meshAudio.setInputDevice(event.target.value)}
-              disabled={!meshAudio.state.joined || meshAudio.inputDevices.length === 0}
+              disabled={!meshAudio.state.joined || meshAudio.inputDevices.length === 0 || inputLocked}
               className="max-w-36 px-2 py-1.5 text-xs rounded border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--foreground)] disabled:opacity-50"
-              title="Input device"
+              title={inputLocked ? 'Stop recording before changing microphone' : 'Input device'}
             >
               <option value="">Default mic</option>
               {meshAudio.inputDevices.map(device => (
