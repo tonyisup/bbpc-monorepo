@@ -225,3 +225,25 @@ describe('microphone lifecycle (audit R03)', () => {
     expect(interrupted).toHaveBeenCalledTimes(1);
   });
 });
+
+it('passes each chunk to its sink and tags the finished take', async () => {
+  vi.useFakeTimers();
+  installAudio();
+  const events: string[] = [];
+  const sink = {
+    takeId: 'take-test',
+    begin: vi.fn((startedAt: number, mimeTypes: Record<string, string>) => { events.push(`begin ${mimeTypes.mic}`); }),
+    chunk: vi.fn((track: string) => { events.push(`chunk ${track}`); }),
+    finish: vi.fn(() => { events.push('finish'); }),
+  };
+  let engine!: ReturnType<typeof useRecordingEngine>;
+  function Harness() { engine = useRecordingEngine(); return null; }
+  let root!: { unmount: () => void };
+  await act(async () => { root = create(createElement(Harness)); });
+  await act(async () => engine.startRecording({ sink }));
+  let tracks!: Awaited<ReturnType<typeof engine.stopRecording>>;
+  await act(async () => { tracks = await engine.stopRecording(); });
+  expect(events).toEqual(['begin audio/mp4', 'chunk mic', 'chunk sounders', 'finish']);
+  expect(tracks.takeId).toBe('take-test');
+  await act(async () => root.unmount());
+});

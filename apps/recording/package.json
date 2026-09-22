@@ -12,9 +12,9 @@
     "merge-session": "node scripts/merge-session-bundle.mjs"
   },
   "dependencies": {
-    "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "@azure/storage-blob": "^12.32.0",
     "@clerk/nextjs": "6.39.6",
+    "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "convex": "1.42.3",
     "dotenv": "^17.4.2",
     "next": "16.3.6",
@@ -29,6 +29,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "fake-indexeddb": "6.2.5",
     "react-test-renderer": "19.2.4",
     "tailwindcss": "^4",
     "typescript": "^5",

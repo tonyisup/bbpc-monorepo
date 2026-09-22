@@ -1,48 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_RECORDING_BYTES,
-  estimatedBase64Bytes,
-  parseRecordingUploadInput,
-  safeBlobSegment,
+  MAX_RECORDING_BLOCKS,
+  RECORDING_BLOCK_BYTES,
+  parseRecordingTakeInput,
   recordingExtension,
+  safeBlobSegment,
 } from './upload';
 
 describe('recording upload boundary', () => {
   const valid = {
     sessionId: 'sess_123',
-    episode: 'EP-1',
-    hostName: 'Host',
-    trackType: 'mic' as const,
+    trackType: 'mic',
     startedAt: 1_000,
-    audioBase64: 'YWJj',
     contentType: 'audio/webm',
   };
 
-  it('rejects anonymous uploads without a session id', () => {
-    expect(parseRecordingUploadInput({ ...valid, sessionId: undefined })).toBeNull();
+  it('rejects uploads without a session id', () => {
+    expect(parseRecordingTakeInput({ ...valid, sessionId: undefined })).toBeNull();
   });
 
-  it('rejects invalid track types and timestamps', () => {
-    expect(parseRecordingUploadInput({ ...valid, trackType: 'video' })).toBeNull();
-    expect(parseRecordingUploadInput({ ...valid, startedAt: Number.NaN })).toBeNull();
+  it('rejects invalid track types and timestamps, and reads numeric query values', () => {
+    expect(parseRecordingTakeInput({ ...valid, trackType: 'video' })).toBeNull();
+    expect(parseRecordingTakeInput({ ...valid, startedAt: Number.NaN })).toBeNull();
+    expect(parseRecordingTakeInput({ ...valid, startedAt: '1.5' })).toBeNull();
+    expect(parseRecordingTakeInput({ ...valid, startedAt: '1000' })?.startedAt).toBe(1_000);
   });
 
   it('keeps supported fallback MIME types and rejects non-audio formats', () => {
-    expect(parseRecordingUploadInput({ ...valid, contentType: 'audio/ogg;codecs=opus' })?.contentType).toBe('audio/ogg;codecs=opus');
+    expect(parseRecordingTakeInput({ ...valid, contentType: 'audio/ogg;codecs=opus' })?.contentType).toBe('audio/ogg;codecs=opus');
     expect(recordingExtension('audio/mp4')).toBe('m4a');
     expect(recordingExtension('audio/ogg;codecs=opus')).toBe('ogg');
-    expect(parseRecordingUploadInput({ ...valid, contentType: 'text/html' })).toBeNull();
-    expect(parseRecordingUploadInput({ ...valid, contentType: undefined })).toBeNull();
+    expect(parseRecordingTakeInput({ ...valid, contentType: 'text/html' })).toBeNull();
+    expect(parseRecordingTakeInput({ ...valid, contentType: undefined })).toBeNull();
   });
 
-  it('estimates decoded size before allocating the audio buffer', () => {
-    expect(estimatedBase64Bytes('YWJj')).toBe(3);
-    expect(estimatedBase64Bytes('YQ==')).toBe(1);
-    expect(estimatedBase64Bytes('A'.repeat(Math.ceil((MAX_RECORDING_BYTES + 1) * 4 / 3))))
-      .toBeGreaterThan(MAX_RECORDING_BYTES);
+  it('keeps each upload request under the 4.5 MB hosting limit', () => {
+    expect(RECORDING_BLOCK_BYTES).toBeLessThan(4.5 * 1000 * 1000);
+    expect(MAX_RECORDING_BLOCKS).toBeLessThan(50_000); // Azure's block limit per blob
   });
 
-  it('normalizes participant names used in blob paths', () => {
+  it('makes storage-safe blob segments', () => {
+    expect(safeBlobSegment(' Harley / Host ')).toBe('Harley-Host');
+    expect(safeBlobSegment('...')).toBe('participant');
     expect(safeBlobSegment('../../Guest / Name')).toBe('Guest-Name');
   });
 });

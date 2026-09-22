@@ -15,9 +15,23 @@ export interface RecordingState {
   inputSwitchable: boolean;
 }
 
+/** Receives a take as it is captured, for example to keep it on the device. */
+export interface RecordingSink {
+  takeId: string;
+  begin: (startedAt: number, mimeTypes: Record<'mic' | 'sounders', string>) => void;
+  chunk: (track: 'mic' | 'sounders', data: Blob) => void;
+  finish: (durationMs: number) => void;
+}
+
+export interface StartRecordingOptions {
+  mediaStream?: MediaStream;
+  ownsMediaStream?: boolean;
+  sink?: RecordingSink;
+}
+
 export interface RecordingEngine {
   state: RecordingState;
-  startRecording: (options?: { mediaStream?: MediaStream; ownsMediaStream?: boolean }) => Promise<void>;
+  startRecording: (options?: StartRecordingOptions) => Promise<void>;
   stopRecording: () => Promise<RecordingTracks>;
   /**
    * Record from a different microphone stream without stopping the take.
@@ -32,6 +46,8 @@ export interface RecordingTracks {
   sounders: Blob;
   startedAt: number; // Date.now() when recording started
   durationMs: number;
+  /** Set when a sink kept this take, so its upload progress can be kept too. */
+  takeId?: string;
 }
 
 const SAMPLE_RATE = 48000;
@@ -106,6 +122,7 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
   const onMicTrackEndedRef = useRef<() => void>(() => {});
   const onUnexpectedStopRef = useRef<() => void>(() => {});
   const recorderErrorRef = useRef<string | null>(null);
+  const sinkRef = useRef<RecordingSink | null>(null);
 
   const teardown = useCallback(async () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -181,7 +198,7 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
     detachTrackEndedRef.current = () => tracks.forEach(track => track.removeEventListener?.('ended', onEnded));
   }, []);
 
-  const startRecording = useCallback(async (options?: { mediaStream?: MediaStream; ownsMediaStream?: boolean }) => {
+  const startRecording = useCallback(async (options?: StartRecordingOptions) => {
     if (startingRef.current || micRecorderRef.current || stoppingRef.current) return;
     startingRef.current = true;
     try {
@@ -218,7 +235,9 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       const micRecorder = new MediaRecorder(inputSwitchable ? micDest.stream : micStream, { mimeType: getSupportedMimeType() });
       micChunksRef.current = [];
       micRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) micChunksRef.current.push(e.data);
+        if (e.data.size === 0) return;
+        micChunksRef.current.push(e.data);
+        sinkRef.current?.chunk('mic', e.data);
       };
       micRecorder.onerror = (event) => {
         const error = (event as Event & { error?: { message?: string } }).error;
@@ -238,11 +257,15 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       const sounderRecorder = new MediaRecorder(sounderDest.stream, { mimeType: getSupportedMimeType() });
       sounderChunksRef.current = [];
       sounderRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) sounderChunksRef.current.push(e.data);
+        if (e.data.size === 0) return;
+        sounderChunksRef.current.push(e.data);
+        sinkRef.current?.chunk('sounders', e.data);
       };
       sounderRecorder.onstop = () => onUnexpectedStopRef.current();
       sounderRecorder.start(1000);
       sounderRecorderRef.current = sounderRecorder;
+      sinkRef.current = options?.sink ?? null;
+      sinkRef.current?.begin(startedAtRef.current, { mic: micRecorder.mimeType, sounders: sounderRecorder.mimeType });
       setState(prev => ({ ...prev, inputSwitchable }));
 
       startVU();
@@ -286,7 +309,10 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       await teardown();
       micChunksRef.current = [];
       sounderChunksRef.current = [];
-      return { mic, sounders, startedAt: startedAtRef.current, durationMs };
+      const sink = sinkRef.current;
+      sinkRef.current = null;
+      sink?.finish(durationMs);
+      return { mic, sounders, startedAt: startedAtRef.current, durationMs, ...(sink ? { takeId: sink.takeId } : {}) };
     }).finally(() => { stoppingRef.current = null; });
     stoppingRef.current = result;
     return result;

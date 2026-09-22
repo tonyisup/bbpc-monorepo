@@ -12,7 +12,8 @@ import {
 } from "./validators.js";
 
 const MAX_RECORDINGS_PER_SESSION = 100;
-const MAX_RECORDING_BYTES = 100 * 1024 * 1024;
+// About 18 hours of Opus at the browser default of 128 kbps.
+const MAX_RECORDING_BYTES = 1024 * 1024 * 1024;
 const MAX_BLOB_NAME_LENGTH = 1_024;
 const MAX_CONTENT_TYPE_LENGTH = 100;
 
