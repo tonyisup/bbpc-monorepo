@@ -500,9 +500,83 @@ test("live recording changes start a visible countdown and lock an already-open 
     await vi.advanceTimersByTimeAsync(600_000);
   });
   expect(screenText()).toContain("Picks locked");
-  expect(renderer.root.findAllByType("fieldset")[0]!.props.disabled).toBe(true);
-  await act(async () =>
-    renderer.root.findAllByType("input")[0]!.props.onChange()
-  );
+  expect(screenText()).toContain("0 of 1 picks locked in");
+  expect(screenText()).toContain("You missed 1 pick this round.");
+  expect(screenText()).toContain("No picks made");
+  expect(screenText()).toContain("No pick made");
+  expect(screenText()).toContain("Hide details");
+  expect(screenText()).not.toContain("Needs picks");
+  expect(screenText()).not.toContain("Make picks");
+  expect(screenText()).not.toContain("stay editable");
+  expect(renderer.root.findAllByType("input")).toHaveLength(0);
   expect(mocks.savePick).not.toHaveBeenCalled();
+});
+
+test("a locked round shows saved picks as read-only rows without edit prompts", async () => {
+  mocks.loadPicks.mockResolvedValue({
+    ...initialPicks,
+    guessesByAssignment: {
+      assignment: [{ id: "g1", hostId: "host", rating: ratings[1] }],
+    },
+  });
+  await render(
+    <ConvexPredictionGame
+      episodeId="episode"
+      assignments={[
+        {
+          id: "assignment",
+          playable: true,
+          movie: { title: "Test movie", poster: null },
+        },
+      ]}
+      episodeStatus="published"
+    />
+  );
+  expect(screenText()).toContain("Picks locked");
+  expect(screenText()).toContain("1 of 1 picks locked in");
+  expect(screenText()).toContain("All picked");
+  expect(screenText()).not.toContain("You missed");
+  expect(screenText()).not.toContain("View or edit picks");
+  await click("View picks");
+  expect(screenText()).toContain("Locked");
+  expect(screenText()).toContain("Your wagers");
+  expect(screenText()).not.toContain("optional");
+  expect(renderer.root.findAllByType("input")).toHaveLength(0);
+});
+
+test("a movie outside the game and an unopened round use their own wording", async () => {
+  await render(
+    <ConvexPredictionGame
+      episodeId="episode"
+      assignments={[
+        {
+          id: "bonus",
+          playable: false,
+          movie: { title: "Bonus movie", poster: null },
+        },
+      ]}
+      episodeStatus="next"
+    />
+  );
+  expect(screenText()).toContain("Round open");
+  expect(screenText()).toContain("Not in play");
+  expect(screenText()).toContain("This movie isn’t part of the game.");
+  expect(screenText()).not.toContain("This round is closed");
+  act(() => renderer.unmount());
+  await render(
+    <ConvexPredictionGame
+      episodeId="episode"
+      assignments={[
+        {
+          id: "assignment",
+          playable: true,
+          movie: { title: "Test movie", poster: null },
+        },
+      ]}
+      episodeStatus="draft"
+    />
+  );
+  expect(screenText()).toContain("Picks not open yet");
+  expect(screenText()).toContain("Picks aren’t open for this episode yet.");
+  expect(screenText()).not.toContain("Picks locked");
 });
