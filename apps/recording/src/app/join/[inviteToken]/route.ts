@@ -1,8 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { ConvexError } from 'convex/values';
 import {
-  getParticipantForGrant,
+  findParticipantForGrant,
   joinSessionByInviteToken,
   resolveInviteSession,
 } from '@/lib/sessions/store';
@@ -12,18 +11,6 @@ import {
   sessionGrantCookieOptions,
   upsertSessionGrant,
 } from '@/lib/sessions/cookies';
-import type { SessionAccessGrant } from '@/lib/sessions/types';
-
-// A grant the backend rejects (revoked, deleted session) is replaced by joining;
-// any other failure is surfaced rather than risking an owner's grant.
-async function isGrantStillValid(sessionId: string, grant: SessionAccessGrant): Promise<boolean> {
-  try {
-    return (await getParticipantForGrant(sessionId, grant)) !== null;
-  } catch (error) {
-    if (error instanceof ConvexError) return false;
-    throw error;
-  }
-}
 
 export async function GET(
   request: Request,
@@ -42,8 +29,10 @@ export async function GET(
 
     // Reopening an invite (including the owner testing their own link) keeps
     // the membership this browser already has instead of adding a participant.
+    // A grant the backend rejects is replaced by joining; any other failure is
+    // surfaced rather than risking an owner's grant.
     const existingGrant = existingGrants.find(grant => grant.sessionId === invitedSessionId);
-    if (existingGrant && await isGrantStillValid(invitedSessionId, existingGrant)) {
+    if (existingGrant && await findParticipantForGrant(invitedSessionId, existingGrant)) {
       return NextResponse.redirect(new URL(`/sessions/${invitedSessionId}`, request.url));
     }
 

@@ -179,6 +179,26 @@ describe('microphone lifecycle (audit R03)', () => {
     await act(async () => root.unmount());
   });
 
+  it('keeps a newly selected microphone when a slower default-microphone request finishes later', async () => {
+    const audio = installAudio();
+    const { engine, root } = await mount();
+    await act(async () => engine().startRecording({ mediaStream: fakeStream() as unknown as MediaStream }));
+    let openDefault!: (stream: ReturnType<typeof fakeStream>) => void;
+    audio.getUserMedia.mockImplementationOnce(() => new Promise(resolve => { openDefault = resolve; }));
+    let fallback!: Promise<void>;
+    await act(async () => { fallback = engine().replaceMicStream(null); });
+    const selected = fakeStream();
+    await act(async () => engine().replaceMicStream(selected as unknown as MediaStream));
+    const lateDefault = fakeStream();
+    await act(async () => { openDefault(lateDefault); await fallback; });
+
+    expect(audio.sources.at(-1)?.stream).toBe(selected);
+    expect(lateDefault.track.stop).toHaveBeenCalled();
+    expect(selected.track.stop).not.toHaveBeenCalled();
+    await act(async () => { await engine().stopRecording(); });
+    await act(async () => root.unmount());
+  });
+
   it('recovers from an unplugged microphone, or says so when it cannot', async () => {
     const audio = installAudio();
     const { engine, root } = await mount();

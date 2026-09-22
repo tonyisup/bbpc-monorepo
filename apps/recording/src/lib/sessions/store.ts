@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values';
 import {
   BBPC_CLIENT_API_VERSION,
   recordingApi,
@@ -185,6 +186,23 @@ export async function getParticipantForGrant(
         ...participant,
         accessToken: grant.accessToken,
       };
+}
+
+/**
+ * Like getParticipantForGrant, but a grant the backend rejects (replaced by
+ * owner recovery, revoked, or its session deleted) counts as no access, so
+ * callers can offer recovery. Other failures still throw.
+ */
+export async function findParticipantForGrant(
+  sessionId: string,
+  grant: SessionAccessGrant | undefined,
+): Promise<AuthenticatedSessionParticipant | null> {
+  try {
+    return await getParticipantForGrant(sessionId, grant);
+  } catch (error) {
+    if (error instanceof ConvexError) return null;
+    throw error;
+  }
 }
 
 export async function updateParticipantDisplayName(

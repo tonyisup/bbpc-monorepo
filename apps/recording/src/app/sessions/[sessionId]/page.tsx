@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { cookies, headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { DashboardApp } from '@/components/dashboard/DashboardApp';
-import { getParticipantForGrant, getSession } from '@/lib/sessions/store';
+import { findParticipantForGrant, getSession } from '@/lib/sessions/store';
 import { SESSION_GRANTS_COOKIE, readSessionGrantsFromCookieValue } from '@/lib/sessions/cookies';
 
 function getOrigin(headersList: Headers): string {
@@ -29,7 +29,8 @@ export default async function SessionPage({
   const cookieStore = await cookies();
   const grants = readSessionGrantsFromCookieValue(cookieStore.get(SESSION_GRANTS_COOKIE)?.value);
   const grant = grants.find(candidate => candidate.sessionId === sessionId);
-  const participant = await getParticipantForGrant(sessionId, grant);
+  // A stale grant (for example, replaced by owner recovery) shows recovery.
+  const participant = await findParticipantForGrant(sessionId, grant);
 
   if (!grant || !participant) {
     const { userId } = await auth();

@@ -94,6 +94,16 @@ interface PendingQueue {
   snapshot: QueueSnapshot;
 }
 const emptyQueueSnapshot: QueueSnapshot = { pendingCount: 0, syncError: null, rejectedCount: 0 };
+// Each sendEvent caller waits for its own event only, so one rejected event
+// cannot fail a later, unrelated one. Keyed by eventId, outside the mutation args.
+const eventWaiters = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+function settleEvent(eventId: string, error?: Error) {
+  const waiter = eventWaiters.get(eventId);
+  if (!waiter) return;
+  eventWaiters.delete(eventId);
+  if (error) waiter.reject(error);
+  else waiter.resolve();
+}
 // Shared by all subscribers for this participant, and retained across navigation.
 const pendingQueues = new Map<string, PendingQueue>();
 const queueListeners = new Set<() => void>();
@@ -165,20 +175,26 @@ export function useSessionSync({
       let rejection: unknown = null;
       try {
         while (queue.events.length) {
+          const event = queue.events[0];
           try {
             // Keep event identity/order; use the currently authorized participant capability.
-            await appendEvent({ ...queue.events[0] });
+            await appendEvent({ ...event });
+            settleEvent(event.eventId);
           } catch (err) {
             if (!isPermanentEventRejection(err)) throw err;
-            console.error('[Session Sync] Event rejected and dropped:', queue.events[0].payload.kind, err);
+            console.error('[Session Sync] Event rejected and dropped:', event.payload.kind, err);
             queue.rejectedCount += 1;
             rejection = err;
+            settleEvent(event.eventId, new Error(rejectionMessage(err)));
           }
           queue.events.shift();
           publishQueue(queue);
         }
       } catch (err) {
-        publishQueue(queue, err instanceof Error ? err.message : 'Session changes could not be saved');
+        const message = err instanceof Error ? err.message : 'Session changes could not be saved';
+        publishQueue(queue, message);
+        // Still queued for a retry, but nothing is saved yet for these callers.
+        for (const event of queue.events) settleEvent(event.eventId, err instanceof Error ? err : new Error(message));
         throw err;
       } finally {
         queue.sending = null;
@@ -200,17 +216,21 @@ export function useSessionSync({
       queue = { events: [], sending: null, rejectedCount: 0, snapshot: emptyQueueSnapshot };
       pendingQueues.set(queueKey, queue);
     }
+    const eventId = createEventId();
+    const saved = new Promise<void>((resolve, reject) => { eventWaiters.set(eventId, { resolve, reject }); });
     queue.events.push({
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       publicId: sessionId,
       clientId,
       accessToken,
-      eventId: createEventId(),
+      eventId,
       createdAt: Date.now(),
       payload: removeUndefined(event) as SessionSyncEvent,
     });
     publishQueue(queue);
-    return retryPendingEvents();
+    // Failures reach this event's caller through `saved` and the sync banner.
+    retryPendingEvents().catch(() => {});
+    return saved;
   }, [accessToken, clientId, queueKey, retryPendingEvents, sessionId]);
 
   useEffect(() => {

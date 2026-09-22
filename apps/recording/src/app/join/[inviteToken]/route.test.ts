@@ -1,4 +1,3 @@
-import { ConvexError } from 'convex/values';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -19,7 +18,7 @@ vi.mock('next/headers', () => ({
 
 const store = vi.hoisted(() => ({
   resolveInviteSession: vi.fn(),
-  getParticipantForGrant: vi.fn(),
+  findParticipantForGrant: vi.fn(),
   joinSessionByInviteToken: vi.fn(),
 }));
 vi.mock('@/lib/sessions/store', () => store);
@@ -66,21 +65,21 @@ describe('invite route', () => {
     // Audit R05: this used to replace the owner grant with a new guest grant.
     storeGrants([ownerGrant]);
     store.resolveInviteSession.mockResolvedValue('sess_owner');
-    store.getParticipantForGrant.mockResolvedValue({ ...ownerGrant, role: 'owner' });
+    store.findParticipantForGrant.mockResolvedValue({ ...ownerGrant, role: 'owner' });
 
     const response = await openInvite();
 
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('https://recording.example.test/sessions/sess_owner');
     expect(grantsSetBy(response)).toBeNull();
-    expect(store.getParticipantForGrant).toHaveBeenCalledWith('sess_owner', ownerGrant);
+    expect(store.findParticipantForGrant).toHaveBeenCalledWith('sess_owner', ownerGrant);
     expect(store.joinSessionByInviteToken).not.toHaveBeenCalled();
   });
 
   it('reuses a returning guest membership instead of adding a participant', async () => {
     storeGrants([guestGrant]);
     store.resolveInviteSession.mockResolvedValue('sess_owner');
-    store.getParticipantForGrant.mockResolvedValue({ ...guestGrant, role: 'participant' });
+    store.findParticipantForGrant.mockResolvedValue({ ...guestGrant, role: 'participant' });
 
     const response = await openInvite();
 
@@ -92,9 +91,8 @@ describe('invite route', () => {
     const otherGrant = { ...guestGrant, sessionId: 'sess_other' };
     storeGrants([otherGrant, guestGrant]);
     store.resolveInviteSession.mockResolvedValue('sess_owner');
-    store.getParticipantForGrant.mockRejectedValue(
-      new ConvexError({ code: 'FORBIDDEN', message: 'Recording session access is denied.', retryable: false }),
-    );
+    // findParticipantForGrant reports a grant the backend rejected as null.
+    store.findParticipantForGrant.mockResolvedValue(null);
     const joinedGrant = { sessionId: 'sess_owner', clientId: 'client_new', accessToken: 'access_new_abcdefghijklmnopqrstuvwxyz' };
     store.joinSessionByInviteToken.mockResolvedValue({ session: { id: 'sess_owner' }, grant: joinedGrant });
 
@@ -108,7 +106,7 @@ describe('invite route', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     storeGrants([ownerGrant]);
     store.resolveInviteSession.mockResolvedValue('sess_owner');
-    store.getParticipantForGrant.mockRejectedValue(new TypeError('fetch failed'));
+    store.findParticipantForGrant.mockRejectedValue(new TypeError('fetch failed'));
 
     const response = await openInvite();
 
