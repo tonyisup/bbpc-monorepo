@@ -21,7 +21,7 @@ const retryPendingEvents = vi.fn(async () => {});
 vi.mock('./SessionProvider', () => ({ useSession: () => ({
   state: session, elapsedMs: 3000, dispatch, sessionId: 'header-test', inviteUrl: null,
   participantClientId: 'host', participantAccessToken: 'test', participantRole,
-  sessionStatus: 'active', pendingEventCount: 0, syncError: null, retryPendingEvents,
+  sessionStatus: 'active', pendingEventCount: 0, syncError: null, rejectedEventCount: 0, retryPendingEvents,
 }) }));
 vi.mock('./AudioProvider', () => ({ useAudio: () => ({ stopAll: vi.fn() }) }));
 vi.mock('@/hooks/useRecordingEngine', () => ({ useRecordingEngine: () => recording }));

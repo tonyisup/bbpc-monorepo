@@ -19,6 +19,7 @@ const MAX_CONTENT_TYPE_LENGTH = 100;
 const recordingUploadValidator = v.object({
   id: v.id("recordingUploads"),
   publicSessionId: v.union(v.string(), v.null()),
+  clientId: v.union(v.string(), v.null()),
   episode: v.string(),
   hostName: v.string(),
   trackType: v.union(v.literal("mic"), v.literal("sounders")),
@@ -141,8 +142,24 @@ export const saveUpload = recordingMutation({
       "Recording blob name",
       MAX_BLOB_NAME_LENGTH,
     );
+    // The upload route names blobs
+    // `${sessionId}/${startedAt}/${host}-${clientId}-${trackType}.${ext}`.
+    // Requiring that namespace stops a participant from claiming, and later
+    // blocking, a name another participant's upload will use.
+    if (
+      !blobName.startsWith(`${session.publicId}/`) ||
+      !blobName.includes(
+        `-${participant.clientId}-${args.trackType}.`,
+      )
+    ) {
+      domainError(
+        "FORBIDDEN",
+        "The recording blob name does not belong to this participant.",
+      );
+    }
     const upload = {
       publicSessionId: session.publicId,
+      clientId: participant.clientId,
       episode,
       hostName,
       trackType: args.trackType,
@@ -181,6 +198,15 @@ export const saveUpload = recordingMutation({
         domainError(
           "CONFLICT",
           "The recording upload belongs to a different session.",
+        );
+      }
+      if (
+        current.clientId !== undefined &&
+        current.clientId !== participant.clientId
+      ) {
+        domainError(
+          "FORBIDDEN",
+          "The recording upload belongs to another participant.",
         );
       }
       await ctx.db.patch(
@@ -253,6 +279,7 @@ export const listBySession = recordingQuery({
         id: upload._id,
         publicSessionId:
           upload.publicSessionId ?? null,
+        clientId: upload.clientId ?? null,
         episode: upload.episode,
         hostName: upload.hostName,
         trackType: upload.trackType,

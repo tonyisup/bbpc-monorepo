@@ -1,4 +1,5 @@
 import type { Manifest, SessionAction, SessionState, SessionSyncEvent, Sounder } from '@/types';
+import { startRecordingRun, stopRecordingRun, timelineMsAt } from './session-timeline';
 
 export function createInitialState(
   episode: string,
@@ -13,6 +14,7 @@ export function createInitialState(
     recordingStart: null,
     recordingEnd: null,
     isRecording: false,
+    recordingRuns: [],
     sounders,
     soundersUsed: [],
     recordingParticipants: [],
@@ -21,10 +23,6 @@ export function createInitialState(
     segments: [],
     editCues: [],
   };
-}
-
-function msSince(recordingStartedAt: number, timestamp: number): number {
-  return Math.max(0, timestamp - recordingStartedAt);
 }
 
 function upsertRecordingJoin(
@@ -41,7 +39,7 @@ function upsertRecordingJoin(
     client_id: participant.clientId,
     name: participant.name,
     role: participant.role,
-    joined_at_ms: msSince(participant.recordingStartedAt, participant.joinedAt),
+    joined_at_ms: timelineMsAt(state.recordingRuns, participant.joinedAt),
     joined_at_epoch_ms: participant.joinedAt,
     left_at_ms: null,
     left_at_epoch_ms: null,
@@ -87,17 +85,13 @@ function applyRecordingLeave(
       index === existingOpenIndex
         ? {
             ...existing,
-            left_at_ms: msSince(participant.recordingStartedAt, participant.leftAt),
+            left_at_ms: timelineMsAt(state.recordingRuns, participant.leftAt),
             left_at_epoch_ms: participant.leftAt,
             leave_reason: participant.reason,
           }
         : existing
     )),
   };
-}
-
-function audioMsSince(recordingStartedAt: number | null, timestamp: number): number {
-  return recordingStartedAt ? msSince(recordingStartedAt, timestamp) : 0;
 }
 
 function upsertAudioJoin(
@@ -118,7 +112,7 @@ function upsertAudioJoin(
     client_id: participant.clientId,
     name: participant.name,
     role: participant.role,
-    joined_audio_at_ms: audioMsSince(participant.recordingStartedAt, participant.joinedAudioAt),
+    joined_audio_at_ms: timelineMsAt(state.recordingRuns, participant.joinedAudioAt),
     joined_audio_at_epoch_ms: participant.joinedAudioAt,
     left_audio_at_ms: null,
     left_audio_at_epoch_ms: null,
@@ -160,7 +154,7 @@ function applyAudioLeave(
       index === existingOpenIndex
         ? {
             ...existing,
-            left_audio_at_ms: audioMsSince(participant.recordingStartedAt, participant.leftAudioAt),
+            left_audio_at_ms: timelineMsAt(state.recordingRuns, participant.leftAudioAt),
             left_audio_at_epoch_ms: participant.leftAudioAt,
           }
         : existing
@@ -196,7 +190,7 @@ function applyAudioDisconnectStart(
           ...existing.disconnects,
           {
             disconnect_id: disconnect.disconnectId,
-            started_at_ms: audioMsSince(disconnect.recordingStartedAt, disconnect.startedAt),
+            started_at_ms: timelineMsAt(state.recordingRuns, disconnect.startedAt),
             started_at_epoch_ms: disconnect.startedAt,
             ended_at_ms: null,
             ended_at_epoch_ms: null,
@@ -228,7 +222,7 @@ function applyAudioDisconnectEnd(
           item.disconnect_id === disconnect.disconnectId && item.ended_at_epoch_ms === null
             ? {
                 ...item,
-                ended_at_ms: audioMsSince(disconnect.recordingStartedAt, disconnect.endedAt),
+                ended_at_ms: timelineMsAt(state.recordingRuns, disconnect.endedAt),
                 ended_at_epoch_ms: disconnect.endedAt,
               }
             : item
@@ -238,11 +232,29 @@ function applyAudioDisconnectEnd(
   };
 }
 
+/**
+ * The open segment or edit cue comes from session state, not panel state, so
+ * it can still be ended after a tab switch, reload or reconnect (audit R08).
+ */
+export function openSegmentId(state: SessionState): string | null {
+  return state.segments.findLast(segment => segment.end_ms === null)?.id ?? null;
+}
+
+export function openEditCueId(state: SessionState): string | null {
+  return state.editCues.findLast(cue => cue.end_ms === null)?.id ?? null;
+}
+
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
     case 'START_RECORDING': {
       const startedAt = action.startedAt ?? Date.now();
-      const nextState = { ...state, isRecording: true, recordingStart: startedAt, recordingEnd: null };
+      const nextState = {
+        ...state,
+        isRecording: true,
+        recordingStart: startedAt,
+        recordingEnd: null,
+        recordingRuns: startRecordingRun(state.recordingRuns, startedAt),
+      };
       if (!action.participant) return nextState;
 
       return upsertRecordingJoin(nextState, {
@@ -252,10 +264,12 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
 
     case 'STOP_RECORDING': {
+      const stoppedAt = action.stoppedAt ?? action.participant?.leftAt ?? Date.now();
       const nextState = {
         ...state,
         isRecording: false,
-        recordingEnd: action.participant?.leftAt ?? Date.now(),
+        recordingEnd: stoppedAt,
+        recordingRuns: stopRecordingRun(state.recordingRuns, stoppedAt),
       };
       return action.participant ? applyRecordingLeave(nextState, action.participant) : nextState;
     }
@@ -279,7 +293,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return applyAudioDisconnectEnd(state, action.disconnect);
 
     case 'TRIGGER_SOUNDER': {
-      const playedAt = action.played_at_ms ?? (state.recordingStart != null ? Date.now() - state.recordingStart : 0);
+      const playedAt = action.played_at_ms ?? timelineMsAt(state.recordingRuns, Date.now());
       return {
         ...state,
         soundersUsed: [
@@ -307,7 +321,8 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return {
         ...state,
         segments: state.segments.map(seg => (
-          seg.id === action.id ? { ...seg, end_ms: action.end_ms } : seg
+          // A range never ends before it starts (audit R09).
+          seg.id === action.id ? { ...seg, end_ms: Math.max(action.end_ms, seg.start_ms) } : seg
         )),
       };
 
@@ -318,7 +333,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return {
         ...state,
         editCues: state.editCues.map(cue => (
-          cue.id === action.id ? { ...cue, end_ms: action.end_ms } : cue
+          cue.id === action.id ? { ...cue, end_ms: Math.max(action.end_ms, cue.start_ms) } : cue
         )),
       };
 
@@ -345,16 +360,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
 export function actionToSyncEvent(
   action: SessionAction,
   hostName: string,
-  recordingStart: number | null,
+  timelineNowMs: number,
   clientEventSourceId: string,
 ): SessionSyncEvent | null {
   switch (action.type) {
     case 'TRIGGER_SOUNDER': {
-      const playedAt = recordingStart != null ? Date.now() - recordingStart : 0;
       return {
         kind: 'sounder',
         sounder: action.sounder,
-        played_at_ms: playedAt,
+        played_at_ms: action.played_at_ms ?? timelineNowMs,
         played_by: hostName,
         from: clientEventSourceId,
       };
@@ -416,6 +430,7 @@ export function syncEventToAction(event: SessionSyncEvent): SessionAction | null
     case 'recording-stopped':
       return {
         type: 'STOP_RECORDING',
+        stoppedAt: event.participant?.leftAt ?? event.startedAt + event.durationMs,
         participant: event.participant
           ? {
               clientId: event.participant.clientId,
@@ -475,9 +490,10 @@ export function sessionStateToManifest(
     date: state.date,
     hosts: [state.hostName],
     session_id: sessionId,
-    recording_start: state.recordingStart,
-    recording_end: state.isRecording ? null : state.recordingEnd,
-    manifest_version: '1.1',
+    recording_start: state.recordingRuns[0]?.started_at_epoch_ms ?? state.recordingStart,
+    recording_end: state.isRecording ? null : state.recordingRuns.at(-1)?.stopped_at_epoch_ms ?? state.recordingEnd,
+    manifest_version: '1.2',
+    recording_runs: state.recordingRuns,
     recording_participants: state.recordingParticipants,
     audio_participants: state.audioParticipants,
     sounders_used: state.soundersUsed,

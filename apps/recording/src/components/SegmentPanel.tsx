@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from './SessionProvider';
+import { openSegmentId } from '@/lib/session-state';
 import { useAudio } from './AudioProvider';
 import { useUniqueId } from '@/hooks/useUniqueId';
 import type { SegmentTemplate } from '@/types';
@@ -19,7 +20,7 @@ export function SegmentPanel() {
   const { state, dispatch, elapsedMs } = useSession();
   const [label, setLabel] = useState('');
   const [segType, setSegType] = useState<string>('segment');
-  const [activeSegId, setActiveSegId] = useState<string | null>(null);
+  const activeSegId = openSegmentId(state);
   const [templates, setTemplates] = useState<SegmentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const newId = useUniqueId('seg');
@@ -54,7 +55,6 @@ export function SegmentPanel() {
   const handleStartSegment = () => {
     if (activeSegId) return;
     const id = newId();
-    setActiveSegId(id);
     dispatch({
       type: 'START_SEGMENT',
       segment: {
@@ -70,7 +70,6 @@ export function SegmentPanel() {
   const handleEndSegment = () => {
     if (!activeSegId) return;
     dispatch({ type: 'END_SEGMENT', id: activeSegId, end_ms: elapsedMs });
-    setActiveSegId(null);
     setLabel('');
   };
 

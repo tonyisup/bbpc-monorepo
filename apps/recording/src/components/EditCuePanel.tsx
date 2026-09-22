@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from './SessionProvider';
+import { openEditCueId } from '@/lib/session-state';
 import { useUniqueId } from '@/hooks/useUniqueId';
 import type { EditCue } from '@/types';
 
@@ -19,13 +20,14 @@ export function EditCuePanel() {
   const { state, dispatch, elapsedMs } = useSession();
   const [activeType, setActiveType] = useState<EditCue['type']>('doxx-bleep');
   const [reason, setReason] = useState('');
-  const [activeCueId, setActiveCueId] = useState<string | null>(null);
+  const activeCueId = openEditCueId(state);
+  // After a remount the open cue's type can differ from the selected type.
+  const activeCueType = state.editCues.find(cue => cue.id === activeCueId)?.type ?? activeType;
   const newId = useUniqueId('edit');
 
   const handleStartCue = () => {
     if (activeCueId) return;
     const id = newId();
-    setActiveCueId(id);
     dispatch({
       type: 'ADD_EDIT_CUE',
       cue: {
@@ -42,7 +44,6 @@ export function EditCuePanel() {
   const handleEndCue = () => {
     if (!activeCueId) return;
     dispatch({ type: 'UPDATE_EDIT_CUE', id: activeCueId, end_ms: elapsedMs });
-    setActiveCueId(null);
     setReason('');
   };
 
@@ -84,7 +85,7 @@ export function EditCuePanel() {
           onClick={handleEndCue}
           className="px-4 py-3 text-sm font-bold rounded-lg bg-[var(--danger)] text-white hover:opacity-90 transition-opacity animate-pulse"
         >
-          END {activeType.toUpperCase()} CUE
+          END {activeCueType.toUpperCase()} CUE
         </button>
       ) : (
         <button

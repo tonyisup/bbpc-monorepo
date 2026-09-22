@@ -64,8 +64,12 @@ Options:
 pnpm --filter bbpc-recording run merge-session -- --help
 pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json --format=mp3
 pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json --sounders=reconstruct
-pnpm --filter bbpc-recording run merge-session -- --dry-run
+pnpm --filter bbpc-recording run merge-session -- --bundle ./EP-merge-bundle.json --dry-run
 ```
+
+Option values may follow `=` or a space.
+
+A session has one timeline. Stopping pauses it and starting again resumes it: paused time is not part of the timeline, the timer and every label keep counting from where the pause began, and a `⏸ Paused` label marks each resume point. The merge places each upload on that timeline and trims it at its run's stop, so repeated Start/Stop runs play back to back. The bundle warns when a participant who recorded in a run has no upload for that run, or when a segment or edit cue was never ended.
 
 Sounder modes:
 

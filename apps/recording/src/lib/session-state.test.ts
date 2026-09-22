@@ -3,6 +3,8 @@ import { strict as assert } from 'assert';
 import {
   applySessionSyncEvents,
   createInitialState,
+  openEditCueId,
+  openSegmentId,
   sessionReducer,
   sessionStateToManifest,
   syncEventToAction,
@@ -112,6 +114,7 @@ describe('session event replay', () => {
       },
     }), {
       type: 'STOP_RECORDING',
+      stoppedAt: 1456,
       participant: {
         clientId: 'host-1',
         leftAt: 1456,
@@ -195,6 +198,7 @@ describe('session event replay', () => {
   it('replays audio participant intervals and disconnects', () => {
     const initial = createInitialState('EP', '2026-06-23', 'Harley');
     const state = applySessionSyncEvents(initial, [
+      { kind: 'recording-started', startedAt: 1000, startedByRole: 'owner' },
       {
         kind: 'audio-joined',
         participant: {
@@ -323,5 +327,25 @@ describe('session event replay', () => {
 
     assert.equal(stopped.recordingEnd, 7_000);
     assert.equal(sessionStateToManifest(stopped, 'session-1').recording_end, 7_000);
+  });
+});
+
+describe('open markers', () => {
+  it('can be found again from replayed history after a remount or reload', () => {
+    // Audit R08: the panel kept the open ID in local state and lost it on unmount.
+    const replayed = applySessionSyncEvents(createInitialState('EP', '2026-09-22', 'Host'), [
+      { kind: 'segment-start', segment: { id: 'seg-1', start_ms: 0, end_ms: 100, type: 'intro', label: 'Intro' } },
+      { kind: 'segment-start', segment: { id: 'seg-2', start_ms: 200, end_ms: null, type: 'news', label: 'News' } },
+      { kind: 'edit-cue', cue: { id: 'cue-1', start_ms: 250, end_ms: null, type: 'spoiler' } },
+    ]);
+    assert.equal(openSegmentId(replayed), 'seg-2');
+    assert.equal(openEditCueId(replayed), 'cue-1');
+
+    const ended = sessionReducer(
+      sessionReducer(replayed, { type: 'END_SEGMENT', id: 'seg-2', end_ms: 400 }),
+      { type: 'UPDATE_EDIT_CUE', id: 'cue-1', end_ms: 300 },
+    );
+    assert.equal(openSegmentId(ended), null);
+    assert.equal(openEditCueId(ended), null);
   });
 });

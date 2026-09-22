@@ -80,6 +80,7 @@ export function DashboardHeader() {
     sessionStatus,
     pendingEventCount,
     syncError,
+    rejectedEventCount,
     retryPendingEvents,
   } = useSession();
   const { stopAll } = useAudio();
@@ -229,6 +230,14 @@ export function DashboardHeader() {
       });
     },
   });
+
+  // Keep recording the call's microphone when it changes or goes away.
+  const meshLocalStream = meshAudio.localStream;
+  const replaceMicStream = recording.replaceMicStream;
+  useEffect(() => {
+    if (!rtcAudioEnabled || !recording.state.isRecording || !recording.state.inputSwitchable) return;
+    void replaceMicStream(meshLocalStream);
+  }, [meshLocalStream, recording.state.inputSwitchable, recording.state.isRecording, replaceMicStream, rtcAudioEnabled]);
 
   const dispatchRecordingJoin = useCallback((recordingStartedAt: number, joinedAt: number) => {
     dispatch({
@@ -437,8 +446,9 @@ export function DashboardHeader() {
       const tracks = await recording.stopRecording();
       recordingStartRef.current = 0;
 
-      // Retain/upload audio before attempting the shared stop event.
-      const upload = uploadTracks(tracks);
+      // Retain/upload audio before attempting the shared stop event. After an
+      // interruption the take is already retained and this one is empty.
+      const upload = tracks.mic.size || tracks.sounders.size ? uploadTracks(tracks) : Promise.resolve(true);
       const broadcast = recordingSync.broadcastStop(recordingStartedAt, stoppedAt - recordingStartedAt, {
         clientId: participantClientId,
         leftAt: stoppedAt,
@@ -457,8 +467,12 @@ export function DashboardHeader() {
 
   const hostRecordingActive = state.isRecording;
   const localRecordingActive = recording.state.isRecording;
+  // Without a running audio graph the recorder holds the call's input track,
+  // so changing or leaving it would silently end the take (audit R03).
+  const inputLocked = localRecordingActive && !recording.state.inputSwitchable;
   const isRecording = isOwner ? (hostRecordingActive || localRecordingActive) : localRecordingActive;
   const sessionEnded = sessionStatus === 'ended';
+  const timelinePaused = !isRecording && state.recordingRuns.length > 0;
   const canEditEpisode = isOwner && !sessionEnded && !hostRecordingActive && !recovery.pending;
   const guestCanJoinRecording = !isOwner && !sessionEnded && hostRecordingActive && !localRecordingActive && !recovery.pending;
   const canEndSession = isOwner && !sessionEnded;
@@ -516,8 +530,8 @@ export function DashboardHeader() {
   }, [localRecordingActive, pendingEventCount, recordingSync.pendingCount, recovery]);
 
   return (
-    <header className="flex items-center justify-between gap-4 px-6 py-3 border-b border-[var(--card-border)] bg-[var(--card-bg)]">
-      <div className="flex items-center gap-4">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 sm:px-6 py-3 border-b border-[var(--card-border)] bg-[var(--card-bg)]">
+      <div className="flex min-w-0 items-center gap-4">
         {/* Episode name — click to edit (only when not recording) */}
         {editingEpisode && canEditEpisode ? (
           <input
@@ -548,9 +562,10 @@ export function DashboardHeader() {
         <span className="text-xs text-[var(--muted)]">{state.date}</span>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Wraps on narrow screens (audit R10); transport controls come first. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
         {rtcAudioEnabled && (
-          <div className="flex items-center gap-2 pr-3 border-r border-[var(--card-border)]">
+          <div className="flex flex-wrap items-center gap-2 sm:pr-3 sm:border-r border-[var(--card-border)]">
             {!meshAudio.state.joined ? (
               <button
                 onClick={() => void meshAudio.joinAudio()}
@@ -562,7 +577,9 @@ export function DashboardHeader() {
             ) : (
               <button
                 onClick={() => void meshAudio.leaveAudio()}
-                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] transition-colors"
+                disabled={inputLocked}
+                title={inputLocked ? 'Stop recording before leaving audio' : undefined}
+                className="px-2 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Leave Audio
               </button>
@@ -579,9 +596,9 @@ export function DashboardHeader() {
             <select
               value={meshAudio.state.selectedInputDeviceId ?? ''}
               onChange={event => void meshAudio.setInputDevice(event.target.value)}
-              disabled={!meshAudio.state.joined || meshAudio.inputDevices.length === 0}
+              disabled={!meshAudio.state.joined || meshAudio.inputDevices.length === 0 || inputLocked}
               className="max-w-36 px-2 py-1.5 text-xs rounded border border-[var(--card-border)] bg-[var(--card-bg)] text-[var(--foreground)] disabled:opacity-50"
-              title="Input device"
+              title={inputLocked ? 'Stop recording before changing microphone' : 'Input device'}
             >
               <option value="">Default mic</option>
               {meshAudio.inputDevices.map(device => (
@@ -635,10 +652,10 @@ export function DashboardHeader() {
         )}
 
         {/* WebRTC Audio Recording Status */}
-        <div className="flex items-center gap-2 pr-3 border-r border-[var(--card-border)]">
+        <div className="flex items-center gap-2 sm:pr-3 sm:border-r border-[var(--card-border)]">
           {recording.state.error ? (
-            <span className="text-xs text-[var(--danger)]" title={recording.state.error}>
-              ⚠ Mic error
+            <span role="alert" className="max-w-64 text-xs text-[var(--danger)]" title={recording.state.error}>
+              ⚠ {recording.state.error}
             </span>
           ) : recording.state.isRecording ? (
             <>
@@ -675,6 +692,9 @@ export function DashboardHeader() {
               void Promise.all([retryPendingEvents(), recordingSync.retryPendingEvents()]).then(() => setSaveError(null)).catch(() => {});
             }}>Retry saving</button>}
           </div>}
+          {rejectedEventCount > 0 && <span role="alert">
+            {rejectedEventCount === 1 ? '1 session change was' : `${rejectedEventCount} session changes were`} rejected and not saved.
+          </span>}
           {saveError && <span role="alert">{saveError}</span>}
         </div>
 
@@ -729,70 +749,73 @@ export function DashboardHeader() {
           </button>
         )}
 
-        {/* Session timer */}
-        <div className={`font-mono text-xl font-bold tabular-nums ${isRecording ? 'text-[var(--danger)]' : 'text-[var(--muted)]'}`}>
-          {isRecording ? formatElapsed(elapsedMs) : '--:--:--'}
-        </div>
+        <div className="order-first flex w-full items-center justify-end gap-2 sm:order-none sm:w-auto sm:gap-3">
+          {/* Session timeline: frozen while paused between runs */}
+          <div className={`font-mono text-xl font-bold tabular-nums ${isRecording ? 'text-[var(--danger)]' : 'text-[var(--muted)]'}`}>
+            {isRecording || timelinePaused ? formatElapsed(elapsedMs) : '--:--:--'}
+            {timelinePaused && <span className="ml-2 font-sans text-xs font-medium uppercase">Paused</span>}
+          </div>
 
-	        {/* Recording controls */}
-        {sessionEnded ? (
-          <span className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--warning)]/40 text-[var(--warning)]">
-            Ended
-          </span>
-        ) : isOwner && isRecording ? (
-          <button
-            onClick={handleStopRecording}
-            disabled={transportBusy}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
-          >
-            Stop Recording
-          </button>
-        ) : isOwner ? (
-          <button
-            onClick={handleStartRecording}
-            disabled={transportBusy || !!recovery.pending || pendingEventCount > 0 || recordingSync.pendingCount > 0}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--success)] text-white hover:opacity-90 transition-opacity"
-          >
-            Start Recording
-          </button>
-        ) : localRecordingActive ? (
-          <button
-            onClick={() => void leaveActiveRecording('left')}
-            disabled={transportBusy}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
-          >
-            Leave Recording
-          </button>
-        ) : guestCanJoinRecording ? (
-          <button
-            disabled={transportBusy}
-            onClick={() => {
-              const recordingStartedAt = recordingStartRef.current || state.recordingStart;
-              if (recordingStartedAt) void joinActiveRecording(recordingStartedAt);
-            }}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--success)] text-white hover:opacity-90 transition-opacity"
-          >
-            Join Recording
-          </button>
-        ) : (
-          <span className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)]">
-            Waiting for Host
-          </span>
-        )}
-        {participantRole === 'owner' && !sessionEnded && (
-          <button
-            onClick={handleEndSession}
-            disabled={!canEndSession || endingSession || transportBusy || uploadStatus === 'uploading'}
-            className={`px-2 py-1.5 text-xs font-medium rounded border transition-colors ${
-              canEndSession && !endingSession
-                ? 'border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)]'
-                : 'border-[var(--card-border)] text-[var(--muted)] opacity-50 cursor-not-allowed'
-            }`}
-            title={isRecording ? 'Stop, upload, and end session' : 'End session'}
-          >
-            {endingSession ? 'Ending...' : 'End Session'}
-          </button>
-        )}
+          {/* Recording controls */}
+          {sessionEnded ? (
+            <span className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--warning)]/40 text-[var(--warning)]">
+              Ended
+            </span>
+          ) : isOwner && isRecording ? (
+            <button
+              onClick={handleStopRecording}
+              disabled={transportBusy}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
+            >
+              Stop Recording
+            </button>
+          ) : isOwner ? (
+            <button
+              onClick={handleStartRecording}
+              disabled={transportBusy || !!recovery.pending || pendingEventCount > 0 || recordingSync.pendingCount > 0}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--success)] text-white hover:opacity-90 transition-opacity"
+            >
+              {timelinePaused ? 'Resume Recording' : 'Start Recording'}
+            </button>
+          ) : localRecordingActive ? (
+            <button
+              onClick={() => void leaveActiveRecording('left')}
+              disabled={transportBusy}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
+            >
+              Leave Recording
+            </button>
+          ) : guestCanJoinRecording ? (
+            <button
+              disabled={transportBusy}
+              onClick={() => {
+                const recordingStartedAt = recordingStartRef.current || state.recordingStart;
+                if (recordingStartedAt) void joinActiveRecording(recordingStartedAt);
+              }}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-[var(--success)] text-white hover:opacity-90 transition-opacity"
+            >
+              Join Recording
+            </button>
+          ) : (
+            <span className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--card-border)] text-[var(--muted)]">
+              Waiting for Host
+            </span>
+          )}
+          {participantRole === 'owner' && !sessionEnded && (
+            <button
+              onClick={handleEndSession}
+              disabled={!canEndSession || endingSession || transportBusy || uploadStatus === 'uploading'}
+              className={`px-2 py-1.5 text-xs font-medium rounded border transition-colors ${
+                canEndSession && !endingSession
+                  ? 'border-[var(--card-border)] text-[var(--muted)] hover:text-[var(--danger)] hover:border-[var(--danger)]'
+                  : 'border-[var(--card-border)] text-[var(--muted)] opacity-50 cursor-not-allowed'
+              }`}
+              title={isRecording ? 'Stop, upload, and end session' : 'End session'}
+            >
+              {endingSession ? 'Ending...' : 'End Session'}
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

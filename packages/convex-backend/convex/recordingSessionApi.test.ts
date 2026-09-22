@@ -303,6 +303,16 @@ describe("shared recording session boundary", () => {
     expect(JSON.stringify(joined)).not.toContain(
       guest.participant.accessToken,
     );
+    await expect(
+      t.query(api.recording.sessions.resolveInviteSession, {
+        inviteToken: input.inviteToken,
+      }),
+    ).resolves.toEqual({ id: input.publicId });
+    await expect(
+      t.query(api.recording.sessions.resolveInviteSession, {
+        inviteToken: "inv_unknown_abcdefghijklmnopqrstuvwxyz",
+      }),
+    ).resolves.toBeNull();
 
     const guestGrant = {
       clientApiVersion: BBPC_API_VERSION,
@@ -324,6 +334,17 @@ describe("shared recording session boundary", () => {
       t.mutation(api.recording.sessions.endSession, guestGrant),
       "FORBIDDEN",
     );
+    await t.mutation(api.recording.sessions.endSession, {
+      clientApiVersion: BBPC_API_VERSION,
+      publicId: input.publicId,
+      clientId: input.participant.clientId,
+      accessToken: input.participant.accessToken,
+    });
+    await expect(
+      t.query(api.recording.sessions.resolveInviteSession, {
+        inviteToken: input.inviteToken,
+      }),
+    ).resolves.toBeNull();
     await expectDomainError(
       t.query(api.recording.sessions.getSession, {
         publicId: input.publicId,
@@ -333,6 +354,102 @@ describe("shared recording session boundary", () => {
       }),
       "FORBIDDEN",
     );
+  });
+
+  test("lets only the signed-in owner recover session access", async () => {
+    const t = createTestBackend();
+    await seedUser(t, {
+      identity: HOST_IDENTITY,
+      name: "Host",
+      email: "host@example.test",
+      role: "host",
+    });
+    await seedUser(t, {
+      identity: ADMIN_IDENTITY,
+      name: "Other Host",
+      email: "other@example.test",
+      role: "host",
+    });
+    await initializeAtS1(t);
+    await advanceToS3(t);
+    const input = ownerInput("recover");
+    await t
+      .withIdentity(HOST_IDENTITY)
+      .mutation(api.recording.sessions.createSession, input);
+    const recovery = {
+      clientApiVersion: BBPC_API_VERSION,
+      publicId: input.publicId,
+      accessToken: "access_recovered_abcdefghijklmnopqrstuvwxyz",
+      inviteToken: "inv_recovered_abcdefghijklmnopqrstuvwxyz",
+    };
+
+    // Audit R12: a grant evicted from the cookie used to be unrecoverable.
+    await expectDomainError(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.recording.sessions.recoverOwnerAccess,
+        recovery,
+      ),
+      "FORBIDDEN",
+    );
+    await expect(
+      t.mutation(api.recording.sessions.recoverOwnerAccess, recovery),
+    ).rejects.toThrow();
+    const recovered = await t
+      .withIdentity(HOST_IDENTITY)
+      .mutation(api.recording.sessions.recoverOwnerAccess, recovery);
+    expect(recovered).toEqual({
+      participant: {
+        clientId: input.participant.clientId,
+        displayName: "Recording Host",
+        role: "owner",
+        joinedAt: new Date(input.participant.joinedAt).toISOString(),
+      },
+      inviteIssued: true,
+    });
+
+    const grant = {
+      publicId: input.publicId,
+      clientId: input.participant.clientId,
+    };
+    await expect(
+      t.query(api.recording.sessions.getParticipantForGrant, {
+        ...grant,
+        accessToken: recovery.accessToken,
+      }),
+    ).resolves.toMatchObject({ role: "owner" });
+    await expectDomainError(
+      t.query(api.recording.sessions.getParticipantForGrant, {
+        ...grant,
+        accessToken: input.participant.accessToken,
+      }),
+      "FORBIDDEN",
+    );
+    // Links already shared keep working alongside the new one.
+    for (const inviteToken of [input.inviteToken, recovery.inviteToken]) {
+      await expect(
+        t.query(api.recording.sessions.resolveInviteSession, { inviteToken }),
+      ).resolves.toEqual({ id: input.publicId });
+    }
+
+    await t.mutation(api.recording.sessions.endSession, {
+      ...grant,
+      clientApiVersion: BBPC_API_VERSION,
+      accessToken: recovery.accessToken,
+    });
+    const afterEnd = await t
+      .withIdentity(HOST_IDENTITY)
+      .mutation(api.recording.sessions.recoverOwnerAccess, {
+        ...recovery,
+        accessToken: "access_after_end_abcdefghijklmnopqrstuvwxyz",
+        inviteToken: "inv_after_end_abcdefghijklmnopqrstuvwxyz",
+      });
+    expect(afterEnd.inviteIssued).toBe(false);
+    await expect(
+      t.query(api.recording.sessions.getParticipantForGrant, {
+        ...grant,
+        accessToken: "access_after_end_abcdefghijklmnopqrstuvwxyz",
+      }),
+    ).resolves.toMatchObject({ role: "owner" });
   });
 
   test("links a canonical episode and rejects event spoofing", async () => {
@@ -931,6 +1048,62 @@ describe("shared recording session boundary", () => {
       );
     }
 
+    // Audit R07: an observer reports its lost connection to another session
+    // participant; the subject must still belong to this session.
+    const observedDisconnects = [
+      [ownerGrant, guest.participant.clientId],
+      [guestGrant, ownerGrant.clientId],
+    ] as const;
+    for (const [index, [observer, subject]] of observedDisconnects.entries()) {
+      await t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...observer,
+        eventId: `event_observed_disconnect_${String(index)}`,
+        createdAt: 2_100 + index,
+        payload: {
+          kind: "audio-disconnect-started",
+          disconnect: {
+            disconnectId: `disconnect_observed_${String(index)}`,
+            clientId: subject,
+            startedAt: 2_100 + index,
+            recordingStartedAt: null,
+            reason: "ice-disconnected",
+          },
+        },
+      });
+      await t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...observer,
+        eventId: `event_observed_reconnect_${String(index)}`,
+        createdAt: 2_110 + index,
+        payload: {
+          kind: "audio-disconnect-ended",
+          disconnect: {
+            disconnectId: `disconnect_observed_${String(index)}`,
+            clientId: subject,
+            endedAt: 2_110 + index,
+            recordingStartedAt: null,
+          },
+        },
+      });
+    }
+    await expectDomainError(
+      t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...ownerGrant,
+        eventId: "event_other_session_disconnect",
+        createdAt: 2_120,
+        payload: {
+          kind: "audio-disconnect-started",
+          disconnect: {
+            disconnectId: "disconnect_other_session",
+            clientId: second.participant.clientId,
+            startedAt: 2_120,
+            recordingStartedAt: null,
+            reason: "ice-failed",
+          },
+        },
+      }),
+      "FORBIDDEN",
+    );
+
     const eventIds = ["event_sort_b", "event_sort_a"];
     for (const eventId of eventIds) {
       await t.mutation(
@@ -1008,7 +1181,11 @@ describe("shared recording session boundary", () => {
         accessToken: ownerGrant.accessToken,
       },
     );
-    expect(events.slice(0, 2).map((event) => event.eventId)).toEqual([
+    expect(
+      events
+        .filter((event) => event.eventId.startsWith("event_sort_"))
+        .map((event) => event.eventId),
+    ).toEqual([
       "event_sort_a",
       "event_sort_b",
     ]);

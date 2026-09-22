@@ -8744,6 +8744,7 @@ export type PublicApiType = {
                 publicSessionId: string;
             }, Array<{
                 blobName: string;
+                clientId: string | null;
                 contentType: string;
                 episode: string;
                 hostName: string;
@@ -9304,6 +9305,25 @@ export type PublicApiType = {
                     kind: "audio-disconnect-ended";
                 };
             }>>;
+            recoverOwnerAccess: FunctionReference<"mutation", "public", {
+                accessToken: string;
+                clientApiVersion: string;
+                inviteToken: string;
+                publicId: string;
+            }, {
+                inviteIssued: boolean;
+                participant: {
+                    clientId: string;
+                    displayName: string;
+                    joinedAt: string;
+                    role: "owner" | "participant";
+                };
+            }>;
+            resolveInviteSession: FunctionReference<"query", "public", {
+                inviteToken: string;
+            }, {
+                id: string;
+            } | null>;
             updateParticipantDisplayName: FunctionReference<"mutation", "public", {
                 accessToken: string;
                 clientApiVersion: string;

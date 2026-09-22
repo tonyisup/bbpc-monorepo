@@ -1,3 +1,4 @@
+import { ConvexError } from 'convex/values';
 import {
   BBPC_CLIENT_API_VERSION,
   recordingApi,
@@ -82,6 +83,44 @@ export async function getSession(
   });
 }
 
+/**
+ * Issue the signed-in owner a fresh grant for a session this browser lost
+ * (audit R12). The previous owner grant stops working. Active sessions also
+ * gain an additional invite link, since the original is stored only as a digest.
+ */
+export async function recoverOwnerAccess(
+  convexToken: string,
+  sessionId: string,
+): Promise<SessionAccessGrant> {
+  const accessToken = createAccessToken();
+  const inviteToken = createInviteToken();
+  const result = await mutateSharedConvexAsUser(
+    recordingApi.sessions.recoverOwnerAccess,
+    {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      publicId: sessionId,
+      accessToken,
+      inviteToken,
+    },
+    convexToken,
+  );
+  return {
+    sessionId,
+    clientId: result.participant.clientId,
+    accessToken,
+    ...(result.inviteIssued ? { inviteToken } : {}),
+  };
+}
+
+/** The public ID of the session a valid, active invite admits to, or null. */
+export async function resolveInviteSession(inviteToken: string): Promise<string | null> {
+  const session = await querySharedConvex(
+    recordingApi.sessions.resolveInviteSession,
+    { inviteToken },
+  );
+  return session?.id ?? null;
+}
+
 export async function joinSessionByInviteToken(
   inviteToken: string,
   displayName?: string,
@@ -147,6 +186,23 @@ export async function getParticipantForGrant(
         ...participant,
         accessToken: grant.accessToken,
       };
+}
+
+/**
+ * Like getParticipantForGrant, but a grant the backend rejects (replaced by
+ * owner recovery, revoked, or its session deleted) counts as no access, so
+ * callers can offer recovery. Other failures still throw.
+ */
+export async function findParticipantForGrant(
+  sessionId: string,
+  grant: SessionAccessGrant | undefined,
+): Promise<AuthenticatedSessionParticipant | null> {
+  try {
+    return await getParticipantForGrant(sessionId, grant);
+  } catch (error) {
+    if (error instanceof ConvexError) return null;
+    throw error;
+  }
 }
 
 export async function updateParticipantDisplayName(
