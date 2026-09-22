@@ -110,6 +110,20 @@ describe('merge-session CLI', () => {
     expect(plan.warnings).toEqual([]);
   }, 15_000);
 
+  it('leaves out an upload that fits no recording run instead of placing it by wall clock', async () => {
+    const bundlePath = await writeBundle();
+    const bundle = JSON.parse(await fs.readFile(bundlePath, 'utf8'));
+    bundle.recordings.push({ ...bundle.recordings[0], id: 'upload-late', startedAt: 9_000, timeline_offset_ms: null, timeline_max_duration_ms: null });
+    await fs.writeFile(bundlePath, JSON.stringify(bundle));
+    const outDir = path.join(workDir, 'unplaced');
+    const result = await runCli(['--bundle', bundlePath, '--out', outDir, '--sounders', 'none', '--dry-run']);
+    expect(result.status).toBe(0);
+
+    const plan = JSON.parse(await fs.readFile(path.join(outDir, 'merge-plan.json'), 'utf8'));
+    expect(plan.inputs.map((input: { id: string }) => input.id)).toEqual(['upload-1', 'upload-2']);
+    expect(plan.warnings).toEqual(["Warning: Host's mic upload fits no recording run and was left out of the merge."]);
+  }, 15_000);
+
   it('rejects an option that is missing its value', async () => {
     const result = await runCli(['--bundle']);
     expect(result.status).not.toBe(0);
