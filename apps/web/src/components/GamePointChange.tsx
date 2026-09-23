@@ -138,7 +138,7 @@ export function PointChangeBadge({
     <span
       className={cn(
         "rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums",
-        change > 0 ? "bg-red-500 text-white" : "bg-zinc-700 text-zinc-100",
+        change > 0 ? "bg-red-600 text-white" : "bg-zinc-700 text-zinc-100",
         className
       )}
     >

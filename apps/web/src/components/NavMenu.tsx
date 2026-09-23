@@ -154,7 +154,14 @@ const NavMenu: FC = () => {
         <NavigationMenu orientation="vertical" delayDuration={0}>
           <NavigationMenuList>
             <NavigationMenuItem>
-              <NavigationMenuTrigger aria-label="Open navigation menu">
+              <NavigationMenuTrigger
+                aria-label="Open navigation menu"
+                aria-describedby={
+                  pointChange.change === null
+                    ? undefined
+                    : "nav-game-point-change"
+                }
+              >
                 <span className="relative">
                   {visibleUser ? (
                     <Avatar>
@@ -167,10 +174,15 @@ const NavMenu: FC = () => {
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   )}
                   {pointChange.change !== null && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-black"
-                    />
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-black"
+                      />
+                      <span className="sr-only" id="nav-game-point-change">
+                        New game points from the last episode
+                      </span>
+                    </>
                   )}
                 </span>
               </NavigationMenuTrigger>

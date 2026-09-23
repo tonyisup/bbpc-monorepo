@@ -4,6 +4,8 @@ import { api } from "@tonyisup/bbpc-convex-api";
 
 import { z } from "zod";
 
+import { pacificPointDay } from "@/lib/pointDays";
+
 const latestPointChangeSchema = z
   .object({
     seasonId: z.string().min(1),
@@ -26,16 +28,10 @@ export interface LatestPointChange {
   change: number;
 }
 
-const pacificDayFormatter = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Los_Angeles",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 /**
- * Points are not linked to episodes, so the Pacific day of the season's latest
- * point stands in for the last episode, as in the performance summary.
+ * The Pacific day of the season's latest point stands in for the last episode,
+ * as in the performance summary. Points are awarded while recording, and this
+ * avoids resolving each point's episode on a query every page subscribes to.
  */
 export function summarizeLatestPointChange(
   value: unknown
@@ -45,9 +41,9 @@ export function summarizeLatestPointChange(
     return null;
   }
   const { seasonId, lastScoredAt, points } = parsed.data;
-  const day = pacificDayFormatter.format(lastScoredAt);
+  const day = pacificPointDay(lastScoredAt);
   const change = points
-    .filter((point) => pacificDayFormatter.format(point.earnedAt) === day)
+    .filter((point) => pacificPointDay(point.earnedAt) === day)
     .reduce((total, point) => total + point.pointValue, 0);
   return { key: `${seasonId}:${day}:${change}`, change };
 }

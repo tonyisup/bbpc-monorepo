@@ -70,7 +70,8 @@ export interface ConvexAdminSeasonInput {
   gameTypeId: string;
   startedOn: string;
   endedOn: string | null;
-  episodeCount: number | null;
+  /** Omitted on update when unchanged. */
+  episodeCount?: number | null;
 }
 export interface ConvexAdminSeasonsPage {
   seasons: ConvexAdminSeason[];
@@ -117,7 +118,7 @@ export async function createConvexAdminSeason(
       startedOn: input.startedOn,
       ...(input.description === null ? {} : { description: input.description }),
       ...(input.endedOn === null ? {} : { endedOn: input.endedOn }),
-      ...(input.episodeCount === null
+      ...(input.episodeCount === null || input.episodeCount === undefined
         ? {}
         : { episodeCount: input.episodeCount }),
     })

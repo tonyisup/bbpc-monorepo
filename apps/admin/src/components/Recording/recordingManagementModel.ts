@@ -152,6 +152,17 @@ export function getEpisodeSeasonPosition(
   return earlierNumbers.size + 1;
 }
 
+/** Whether an episode is its season's finale, or past its fixed length. */
+export function getSeasonFinaleState(
+  position: number | null,
+  episodeCount: number | null
+): "finale" | "overrun" | null {
+  if (position === null || episodeCount === null || position < episodeCount) {
+    return null;
+  }
+  return position === episodeCount ? "finale" : "overrun";
+}
+
 export async function collectAllRecordingEpisodes<T>(
   loadPage: (cursor: string | null) => Promise<RecordingEpisodePage<T>>
 ): Promise<T[]> {

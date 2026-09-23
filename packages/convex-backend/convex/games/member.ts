@@ -70,9 +70,11 @@ export const myAvailablePoints = authenticatedQuery({
 });
 
 /**
- * Returns the member's points near the current season's latest point. Points
- * are not linked to episodes, so clients treat the latest point's Pacific day
- * as the last episode and sum this member's points from that day.
+ * Returns the member's points near the current season's latest point. Clients
+ * treat the latest point's Pacific day as the last episode and sum this
+ * member's points from that day. Resolving each point's episode would cost
+ * several reads per point on a query every signed-in page subscribes to, and
+ * manual adjustments have no episode anyway.
  */
 export const myLatestPointChange = authenticatedQuery({
   args: { today: v.string() },

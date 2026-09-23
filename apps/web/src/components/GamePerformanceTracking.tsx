@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
 import { formatPlainDate } from "@/lib/dates";
+import { pacificPointDay } from "@/lib/pointDays";
 import type { GamePerformanceData } from "@/types/game";
 
 const COLORS = [
@@ -66,8 +67,8 @@ export const buildChartData = (
 };
 
 /**
- * Points are not linked to episodes, but they are awarded while recording, so
- * the latest scoring day stands in for the last episode.
+ * Points are awarded while recording, so the latest Pacific scoring day stands
+ * in for the last episode. Manual adjustments made that day count too.
  */
 export const buildSummaryRows = (
   chartData: Record<string, number | string>[],
@@ -75,13 +76,11 @@ export const buildSummaryRows = (
   userSummary: PerformanceSummaryItem[]
 ) => {
   const lastPoint = points.at(-1);
-  const lastEpisodeKey =
-    lastPoint === undefined
-      ? null
-      : dateLabelFormatter.format(new Date(lastPoint.earnedAt));
+  const lastEpisodeDay =
+    lastPoint === undefined ? null : pacificPointDay(lastPoint.earnedAt);
   const lastEpisodePoints = new Map<string, number>();
   for (const point of points) {
-    if (dateLabelFormatter.format(new Date(point.earnedAt)) === lastEpisodeKey) {
+    if (pacificPointDay(point.earnedAt) === lastEpisodeDay) {
       lastEpisodePoints.set(
         point.userId,
         (lastEpisodePoints.get(point.userId) ?? 0) + point.pointValue
@@ -90,7 +89,10 @@ export const buildSummaryRows = (
   }
 
   return {
-    lastEpisodeLabel: lastEpisodeKey,
+    lastEpisodeLabel:
+      lastPoint === undefined
+        ? null
+        : dateLabelFormatter.format(new Date(lastPoint.earnedAt)),
     rows: userSummary.map((user) => {
       const series = chartData.map((point) => Number(point[user.id] ?? 0));
 
@@ -254,7 +256,7 @@ export default function GamePerformanceTracking({
                     <th className="px-4 py-3 font-semibold">
                       Last Episode
                       {summary.lastEpisodeLabel !== null && (
-                        <span className="ml-1 font-normal normal-case tracking-normal text-zinc-600">
+                        <span className="ml-1 font-normal normal-case tracking-normal text-zinc-400">
                           ({summary.lastEpisodeLabel})
                         </span>
                       )}

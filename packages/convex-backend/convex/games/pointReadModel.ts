@@ -241,58 +241,52 @@ export async function calculatePointTotal(
   return total;
 }
 
-async function findPointAssignmentId(
-  ctx: PointReadContext,
-  pointId: Id<"points">,
-): Promise<Id<"assignments"> | null> {
-  const link = await ctx.db
-    .query("assignmentPointLinks")
-    .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
-    .first();
-  if (link !== null) {
-    return link.assignmentId;
-  }
-  const guess = await ctx.db
-    .query("guesses")
-    .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
-    .first();
-  if (guess !== null) {
-    const review = await ctx.db.get(
-      "assignmentReviews",
-      guess.assignmentReviewId,
-    );
-    return review?.assignmentId ?? null;
-  }
-  const wager = await ctx.db
-    .query("gamblingEntries")
-    .withIndex("by_awardPointId", (index) =>
-      index.eq("awardPointId", pointId),
-    )
-    .first();
-  return wager?.assignmentId ?? null;
-}
-
 /**
  * Points have no episode field, so the episode comes from whatever the point
  * was awarded for: an assignment link, a guess, a wager, or a quote. Manual
- * adjustments have none.
+ * adjustments have none. The lookups run together; the first match wins in
+ * that order.
  */
 export async function findPointEpisode(
   ctx: PointReadContext,
   pointId: Id<"points">,
 ): Promise<PointEpisode | null> {
-  let episodeId: Id<"episodes"> | null = null;
-  const assignmentId = await findPointAssignmentId(ctx, pointId);
-  if (assignmentId !== null) {
-    episodeId =
-      (await ctx.db.get("assignments", assignmentId))?.episodeId ?? null;
-  } else {
-    const quote = await ctx.db
+  const [link, guess, wager, quote] = await Promise.all([
+    ctx.db
+      .query("assignmentPointLinks")
+      .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
+      .first(),
+    ctx.db
+      .query("guesses")
+      .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
+      .first(),
+    ctx.db
+      .query("gamblingEntries")
+      .withIndex("by_awardPointId", (index) =>
+        index.eq("awardPointId", pointId),
+      )
+      .first(),
+    ctx.db
       .query("quoteSubmissions")
       .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
-      .first();
-    episodeId = quote?.episodeId ?? null;
+      .first(),
+  ]);
+  let assignmentId: Id<"assignments"> | null = null;
+  if (link !== null) {
+    assignmentId = link.assignmentId;
+  } else if (guess !== null) {
+    const review = await ctx.db.get(
+      "assignmentReviews",
+      guess.assignmentReviewId,
+    );
+    assignmentId = review?.assignmentId ?? null;
+  } else if (wager !== null) {
+    assignmentId = wager.assignmentId ?? null;
   }
+  const episodeId =
+    assignmentId === null
+      ? (quote?.episodeId ?? null)
+      : ((await ctx.db.get("assignments", assignmentId))?.episodeId ?? null);
   if (episodeId === null) {
     return null;
   }

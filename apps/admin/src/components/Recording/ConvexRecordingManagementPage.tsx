@@ -106,6 +106,7 @@ import {
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
   getEpisodeSeasonPosition,
+  getSeasonFinaleState,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
@@ -1487,6 +1488,10 @@ export function ConvexRecordingManagementPage() {
   }
 
   const { episode } = data;
+  const finaleState = getSeasonFinaleState(
+    data.seasonEpisodePosition,
+    data.season?.episodeCount ?? null
+  );
   return (
     <>
       <Head>
@@ -1541,7 +1546,7 @@ export function ConvexRecordingManagementPage() {
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Badge>{episode.status ?? "unknown"}</Badge>
                       <span className="text-sm text-muted-foreground">
                         Episode {episode.number}
@@ -1555,17 +1560,17 @@ export function ConvexRecordingManagementPage() {
                             in {data.season.title}
                           </Badge>
                         )}
-                      {data.season?.episodeCount != null &&
-                        data.seasonEpisodePosition !== null &&
-                        data.seasonEpisodePosition >=
-                          data.season.episodeCount && (
-                          <Badge variant="destructive">
-                            {data.seasonEpisodePosition ===
-                            data.season.episodeCount
-                              ? "Season finale"
-                              : "Past season length"}
-                          </Badge>
-                        )}
+                      {finaleState !== null && (
+                        <Badge
+                          variant={
+                            finaleState === "finale" ? "default" : "destructive"
+                          }
+                        >
+                          {finaleState === "finale"
+                            ? "Season finale"
+                            : "Past season length"}
+                        </Badge>
+                      )}
                     </div>
                     <CardTitle className="text-3xl">{episode.title}</CardTitle>
                     <CardDescription>

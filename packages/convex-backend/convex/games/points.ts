@@ -373,10 +373,13 @@ export const listForSeasonPage = adminQuery({
     return {
       ...result,
       page: await Promise.all(
-        result.page.map(async (point) => ({
-          ...(await hydratePointCore(ctx, point)),
-          episode: await findPointEpisode(ctx, point._id),
-        })),
+        result.page.map(async (point) => {
+          const [core, episode] = await Promise.all([
+            hydratePointCore(ctx, point),
+            findPointEpisode(ctx, point._id),
+          ]);
+          return { ...core, episode };
+        }),
       ),
     };
   },

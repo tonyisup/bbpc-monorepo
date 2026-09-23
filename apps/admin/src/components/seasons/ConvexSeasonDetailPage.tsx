@@ -196,7 +196,7 @@ function PointLink({
   }
   return (
     <Link
-      className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       href={`/point/${encodeURIComponent(pointId)}`}
     >
       {children}
@@ -530,7 +530,7 @@ export function ConvexSeasonDetailPage() {
               Edit season
             </Button>
           </div>
-          <div className="flex items-center gap-4 rounded-2xl border border-dashed bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-dashed bg-muted/30 p-4">
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 Start date

@@ -39,7 +39,7 @@ export function SeasonStandingsDisclosure({
       open={isOpen}
       onToggle={(event) => setIsOpen(event.currentTarget.open)}
     >
-      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 text-lg font-bold text-white hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 text-lg font-bold text-white hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 [&::-webkit-details-marker]:hidden">
         <span>
           Season standings
           {progress !== null && (
@@ -51,7 +51,7 @@ export function SeasonStandingsDisclosure({
             <PointChangeBadge change={change} className="ml-2 align-middle" />
           )}
         </span>
-        <span className="text-sm font-medium text-zinc-400">
+        <span className="shrink-0 text-sm font-medium text-zinc-400">
           {isOpen ? "Close chart" : "Open chart"}
         </span>
       </summary>

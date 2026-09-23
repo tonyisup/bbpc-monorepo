@@ -7,6 +7,8 @@ export const MAX_SEASONS_TO_INSPECT = 100;
 export const MAX_SEASON_RELATIONSHIPS_FOR_COUNT = 2000;
 export const MAX_SEASON_PERFORMANCE_ACTIVITY = 2000;
 export const MAX_SEASON_EPISODE_COUNT = 500;
+// Season progress stops counting here; a longer season reads as this many.
+export const MAX_SEASON_EPISODES_TO_COUNT = 500;
 export const MAX_POINT_PAGE_SIZE = 100;
 export const MAX_POINTS_FOR_AGGREGATE = 2000;
 export const MAX_POINTS_FOR_LATEST_CHANGE = 200;

@@ -61,6 +61,10 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import {
+  MAX_SEASON_EPISODE_COUNT,
+  parseSeasonEpisodeCount,
+} from "./seasonEditorModel";
 
 export function seasonMutationFailureMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -80,22 +84,6 @@ export function seasonMutationFailureMessage(error: unknown): string {
 function nullableText(value: string): string | null {
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
-}
-
-const MAX_SEASON_EPISODE_COUNT = 500;
-
-/** Blank means no fixed length; `undefined` marks an invalid entry. */
-function parseSeasonEpisodeCount(value: string): number | null | undefined {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return null;
-  }
-  const count = Number(trimmed);
-  return Number.isSafeInteger(count) &&
-    count >= 1 &&
-    count <= MAX_SEASON_EPISODE_COUNT
-    ? count
-    : undefined;
 }
 
 export function ConvexSeasonEditor({
@@ -208,6 +196,7 @@ export function ConvexSeasonEditor({
               Episodes in Season (Optional)
             </Label>
             <Input
+              aria-describedby="convex-season-episode-count-help"
               aria-invalid={showErrors && parsedEpisodeCount === undefined}
               id="convex-season-episode-count"
               inputMode="numeric"
@@ -219,9 +208,12 @@ export function ConvexSeasonEditor({
               type="number"
               value={episodeCount}
             />
-            <p className="text-xs text-muted-foreground">
-              The season runs for this many episodes. End it by setting its end
-              date after the final episode records.
+            <p
+              className="text-xs text-muted-foreground"
+              id="convex-season-episode-count-help"
+            >
+              A whole number from 1 through {MAX_SEASON_EPISODE_COUNT}. End the
+              season by setting its end date after the final episode records.
             </p>
           </div>
           {showErrors && !isValid && (
@@ -247,7 +239,12 @@ export function ConvexSeasonEditor({
                   gameTypeId,
                   startedOn,
                   endedOn: endedOn.length === 0 ? null : endedOn,
-                  episodeCount: parsedEpisodeCount ?? null,
+                  // Send the count only when it changed, so editing other
+                  // fields still works against a backend without it.
+                  ...(editingSeason !== null &&
+                  (parsedEpisodeCount ?? null) === editingSeason.episodeCount
+                    ? {}
+                    : { episodeCount: parsedEpisodeCount ?? null }),
                 });
               }
             }}
@@ -606,14 +603,17 @@ export function ConvexSeasonsPage() {
                           aria-label={`${recorded} of ${season.episodeCount} episodes recorded`}
                           aria-valuemax={season.episodeCount}
                           aria-valuemin={0}
-                          aria-valuenow={recorded}
+                          aria-valuenow={Math.min(
+                            recorded,
+                            season.episodeCount
+                          )}
                           className="h-2 overflow-hidden rounded-full bg-muted"
                           role="progressbar"
                         >
                           <div
                             className={cn(
                               "h-full rounded-full",
-                              recorded >= season.episodeCount
+                              recorded > season.episodeCount
                                 ? "bg-destructive"
                                 : "bg-primary"
                             )}
@@ -626,9 +626,18 @@ export function ConvexSeasonsPage() {
                           />
                         </div>
                         {recorded >= season.episodeCount && (
-                          <p className="text-xs text-destructive">
-                            All episodes are recorded. Set an end date to close
-                            the season.
+                          <p
+                            className={cn(
+                              "text-xs",
+                              recorded > season.episodeCount
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {recorded > season.episodeCount
+                              ? "More episodes than the season length are recorded."
+                              : "All episodes are recorded."}{" "}
+                            Set an end date to close the season.
                           </p>
                         )}
                       </div>

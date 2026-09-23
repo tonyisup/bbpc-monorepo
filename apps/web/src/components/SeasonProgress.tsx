@@ -37,7 +37,7 @@ export function SeasonProgress({ progress }: { progress: SeasonProgressValue }) 
   const label = formatSeasonProgress(progress);
   return (
     <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-4 text-sm">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
         <span className="font-semibold text-zinc-200">Season progress</span>
         <span className="text-zinc-400">
           {label} · {remainingLabel(progress)}

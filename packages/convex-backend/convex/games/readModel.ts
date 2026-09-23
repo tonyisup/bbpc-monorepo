@@ -4,7 +4,7 @@ import { domainError } from "../lib/errors.js";
 import {
   MAX_SEASON_RELATIONSHIPS_FOR_COUNT,
   MAX_SEASONS_TO_INSPECT,
-  MAX_SEASON_EPISODE_COUNT,
+  MAX_SEASON_EPISODES_TO_COUNT,
 } from "./limits.js";
 
 type GameReadContext = Pick<QueryCtx, "db">;
@@ -147,7 +147,7 @@ export async function countSeasonEpisodesThrough(
     .withIndex("by_date_and_status", (index) =>
       index.gte("date", startedOn).lte("date", through),
     )
-    .take(MAX_SEASON_EPISODE_COUNT + 1);
+    .take(MAX_SEASON_EPISODES_TO_COUNT);
   return episodes.length;
 }
 
