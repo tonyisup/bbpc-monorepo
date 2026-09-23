@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { announcementSeverityValidator } from "./announcements/validators.js";
 import { movieLinkPreferenceValidator } from "./lib/movieLinkPreference.js";
 
 import {
@@ -327,6 +328,18 @@ export default defineSchema({
     .index("by_year", ["year"])
     .index("by_normalizedTitle_and_year", ["normalizedTitle", "year"])
     .searchIndex("search_title", { searchField: "title" }),
+
+  announcements: defineTable({
+    message: v.string(),
+    severity: announcementSeverityValidator,
+    startsAt: v.number(),
+    endsAt: v.number(),
+    linkUrl: v.optional(v.string()),
+    linkLabel: v.optional(v.string()),
+    dismissible: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_endsAt", ["endsAt"]),
 
   tags: defineTable({
     legacyId: v.optional(v.string()),
