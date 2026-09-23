@@ -2,6 +2,46 @@ packages:
   - apps/*
   - packages/*
 
+# The apps use different React type majors (web/admin 18, recording 19). Keep
+# @types/react out of the shared hidden hoist so TypeScript never falls back to
+# whichever version pnpm happened to hoist there, and declare the React types as
+# optional peers of the packages whose declarations import react without them.
+hoistPattern:
+  - '*'
+  - '!@types/react'
+  - '!@types/react-dom'
+
+packageExtensions:
+  '@clerk/clerk-react': &reactTypes
+    peerDependencies:
+      '@types/react': '*'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+  '@clerk/nextjs': *reactTypes
+  '@clerk/shared': *reactTypes
+  '@headlessui/react': *reactTypes
+  '@uploadthing/react': *reactTypes
+  '@uploadthing/shared': *reactTypes
+  cmdk: *reactTypes
+  convex: *reactTypes
+  framer-motion: *reactTypes
+  lucide-react: *reactTypes
+  next:
+    peerDependencies:
+      '@types/react': '*'
+      '@types/react-dom': '*'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+  next-themes: *reactTypes
+  posthog-js: *reactTypes
+  react-hook-form: *reactTypes
+  react-icons: *reactTypes
+  recharts: *reactTypes
+
 overrides:
   effect: 3.22.1
   fast-xml-parser: 5.10.1
