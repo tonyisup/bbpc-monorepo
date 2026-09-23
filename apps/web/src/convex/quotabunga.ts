@@ -40,8 +40,18 @@ const currentQuoteSubmissionSchema = z.object({
   submission: quoteSubmissionSchema.nullable(),
 });
 
+const quoteTranscriptMatchSchema = z.object({
+  episodeNumber: z.number(),
+  episodeTitle: z.string(),
+  episodeSlug: z.string().nullable(),
+  start: z.number(),
+  excerpt: z.string(),
+});
+
 const possibleQuoteDuplicateSchema = z.object({
   possibleMatch: z.boolean(),
+  // A backend deployed before transcript matching omits this field.
+  transcriptMatches: z.array(quoteTranscriptMatchSchema).default([]),
 });
 
 const currentForMeReference = api.games.quotes.currentForMe;
@@ -56,6 +66,9 @@ const withdrawnSubmissionSchema = z.object({ id: z.string().min(1) });
 
 export type ConvexQuoteSourceType = z.infer<typeof quoteSourceTypeSchema>;
 export type ConvexQuoteSubmission = z.infer<typeof quoteSubmissionSchema>;
+export type ConvexQuoteTranscriptMatch = z.infer<
+  typeof quoteTranscriptMatchSchema
+>;
 export type ConvexCurrentQuoteSubmission = z.infer<
   typeof currentQuoteSubmissionSchema
 >;
