@@ -565,6 +565,31 @@ or clip-start values. Synthetic tests cover access/write gates, open-round owner
 normalization, deterministic brackets, award recalculation and cleanup, relationship
 corruption, audit privacy, and bounded reads.
 
+## Season progress API
+
+A season can declare an optional `episodeCount`, a whole number from 1 through 500.
+Administrator `games.seasons.create` and `update` accept it, `null` leaves it unset or
+clears it, and every season DTO returns it or `null`.
+
+`games.public.currentPerformance` also returns `recordedEpisodeCount`. Episodes are not
+linked to seasons, so it counts dated episodes of any status from the season's start
+through `today` or the season's end date, whichever is earlier, and stops counting at
+500. It is `null` when the season has no episode count or start date.
+
+Authenticated `games.member.myLatestPointChange` takes the caller's `YYYY-MM-DD` date
+and returns `seasonId`, `lastScoredAt` (the season's latest point time), and the
+signed-in member's `points` (`earnedAt`, `pointValue`) from the 36 hours up to it.
+Points from 08:00 UTC on the day after `today`, the end of a Pacific standard-time day,
+are ignored so a mistyped future date cannot pin the result. Clients sum the points
+on the latest point's Pacific day as the last-episode change. It returns `null` when
+there is no current season or no season point dated through today, and more than 200
+matching points fail with `CONFLICT`.
+
+Administrator `games.points.listForSeasonPage` items carry an `episode` (`id`,
+`number`, `title`) resolved through the point's assignment link, guess, or wager
+assignment, falling back to its quote's episode. It is `null` for manual adjustments or
+when the chain has no episode.
+
 ## Ranked-list API
 
 Authenticated users can list their own ranked lists, filter by target kind, read a list
