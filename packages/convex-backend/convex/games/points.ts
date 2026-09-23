@@ -20,6 +20,7 @@ import {
 } from "./limits.js";
 import {
   calculatePointTotal,
+  findPointEpisode,
   hydratePointCore,
   hydratePointDetail,
   pointValue,
@@ -44,6 +45,7 @@ import {
   pointCoreValidator,
   pointDetailValidator,
   pointEditableSnapshotValidator,
+  pointSeasonActivityValidator,
   pointSeasonSelectorValidator,
   pointSeasonTargetValidator,
   pointWorkbenchValidator,
@@ -357,7 +359,7 @@ export const listForSeasonPage = adminQuery({
     seasonId: v.id("seasons"),
     paginationOpts: paginationOptsValidator,
   },
-  returns: paginationResultValidator(pointCoreValidator),
+  returns: paginationResultValidator(pointSeasonActivityValidator),
   handler: async (ctx, args) => {
     validatePointPageSize(args.paginationOpts.numItems);
     await requireSeason(ctx, args.seasonId);
@@ -371,7 +373,13 @@ export const listForSeasonPage = adminQuery({
     return {
       ...result,
       page: await Promise.all(
-        result.page.map((point) => hydratePointCore(ctx, point)),
+        result.page.map(async (point) => {
+          const [core, episode] = await Promise.all([
+            hydratePointCore(ctx, point),
+            findPointEpisode(ctx, point._id),
+          ]);
+          return { ...core, episode };
+        }),
       ),
     };
   },

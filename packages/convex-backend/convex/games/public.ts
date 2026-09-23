@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import { anonymousQuery } from "../functions.js";
 import {
+  countSeasonEpisodesThrough,
   findCurrentSeason,
   hydrateSeason,
 } from "./readModel.js";
@@ -185,6 +186,11 @@ export const currentPerformance = anonymousQuery({
       .sort((left, right) => right.total - left.total);
     return {
       season: await hydrateSeason(ctx, season),
+      recordedEpisodeCount: await countSeasonEpisodesThrough(
+        ctx,
+        season,
+        today,
+      ),
       userSummary,
       points: flattenedPoints,
     };

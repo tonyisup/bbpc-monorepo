@@ -39,6 +39,7 @@ import type * as episodes_adminWriteModel from "../episodes/adminWriteModel.js";
 import type * as episodes_audio from "../episodes/audio.js";
 import type * as episodes_bangers from "../episodes/bangers.js";
 import type * as episodes_limits from "../episodes/limits.js";
+import type * as episodes_mergeModel from "../episodes/mergeModel.js";
 import type * as episodes_public from "../episodes/public.js";
 import type * as episodes_publicResults from "../episodes/publicResults.js";
 import type * as episodes_readModel from "../episodes/readModel.js";
@@ -201,6 +202,7 @@ declare const fullApi: ApiFromModules<{
   "episodes/audio": typeof episodes_audio;
   "episodes/bangers": typeof episodes_bangers;
   "episodes/limits": typeof episodes_limits;
+  "episodes/mergeModel": typeof episodes_mergeModel;
   "episodes/public": typeof episodes_public;
   "episodes/publicResults": typeof episodes_publicResults;
   "episodes/readModel": typeof episodes_readModel;

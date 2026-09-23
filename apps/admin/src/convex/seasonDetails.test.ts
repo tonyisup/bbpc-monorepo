@@ -22,6 +22,7 @@ const season = {
   description: "The first season",
   startedOn: "2026-01-01",
   endedOn: null,
+  episodeCount: 20,
   gameType,
 };
 
@@ -163,7 +164,12 @@ describe("Convex season detail adapter", () => {
         ],
         points: [{ userId: user.id, earnedAt: 100, pointValue: 3 }],
       })
-      .mockResolvedValueOnce(page(point))
+      .mockResolvedValueOnce(
+        page({
+          ...point,
+          episode: { id: "episode-1", number: 401, title: "Episode 401" },
+        })
+      )
       .mockResolvedValueOnce(page(guess))
       .mockResolvedValueOnce(page(gamblingEntry));
     const client = { query } as unknown as ConvexReactClient;
@@ -176,7 +182,10 @@ describe("Convex season detail adapter", () => {
     ).resolves.toMatchObject({ userSummary: [{ total: 3 }] });
     await expect(
       loadConvexAdminSeasonPointsPage(client, season.id, null)
-    ).resolves.toMatchObject({ items: [{ id: point.id }], isDone: true });
+    ).resolves.toMatchObject({
+      items: [{ id: point.id, episode: { number: 401 } }],
+      isDone: true,
+    });
     await expect(
       loadConvexAdminSeasonGuessesPage(client, season.id, null)
     ).resolves.toMatchObject({ items: [{ id: guess.id }], isDone: true });
@@ -216,5 +225,14 @@ describe("Convex season detail adapter", () => {
     await expect(
       loadConvexAdminSeasonGamblingPage(client, season.id, null)
     ).rejects.toThrow(/missing its season/u);
+  });
+
+  test("reads season points from backends without episode labels", async () => {
+    const query = vi.fn().mockResolvedValueOnce(page(point));
+    const client = { query } as unknown as ConvexReactClient;
+
+    await expect(
+      loadConvexAdminSeasonPointsPage(client, season.id, null)
+    ).resolves.toMatchObject({ items: [{ id: point.id, episode: null }] });
   });
 });

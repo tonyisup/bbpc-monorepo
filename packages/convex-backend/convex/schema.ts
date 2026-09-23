@@ -518,6 +518,7 @@ export default defineSchema({
     gameTypeId: v.id("gameTypes"),
     endedOn: v.optional(v.string()),
     startedOn: v.optional(v.string()),
+    episodeCount: v.optional(v.number()),
   })
     .index("by_legacyId", ["legacyId"])
     .index("by_gameTypeId", ["gameTypeId"])

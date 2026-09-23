@@ -15,7 +15,7 @@ import {
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -52,6 +52,10 @@ import {
   ConvexSeasonEditor,
   seasonMutationFailureMessage,
 } from "./ConvexSeasonsPage";
+import {
+  type SeasonActivityGroup,
+  groupSeasonActivityByEpisode,
+} from "./seasonActivityGroups";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -128,6 +132,79 @@ function ActivityFailure({ onRetry }: { onRetry: () => void }) {
         Retry
       </Button>
     </div>
+  );
+}
+
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+function EpisodeActivityGroups<T extends { id: string }>({
+  groups,
+  isComplete,
+  renderItem,
+  summarize,
+}: {
+  groups: SeasonActivityGroup<T>[];
+  /** False while more pages exist, so group totals may still grow. */
+  isComplete: boolean;
+  renderItem: (item: T) => ReactNode;
+  summarize: (items: T[]) => string;
+}) {
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => (
+        <section className="space-y-3" key={group.key}>
+          <div className="flex items-baseline justify-between gap-4 border-b pb-2">
+            <h3 className="min-w-0 truncate text-sm font-black">
+              {group.episode === null ? (
+                <span className="text-muted-foreground">No episode</span>
+              ) : (
+                <>
+                  <span className="text-primary">
+                    Episode {group.episode.number}
+                  </span>
+                  <span className="font-medium text-muted-foreground">
+                    {" "}
+                    · {group.episode.title}
+                  </span>
+                </>
+              )}
+            </h3>
+            <span className="shrink-0 text-xs font-semibold text-muted-foreground">
+              {summarize(group.items)}
+              {!isComplete && " so far"}
+            </span>
+          </div>
+          {group.items.map((item) => (
+            <div key={item.id}>{renderItem(item)}</div>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+const pointCardHover = "transition-colors hover:bg-muted/40";
+
+/** Links to the point's detail page, or renders the card as-is without one. */
+function PointLink({
+  children,
+  pointId,
+}: {
+  children: ReactNode;
+  pointId: string | null;
+}) {
+  if (pointId === null) {
+    return <>{children}</>;
+  }
+  return (
+    <Link
+      className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      href={`/point/${encodeURIComponent(pointId)}`}
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -263,6 +340,31 @@ export function ConvexSeasonDetailPage() {
     });
     return [...rows.values()];
   }, [performance]);
+
+  const pointGroups = useMemo(
+    () =>
+      groupSeasonActivityByEpisode(
+        points?.items ?? [],
+        (point) => point.episode
+      ),
+    [points]
+  );
+  const guessGroups = useMemo(
+    () =>
+      groupSeasonActivityByEpisode(
+        guesses?.items ?? [],
+        (guess) => guess.assignmentReview.assignment.episode
+      ),
+    [guesses]
+  );
+  const gamblingGroups = useMemo(
+    () =>
+      groupSeasonActivityByEpisode(
+        gambling?.items ?? [],
+        (entry) => entry.assignment?.episode ?? null
+      ),
+    [gambling]
+  );
 
   const refresh = () => setRevision((value) => value + 1);
 
@@ -432,7 +534,7 @@ export function ConvexSeasonDetailPage() {
               Edit season
             </Button>
           </div>
-          <div className="flex items-center gap-4 rounded-2xl border border-dashed bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-dashed bg-muted/30 p-4">
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                 Start date
@@ -451,6 +553,16 @@ export function ConvexSeasonDetailPage() {
                 </span>
                 <span className="text-sm font-bold">
                   {formatPlainDate(season.endedOn)}
+                </span>
+              </div>
+            )}
+            {season.episodeCount !== null && (
+              <div className="border-l pl-4">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Length
+                </span>
+                <span className="text-sm font-bold">
+                  {season.episodeCount} episodes
                 </span>
               </div>
             )}
@@ -581,42 +693,59 @@ export function ConvexSeasonDetailPage() {
                   </p>
                 ) : (
                   <>
-                    {points.items.map((point) => (
-                      <Card key={point.id}>
-                        <CardContent className="flex items-center justify-between gap-4 p-4">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={point.user.image ?? ""} />
-                              <AvatarFallback>
-                                {initials(point.user.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold">
-                                {point.user.name ?? "Unnamed user"}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {point.gamePointType?.title ??
-                                  point.reason ??
-                                  "Manual adjustment"}{" "}
-                                · {formatInstantLocal(new Date(point.earnedAt))}
-                              </p>
-                            </div>
-                          </div>
-                          <Badge
-                            className={cn(
-                              "font-mono",
-                              point.total >= 0
-                                ? "bg-emerald-500/10 text-emerald-700"
-                                : "bg-rose-500/10 text-rose-700"
-                            )}
-                          >
-                            {point.total > 0 ? "+" : ""}
-                            {point.total}
-                          </Badge>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    <EpisodeActivityGroups
+                      groups={pointGroups}
+                      isComplete={points.isDone}
+                      renderItem={(point) => (
+                        <PointLink pointId={point.id}>
+                          <Card className={pointCardHover}>
+                            <CardContent className="flex items-center justify-between gap-4 p-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <Avatar className="h-9 w-9">
+                                  <AvatarImage src={point.user.image ?? ""} />
+                                  <AvatarFallback>
+                                    {initials(point.user.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-bold">
+                                    {point.user.name ?? "Unnamed user"}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {point.gamePointType?.title ??
+                                      point.reason ??
+                                      "Manual adjustment"}{" "}
+                                    · {formatInstantLocal(new Date(point.earnedAt))}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge
+                                className={cn(
+                                  "font-mono",
+                                  point.total >= 0
+                                    ? "bg-emerald-500/10 text-emerald-700"
+                                    : "bg-rose-500/10 text-rose-700"
+                                )}
+                              >
+                                {point.total > 0 ? "+" : ""}
+                                {point.total}
+                              </Badge>
+                            </CardContent>
+                          </Card>
+                        </PointLink>
+                      )}
+                      summarize={(items) => {
+                        const total = items.reduce(
+                          (sum, point) => sum + point.total,
+                          0
+                        );
+                        return `${total > 0 ? "+" : ""}${total} pts · ${plural(
+                          items.length,
+                          "entry",
+                          "entries"
+                        )}`;
+                      }}
+                    />
                     {!points.isDone && (
                       <LoadMoreButton
                         isLoading={loadingMore === "points"}
@@ -638,40 +767,53 @@ export function ConvexSeasonDetailPage() {
                   </p>
                 ) : (
                   <>
-                    {guesses.items.map((guess) => {
-                      const review = guess.assignmentReview.review;
-                      return (
-                        <Card key={guess.id}>
-                          <CardContent className="flex items-center justify-between gap-4 p-4">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <Avatar className="h-9 w-9">
-                                <AvatarImage src={guess.user.image ?? ""} />
-                                <AvatarFallback>
-                                  {initials(guess.user.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-bold">
-                                  {guess.user.name ?? "Unnamed user"}
-                                </p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {review.movie?.title ??
-                                    review.show?.title ??
-                                    "Unknown target"}{" "}
-                                  ·{" "}
-                                  {formatInstantLocal(
-                                    new Date(guess.createdAt)
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge variant="secondary">
-                              {guess.rating.value} · {guess.rating.name}
-                            </Badge>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                    <EpisodeActivityGroups
+                      groups={guessGroups}
+                      isComplete={guesses.isDone}
+                      renderItem={(guess) => {
+                        const review = guess.assignmentReview.review;
+                        return (
+                          <PointLink pointId={guess.point?.id ?? null}>
+                            <Card
+                              className={cn(
+                                guess.point !== null && pointCardHover
+                              )}
+                            >
+                              <CardContent className="flex items-center justify-between gap-4 p-4">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <Avatar className="h-9 w-9">
+                                    <AvatarImage src={guess.user.image ?? ""} />
+                                    <AvatarFallback>
+                                      {initials(guess.user.name)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold">
+                                      {guess.user.name ?? "Unnamed user"}
+                                    </p>
+                                    <p className="truncate text-xs text-muted-foreground">
+                                      {review.movie?.title ??
+                                        review.show?.title ??
+                                        "Unknown target"}{" "}
+                                      ·{" "}
+                                      {formatInstantLocal(
+                                        new Date(guess.createdAt)
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge variant="secondary">
+                                  {guess.rating.value} · {guess.rating.name}
+                                </Badge>
+                              </CardContent>
+                            </Card>
+                          </PointLink>
+                        );
+                      }}
+                      summarize={(items) =>
+                        plural(items.length, "guess", "guesses")
+                      }
+                    />
                     {!guesses.isDone && (
                       <LoadMoreButton
                         isLoading={loadingMore === "guesses"}
@@ -693,35 +835,51 @@ export function ConvexSeasonDetailPage() {
                   </p>
                 ) : (
                   <>
-                    {gambling.items.map((entry) => (
-                      <Card key={entry.id}>
-                        <CardContent className="flex items-center justify-between gap-4 p-4">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={entry.user.image ?? ""} />
-                              <AvatarFallback>
-                                {initials(entry.user.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold">
-                                {entry.user.name ?? "Unnamed user"}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {entry.gamblingType.title}
-                                {entry.assignment === null
-                                  ? ""
-                                  : ` · ${entry.assignment.movie.title}`}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-black">{entry.points} pts</p>
-                            <Badge variant="outline">{entry.status}</Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    <EpisodeActivityGroups
+                      groups={gamblingGroups}
+                      isComplete={gambling.isDone}
+                      renderItem={(entry) => (
+                        <PointLink pointId={entry.awardPoint?.id ?? null}>
+                          <Card
+                            className={cn(
+                              entry.awardPoint !== null && pointCardHover
+                            )}
+                          >
+                            <CardContent className="flex items-center justify-between gap-4 p-4">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <Avatar className="h-9 w-9">
+                                  <AvatarImage src={entry.user.image ?? ""} />
+                                  <AvatarFallback>
+                                    {initials(entry.user.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-bold">
+                                    {entry.user.name ?? "Unnamed user"}
+                                  </p>
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {entry.gamblingType.title}
+                                    {entry.assignment === null
+                                      ? ""
+                                      : ` · ${entry.assignment.movie.title}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-black">{entry.points} pts</p>
+                                <Badge variant="outline">{entry.status}</Badge>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </PointLink>
+                      )}
+                      summarize={(items) =>
+                        `${plural(items.length, "wager", "wagers")} · ${items.reduce(
+                          (sum, entry) => sum + entry.points,
+                          0
+                        )} pts wagered`
+                      }
+                    />
                     {!gambling.isDone && (
                       <LoadMoreButton
                         isLoading={loadingMore === "gambling"}

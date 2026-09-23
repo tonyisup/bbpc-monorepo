@@ -10,6 +10,8 @@ import {
   collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getEpisodeSeasonPosition,
+  getSeasonFinaleState,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
@@ -470,5 +472,89 @@ describe("recording management model", () => {
         total: 5,
       },
     ]);
+  });
+});
+
+describe("getEpisodeSeasonPosition", () => {
+  const openSeason = { startedOn: "2026-01-01", endedOn: null };
+  const today = "2026-01-25";
+  const seasonEpisodes = [
+    { number: 100, date: "2026-01-05" },
+    { number: 101, date: "2026-01-12" },
+    { number: 102, date: "2026-01-19" },
+    { number: 103, date: null },
+  ];
+
+  it("counts an undated next episode after the dated season episodes", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        openSeason,
+        seasonEpisodes,
+        today
+      )
+    ).toBe(4);
+  });
+
+  it("ignores later episodes and episodes outside the season range", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 101, date: "2026-01-12" },
+        { startedOn: "2026-01-06", endedOn: "2026-02-01" },
+        [{ number: 99, date: "2025-12-29" }, ...seasonEpisodes],
+        today
+      )
+    ).toBe(1);
+  });
+
+  it("returns null when the season has no start or the episode is outside it", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        { startedOn: null, endedOn: null },
+        seasonEpisodes,
+        today
+      )
+    ).toBeNull();
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: "2026-03-01" },
+        { startedOn: "2026-01-01", endedOn: "2026-02-01" },
+        seasonEpisodes,
+        today
+      )
+    ).toBeNull();
+  });
+
+  it("places an undated episode only in a season running today", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        { startedOn: "2026-01-01", endedOn: "2026-01-20" },
+        seasonEpisodes,
+        today
+      )
+    ).toBeNull();
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        { startedOn: "2026-02-01", endedOn: null },
+        seasonEpisodes,
+        today
+      )
+    ).toBeNull();
+  });
+});
+
+describe("getSeasonFinaleState", () => {
+  it("flags the finale and episodes past the season length", () => {
+    expect(getSeasonFinaleState(19, 20)).toBeNull();
+    expect(getSeasonFinaleState(20, 20)).toBe("finale");
+    expect(getSeasonFinaleState(21, 20)).toBe("overrun");
+  });
+
+  it("stays quiet without a position or a fixed length", () => {
+    expect(getSeasonFinaleState(null, 20)).toBeNull();
+    expect(getSeasonFinaleState(20, null)).toBeNull();
   });
 });

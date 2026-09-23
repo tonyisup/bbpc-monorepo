@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { loadConvexAdminEpisodeSearchCatalog } from "@/convex/episodes";
 import { getConvexDomainErrorCode } from "@/convex/identity";
 import {
   type ConvexAdminGameType,
@@ -60,6 +61,10 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Textarea } from "../ui/textarea";
+import {
+  MAX_SEASON_EPISODE_COUNT,
+  parseSeasonEpisodeCount,
+} from "./seasonEditorModel";
 
 export function seasonMutationFailureMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -105,13 +110,18 @@ export function ConvexSeasonEditor({
     editingSeason?.startedOn ?? getPacificTodayPlainDate()
   );
   const [endedOn, setEndedOn] = useState(editingSeason?.endedOn ?? "");
+  const [episodeCount, setEpisodeCount] = useState(
+    editingSeason?.episodeCount?.toString() ?? ""
+  );
   const [showErrors, setShowErrors] = useState(false);
   const dateRangeIsValid = endedOn.length === 0 || endedOn >= startedOn;
+  const parsedEpisodeCount = parseSeasonEpisodeCount(episodeCount);
   const isValid =
     title.trim().length > 0 &&
     gameTypeId.length > 0 &&
     /^\d{4}-\d{2}-\d{2}$/u.test(startedOn) &&
-    dateRangeIsValid;
+    dateRangeIsValid &&
+    parsedEpisodeCount !== undefined;
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -181,10 +191,34 @@ export function ConvexSeasonEditor({
               />
             </div>
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor="convex-season-episode-count">
+              Episodes in Season (Optional)
+            </Label>
+            <Input
+              aria-describedby="convex-season-episode-count-help"
+              aria-invalid={showErrors && parsedEpisodeCount === undefined}
+              id="convex-season-episode-count"
+              inputMode="numeric"
+              onChange={(event) => setEpisodeCount(event.target.value)}
+              pattern="[0-9]*"
+              placeholder="e.g. 20"
+              type="text"
+              value={episodeCount}
+            />
+            <p
+              className="text-xs text-muted-foreground"
+              id="convex-season-episode-count-help"
+            >
+              A whole number from 1 through {MAX_SEASON_EPISODE_COUNT}. End the
+              season by setting its end date after the final episode records.
+            </p>
+          </div>
           {showErrors && !isValid && (
             <p className="text-xs text-destructive">
-              A title, ruleset, valid start date, and non-reversed date range
-              are required.
+              A title, ruleset, valid start date, non-reversed date range, and
+              an episode count from 1 through {MAX_SEASON_EPISODE_COUNT} (or
+              blank) are required.
             </p>
           )}
         </div>
@@ -203,6 +237,12 @@ export function ConvexSeasonEditor({
                   gameTypeId,
                   startedOn,
                   endedOn: endedOn.length === 0 ? null : endedOn,
+                  // Send the count only when it changed, so editing other
+                  // fields still works against a backend without it.
+                  ...(editingSeason !== null &&
+                  (parsedEpisodeCount ?? null) === editingSeason.episodeCount
+                    ? {}
+                    : { episodeCount: parsedEpisodeCount ?? null }),
                 });
               }
             }}
@@ -252,6 +292,9 @@ export function ConvexSeasonsPage() {
   const [deletingSeason, setDeletingSeason] =
     useState<ConvexAdminSeason | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [recordedEpisodes, setRecordedEpisodes] = useState<
+    Record<string, number>
+  >({});
   const today = getPacificTodayPlainDate();
 
   useEffect(() => {
@@ -278,6 +321,44 @@ export function ConvexSeasonsPage() {
       active = false;
     };
   }, [convex, revision]);
+
+  // Episodes are not linked to seasons, so progress counts the episodes dated
+  // from the season's start through today. Only active, fixed-length seasons
+  // are counted to keep the page to one catalog scan per active season.
+  const progressSeasons = useMemo(
+    () =>
+      (seasons ?? []).flatMap((season) =>
+        season.episodeCount !== null &&
+        season.startedOn !== null &&
+        seasonStatus(season, today) === "active"
+          ? [{ id: season.id, startedOn: season.startedOn }]
+          : []
+      ),
+    [seasons, today]
+  );
+  useEffect(() => {
+    if (progressSeasons.length === 0) {
+      return;
+    }
+    const controller = new AbortController();
+    void Promise.all(
+      progressSeasons.map(async ({ id, startedOn }) => {
+        const episodes = await loadConvexAdminEpisodeSearchCatalog(
+          convex,
+          controller.signal,
+          { dateFrom: startedOn, dateTo: today }
+        );
+        return [id, episodes.length] as const;
+      })
+    )
+      .then((counts) => setRecordedEpisodes(Object.fromEntries(counts)))
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          console.error("Season episode progress could not be loaded.", error);
+        }
+      });
+    return () => controller.abort();
+  }, [convex, progressSeasons, today]);
 
   const filteredSeasons = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -452,6 +533,8 @@ export function ConvexSeasonsPage() {
             {filteredSeasons.map((season) => {
               const status = seasonStatus(season, today);
               const canDelete = canDeleteSeason(season);
+              const recorded =
+                status === "active" ? recordedEpisodes[season.id] : undefined;
               return (
                 <Card
                   className={cn(
@@ -495,7 +578,69 @@ export function ConvexSeasonsPage() {
                           ? "Ongoing"
                           : formatPlainDate(season.endedOn)}
                       </span>
+                      {season.episodeCount !== null && (
+                        <>
+                          <span>·</span>
+                          <span className="font-semibold text-foreground">
+                            {season.episodeCount} episodes
+                          </span>
+                        </>
+                      )}
                     </div>
+                    {season.episodeCount !== null && recorded !== undefined && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-baseline justify-between text-xs">
+                          <span className="font-bold uppercase tracking-wider text-muted-foreground">
+                            Progress
+                          </span>
+                          <span className="font-semibold">
+                            {recorded} of {season.episodeCount} recorded
+                          </span>
+                        </div>
+                        <div
+                          aria-label={`${recorded} of ${season.episodeCount} episodes recorded`}
+                          aria-valuemax={season.episodeCount}
+                          aria-valuemin={0}
+                          aria-valuenow={Math.min(
+                            recorded,
+                            season.episodeCount
+                          )}
+                          className="h-2 overflow-hidden rounded-full bg-muted"
+                          role="progressbar"
+                        >
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              recorded > season.episodeCount
+                                ? "bg-destructive"
+                                : "bg-primary"
+                            )}
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                (recorded / season.episodeCount) * 100
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                        {recorded >= season.episodeCount && (
+                          <p
+                            className={cn(
+                              "text-xs",
+                              recorded > season.episodeCount
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            {recorded > season.episodeCount
+                              ? "More episodes than the season length are dated."
+                              : "All of this season's episodes are dated."}{" "}
+                            Set an end date once the final episode has recorded
+                            and its points are in.
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl bg-primary/5 p-3">
                         <span className="text-[10px] font-bold uppercase text-primary/70">

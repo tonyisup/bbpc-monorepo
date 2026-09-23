@@ -162,6 +162,7 @@ async function createSeason(
     title: string;
     startedOn: string;
     endedOn?: string | null;
+    episodeCount?: number | null;
   },
 ) {
   return await t.withIdentity(ADMIN_IDENTITY).mutation(
@@ -487,7 +488,18 @@ describe("game foundation API", () => {
       title: "Season One",
       startedOn: "2026-01-01",
       endedOn: "2026-12-31",
+      episodeCount: 12,
     });
+    expect(season.episodeCount).toBe(12);
+    await expectDomainError(
+      createSeason(t, {
+        gameTypeId: gameType.id,
+        title: "Invalid length",
+        startedOn: "2026-01-01",
+        episodeCount: 0,
+      }),
+      "VALIDATION_FAILED",
+    );
     const pointTypeId = await t.run(async (ctx) => {
       const createdPointTypeId = await ctx.db.insert("gamePointTypes", {
         title: "Manual bonus",
@@ -587,6 +599,7 @@ describe("game foundation API", () => {
           gameTypeId: replacementGameType.id,
           startedOn: "2026-02-01",
           endedOn: "2026-11-30",
+          episodeCount: 20,
         },
       );
     expect(updated).toMatchObject({
@@ -594,6 +607,7 @@ describe("game foundation API", () => {
       description: "Updated season",
       startedOn: "2026-02-01",
       endedOn: "2026-11-30",
+      episodeCount: 20,
       gameType: { id: replacementGameType.id },
     });
     const cleared =
@@ -604,11 +618,51 @@ describe("game foundation API", () => {
           id: season.id,
           description: null,
           endedOn: null,
+          episodeCount: null,
         },
       );
     expect(cleared).toMatchObject({
       description: null,
       endedOn: null,
+      episodeCount: null,
+    });
+    for (const episodeCount of [0, 2.5, 501]) {
+      await expectDomainError(
+        t.withIdentity(ADMIN_IDENTITY).mutation(
+          api.games.seasons.update,
+          {
+            clientApiVersion: BBPC_API_VERSION,
+            id: season.id,
+            episodeCount,
+          },
+        ),
+        "VALIDATION_FAILED",
+      );
+    }
+    for (const episodeCount of [1, 500]) {
+      await expect(
+        t.withIdentity(ADMIN_IDENTITY).mutation(
+          api.games.seasons.update,
+          {
+            clientApiVersion: BBPC_API_VERSION,
+            id: season.id,
+            episodeCount,
+          },
+        ),
+      ).resolves.toMatchObject({ episodeCount });
+    }
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.seasons.update, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: season.id,
+        title: "Season 1 renamed",
+      }),
+    ).resolves.toMatchObject({ episodeCount: 500 });
+    await t.withIdentity(ADMIN_IDENTITY).mutation(api.games.seasons.update, {
+      clientApiVersion: BBPC_API_VERSION,
+      id: season.id,
+      title: "Season 1",
+      episodeCount: null,
     });
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(

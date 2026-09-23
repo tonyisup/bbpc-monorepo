@@ -18,7 +18,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatPlainDate } from "@/lib/dates";
+import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
+import { formatPlainDate, getPacificTodayPlainDate } from "@/lib/dates";
+import { pacificPointDay } from "@/lib/pointDays";
 import type { GamePerformanceData } from "@/types/game";
 
 const COLORS = [
@@ -39,7 +41,7 @@ const dateLabelFormatter = new Intl.DateTimeFormat("en-US", {
 type PerformancePoint = GamePerformanceData["points"][number];
 type PerformanceSummaryItem = GamePerformanceData["userSummary"][number];
 
-const buildChartData = (
+export const buildChartData = (
   points: PerformancePoint[],
   userSummary: PerformanceSummaryItem[]
 ) => {
@@ -64,24 +66,49 @@ const buildChartData = (
   return Array.from(chartDataPointMap.values());
 };
 
-const buildSummaryRows = (
+/**
+ * Points are awarded while recording, so the latest Pacific scoring day stands
+ * in for the last episode. Manual adjustments made that day count too. Points
+ * dated after `today` are ignored so a mistyped date can't pin the column.
+ */
+export const buildSummaryRows = (
   chartData: Record<string, number | string>[],
-  userSummary: PerformanceSummaryItem[]
+  points: PerformancePoint[],
+  userSummary: PerformanceSummaryItem[],
+  today: string
 ) => {
-  return userSummary.map((user) => {
-    const series = chartData.map((point) => Number(point[user.id] ?? 0));
-    const latestScore = series.at(-1) ?? 0;
-    const peakScore = series.length > 0 ? Math.max(...series) : 0;
-    const firstScore = series[0] ?? 0;
+  const lastPoint = points.findLast(
+    (point) => pacificPointDay(point.earnedAt) <= today
+  );
+  const lastEpisodeDay =
+    lastPoint === undefined ? null : pacificPointDay(lastPoint.earnedAt);
+  const lastEpisodePoints = new Map<string, number>();
+  for (const point of points) {
+    if (pacificPointDay(point.earnedAt) === lastEpisodeDay) {
+      lastEpisodePoints.set(
+        point.userId,
+        (lastEpisodePoints.get(point.userId) ?? 0) + point.pointValue
+      );
+    }
+  }
 
-    return {
-      id: user.id,
-      name: user.name ?? "Player",
-      latestScore,
-      peakScore,
-      trendValue: latestScore - firstScore,
-    };
-  });
+  return {
+    lastEpisodeLabel:
+      lastPoint === undefined
+        ? null
+        : dateLabelFormatter.format(new Date(lastPoint.earnedAt)),
+    rows: userSummary.map((user) => {
+      const series = chartData.map((point) => Number(point[user.id] ?? 0));
+
+      return {
+        id: user.id,
+        name: user.name ?? "Player",
+        latestScore: series.at(-1) ?? 0,
+        peakScore: series.length > 0 ? Math.max(...series) : 0,
+        lastEpisodeScore: lastEpisodePoints.get(user.id) ?? 0,
+      };
+    }),
+  };
 };
 
 export default function GamePerformanceTracking({
@@ -94,7 +121,13 @@ export default function GamePerformanceTracking({
   }
 
   const chartData = buildChartData(data.points, data.userSummary);
-  const summaryRows = buildSummaryRows(chartData, data.userSummary);
+  const summary = buildSummaryRows(
+    chartData,
+    data.points,
+    data.userSummary,
+    getPacificTodayPlainDate()
+  );
+  const progress = getSeasonProgress(data);
 
   return (
     <Card className="overflow-hidden border-zinc-800 bg-black/70 text-white shadow-xl shadow-black/30">
@@ -109,6 +142,11 @@ export default function GamePerformanceTracking({
             <p>This season ends on {formatPlainDate(data.season.endedOn)}.</p>
           )}
         </CardDescription>
+        {progress !== null && (
+          <div className="pt-3">
+            <SeasonProgress progress={progress} />
+          </div>
+        )}
       </CardHeader>
       <CardContent className="pt-4">
         {chartData.length === 0 ? (
@@ -224,11 +262,18 @@ export default function GamePerformanceTracking({
                     <th className="px-4 py-3 font-semibold">Player</th>
                     <th className="px-4 py-3 font-semibold">Current</th>
                     <th className="px-4 py-3 font-semibold">Peak</th>
-                    <th className="px-4 py-3 font-semibold">Net Change</th>
+                    <th className="px-4 py-3 font-semibold">
+                      Last Episode
+                      {summary.lastEpisodeLabel !== null && (
+                        <span className="ml-1 font-normal normal-case tracking-normal text-zinc-400">
+                          ({summary.lastEpisodeLabel})
+                        </span>
+                      )}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {summaryRows.map((user) => (
+                  {summary.rows.map((user) => (
                     <tr
                       key={user.id}
                       className="border-b border-zinc-900 last:border-b-0"
@@ -246,8 +291,8 @@ export default function GamePerformanceTracking({
                         {user.peakScore}
                       </td>
                       <td className="px-4 py-3 text-zinc-300">
-                        {user.trendValue > 0 ? "+" : ""}
-                        {user.trendValue}
+                        {user.lastEpisodeScore > 0 ? "+" : ""}
+                        {user.lastEpisodeScore}
                       </td>
                     </tr>
                   ))}

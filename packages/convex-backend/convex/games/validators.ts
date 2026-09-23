@@ -29,6 +29,7 @@ export const seasonValidator = v.object({
   description: nullableStringValidator,
   startedOn: nullableStringValidator,
   endedOn: nullableStringValidator,
+  episodeCount: v.union(v.number(), v.null()),
   gameType: gameTypeValidator,
 });
 
@@ -67,6 +68,16 @@ export const pointCoreValidator = v.object({
   adjustment: nullableNumberValidator,
   gamePointType: v.union(gamePointTypeValidator, v.null()),
   total: v.number(),
+});
+
+export const pointEpisodeValidator = v.object({
+  id: v.id("episodes"),
+  number: v.number(),
+  title: v.string(),
+});
+
+export const pointSeasonActivityValidator = pointCoreValidator.extend({
+  episode: v.union(pointEpisodeValidator, v.null()),
 });
 
 export const assignmentPointLinkValidator = v.object({
@@ -160,6 +171,17 @@ export const performancePointValidator = v.object({
   pointValue: v.number(),
 });
 
+export const latestPointChangeValidator = v.object({
+  seasonId: v.id("seasons"),
+  lastScoredAt: v.number(),
+  points: v.array(
+    v.object({
+      earnedAt: v.number(),
+      pointValue: v.number(),
+    }),
+  ),
+});
+
 export const performanceUserValidator = v.object({
   user: pointUserValidator,
   total: v.number(),
@@ -167,6 +189,7 @@ export const performanceUserValidator = v.object({
 
 export const currentPerformanceValidator = v.object({
   season: seasonValidator,
+  recordedEpisodeCount: v.union(v.number(), v.null()),
   userSummary: v.array(performanceUserValidator),
   points: v.array(performancePointValidator),
 });

@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
 import { normalizeLookupKey } from "../lib/normalize.js";
+import { MAX_SEASON_EPISODE_COUNT } from "./limits.js";
 
 const MAX_GAME_TEXT_LENGTH = 1000;
 const MIN_SQL_SMALLINT = -32_768;
@@ -83,6 +84,20 @@ export function validatePlainDate(
     domainError(
       "VALIDATION_FAILED",
       `${label} must be a real calendar date.`,
+    );
+  }
+  return value;
+}
+
+export function validateSeasonEpisodeCount(value: number): number {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 1 ||
+    value > MAX_SEASON_EPISODE_COUNT
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      `Season episode count must be a whole number from 1 through ${String(MAX_SEASON_EPISODE_COUNT)}.`,
     );
   }
   return value;

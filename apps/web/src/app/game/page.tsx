@@ -46,6 +46,8 @@ export default async function GamePage() {
         </p>
       </header>
 
+      <SeasonStandingsDisclosure data={performance} />
+
       <section aria-labelledby="current-round-heading" className="space-y-4">
         <h2
           id="current-round-heading"
@@ -66,8 +68,6 @@ export default async function GamePage() {
           </div>
         )}
       </section>
-
-      <SeasonStandingsDisclosure data={performance} />
 
       <section aria-labelledby="rules-heading" className="space-y-4">
         <div>
@@ -90,7 +90,10 @@ export default async function GamePage() {
             </summary>
             <div className="space-y-3 px-3 pb-5 text-zinc-300">
               <p>
-                Each season lasts 8 weeks. The player with the most points wins.
+                {performance?.season.episodeCount != null
+                  ? `Each season lasts ${performance.season.episodeCount} episodes.`
+                  : "Each season lasts a set number of episodes."}{" "}
+                The player with the most points wins.
               </p>
               <p>
                 The winner picks a movie and joins the hosts to discuss it on

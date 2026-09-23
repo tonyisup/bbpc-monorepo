@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/navigation-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConvexImpersonationControl } from "./ConvexImpersonationControl";
+import { PointChangeBadge, useUnseenPointChange } from "./GamePointChange";
 import { cn } from "@/lib/utils";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 
@@ -70,7 +71,7 @@ const authNavItems: NavItem[] = [
 ];
 
 const NavMenu: FC = () => {
-  const { signIn, signOut, user } = useBbpcAuth();
+  const { accountStatus, signIn, signOut, user } = useBbpcAuth();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -83,6 +84,16 @@ const NavMenu: FC = () => {
       ? pathname === "/"
       : pathname === href || pathname.startsWith(`${href}/`);
 
+  const pointChange = useUnseenPointChange(
+    mounted && accountStatus === "ready",
+    isActive("/game"),
+    visibleUser?.appUserId ?? null
+  );
+  const gameBadge = (item: NavItem) =>
+    item.href === "/game" && pointChange.change !== null ? (
+      <PointChangeBadge change={pointChange.change} />
+    ) : null;
+
   const desktopItems = [
     ...publicNavItems,
     ...authNavItems.filter((item) => !item.requiresAuth || isLoggedIn),
@@ -90,6 +101,7 @@ const NavMenu: FC = () => {
 
   return (
     <div className="flex items-center gap-2">
+      {pointChange.loader}
       <ConvexImpersonationControl />
 
       {/* Desktop horizontal nav */}
@@ -115,6 +127,7 @@ const NavMenu: FC = () => {
           >
             {item.icon}
             <span>{item.label}</span>
+            {gameBadge(item)}
           </Link>
         ))}
         {isLoggedIn ? (
@@ -142,17 +155,37 @@ const NavMenu: FC = () => {
         <NavigationMenu orientation="vertical" delayDuration={0}>
           <NavigationMenuList>
             <NavigationMenuItem>
-              <NavigationMenuTrigger aria-label="Open navigation menu">
-                {visibleUser ? (
-                  <Avatar>
-                    <AvatarImage src={visibleUser.image ?? undefined} />
-                    <AvatarFallback>
-                      {visibleUser.name?.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                ) : (
-                  <Menu className="h-5 w-5" aria-hidden="true" />
-                )}
+              <NavigationMenuTrigger
+                aria-label="Open navigation menu"
+                aria-describedby={
+                  pointChange.change === null
+                    ? undefined
+                    : "nav-game-point-change"
+                }
+              >
+                <span className="relative">
+                  {visibleUser ? (
+                    <Avatar>
+                      <AvatarImage src={visibleUser.image ?? undefined} />
+                      <AvatarFallback>
+                        {visibleUser.name?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                  ) : (
+                    <Menu className="h-5 w-5" aria-hidden="true" />
+                  )}
+                  {pointChange.change !== null && (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-black"
+                      />
+                      <span className="sr-only" id="nav-game-point-change">
+                        New game point changes from the last episode
+                      </span>
+                    </>
+                  )}
+                </span>
               </NavigationMenuTrigger>
               <NavigationMenuContent>
                 {publicNavItems.map((item) => (
@@ -175,6 +208,7 @@ const NavMenu: FC = () => {
                     >
                       {item.icon}
                       {item.label}
+                      {gameBadge(item)}
                     </Link>
                   </NavigationMenuLink>
                 ))}

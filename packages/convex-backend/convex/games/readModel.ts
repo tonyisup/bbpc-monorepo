@@ -4,6 +4,7 @@ import { domainError } from "../lib/errors.js";
 import {
   MAX_SEASON_RELATIONSHIPS_FOR_COUNT,
   MAX_SEASONS_TO_INSPECT,
+  MAX_SEASON_EPISODES_TO_COUNT,
 } from "./limits.js";
 
 type GameReadContext = Pick<QueryCtx, "db">;
@@ -64,6 +65,7 @@ export async function hydrateSeason(
     description: nullable(season.description),
     startedOn: nullable(season.startedOn),
     endedOn: nullable(season.endedOn),
+    episodeCount: nullable(season.episodeCount),
     gameType: toGameType(gameType),
   };
 }
@@ -121,6 +123,32 @@ export async function hydrateAdminSeason(
       quoteSubmissions: toBoundedCount(quoteSubmissions),
     },
   };
+}
+
+/**
+ * Episodes are not linked to seasons, so a fixed-length season's progress
+ * counts the dated episodes from its start through `today` (or its end date).
+ */
+export async function countSeasonEpisodesThrough(
+  ctx: GameReadContext,
+  season: Doc<"seasons">,
+  today: string,
+): Promise<number | null> {
+  const { startedOn, endedOn } = season;
+  if (season.episodeCount === undefined || startedOn === undefined) {
+    return null;
+  }
+  const through = endedOn !== undefined && endedOn < today ? endedOn : today;
+  if (through < startedOn) {
+    return 0;
+  }
+  const episodes = await ctx.db
+    .query("episodes")
+    .withIndex("by_date_and_status", (index) =>
+      index.gte("date", startedOn).lte("date", through),
+    )
+    .take(MAX_SEASON_EPISODES_TO_COUNT);
+  return episodes.length;
 }
 
 export async function findCurrentSeason(

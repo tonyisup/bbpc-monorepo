@@ -7,6 +7,8 @@ import { describe, expect, test } from "vitest";
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
+import { MAX_POINTS_FOR_LATEST_CHANGE } from "./games/limits.js";
+import { countSeasonEpisodesThrough } from "./games/readModel.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -528,7 +530,8 @@ describe("point API", () => {
       { today: "2026-07-24" },
     );
     expect(performance).toMatchObject({
-      season: { id: seasonId },
+      season: { id: seasonId, episodeCount: null },
+      recordedEpisodeCount: null,
       userSummary: [
         { user: { id: otherId }, total: 20 },
         { user: { id: memberId }, total: 12 },
@@ -538,6 +541,350 @@ describe("point API", () => {
         { userId: otherId, earnedAt: 200, pointValue: 20 },
       ],
     });
+  });
+
+  test("reports fixed-length season progress from dated episodes", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("seasons", seasonId, { episodeCount: 20 });
+      for (const [number, date, status] of [
+        [99, "2025-12-29", "published"],
+        [100, "2026-01-05", "published"],
+        [101, "2026-01-12", "published"],
+        [102, "2026-07-24", "recording"],
+        [103, "2026-07-31", "next"],
+        [104, undefined, "next"],
+      ] as const) {
+        await ctx.db.insert("episodes", {
+          number,
+          title: `Episode ${String(number)}`,
+          status,
+          ...(date === undefined ? {} : { date }),
+        });
+      }
+    });
+
+    await expect(
+      t.query(api.games.public.currentPerformance, {
+        today: "2026-07-24",
+      }),
+    ).resolves.toMatchObject({
+      season: { id: seasonId, episodeCount: 20 },
+      recordedEpisodeCount: 3,
+    });
+  });
+
+  test("returns the member's points near the season's latest point", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const { pointTypeId, seasonId } = await seedGameFoundation(t);
+    const hour = 60 * 60 * 1000;
+    const latest = Date.parse("2026-07-17T04:00:00Z");
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+    ).resolves.toBeNull();
+
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 4,
+      earnedAt: latest - 7 * 24 * hour,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      pointTypeId,
+      adjustment: 1,
+      earnedAt: latest - 2 * hour,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: -3,
+      earnedAt: latest - hour,
+    });
+    await seedPoint(t, {
+      userId: otherId,
+      seasonId,
+      adjustment: 20,
+      earnedAt: latest,
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+    ).resolves.toEqual({
+      seasonId,
+      lastScoredAt: latest,
+      points: [
+        { earnedAt: latest - 2 * hour, pointValue: 11 },
+        { earnedAt: latest - hour, pointValue: -3 },
+      ],
+    });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2027-01-01" },
+      ),
+    ).resolves.toBeNull();
+    await expectDomainError(
+      t.query(api.games.member.myLatestPointChange, {
+        today: "2026-07-24",
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+  });
+
+  test("labels season point activity with the episode it was awarded for", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    await advanceToS3(t);
+    const linked = await seedAssignment(t, memberId, "401");
+    const guessed = await seedAssignment(t, memberId, "402");
+    const wagered = await seedAssignment(t, memberId, "403");
+    const linkPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 1,
+    });
+    const guessPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 2,
+    });
+    const wagerPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 3,
+    });
+    const quotePoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 4,
+    });
+    await seedPoint(t, { userId: memberId, seasonId, earnedAt: 5 });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("assignmentPointLinks", {
+        assignmentId: linked.assignmentId,
+        userId: memberId,
+        pointId: linkPoint,
+      });
+      const ratingId = await ctx.db.insert("ratings", {
+        name: "Excellent",
+        value: 5,
+      });
+      const reviewId = await ctx.db.insert("reviews", {
+        userId: memberId,
+        movieId: guessed.movieId,
+        reviewedAt: 1,
+      });
+      const assignmentReviewId = await ctx.db.insert("assignmentReviews", {
+        assignmentId: guessed.assignmentId,
+        reviewId,
+      });
+      await ctx.db.insert("guesses", {
+        ratingId,
+        createdAt: 1,
+        userId: memberId,
+        assignmentReviewId,
+        seasonId,
+        pointId: guessPoint,
+      });
+      const gamblingTypeId = await ctx.db.insert("gamblingTypes", {
+        lookupId: "double",
+        normalizedLookupId: "double",
+        title: "Double",
+        multiplier: 2,
+        isActive: true,
+        createdAt: 1,
+      });
+      await ctx.db.insert("gamblingEntries", {
+        userId: memberId,
+        assignmentId: wagered.assignmentId,
+        points: 2,
+        createdAt: 1,
+        awardPointId: wagerPoint,
+        seasonId,
+        gamblingTypeId,
+        status: "won",
+      });
+      await ctx.db.insert("quoteSubmissions", {
+        userId: memberId,
+        episodeId: linked.episodeId,
+        seasonId,
+        quoteText: "Shake and bake.",
+        sourceTitle: "Talladega Nights",
+        sourceType: "MOVIE",
+        status: "INCLUDED",
+        pointId: quotePoint,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    });
+
+    const page = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.games.points.listForSeasonPage,
+      { seasonId, paginationOpts: { numItems: 10, cursor: null } },
+    );
+    expect(
+      page.page.map((point) => [point.earnedAt, point.episode?.number ?? null]),
+    ).toEqual([
+      [5, null],
+      [4, 401],
+      [3, 403],
+      [2, 402],
+      [1, 401],
+    ]);
+    expect(page.page[1]?.episode).toEqual({
+      id: linked.episodeId,
+      number: 401,
+      title: "Episode 401",
+    });
+  });
+
+  test("counts season progress only within the season's dates", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    const counts = await t.run(async (ctx) => {
+      for (const [number, date] of [
+        [1, "2026-01-05"],
+        [2, "2026-03-01"],
+        [3, "2026-06-01"],
+      ] as const) {
+        await ctx.db.insert("episodes", {
+          number,
+          title: `Episode ${String(number)}`,
+          date,
+        });
+      }
+      const season = await ctx.db.get("seasons", seasonId);
+      if (season === null) {
+        throw new Error("Seeded season is missing.");
+      }
+      const withCount = { ...season, episodeCount: 20 };
+      const withoutStart: typeof withCount = { ...withCount };
+      delete withoutStart.startedOn;
+      return {
+        noLength: await countSeasonEpisodesThrough(ctx, season, "2026-07-24"),
+        noStart: await countSeasonEpisodesThrough(
+          ctx,
+          withoutStart,
+          "2026-07-24",
+        ),
+        ended: await countSeasonEpisodesThrough(
+          ctx,
+          { ...withCount, endedOn: "2026-04-01" },
+          "2026-07-24",
+        ),
+        beforeStart: await countSeasonEpisodesThrough(
+          ctx,
+          withCount,
+          "2025-12-31",
+        ),
+        open: await countSeasonEpisodesThrough(ctx, withCount, "2026-07-24"),
+      };
+    });
+
+    expect(counts).toEqual({
+      noLength: null,
+      noStart: null,
+      ended: 2,
+      beforeStart: 0,
+      open: 3,
+    });
+  });
+
+  test("ignores points dated after today when finding the last episode", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    // 9pm Pacific on Jul 23, and a mistyped point years ahead.
+    const latest = Date.parse("2026-07-24T04:00:00Z");
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 5,
+      earnedAt: latest,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 9,
+      earnedAt: Date.parse("2062-01-01T00:00:00Z"),
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+    ).resolves.toEqual({
+      seasonId,
+      lastScoredAt: latest,
+      points: [{ earnedAt: latest, pointValue: 5 }],
+    });
+  });
+
+  test("rejects a latest point change beyond its point limit", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    const latest = Date.parse("2026-07-17T04:00:00Z");
+    await t.run(async (ctx) => {
+      for (let index = 0; index <= MAX_POINTS_FOR_LATEST_CHANGE; index += 1) {
+        await ctx.db.insert("points", {
+          userId: memberId,
+          seasonId,
+          earnedAt: latest - index,
+          adjustment: 1,
+        });
+      }
+    });
+
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+      "CONFLICT",
+    );
+  });
+
+  test("labels a point without an episode when its assignment is gone", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    await advanceToS3(t);
+    const { assignmentId } = await seedAssignment(t, memberId, "501");
+    const pointId = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 1,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("assignmentPointLinks", {
+        assignmentId,
+        userId: memberId,
+        pointId,
+      });
+      await ctx.db.delete("assignments", assignmentId);
+    });
+
+    const page = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.games.points.listForSeasonPage,
+      { seasonId, paginationOpts: { numItems: 10, cursor: null } },
+    );
+    expect(page.page.map((point) => point.episode)).toEqual([null]);
   });
 
   test("paginates only the authenticated member's point history", async () => {

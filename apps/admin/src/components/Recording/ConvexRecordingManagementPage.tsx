@@ -31,7 +31,10 @@ import {
   loadConvexAssignmentWorkbenchById,
   updateConvexAssignmentReviewRating,
 } from "../../convex/assignmentDetails";
-import { type ConvexAdminEpisode } from "../../convex/episodes";
+import {
+  type ConvexAdminEpisode,
+  loadConvexAdminEpisodesPage,
+} from "../../convex/episodes";
 import {
   type ConvexAdminEpisodeAudioMessage,
   loadConvexAdminEpisodeAudioPage,
@@ -99,14 +102,17 @@ import {
   type AssignmentRecordingDisclosure,
   chunkRecordingValues,
   collectAllRecordingAudioMessages,
+  collectAllRecordingEpisodes,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getEpisodeSeasonPosition,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
 } from "./recordingManagementModel";
+import { SeasonPositionBadges } from "./SeasonPositionBadges";
 
 const listGuessesForAssignmentReference = api.games.guesses.listForAssignment;
 
@@ -157,6 +163,7 @@ type RecordingGuessSettlement = z.infer<typeof guessSettlementSchema>;
 interface RecordingManagementData {
   episode: ConvexAdminEpisode | null;
   season: ConvexAdminSeason | null;
+  seasonEpisodePosition: number | null;
   performance: ConvexAdminSeasonPerformance | null;
   guesses: ConvexAdminSeasonGuess[];
   guessSettlements: RecordingGuessSettlement[];
@@ -264,6 +271,7 @@ async function loadRecordingManagementData(
   const [
     games,
     performance,
+    seasonEpisodes,
     submissions,
     assignmentPoints,
     workbenches,
@@ -273,6 +281,18 @@ async function loadRecordingManagementData(
     season === null
       ? Promise.resolve(null)
       : loadConvexAdminSeasonPerformance(client, season.id),
+    episode === null || season?.startedOn == null
+      ? Promise.resolve([])
+      : // The season position is a label; never let it block the page.
+        collectAllRecordingEpisodes((cursor) =>
+          loadConvexAdminEpisodesPage(client, cursor, {
+            dateFrom: season.startedOn ?? undefined,
+            dateTo: season.endedOn ?? undefined,
+          })
+        ).catch((error: unknown) => {
+          console.error("Season episodes could not be loaded.", error);
+          return null;
+        }),
     episode === null
       ? Promise.resolve([])
       : loadConvexAdminQuoteSubmissions(client, episode.id),
@@ -316,6 +336,12 @@ async function loadRecordingManagementData(
   return {
     episode,
     season,
+    seasonEpisodePosition:
+      episode === null || season === null
+        ? null
+        : seasonEpisodes === null
+        ? null
+        : getEpisodeSeasonPosition(episode, season, seasonEpisodes, today),
     performance,
     guesses: games.guesses,
     guessSettlements: games.guessSettlements,
@@ -1522,11 +1548,15 @@ export function ConvexRecordingManagementPage() {
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Badge>{episode.status ?? "unknown"}</Badge>
                       <span className="text-sm text-muted-foreground">
                         Episode {episode.number}
                       </span>
+                      <SeasonPositionBadges
+                        position={data.seasonEpisodePosition}
+                        season={data.season}
+                      />
                     </div>
                     <CardTitle className="text-3xl">{episode.title}</CardTitle>
                     <CardDescription>
