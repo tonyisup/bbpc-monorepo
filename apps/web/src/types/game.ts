@@ -9,7 +9,9 @@ export interface GamePerformanceData {
     id: string;
     title: string;
     endedOn: string | null;
+    episodeCount: number | null;
   };
+  recordedEpisodeCount: number | null;
   userSummary: Array<{
     id: string;
     name: string | null;

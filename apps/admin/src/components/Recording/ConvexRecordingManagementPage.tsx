@@ -31,7 +31,10 @@ import {
   loadConvexAssignmentWorkbenchById,
   updateConvexAssignmentReviewRating,
 } from "../../convex/assignmentDetails";
-import { type ConvexAdminEpisode } from "../../convex/episodes";
+import {
+  type ConvexAdminEpisode,
+  loadConvexAdminEpisodesPage,
+} from "../../convex/episodes";
 import {
   type ConvexAdminEpisodeAudioMessage,
   loadConvexAdminEpisodeAudioPage,
@@ -99,8 +102,10 @@ import {
   type AssignmentRecordingDisclosure,
   chunkRecordingValues,
   collectAllRecordingAudioMessages,
+  collectAllRecordingEpisodes,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getEpisodeSeasonPosition,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
@@ -157,6 +162,7 @@ type RecordingGuessSettlement = z.infer<typeof guessSettlementSchema>;
 interface RecordingManagementData {
   episode: ConvexAdminEpisode | null;
   season: ConvexAdminSeason | null;
+  seasonEpisodePosition: number | null;
   performance: ConvexAdminSeasonPerformance | null;
   guesses: ConvexAdminSeasonGuess[];
   guessSettlements: RecordingGuessSettlement[];
@@ -264,6 +270,7 @@ async function loadRecordingManagementData(
   const [
     games,
     performance,
+    seasonEpisodes,
     submissions,
     assignmentPoints,
     workbenches,
@@ -273,6 +280,14 @@ async function loadRecordingManagementData(
     season === null
       ? Promise.resolve(null)
       : loadConvexAdminSeasonPerformance(client, season.id),
+    episode === null || season?.startedOn == null
+      ? Promise.resolve([])
+      : collectAllRecordingEpisodes((cursor) =>
+          loadConvexAdminEpisodesPage(client, cursor, {
+            dateFrom: season.startedOn ?? undefined,
+            dateTo: season.endedOn ?? undefined,
+          })
+        ),
     episode === null
       ? Promise.resolve([])
       : loadConvexAdminQuoteSubmissions(client, episode.id),
@@ -316,6 +331,10 @@ async function loadRecordingManagementData(
   return {
     episode,
     season,
+    seasonEpisodePosition:
+      episode === null || season === null
+        ? null
+        : getEpisodeSeasonPosition(episode, season, seasonEpisodes),
     performance,
     guesses: games.guesses,
     guessSettlements: games.guessSettlements,
@@ -1527,6 +1546,26 @@ export function ConvexRecordingManagementPage() {
                       <span className="text-sm text-muted-foreground">
                         Episode {episode.number}
                       </span>
+                      {data.season !== null &&
+                        data.seasonEpisodePosition !== null && (
+                          <Badge variant="outline">
+                            #{data.seasonEpisodePosition}
+                            {data.season.episodeCount !== null &&
+                              ` of ${data.season.episodeCount}`}{" "}
+                            in {data.season.title}
+                          </Badge>
+                        )}
+                      {data.season?.episodeCount != null &&
+                        data.seasonEpisodePosition !== null &&
+                        data.seasonEpisodePosition >=
+                          data.season.episodeCount && (
+                          <Badge variant="destructive">
+                            {data.seasonEpisodePosition ===
+                            data.season.episodeCount
+                              ? "Season finale"
+                              : "Past season length"}
+                          </Badge>
+                        )}
                     </div>
                     <CardTitle className="text-3xl">{episode.title}</CardTitle>
                     <CardDescription>

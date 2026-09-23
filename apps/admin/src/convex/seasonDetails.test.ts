@@ -22,6 +22,7 @@ const season = {
   description: "The first season",
   startedOn: "2026-01-01",
   endedOn: null,
+  episodeCount: 20,
   gameType,
 };
 

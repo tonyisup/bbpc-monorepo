@@ -24,6 +24,8 @@ export const adminSeasonSchema = z.object({
   description: z.string().nullable(),
   startedOn: z.string().nullable(),
   endedOn: z.string().nullable(),
+  // Seasons created before episode counts existed omit the field.
+  episodeCount: z.number().int().positive().nullable().default(null),
   gameType: gameTypeSchema,
   counts: z.object({
     points: boundedCountSchema,
@@ -68,6 +70,7 @@ export interface ConvexAdminSeasonInput {
   gameTypeId: string;
   startedOn: string;
   endedOn: string | null;
+  episodeCount: number | null;
 }
 export interface ConvexAdminSeasonsPage {
   seasons: ConvexAdminSeason[];
@@ -114,6 +117,9 @@ export async function createConvexAdminSeason(
       startedOn: input.startedOn,
       ...(input.description === null ? {} : { description: input.description }),
       ...(input.endedOn === null ? {} : { endedOn: input.endedOn }),
+      ...(input.episodeCount === null
+        ? {}
+        : { episodeCount: input.episodeCount }),
     })
   );
 }

@@ -454,6 +454,16 @@ export function ConvexSeasonDetailPage() {
                 </span>
               </div>
             )}
+            {season.episodeCount !== null && (
+              <div className="border-l pl-4">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Length
+                </span>
+                <span className="text-sm font-bold">
+                  {season.episodeCount} episodes
+                </span>
+              </div>
+            )}
           </div>
         </section>
 

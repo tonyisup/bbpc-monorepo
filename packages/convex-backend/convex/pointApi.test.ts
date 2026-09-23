@@ -528,7 +528,8 @@ describe("point API", () => {
       { today: "2026-07-24" },
     );
     expect(performance).toMatchObject({
-      season: { id: seasonId },
+      season: { id: seasonId, episodeCount: null },
+      recordedEpisodeCount: null,
       userSummary: [
         { user: { id: otherId }, total: 20 },
         { user: { id: memberId }, total: 12 },
@@ -537,6 +538,39 @@ describe("point API", () => {
         { userId: memberId, earnedAt: 100, pointValue: 12 },
         { userId: otherId, earnedAt: 200, pointValue: 20 },
       ],
+    });
+  });
+
+  test("reports fixed-length season progress from dated episodes", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("seasons", seasonId, { episodeCount: 20 });
+      for (const [number, date, status] of [
+        [99, "2025-12-29", "published"],
+        [100, "2026-01-05", "published"],
+        [101, "2026-01-12", "published"],
+        [102, "2026-07-24", "recording"],
+        [103, "2026-07-31", "next"],
+        [104, undefined, "next"],
+      ] as const) {
+        await ctx.db.insert("episodes", {
+          number,
+          title: `Episode ${String(number)}`,
+          status,
+          ...(date === undefined ? {} : { date }),
+        });
+      }
+    });
+
+    await expect(
+      t.query(api.games.public.currentPerformance, {
+        today: "2026-07-24",
+      }),
+    ).resolves.toMatchObject({
+      season: { id: seasonId, episodeCount: 20 },
+      recordedEpisodeCount: 3,
     });
   });
 

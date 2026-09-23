@@ -54,6 +54,12 @@ interface RecordingAudioPage<T> {
   continueCursor: string;
 }
 
+interface RecordingEpisodePage<T> {
+  episodes: T[];
+  isDone: boolean;
+  continueCursor: string;
+}
+
 interface RecordingPage {
   isDone: boolean;
   continueCursor: string;
@@ -112,6 +118,48 @@ export function selectRecordingManagementEpisode<
       ? episode
       : selected;
   }, null);
+}
+
+/**
+ * Episodes are not linked to seasons, so an episode's place in a season is
+ * counted from the dated episodes that fall inside the season's date range.
+ * The next episode often has no date yet and still counts as in the season.
+ */
+export function getEpisodeSeasonPosition(
+  episode: { number: number; date: string | null },
+  season: { startedOn: string | null; endedOn: string | null },
+  seasonEpisodes: readonly { number: number; date: string | null }[]
+): number | null {
+  const { startedOn, endedOn } = season;
+  if (startedOn === null) {
+    return null;
+  }
+  const inSeason = (date: string) =>
+    date >= startedOn && (endedOn === null || date <= endedOn);
+  if (episode.date !== null && !inSeason(episode.date)) {
+    return null;
+  }
+  const earlierNumbers = new Set(
+    seasonEpisodes
+      .filter(
+        (candidate) =>
+          candidate.number < episode.number &&
+          candidate.date !== null &&
+          inSeason(candidate.date)
+      )
+      .map((candidate) => candidate.number)
+  );
+  return earlierNumbers.size + 1;
+}
+
+export async function collectAllRecordingEpisodes<T>(
+  loadPage: (cursor: string | null) => Promise<RecordingEpisodePage<T>>
+): Promise<T[]> {
+  return collectAllRecordingPages(
+    loadPage,
+    (page) => page.episodes,
+    "season episode catalog"
+  );
 }
 
 export async function collectAllRecordingUsers(

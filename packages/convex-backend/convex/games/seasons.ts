@@ -27,6 +27,7 @@ import {
   validateGameTitle,
   validateOptionalGameText,
   validatePlainDate,
+  validateSeasonEpisodeCount,
   validateSeasonRange,
 } from "./writeModel.js";
 
@@ -227,6 +228,7 @@ export const create = adminMutation({
     gameTypeId: v.id("gameTypes"),
     startedOn: v.string(),
     endedOn: v.optional(v.union(v.string(), v.null())),
+    episodeCount: v.optional(v.union(v.number(), v.null())),
   },
   returns: seasonAdminValidator,
   handler: async (ctx, args) => {
@@ -251,12 +253,17 @@ export const create = adminMutation({
         ? undefined
         : validatePlainDate(args.endedOn, "Season end date");
     validateSeasonRange(startedOn, endedOn);
+    const episodeCount =
+      args.episodeCount === undefined || args.episodeCount === null
+        ? undefined
+        : validateSeasonEpisodeCount(args.episodeCount);
     const seasonId = await ctx.db.insert("seasons", {
       title,
       gameTypeId: gameType._id,
       startedOn,
       ...(description === undefined ? {} : { description }),
       ...(endedOn === undefined ? {} : { endedOn }),
+      ...(episodeCount === undefined ? {} : { episodeCount }),
     });
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
@@ -280,6 +287,7 @@ export const update = adminMutation({
     gameTypeId: v.optional(v.id("gameTypes")),
     startedOn: v.optional(v.string()),
     endedOn: v.optional(v.union(v.string(), v.null())),
+    episodeCount: v.optional(v.union(v.number(), v.null())),
   },
   returns: seasonAdminValidator,
   handler: async (ctx, args) => {
@@ -290,6 +298,7 @@ export const update = adminMutation({
       gameTypeId?: typeof season.gameTypeId;
       startedOn?: string;
       endedOn?: string | undefined;
+      episodeCount?: number | undefined;
     } = {};
     if (args.title !== undefined) {
       patch.title = validateGameTitle(args.title, "Season title");
@@ -316,6 +325,12 @@ export const update = adminMutation({
         args.endedOn === null
           ? undefined
           : validatePlainDate(args.endedOn, "Season end date");
+    }
+    if (args.episodeCount !== undefined) {
+      patch.episodeCount =
+        args.episodeCount === null
+          ? undefined
+          : validateSeasonEpisodeCount(args.episodeCount);
     }
     const startedOn = patch.startedOn ?? season.startedOn;
     if (startedOn === undefined) {

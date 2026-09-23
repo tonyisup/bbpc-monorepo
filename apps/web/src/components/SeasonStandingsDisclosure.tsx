@@ -3,6 +3,10 @@
 import { useState } from "react";
 
 import GamePerformanceTracking from "@/components/GamePerformanceTracking";
+import {
+  formatSeasonProgress,
+  getSeasonProgress,
+} from "@/components/SeasonProgress";
 import type { GamePerformanceData } from "@/types/game";
 
 export function SeasonStandingsDisclosure({
@@ -11,6 +15,7 @@ export function SeasonStandingsDisclosure({
   data: GamePerformanceData | null;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const progress = data === null ? null : getSeasonProgress(data);
 
   return (
     <details
@@ -19,7 +24,14 @@ export function SeasonStandingsDisclosure({
       onToggle={(event) => setIsOpen(event.currentTarget.open)}
     >
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 text-lg font-bold text-white hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 [&::-webkit-details-marker]:hidden">
-        Season standings
+        <span>
+          Season standings
+          {progress !== null && (
+            <span className="ml-2 text-sm font-medium text-zinc-400">
+              · {formatSeasonProgress(progress)}
+            </span>
+          )}
+        </span>
         <span className="text-sm font-medium text-zinc-400">
           {isOpen ? "Close chart" : "Open chart"}
         </span>

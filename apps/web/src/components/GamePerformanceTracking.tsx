@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
 import { formatPlainDate } from "@/lib/dates";
 import type { GamePerformanceData } from "@/types/game";
 
@@ -95,6 +96,7 @@ export default function GamePerformanceTracking({
 
   const chartData = buildChartData(data.points, data.userSummary);
   const summaryRows = buildSummaryRows(chartData, data.userSummary);
+  const progress = getSeasonProgress(data);
 
   return (
     <Card className="overflow-hidden border-zinc-800 bg-black/70 text-white shadow-xl shadow-black/30">
@@ -109,6 +111,11 @@ export default function GamePerformanceTracking({
             <p>This season ends on {formatPlainDate(data.season.endedOn)}.</p>
           )}
         </CardDescription>
+        {progress !== null && (
+          <div className="pt-3">
+            <SeasonProgress progress={progress} />
+          </div>
+        )}
       </CardHeader>
       <CardContent className="pt-4">
         {chartData.length === 0 ? (

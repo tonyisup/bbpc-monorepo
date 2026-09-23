@@ -29,6 +29,7 @@ export const seasonValidator = v.object({
   description: nullableStringValidator,
   startedOn: nullableStringValidator,
   endedOn: nullableStringValidator,
+  episodeCount: v.union(v.number(), v.null()),
   gameType: gameTypeValidator,
 });
 
@@ -167,6 +168,7 @@ export const performanceUserValidator = v.object({
 
 export const currentPerformanceValidator = v.object({
   season: seasonValidator,
+  recordedEpisodeCount: v.union(v.number(), v.null()),
   userSummary: v.array(performanceUserValidator),
   points: v.array(performancePointValidator),
 });

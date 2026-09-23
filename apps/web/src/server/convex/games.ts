@@ -18,7 +18,10 @@ const currentPerformanceSchema = z
       id: z.string().min(1),
       title: z.string(),
       endedOn: z.string().nullable(),
+      // Defaults keep the page working against a backend without season lengths.
+      episodeCount: z.number().int().positive().nullable().default(null),
     }),
+    recordedEpisodeCount: z.number().int().nonnegative().nullable().default(null),
     userSummary: z.array(
       z.object({
         total: z.number(),
@@ -58,6 +61,7 @@ export async function getConvexCurrentPerformance(
   }
   return {
     season: result.season,
+    recordedEpisodeCount: result.recordedEpisodeCount,
     userSummary: result.userSummary.map(({ total, user }) => ({
       id: user.id,
       name: user.name,

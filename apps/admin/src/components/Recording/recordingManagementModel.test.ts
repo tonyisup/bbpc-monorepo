@@ -10,6 +10,7 @@ import {
   collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
+  getEpisodeSeasonPosition,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
@@ -470,5 +471,52 @@ describe("recording management model", () => {
         total: 5,
       },
     ]);
+  });
+});
+
+describe("getEpisodeSeasonPosition", () => {
+  const openSeason = { startedOn: "2026-01-01", endedOn: null };
+  const seasonEpisodes = [
+    { number: 100, date: "2026-01-05" },
+    { number: 101, date: "2026-01-12" },
+    { number: 102, date: "2026-01-19" },
+    { number: 103, date: null },
+  ];
+
+  it("counts an undated next episode after the dated season episodes", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        openSeason,
+        seasonEpisodes
+      )
+    ).toBe(4);
+  });
+
+  it("ignores later episodes and episodes outside the season range", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 101, date: "2026-01-12" },
+        { startedOn: "2026-01-06", endedOn: "2026-02-01" },
+        [{ number: 99, date: "2025-12-29" }, ...seasonEpisodes]
+      )
+    ).toBe(1);
+  });
+
+  it("returns null when the season has no start or the episode is outside it", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        { startedOn: null, endedOn: null },
+        seasonEpisodes
+      )
+    ).toBeNull();
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: "2026-03-01" },
+        { startedOn: "2026-01-01", endedOn: "2026-02-01" },
+        seasonEpisodes
+      )
+    ).toBeNull();
   });
 });

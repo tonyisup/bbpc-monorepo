@@ -24,6 +24,7 @@ const season = {
   description: null,
   startedOn: "2026-01-01",
   endedOn: null,
+  episodeCount: 20,
   gameType,
   counts: {
     points: { count: 0, isExact: true },
@@ -39,6 +40,7 @@ const input = {
   gameTypeId: gameType.id,
   startedOn: season.startedOn,
   endedOn: season.endedOn,
+  episodeCount: season.episodeCount,
 };
 
 describe("Convex admin season adapter", () => {
@@ -77,6 +79,8 @@ describe("Convex admin season adapter", () => {
       title: "Updated",
     });
     await deleteConvexAdminSeason(client, season.id);
+    expect(mutation.mock.calls[0]?.[1]).toMatchObject({ episodeCount: 20 });
+    expect(mutation.mock.calls[1]?.[1]).toMatchObject({ episodeCount: 20 });
     for (const call of mutation.mock.calls) {
       expect(call[1]).toEqual(
         expect.objectContaining({
@@ -95,5 +99,22 @@ describe("Convex admin season adapter", () => {
     const client = { query } as unknown as ConvexReactClient;
 
     await expect(loadConvexAdminSeasonsPage(client, null)).rejects.toThrow();
+  });
+
+  test("reads seasons saved before episode counts existed", async () => {
+    const legacySeason: Partial<typeof season> = { ...season };
+    delete legacySeason.episodeCount;
+    const query = vi.fn().mockResolvedValue({
+      page: [legacySeason],
+      isDone: true,
+      continueCursor: "done",
+    });
+    const client = { query } as unknown as ConvexReactClient;
+
+    await expect(loadConvexAdminSeasonsPage(client, null)).resolves.toEqual({
+      seasons: [{ ...season, episodeCount: null }],
+      isDone: true,
+      continueCursor: "done",
+    });
   });
 });

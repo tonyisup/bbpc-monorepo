@@ -3097,6 +3097,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3130,6 +3131,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -3217,6 +3219,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3250,6 +3253,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -3340,6 +3344,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3373,6 +3378,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -3469,6 +3475,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3502,6 +3509,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -3586,6 +3594,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -3619,6 +3628,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3706,6 +3716,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -3739,6 +3750,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3835,6 +3847,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -3868,6 +3881,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3951,6 +3965,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -3984,6 +3999,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4057,6 +4073,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4090,6 +4107,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4165,6 +4183,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -4198,6 +4217,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4272,6 +4292,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4305,6 +4326,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4387,6 +4409,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4420,6 +4443,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4507,6 +4531,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4540,6 +4565,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4619,6 +4645,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4652,6 +4679,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4732,6 +4760,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4765,6 +4794,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -4849,6 +4879,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -4882,6 +4913,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -5002,6 +5034,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5030,6 +5063,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -5125,6 +5159,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5153,6 +5188,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -5243,6 +5279,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5271,6 +5308,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -5361,6 +5399,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5389,6 +5428,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -5490,6 +5530,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -5518,6 +5559,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5631,6 +5673,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -5659,6 +5702,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5763,6 +5807,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -5791,6 +5836,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -5883,6 +5929,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -5911,6 +5958,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6044,6 +6092,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6072,6 +6121,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6167,6 +6217,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6195,6 +6246,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6288,6 +6340,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6316,6 +6369,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6414,6 +6468,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6442,6 +6497,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6502,6 +6558,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6559,6 +6616,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6611,6 +6669,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6704,6 +6763,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6788,6 +6848,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -6911,6 +6972,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -6993,6 +7055,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -7045,6 +7108,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -7108,6 +7172,7 @@ export type PublicApiType = {
                     season: {
                         description: string | null;
                         endedOn: string | null;
+                        episodeCount: number | null;
                         gameType: {
                             description: string | null;
                             id: Id<"gameTypes">;
@@ -7242,6 +7307,7 @@ export type PublicApiType = {
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -7269,9 +7335,11 @@ export type PublicApiType = {
                     pointValue: number;
                     userId: Id<"users">;
                 }>;
+                recordedEpisodeCount: number | null;
                 season: {
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -7296,6 +7364,7 @@ export type PublicApiType = {
             }, {
                 description: string | null;
                 endedOn: string | null;
+                episodeCount: number | null;
                 gameType: {
                     description: string | null;
                     id: Id<"gameTypes">;
@@ -7724,6 +7793,7 @@ export type PublicApiType = {
                 clientApiVersion: string;
                 description?: string;
                 endedOn?: string | null;
+                episodeCount?: number | null;
                 gameTypeId: Id<"gameTypes">;
                 startedOn: string;
                 title: string;
@@ -7748,6 +7818,7 @@ export type PublicApiType = {
                 };
                 description: string | null;
                 endedOn: string | null;
+                episodeCount: number | null;
                 gameType: {
                     description: string | null;
                     id: Id<"gameTypes">;
@@ -7781,6 +7852,7 @@ export type PublicApiType = {
                 };
                 description: string | null;
                 endedOn: string | null;
+                episodeCount: number | null;
                 gameType: {
                     description: string | null;
                     id: Id<"gameTypes">;
@@ -7843,6 +7915,7 @@ export type PublicApiType = {
                     };
                     description: string | null;
                     endedOn: string | null;
+                    episodeCount: number | null;
                     gameType: {
                         description: string | null;
                         id: Id<"gameTypes">;
@@ -7866,6 +7939,7 @@ export type PublicApiType = {
                 clientApiVersion: string;
                 description?: string | null;
                 endedOn?: string | null;
+                episodeCount?: number | null;
                 gameTypeId?: Id<"gameTypes">;
                 id: Id<"seasons">;
                 startedOn?: string;
@@ -7891,6 +7965,7 @@ export type PublicApiType = {
                 };
                 description: string | null;
                 endedOn: string | null;
+                episodeCount: number | null;
                 gameType: {
                     description: string | null;
                     id: Id<"gameTypes">;
@@ -7934,6 +8009,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -8016,6 +8092,7 @@ export type PublicApiType = {
                         season: {
                             description: string | null;
                             endedOn: string | null;
+                            episodeCount: number | null;
                             gameType: {
                                 description: string | null;
                                 id: Id<"gameTypes">;
@@ -8092,6 +8169,7 @@ export type PublicApiType = {
                             season: {
                                 description: string | null;
                                 endedOn: string | null;
+                                episodeCount: number | null;
                                 gameType: {
                                     description: string | null;
                                     id: Id<"gameTypes">;
@@ -8165,6 +8243,7 @@ export type PublicApiType = {
                             season: {
                                 description: string | null;
                                 endedOn: string | null;
+                                episodeCount: number | null;
                                 gameType: {
                                     description: string | null;
                                     id: Id<"gameTypes">;
