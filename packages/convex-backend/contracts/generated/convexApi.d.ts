@@ -647,6 +647,101 @@ export type PublicApiType = {
             }>;
         };
     };
+    announcements: {
+        admin: {
+            list: FunctionReference<"query", "public", Record<string, never>, Array<{
+                id: Id<"announcements">;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+                updatedAt: number;
+                createdAt: number;
+            }>>;
+            create: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+            }, {
+                id: Id<"announcements">;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+                updatedAt: number;
+                createdAt: number;
+            }>;
+            update: FunctionReference<"mutation", "public", {
+                id: Id<"announcements">;
+                clientApiVersion: string;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+            }, {
+                id: Id<"announcements">;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+                updatedAt: number;
+                createdAt: number;
+            }>;
+            endNow: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"announcements">;
+            }, {
+                id: Id<"announcements">;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+                updatedAt: number;
+                createdAt: number;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"announcements">;
+            }, {
+                id: Id<"announcements">;
+            }>;
+        };
+        public: {
+            listLive: FunctionReference<"query", "public", {
+                now: number;
+            }, Array<{
+                id: Id<"announcements">;
+                message: string;
+                severity: "info" | "warning";
+                startsAt: number;
+                endsAt: number;
+                linkUrl: string | null;
+                linkLabel: string | null;
+                dismissible: boolean;
+                updatedAt: number;
+            }>>;
+        };
+    };
     admin: {
         dashboardBackfill: {
             initialize: FunctionReference<"mutation", "public", {

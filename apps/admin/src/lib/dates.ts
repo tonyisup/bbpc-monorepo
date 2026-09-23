@@ -110,3 +110,15 @@ export const formatInstantLocal = (
 
   return new Intl.DateTimeFormat(locale, options).format(date);
 };
+
+// Values for <input type="datetime-local">, which uses the browser's time zone.
+export const toDateTimeLocalValue = (value: number): string => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+export const parseDateTimeLocalValue = (value: string): number | null => {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+};
