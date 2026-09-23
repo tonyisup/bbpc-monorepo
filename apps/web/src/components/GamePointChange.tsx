@@ -17,30 +17,56 @@ import {
 import { getPacificTodayPlainDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
-const SEEN_STORAGE_KEY = "bbpc.seenPointChange";
+// Kept per member, so people sharing a browser don't hide each other's badge.
+function seenStorageKey(userId: string): string {
+  return `bbpc.seenPointChange:${userId}`;
+}
 
-function readSeen(): string | null {
+function readSeen(userId: string | null): string | null {
+  if (userId === null) {
+    return null;
+  }
   try {
-    return window.localStorage.getItem(SEEN_STORAGE_KEY);
+    return window.localStorage.getItem(seenStorageKey(userId));
   } catch {
     return null;
   }
 }
 
-function writeSeen(key: string) {
+function writeSeen(userId: string | null, key: string) {
+  if (userId === null) {
+    return;
+  }
   try {
-    window.localStorage.setItem(SEEN_STORAGE_KEY, key);
+    window.localStorage.setItem(seenStorageKey(userId), key);
   } catch {
     // The badge still clears for this page view.
   }
 }
 
+// The header stays mounted across navigation, so refresh the date when the tab
+// comes back into view rather than keeping the date it first loaded with.
+function usePacificToday(): string {
+  const [today, setToday] = useState(getPacificTodayPlainDate);
+  useEffect(() => {
+    const refresh = () => setToday(getPacificTodayPlainDate());
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+  return today;
+}
+
 function LatestPointChangeQuery({
   onChange,
+  today,
 }: {
   onChange: (change: LatestPointChange | null) => void;
+  today: string;
 }) {
-  const [today] = useState(getPacificTodayPlainDate);
   const result: unknown = useQuery(latestPointChangeReference, { today });
   const summary = useMemo(
     () =>
@@ -81,14 +107,16 @@ export function useLatestPointChange(enabled: boolean): {
   loader: ReactNode;
 } {
   const [latest, setLatest] = useState<LatestPointChange | null>(null);
+  const today = usePacificToday();
   useEffect(() => {
     if (!enabled) {
       setLatest(null);
     }
   }, [enabled]);
+  // Keyed by date so a failed query gets another try the next day.
   const loader = enabled ? (
-    <PointChangeErrorBoundary>
-      <LatestPointChangeQuery onChange={setLatest} />
+    <PointChangeErrorBoundary key={today}>
+      <LatestPointChangeQuery onChange={setLatest} today={today} />
     </PointChangeErrorBoundary>
   ) : null;
   return { latest: enabled ? latest : null, loader };
@@ -100,20 +128,21 @@ export function useLatestPointChange(enabled: boolean): {
  */
 export function useUnseenPointChange(
   enabled: boolean,
-  onGamePage: boolean
+  onGamePage: boolean,
+  userId: string | null
 ): { change: number | null; loader: ReactNode } {
   const { latest, loader } = useLatestPointChange(enabled);
   const [seen, setSeen] = useState<string | null>(null);
 
   useEffect(() => {
-    setSeen(readSeen());
-  }, []);
+    setSeen(readSeen(userId));
+  }, [userId]);
   useEffect(() => {
     if (onGamePage && latest !== null && latest.key !== seen) {
-      writeSeen(latest.key);
+      writeSeen(userId, latest.key);
       setSeen(latest.key);
     }
-  }, [latest, onGamePage, seen]);
+  }, [latest, onGamePage, seen, userId]);
 
   const change =
     !onGamePage && latest !== null && latest.change !== 0 && latest.key !== seen

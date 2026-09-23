@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   useQuery: vi.fn<(reference: unknown, args: { today: string }) => unknown>(),
@@ -49,11 +49,21 @@ function summaryText(data: GamePerformanceData | null = null): string {
 }
 
 describe("SeasonStandingsDisclosure", () => {
+  beforeEach(() => {
+    const listeners = {
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+    vi.stubGlobal("window", listeners);
+    vi.stubGlobal("document", listeners);
+  });
+
   afterEach(() => {
     if (renderer !== null) {
       act(() => renderer?.unmount());
       renderer = null;
     }
+    vi.unstubAllGlobals();
     mocks.useQuery.mockReset();
     mocks.accountStatus = "ready";
   });

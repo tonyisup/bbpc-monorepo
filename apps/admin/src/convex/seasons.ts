@@ -24,8 +24,8 @@ export const adminSeasonSchema = z.object({
   description: z.string().nullable(),
   startedOn: z.string().nullable(),
   endedOn: z.string().nullable(),
-  // Seasons created before episode counts existed omit the field.
-  episodeCount: z.number().int().positive().nullable().default(null),
+  // Older backends omit the field; a malformed stored value reads as none.
+  episodeCount: z.number().int().positive().nullable().catch(null),
   gameType: gameTypeSchema,
   counts: z.object({
     points: boundedCountSchema,

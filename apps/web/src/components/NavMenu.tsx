@@ -86,7 +86,8 @@ const NavMenu: FC = () => {
 
   const pointChange = useUnseenPointChange(
     mounted && accountStatus === "ready",
-    isActive("/game")
+    isActive("/game"),
+    visibleUser?.appUserId ?? null
   );
   const gameBadge = (item: NavItem) =>
     item.href === "/game" && pointChange.change !== null ? (

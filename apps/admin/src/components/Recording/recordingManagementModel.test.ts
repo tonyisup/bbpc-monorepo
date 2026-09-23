@@ -477,6 +477,7 @@ describe("recording management model", () => {
 
 describe("getEpisodeSeasonPosition", () => {
   const openSeason = { startedOn: "2026-01-01", endedOn: null };
+  const today = "2026-01-25";
   const seasonEpisodes = [
     { number: 100, date: "2026-01-05" },
     { number: 101, date: "2026-01-12" },
@@ -489,7 +490,8 @@ describe("getEpisodeSeasonPosition", () => {
       getEpisodeSeasonPosition(
         { number: 103, date: null },
         openSeason,
-        seasonEpisodes
+        seasonEpisodes,
+        today
       )
     ).toBe(4);
   });
@@ -499,7 +501,8 @@ describe("getEpisodeSeasonPosition", () => {
       getEpisodeSeasonPosition(
         { number: 101, date: "2026-01-12" },
         { startedOn: "2026-01-06", endedOn: "2026-02-01" },
-        [{ number: 99, date: "2025-12-29" }, ...seasonEpisodes]
+        [{ number: 99, date: "2025-12-29" }, ...seasonEpisodes],
+        today
       )
     ).toBe(1);
   });
@@ -509,14 +512,35 @@ describe("getEpisodeSeasonPosition", () => {
       getEpisodeSeasonPosition(
         { number: 103, date: null },
         { startedOn: null, endedOn: null },
-        seasonEpisodes
+        seasonEpisodes,
+        today
       )
     ).toBeNull();
     expect(
       getEpisodeSeasonPosition(
         { number: 103, date: "2026-03-01" },
         { startedOn: "2026-01-01", endedOn: "2026-02-01" },
-        seasonEpisodes
+        seasonEpisodes,
+        today
+      )
+    ).toBeNull();
+  });
+
+  it("places an undated episode only in a season running today", () => {
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        { startedOn: "2026-01-01", endedOn: "2026-01-20" },
+        seasonEpisodes,
+        today
+      )
+    ).toBeNull();
+    expect(
+      getEpisodeSeasonPosition(
+        { number: 103, date: null },
+        { startedOn: "2026-02-01", endedOn: null },
+        seasonEpisodes,
+        today
       )
     ).toBeNull();
   });

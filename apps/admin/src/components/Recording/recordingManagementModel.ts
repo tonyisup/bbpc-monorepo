@@ -123,12 +123,14 @@ export function selectRecordingManagementEpisode<
 /**
  * Episodes are not linked to seasons, so an episode's place in a season is
  * counted from the dated episodes that fall inside the season's date range.
- * The next episode often has no date yet and still counts as in the season.
+ * The next episode often has no date yet; it counts as in the season only
+ * while the season is running on `today`.
  */
 export function getEpisodeSeasonPosition(
   episode: { number: number; date: string | null },
   season: { startedOn: string | null; endedOn: string | null },
-  seasonEpisodes: readonly { number: number; date: string | null }[]
+  seasonEpisodes: readonly { number: number; date: string | null }[],
+  today: string
 ): number | null {
   const { startedOn, endedOn } = season;
   if (startedOn === null) {
@@ -136,7 +138,7 @@ export function getEpisodeSeasonPosition(
   }
   const inSeason = (date: string) =>
     date >= startedOn && (endedOn === null || date <= endedOn);
-  if (episode.date !== null && !inSeason(episode.date)) {
+  if (!inSeason(episode.date ?? today)) {
     return null;
   }
   const earlierNumbers = new Set(

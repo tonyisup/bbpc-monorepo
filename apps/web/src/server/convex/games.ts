@@ -18,10 +18,11 @@ const currentPerformanceSchema = z
       id: z.string().min(1),
       title: z.string(),
       endedOn: z.string().nullable(),
-      // Defaults keep the page working against a backend without season lengths.
-      episodeCount: z.number().int().positive().nullable().default(null),
+      // Older backends omit these; a malformed value reads as none rather
+      // than taking down the game page.
+      episodeCount: z.number().int().positive().nullable().catch(null),
     }),
-    recordedEpisodeCount: z.number().int().nonnegative().nullable().default(null),
+    recordedEpisodeCount: z.number().int().nonnegative().nullable().catch(null),
     userSummary: z.array(
       z.object({
         total: z.number(),

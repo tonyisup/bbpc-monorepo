@@ -283,12 +283,16 @@ async function loadRecordingManagementData(
       : loadConvexAdminSeasonPerformance(client, season.id),
     episode === null || season?.startedOn == null
       ? Promise.resolve([])
-      : collectAllRecordingEpisodes((cursor) =>
+      : // The season position is a label; never let it block the page.
+        collectAllRecordingEpisodes((cursor) =>
           loadConvexAdminEpisodesPage(client, cursor, {
             dateFrom: season.startedOn ?? undefined,
             dateTo: season.endedOn ?? undefined,
           })
-        ),
+        ).catch((error: unknown) => {
+          console.error("Season episodes could not be loaded.", error);
+          return null;
+        }),
     episode === null
       ? Promise.resolve([])
       : loadConvexAdminQuoteSubmissions(client, episode.id),
@@ -335,7 +339,9 @@ async function loadRecordingManagementData(
     seasonEpisodePosition:
       episode === null || season === null
         ? null
-        : getEpisodeSeasonPosition(episode, season, seasonEpisodes),
+        : seasonEpisodes === null
+        ? null
+        : getEpisodeSeasonPosition(episode, season, seasonEpisodes, today),
     performance,
     guesses: games.guesses,
     guessSettlements: games.guessSettlements,

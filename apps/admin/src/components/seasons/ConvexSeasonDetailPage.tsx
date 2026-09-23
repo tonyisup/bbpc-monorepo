@@ -141,10 +141,13 @@ function plural(count: number, singular: string, pluralForm: string): string {
 
 function EpisodeActivityGroups<T extends { id: string }>({
   groups,
+  isComplete,
   renderItem,
   summarize,
 }: {
   groups: SeasonActivityGroup<T>[];
+  /** False while more pages exist, so group totals may still grow. */
+  isComplete: boolean;
   renderItem: (item: T) => ReactNode;
   summarize: (items: T[]) => string;
 }) {
@@ -170,6 +173,7 @@ function EpisodeActivityGroups<T extends { id: string }>({
             </h3>
             <span className="shrink-0 text-xs font-semibold text-muted-foreground">
               {summarize(group.items)}
+              {!isComplete && " so far"}
             </span>
           </div>
           {group.items.map((item) => (
@@ -691,6 +695,7 @@ export function ConvexSeasonDetailPage() {
                   <>
                     <EpisodeActivityGroups
                       groups={pointGroups}
+                      isComplete={points.isDone}
                       renderItem={(point) => (
                         <PointLink pointId={point.id}>
                           <Card className={pointCardHover}>
@@ -764,6 +769,7 @@ export function ConvexSeasonDetailPage() {
                   <>
                     <EpisodeActivityGroups
                       groups={guessGroups}
+                      isComplete={guesses.isDone}
                       renderItem={(guess) => {
                         const review = guess.assignmentReview.review;
                         return (
@@ -831,6 +837,7 @@ export function ConvexSeasonDetailPage() {
                   <>
                     <EpisodeActivityGroups
                       groups={gamblingGroups}
+                      isComplete={gambling.isDone}
                       renderItem={(entry) => (
                         <PointLink pointId={entry.awardPoint?.id ?? null}>
                           <Card

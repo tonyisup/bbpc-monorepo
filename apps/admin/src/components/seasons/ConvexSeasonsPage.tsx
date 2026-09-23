@@ -635,9 +635,10 @@ export function ConvexSeasonsPage() {
                             )}
                           >
                             {recorded > season.episodeCount
-                              ? "More episodes than the season length are recorded."
-                              : "All episodes are recorded."}{" "}
-                            Set an end date to close the season.
+                              ? "More episodes than the season length are dated."
+                              : "All of this season's episodes are dated."}{" "}
+                            Set an end date once the final episode has recorded
+                            and its points are in.
                           </p>
                         )}
                       </div>

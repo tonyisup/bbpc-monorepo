@@ -55,7 +55,11 @@ function Harness({
   enabled: boolean;
   onGamePage: boolean;
 }) {
-  const { change, loader } = useUnseenPointChange(enabled, onGamePage);
+  const { change, loader } = useUnseenPointChange(
+    enabled,
+    onGamePage,
+    "user-1"
+  );
   latestChange = change;
   return <>{loader}</>;
 }
@@ -95,6 +99,12 @@ describe("useUnseenPointChange", () => {
   beforeEach(() => {
     storage = new Map();
     vi.stubGlobal("window", globalThis);
+    vi.stubGlobal("addEventListener", () => {});
+    vi.stubGlobal("removeEventListener", () => {});
+    vi.stubGlobal("document", {
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
@@ -120,7 +130,7 @@ describe("useUnseenPointChange", () => {
     });
 
     expect(render({ enabled: true, onGamePage: true })).toBeNull();
-    expect(storage.get("bbpc.seenPointChange")).toBe("season-1:2026-09-10:5");
+    expect(storage.get("bbpc.seenPointChange:user-1")).toBe("season-1:2026-09-10:5");
     expect(render({ enabled: true, onGamePage: false })).toBeNull();
 
     mocks.useQuery.mockReturnValue(result([[LATEST, 5], [LATEST, 2]]));
