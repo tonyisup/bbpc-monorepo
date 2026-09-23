@@ -641,6 +641,99 @@ describe("point API", () => {
     );
   });
 
+  test("labels season point activity with the episode it was awarded for", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    await advanceToS3(t);
+    const linked = await seedAssignment(t, memberId, "401");
+    const guessed = await seedAssignment(t, memberId, "402");
+    const wagered = await seedAssignment(t, memberId, "403");
+    const pointIds = await Promise.all(
+      [1, 2, 3, 4, 5].map((earnedAt) =>
+        seedPoint(t, { userId: memberId, seasonId, earnedAt }),
+      ),
+    );
+    const [linkPoint, guessPoint, wagerPoint, quotePoint] = pointIds;
+    await t.run(async (ctx) => {
+      await ctx.db.insert("assignmentPointLinks", {
+        assignmentId: linked.assignmentId,
+        userId: memberId,
+        pointId: linkPoint,
+      });
+      const ratingId = await ctx.db.insert("ratings", {
+        name: "Excellent",
+        value: 5,
+      });
+      const reviewId = await ctx.db.insert("reviews", {
+        userId: memberId,
+        movieId: guessed.movieId,
+        reviewedAt: 1,
+      });
+      const assignmentReviewId = await ctx.db.insert("assignmentReviews", {
+        assignmentId: guessed.assignmentId,
+        reviewId,
+      });
+      await ctx.db.insert("guesses", {
+        ratingId,
+        createdAt: 1,
+        userId: memberId,
+        assignmentReviewId,
+        seasonId,
+        pointId: guessPoint,
+      });
+      const gamblingTypeId = await ctx.db.insert("gamblingTypes", {
+        lookupId: "double",
+        normalizedLookupId: "double",
+        title: "Double",
+        multiplier: 2,
+        isActive: true,
+        createdAt: 1,
+      });
+      await ctx.db.insert("gamblingEntries", {
+        userId: memberId,
+        assignmentId: wagered.assignmentId,
+        points: 2,
+        createdAt: 1,
+        awardPointId: wagerPoint,
+        seasonId,
+        gamblingTypeId,
+        status: "won",
+      });
+      await ctx.db.insert("quoteSubmissions", {
+        userId: memberId,
+        episodeId: linked.episodeId,
+        seasonId,
+        quoteText: "Shake and bake.",
+        sourceTitle: "Talladega Nights",
+        sourceType: "MOVIE",
+        status: "INCLUDED",
+        pointId: quotePoint,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    });
+
+    const page = await t.withIdentity(ADMIN_IDENTITY).query(
+      api.games.points.listForSeasonPage,
+      { seasonId, paginationOpts: { numItems: 10, cursor: null } },
+    );
+    expect(
+      page.page.map((point) => [point.earnedAt, point.episode?.number ?? null]),
+    ).toEqual([
+      [5, null],
+      [4, 401],
+      [3, 403],
+      [2, 402],
+      [1, 401],
+    ]);
+    expect(page.page[1]?.episode).toEqual({
+      id: linked.episodeId,
+      number: 401,
+      title: "Episode 401",
+    });
+  });
+
   test("paginates only the authenticated member's point history", async () => {
     const t = createTestBackend();
     const { memberId, otherId } = await seedActors(t);

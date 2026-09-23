@@ -15,11 +15,13 @@ import {
 import type {
   pointCoreValidator,
   pointDetailValidator,
+  pointEpisodeValidator,
 } from "./validators.js";
 
 type PointReadContext = QueryCtx;
 type PointCore = Infer<typeof pointCoreValidator>;
 type PointDetail = Infer<typeof pointDetailValidator>;
+type PointEpisode = Infer<typeof pointEpisodeValidator>;
 
 function nullable<T>(value: T | undefined): T | null {
   return value ?? null;
@@ -237,4 +239,65 @@ export async function calculatePointTotal(
     total += pointValue(point, pointType);
   }
   return total;
+}
+
+async function findPointAssignmentId(
+  ctx: PointReadContext,
+  pointId: Id<"points">,
+): Promise<Id<"assignments"> | null> {
+  const link = await ctx.db
+    .query("assignmentPointLinks")
+    .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
+    .first();
+  if (link !== null) {
+    return link.assignmentId;
+  }
+  const guess = await ctx.db
+    .query("guesses")
+    .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
+    .first();
+  if (guess !== null) {
+    const review = await ctx.db.get(
+      "assignmentReviews",
+      guess.assignmentReviewId,
+    );
+    return review?.assignmentId ?? null;
+  }
+  const wager = await ctx.db
+    .query("gamblingEntries")
+    .withIndex("by_awardPointId", (index) =>
+      index.eq("awardPointId", pointId),
+    )
+    .first();
+  return wager?.assignmentId ?? null;
+}
+
+/**
+ * Points have no episode field, so the episode comes from whatever the point
+ * was awarded for: an assignment link, a guess, a wager, or a quote. Manual
+ * adjustments have none.
+ */
+export async function findPointEpisode(
+  ctx: PointReadContext,
+  pointId: Id<"points">,
+): Promise<PointEpisode | null> {
+  let episodeId: Id<"episodes"> | null = null;
+  const assignmentId = await findPointAssignmentId(ctx, pointId);
+  if (assignmentId !== null) {
+    episodeId =
+      (await ctx.db.get("assignments", assignmentId))?.episodeId ?? null;
+  } else {
+    const quote = await ctx.db
+      .query("quoteSubmissions")
+      .withIndex("by_pointId", (index) => index.eq("pointId", pointId))
+      .first();
+    episodeId = quote?.episodeId ?? null;
+  }
+  if (episodeId === null) {
+    return null;
+  }
+  const episode = await ctx.db.get("episodes", episodeId);
+  return episode === null
+    ? null
+    : { id: episode._id, number: episode.number, title: episode.title };
 }

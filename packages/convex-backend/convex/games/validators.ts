@@ -70,6 +70,16 @@ export const pointCoreValidator = v.object({
   total: v.number(),
 });
 
+export const pointEpisodeValidator = v.object({
+  id: v.id("episodes"),
+  number: v.number(),
+  title: v.string(),
+});
+
+export const pointSeasonActivityValidator = pointCoreValidator.extend({
+  episode: v.union(pointEpisodeValidator, v.null()),
+});
+
 export const assignmentPointLinkValidator = v.object({
   id: v.id("assignmentPointLinks"),
   assignment: assignmentDetailValidator,

@@ -7100,6 +7100,11 @@ export type PublicApiType = {
                 page: Array<{
                     adjustment: number | null;
                     earnedAt: number;
+                    episode: {
+                        id: Id<"episodes">;
+                        number: number;
+                        title: string;
+                    } | null;
                     gamePointType: {
                         description: string | null;
                         gameType: {

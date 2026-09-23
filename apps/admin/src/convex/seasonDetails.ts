@@ -48,6 +48,19 @@ export const adminPointSchema = z.object({
   total: z.number(),
 });
 
+// The season activity feed labels each point with the episode it was awarded
+// for; older backends omit it.
+const adminSeasonPointSchema = adminPointSchema.extend({
+  episode: z
+    .object({
+      id: z.string().min(1),
+      number: z.number(),
+      title: z.string(),
+    })
+    .nullable()
+    .default(null),
+});
+
 const ratingSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -216,7 +229,7 @@ const listGamblingReference = api.games.gambling.listForSeasonPage;
 export const ADMIN_SEASON_ACTIVITY_PAGE_SIZE = 30;
 
 export type ConvexAdminSeasonPerformance = z.infer<typeof performanceSchema>;
-export type ConvexAdminSeasonPoint = z.infer<typeof adminPointSchema>;
+export type ConvexAdminSeasonPoint = z.infer<typeof adminSeasonPointSchema>;
 export type ConvexAdminSeasonGuess = z.infer<typeof adminGuessSchema>;
 export type ConvexAdminSeasonGamblingEntry = z.infer<
   typeof adminGamblingEntrySchema
@@ -263,7 +276,7 @@ export async function loadConvexAdminSeasonPerformance(
 async function loadSeasonPage<T>(
   client: ConvexReactClient,
   reference: Parameters<ConvexReactClient["query"]>[0],
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   seasonId: string,
   cursor: string | null
 ): Promise<ConvexAdminSeasonActivityPage<T>> {
@@ -291,7 +304,7 @@ export async function loadConvexAdminSeasonPointsPage(
   const result = await loadSeasonPage(
     client,
     listPointsReference,
-    adminPointSchema,
+    adminSeasonPointSchema,
     seasonId,
     cursor
   );
