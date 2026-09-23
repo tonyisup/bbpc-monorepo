@@ -6,6 +6,7 @@ import { ListenHere } from "@/components/ListenHere";
 import { Providers } from "@/components/Providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ConvexAccountRecoveryBanner } from "@/components/ConvexAccountRecoveryBanner";
+import { ConvexSiteAnnouncements } from "@/components/ConvexSiteAnnouncements";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -65,6 +66,7 @@ export default function RootLayout({
         <Providers>
           <div className="flex min-h-[100dvh] w-full min-w-0 flex-col items-center bg-[color:var(--bbpc-bg)]">
             <SiteHeader />
+            <ConvexSiteAnnouncements />
             <ConvexAccountRecoveryBanner />
             <main className="w-full min-w-0 flex-grow">
               <div className="main-mask flex w-full min-w-0 flex-col text-white">

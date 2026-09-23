@@ -19,7 +19,8 @@ import {
 	Film,
 	List,
 	Quote,
-	RotateCcw
+	RotateCcw,
+	Megaphone
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/button"
@@ -135,6 +136,12 @@ export function Sidebar({ className }: SidebarProps) {
 		{
 			title: "System",
 			routes: [
+				{
+					label: "Announcements",
+					icon: Megaphone,
+					href: "/announcement",
+					active: pathname.startsWith("/announcement"),
+				},
 				{
 					label: "Seasons",
 					icon: Mic,
