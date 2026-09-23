@@ -106,13 +106,13 @@ import {
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
   getEpisodeSeasonPosition,
-  getSeasonFinaleState,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
 } from "./recordingManagementModel";
+import { SeasonPositionBadges } from "./SeasonPositionBadges";
 
 const listGuessesForAssignmentReference = api.games.guesses.listForAssignment;
 
@@ -1494,10 +1494,6 @@ export function ConvexRecordingManagementPage() {
   }
 
   const { episode } = data;
-  const finaleState = getSeasonFinaleState(
-    data.seasonEpisodePosition,
-    data.season?.episodeCount ?? null
-  );
   return (
     <>
       <Head>
@@ -1557,26 +1553,10 @@ export function ConvexRecordingManagementPage() {
                       <span className="text-sm text-muted-foreground">
                         Episode {episode.number}
                       </span>
-                      {data.season !== null &&
-                        data.seasonEpisodePosition !== null && (
-                          <Badge variant="outline">
-                            #{data.seasonEpisodePosition}
-                            {data.season.episodeCount !== null &&
-                              ` of ${data.season.episodeCount}`}{" "}
-                            in {data.season.title}
-                          </Badge>
-                        )}
-                      {finaleState !== null && (
-                        <Badge
-                          variant={
-                            finaleState === "finale" ? "default" : "destructive"
-                          }
-                        >
-                          {finaleState === "finale"
-                            ? "Season finale"
-                            : "Past season length"}
-                        </Badge>
-                      )}
+                      <SeasonPositionBadges
+                        position={data.seasonEpisodePosition}
+                        season={data.season}
+                      />
                     </div>
                     <CardTitle className="text-3xl">{episode.title}</CardTitle>
                     <CardDescription>
