@@ -649,12 +649,27 @@ describe("point API", () => {
     const linked = await seedAssignment(t, memberId, "401");
     const guessed = await seedAssignment(t, memberId, "402");
     const wagered = await seedAssignment(t, memberId, "403");
-    const pointIds = await Promise.all(
-      [1, 2, 3, 4, 5].map((earnedAt) =>
-        seedPoint(t, { userId: memberId, seasonId, earnedAt }),
-      ),
-    );
-    const [linkPoint, guessPoint, wagerPoint, quotePoint] = pointIds;
+    const linkPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 1,
+    });
+    const guessPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 2,
+    });
+    const wagerPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 3,
+    });
+    const quotePoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      earnedAt: 4,
+    });
+    await seedPoint(t, { userId: memberId, seasonId, earnedAt: 5 });
     await t.run(async (ctx) => {
       await ctx.db.insert("assignmentPointLinks", {
         assignmentId: linked.assignmentId,
