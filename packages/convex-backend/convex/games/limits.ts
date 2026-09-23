@@ -9,6 +9,9 @@ export const MAX_SEASON_PERFORMANCE_ACTIVITY = 2000;
 export const MAX_SEASON_EPISODE_COUNT = 500;
 export const MAX_POINT_PAGE_SIZE = 100;
 export const MAX_POINTS_FOR_AGGREGATE = 2000;
+export const MAX_POINTS_FOR_LATEST_CHANGE = 200;
+// Wide enough to hold any Pacific calendar day that ends at the latest point.
+export const LATEST_POINT_CHANGE_WINDOW_MS = 36 * 60 * 60 * 1000;
 export const MAX_ACTIVE_WAGERS_FOR_TOTAL = 2000;
 export const MAX_POINT_RELATIONSHIPS = 100;
 export const MAX_ASSIGNMENT_POINT_LINKS_FOR_TOTALS = 1000;

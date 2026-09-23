@@ -574,6 +574,73 @@ describe("point API", () => {
     });
   });
 
+  test("returns the member's points near the season's latest point", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const { pointTypeId, seasonId } = await seedGameFoundation(t);
+    const hour = 60 * 60 * 1000;
+    const latest = Date.parse("2026-07-17T04:00:00Z");
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+    ).resolves.toBeNull();
+
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 4,
+      earnedAt: latest - 7 * 24 * hour,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      pointTypeId,
+      adjustment: 1,
+      earnedAt: latest - 2 * hour,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: -3,
+      earnedAt: latest - hour,
+    });
+    await seedPoint(t, {
+      userId: otherId,
+      seasonId,
+      adjustment: 20,
+      earnedAt: latest,
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+    ).resolves.toEqual({
+      seasonId,
+      lastScoredAt: latest,
+      points: [
+        { earnedAt: latest - 2 * hour, pointValue: 11 },
+        { earnedAt: latest - hour, pointValue: -3 },
+      ],
+    });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2027-01-01" },
+      ),
+    ).resolves.toBeNull();
+    await expectDomainError(
+      t.query(api.games.member.myLatestPointChange, {
+        today: "2026-07-24",
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+  });
+
   test("paginates only the authenticated member's point history", async () => {
     const t = createTestBackend();
     const { memberId, otherId } = await seedActors(t);

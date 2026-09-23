@@ -161,6 +161,17 @@ export const performancePointValidator = v.object({
   pointValue: v.number(),
 });
 
+export const latestPointChangeValidator = v.object({
+  seasonId: v.id("seasons"),
+  lastScoredAt: v.number(),
+  points: v.array(
+    v.object({
+      earnedAt: v.number(),
+      pointValue: v.number(),
+    }),
+  ),
+});
+
 export const performanceUserValidator = v.object({
   user: pointUserValidator,
   total: v.number(),

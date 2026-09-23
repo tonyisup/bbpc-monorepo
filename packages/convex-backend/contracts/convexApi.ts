@@ -6865,6 +6865,16 @@ export type PublicApiType = {
         },
         number
       >;
+      myLatestPointChange: FunctionReference<
+        "query",
+        "public",
+        { today: string },
+        {
+          lastScoredAt: number;
+          points: Array<{ earnedAt: number; pointValue: number }>;
+          seasonId: Id<"seasons">;
+        } | null
+      >;
       myPointsPage: FunctionReference<
         "query",
         "public",

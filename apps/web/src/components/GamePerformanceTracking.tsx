@@ -40,7 +40,7 @@ const dateLabelFormatter = new Intl.DateTimeFormat("en-US", {
 type PerformancePoint = GamePerformanceData["points"][number];
 type PerformanceSummaryItem = GamePerformanceData["userSummary"][number];
 
-const buildChartData = (
+export const buildChartData = (
   points: PerformancePoint[],
   userSummary: PerformanceSummaryItem[]
 ) => {
@@ -65,24 +65,44 @@ const buildChartData = (
   return Array.from(chartDataPointMap.values());
 };
 
-const buildSummaryRows = (
+/**
+ * Points are not linked to episodes, but they are awarded while recording, so
+ * the latest scoring day stands in for the last episode.
+ */
+export const buildSummaryRows = (
   chartData: Record<string, number | string>[],
+  points: PerformancePoint[],
   userSummary: PerformanceSummaryItem[]
 ) => {
-  return userSummary.map((user) => {
-    const series = chartData.map((point) => Number(point[user.id] ?? 0));
-    const latestScore = series.at(-1) ?? 0;
-    const peakScore = series.length > 0 ? Math.max(...series) : 0;
-    const firstScore = series[0] ?? 0;
+  const lastPoint = points.at(-1);
+  const lastEpisodeKey =
+    lastPoint === undefined
+      ? null
+      : dateLabelFormatter.format(new Date(lastPoint.earnedAt));
+  const lastEpisodePoints = new Map<string, number>();
+  for (const point of points) {
+    if (dateLabelFormatter.format(new Date(point.earnedAt)) === lastEpisodeKey) {
+      lastEpisodePoints.set(
+        point.userId,
+        (lastEpisodePoints.get(point.userId) ?? 0) + point.pointValue
+      );
+    }
+  }
 
-    return {
-      id: user.id,
-      name: user.name ?? "Player",
-      latestScore,
-      peakScore,
-      trendValue: latestScore - firstScore,
-    };
-  });
+  return {
+    lastEpisodeLabel: lastEpisodeKey,
+    rows: userSummary.map((user) => {
+      const series = chartData.map((point) => Number(point[user.id] ?? 0));
+
+      return {
+        id: user.id,
+        name: user.name ?? "Player",
+        latestScore: series.at(-1) ?? 0,
+        peakScore: series.length > 0 ? Math.max(...series) : 0,
+        lastEpisodeScore: lastEpisodePoints.get(user.id) ?? 0,
+      };
+    }),
+  };
 };
 
 export default function GamePerformanceTracking({
@@ -95,7 +115,7 @@ export default function GamePerformanceTracking({
   }
 
   const chartData = buildChartData(data.points, data.userSummary);
-  const summaryRows = buildSummaryRows(chartData, data.userSummary);
+  const summary = buildSummaryRows(chartData, data.points, data.userSummary);
   const progress = getSeasonProgress(data);
 
   return (
@@ -231,11 +251,18 @@ export default function GamePerformanceTracking({
                     <th className="px-4 py-3 font-semibold">Player</th>
                     <th className="px-4 py-3 font-semibold">Current</th>
                     <th className="px-4 py-3 font-semibold">Peak</th>
-                    <th className="px-4 py-3 font-semibold">Net Change</th>
+                    <th className="px-4 py-3 font-semibold">
+                      Last Episode
+                      {summary.lastEpisodeLabel !== null && (
+                        <span className="ml-1 font-normal normal-case tracking-normal text-zinc-600">
+                          ({summary.lastEpisodeLabel})
+                        </span>
+                      )}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {summaryRows.map((user) => (
+                  {summary.rows.map((user) => (
                     <tr
                       key={user.id}
                       className="border-b border-zinc-900 last:border-b-0"
@@ -253,8 +280,8 @@ export default function GamePerformanceTracking({
                         {user.peakScore}
                       </td>
                       <td className="px-4 py-3 text-zinc-300">
-                        {user.trendValue > 0 ? "+" : ""}
-                        {user.trendValue}
+                        {user.lastEpisodeScore > 0 ? "+" : ""}
+                        {user.lastEpisodeScore}
                       </td>
                     </tr>
                   ))}
