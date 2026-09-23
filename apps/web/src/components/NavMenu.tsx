@@ -181,7 +181,7 @@ const NavMenu: FC = () => {
                         className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-black"
                       />
                       <span className="sr-only" id="nav-game-point-change">
-                        New game points from the last episode
+                        New game point changes from the last episode
                       </span>
                     </>
                   )}

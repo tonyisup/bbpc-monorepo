@@ -200,12 +200,10 @@ export function ConvexSeasonEditor({
               aria-invalid={showErrors && parsedEpisodeCount === undefined}
               id="convex-season-episode-count"
               inputMode="numeric"
-              max={MAX_SEASON_EPISODE_COUNT}
-              min={1}
               onChange={(event) => setEpisodeCount(event.target.value)}
+              pattern="[0-9]*"
               placeholder="e.g. 20"
-              step={1}
-              type="number"
+              type="text"
               value={episodeCount}
             />
             <p

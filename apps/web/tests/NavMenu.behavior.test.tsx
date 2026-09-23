@@ -159,7 +159,7 @@ describe("NavMenu game point badge", () => {
     expect(trigger.props["aria-describedby"]).toBe("nav-game-point-change");
     expect(
       rendered.root.findByProps({ id: "nav-game-point-change" }).children
-    ).toEqual(["New game points from the last episode"]);
+    ).toEqual(["New game point changes from the last episode"]);
   });
 
   test("clears the badge on the game page and remembers it per member", async () => {

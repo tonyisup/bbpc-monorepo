@@ -90,7 +90,10 @@ describe("SeasonStandingsDisclosure", () => {
     mocks.useQuery.mockReturnValue({
       seasonId: "season-1",
       lastScoredAt: LATEST,
-      points: [],
+      points: [
+        { earnedAt: LATEST, pointValue: 3 },
+        { earnedAt: LATEST, pointValue: -3 },
+      ],
     });
     expect(summaryText()).not.toContain("last episode");
   });
