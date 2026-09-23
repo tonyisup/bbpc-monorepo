@@ -12,23 +12,22 @@ import { domainError } from "../lib/errors.js";
 import {
   MAX_QUOTE_EPISODE_SELECTOR_SIZE,
   MAX_QUOTE_RANDOM_SEED_LENGTH,
-  MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH,
   MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR,
 } from "./limits.js";
 import {
+  buildQuoteReuseReport,
+  findPublicTranscriptMatches,
   findQuoteForEpisodeUser,
   findSubmissionEpisode,
   hydrateAdminQuoteSubmission,
   listQuoteSubmissionsForEpisode,
   requireQuoteEpisode,
   requireQuoteSubmission,
+  searchQuoteSubmissionCandidates,
   toMemberQuoteSubmission,
   toQuoteEpisode,
 } from "./quoteReadModel.js";
-import {
-  quoteSearchAnchors,
-  quotesPossiblyMatch,
-} from "./quoteSimilarity.js";
+import { quotesPossiblyMatch } from "./quoteSimilarity.js";
 import {
   assertQuotePointOwnedOnly,
   deleteOwnedQuotePoint,
@@ -56,6 +55,7 @@ import {
   quoteAdminEpisodeValidator,
   quoteAdminSubmissionValidator,
   quoteMemberSubmissionValidator,
+  quoteReuseReportValidator,
   quoteSimilarityResultValidator,
   quoteSourceTypeValidator,
   quoteStatusValidator,
@@ -267,13 +267,6 @@ export const checkPossibleDuplicate = authenticatedQuery({
       args.sourceTitle.trim().length === 0
         ? ""
         : validateQuoteSourceTitle(args.sourceTitle);
-    const anchors = quoteSearchAnchors(quoteText);
-    if (anchors.length === 0) {
-      return { possibleMatch: false };
-    }
-    const searchQueries = [
-      ...new Set([anchors.join(" "), ...anchors]),
-    ];
     const ownCurrentSubmissionPromise = (async () => {
       const currentEpisode = await findSubmissionEpisode(ctx, ["next"]);
       return currentEpisode === null
@@ -284,41 +277,25 @@ export const checkPossibleDuplicate = authenticatedQuery({
             ctx.actor.user._id,
           );
     })();
-    const [candidateGroups, ownCurrentSubmission] = await Promise.all([
-      Promise.all(
-        searchQueries.map(async (searchQuery) => {
-          return await ctx.db
-            .query("quoteSubmissions")
-            .withSearchIndex("search_quoteText", (search) =>
-              search.search("quoteText", searchQuery),
-            )
-            .take(MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH);
-        }),
-      ),
-      ownCurrentSubmissionPromise,
-    ]);
-    const candidates = new Map(
-      candidateGroups
-        .flat()
-        .map((submission) => [submission._id, submission]),
-    );
-    for (const candidate of candidates.values()) {
-      if (candidate._id === ownCurrentSubmission?._id) {
-        continue;
-      }
-      if (
+    const [{ candidates }, ownCurrentSubmission, transcriptMatches] =
+      await Promise.all([
+        searchQuoteSubmissionCandidates(ctx, quoteText),
+        ownCurrentSubmissionPromise,
+        findPublicTranscriptMatches(ctx, quoteText),
+      ]);
+    // Other listeners' entries stay private: report only that one may exist.
+    const possibleMatch = candidates.some(
+      (candidate) =>
+        candidate._id !== ownCurrentSubmission?._id &&
         quotesPossiblyMatch(
           { quoteText, sourceTitle },
           {
             quoteText: candidate.quoteText,
             sourceTitle: candidate.sourceTitle,
           },
-        )
-      ) {
-        return { possibleMatch: true };
-      }
-    }
-    return { possibleMatch: false };
+        ),
+    );
+    return { possibleMatch, transcriptMatches };
   },
 });
 
@@ -509,6 +486,17 @@ export const getAdminById = adminQuery({
     return submission === null
       ? null
       : await hydrateAdminQuoteSubmission(ctx, submission);
+  },
+});
+
+export const getAdminReuseReport = adminQuery({
+  args: { id: v.id("quoteSubmissions") },
+  returns: v.union(quoteReuseReportValidator, v.null()),
+  handler: async (ctx, args) => {
+    const submission = await ctx.db.get("quoteSubmissions", args.id);
+    return submission === null
+      ? null
+      : await buildQuoteReuseReport(ctx, submission);
   },
 });
 

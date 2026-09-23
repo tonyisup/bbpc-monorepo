@@ -1,5 +1,6 @@
 "use client";
 
+import { formatTranscriptTime } from "@bbpc/episode-search";
 import { useConvex } from "convex/react";
 import {
   AlertTriangle,
@@ -26,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   type ConvexCurrentQuoteSubmission,
   type ConvexQuoteSourceType,
+  type ConvexQuoteTranscriptMatch,
   checkConvexQuotabungaDuplicate,
   loadConvexQuotabunga,
   submitConvexQuotabunga,
@@ -33,6 +35,7 @@ import {
 } from "@/convex/quotabunga";
 import { getConvexDomainErrorCode } from "@/convex/identity";
 import { useAdminCollapse } from "@/hooks/useAdminCollapse";
+import { getEpisodePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 const QUOTE_DUPLICATE_CHECK_DELAY_MS = 500;
@@ -65,18 +68,68 @@ function sourceTypeLabel(sourceType: ConvexQuoteSourceType) {
   }
 }
 
-function DuplicateStatusPanel({ children }: { children: ReactNode }) {
+// Only the short summary is a live region, so screen readers are not read every
+// excerpt again each time a check refreshes.
+function DuplicateStatusPanel({
+  children,
+  details,
+}: {
+  children: ReactNode;
+  details?: ReactNode;
+}) {
   return (
-    <div
-      className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100"
-      role="status"
-    >
+    <div className="flex gap-3 rounded-md border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">
       <AlertTriangle
         className="mt-0.5 h-5 w-5 shrink-0 text-amber-400"
         aria-hidden="true"
       />
-      <p>{children}</p>
+      <div className="min-w-0 flex-1 space-y-2">
+        <p role="status">{children}</p>
+        {details}
+      </div>
     </div>
+  );
+}
+
+function TranscriptMatchList({
+  matches,
+}: {
+  matches: ConvexQuoteTranscriptMatch[];
+}) {
+  return (
+    <ul className="space-y-2">
+      {matches.map((match) => {
+        const label = `Episode ${match.episodeNumber} · ${match.episodeTitle}`;
+        return (
+          <li
+            key={`${match.episodeNumber}-${match.start}`}
+            className="rounded border border-amber-400/20 bg-black/20 p-2"
+          >
+            <p className="flex flex-wrap items-baseline gap-x-2 text-xs font-semibold">
+              {match.episodeSlug ? (
+                // A new tab keeps the quote the listener is typing.
+                <a
+                  href={getEpisodePath(match.episodeSlug)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="rounded-sm underline hover:text-amber-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                >
+                  {label}
+                </a>
+              ) : (
+                <span>{label}</span>
+              )}
+              <span className="font-mono font-normal text-amber-200/80">
+                {formatTranscriptTime(match.start)}
+              </span>
+            </p>
+            <p className="mt-1 break-words text-amber-50/80">
+              &ldquo;{match.excerpt}&rdquo;
+            </p>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -100,6 +153,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     inputKey: string;
     status: "ready" | "unavailable";
     possibleMatch?: boolean;
+    transcriptMatches?: ConvexQuoteTranscriptMatch[];
   } | null>(null);
   const loadGenerationRef = useRef(0);
   const { isAdminCollapsed, isContentVisible, headerProps } =
@@ -111,6 +165,11 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     duplicateCheck?.inputKey === duplicateInputKey &&
     duplicateCheck.status === "ready" &&
     duplicateCheck.possibleMatch;
+  const transcriptMatches =
+    duplicateCheck?.inputKey === duplicateInputKey &&
+    duplicateCheck.status === "ready"
+      ? (duplicateCheck.transcriptMatches ?? [])
+      : [];
   const isDuplicateCheckUnavailable =
     duplicateCheck?.inputKey === duplicateInputKey &&
     duplicateCheck.status === "unavailable";
@@ -475,6 +534,22 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
                   <span className="font-semibold">Possible duplicate.</span> A
                   similar quote may have been submitted before. You can still
                   submit it, but duplicate entries may be judged less favorably.
+                </DuplicateStatusPanel>
+              ) : null}
+
+              {transcriptMatches.length > 0 ? (
+                <DuplicateStatusPanel
+                  details={<TranscriptMatchList matches={transcriptMatches} />}
+                >
+                  <span className="font-semibold">
+                    Possibly heard on the show.
+                  </span>{" "}
+                  Something close to this quote comes up in{" "}
+                  {transcriptMatches.length === 1
+                    ? "an episode transcript"
+                    : "episode transcripts"}
+                  . You can still submit it, but repeats may be judged less
+                  favorably.
                 </DuplicateStatusPanel>
               ) : null}
 

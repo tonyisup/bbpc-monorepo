@@ -99,6 +99,7 @@ describe("Convex-only admin scaffold", () => {
     ["src/pages/movie/index.tsx", "ConvexMediaCatalogPage"],
     ["src/pages/point/[id].tsx", "ConvexPointDetailPage"],
     ["src/pages/quotabunga/index.tsx", "ConvexQuotabungaPage"],
+    ["src/pages/quotabunga/reuse/[id].tsx", "ConvexQuoteReusePage"],
     ["src/pages/rating/index.tsx", "ConvexRatingsPage"],
     ["src/pages/record/index.tsx", "ConvexRecordingManagementPage"],
     ["src/pages/review/index.tsx", "ConvexReviewsPage"],

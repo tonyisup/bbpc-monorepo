@@ -6,8 +6,11 @@ import {
   awardConvexAdminQuotePlacements,
   createConvexAdminQuoteForUser,
   deleteConvexAdminQuote,
+  formatQuoteReuseLikelihood,
   loadConvexAdminQuoteEpisodes,
+  loadConvexAdminQuoteReuseReport,
   loadConvexAdminQuoteSubmissions,
+  quoteReuseTone,
   randomizeConvexAdminQuotes,
   setConvexAdminQuoteStatus,
   snapshotConvexQuoteAwards,
@@ -183,5 +186,85 @@ describe("Convex Quotabunga admin adapter", () => {
     await expect(
       loadConvexAdminQuoteSubmissions(client, episode.id)
     ).rejects.toThrow();
+  });
+
+  test("validates the reuse breakdown and formats its likelihood", async () => {
+    const report = {
+      submission: {
+        id: submission.id,
+        quoteText: submission.quoteText,
+        sourceTitle: submission.sourceTitle,
+        sourceType: submission.sourceType,
+        status: submission.status,
+        user: submission.user,
+        episode,
+      },
+      likelihood: 0.72,
+      limited: false,
+      episodes: [
+        {
+          episode: {
+            ...episode,
+            id: "episode-0",
+            number: 99,
+            date: "2025-01-01",
+            slug: "episode-99",
+          },
+          likelihood: 0.72,
+          submissions: [
+            {
+              id: "quote-0",
+              quoteText: submission.quoteText,
+              sourceTitle: submission.sourceTitle,
+              sourceType: submission.sourceType,
+              status: "INCLUDED" as const,
+              placement: 2 as const,
+              user: submission.user,
+              similarity: 0.9,
+              sourceTitleMatches: true,
+              likelihood: 0.72,
+            },
+          ],
+          transcriptPassages: [
+            {
+              start: 60,
+              end: 90,
+              excerpt: "…a synthetic quote…",
+              similarity: 1,
+              likelihood: 0.9,
+            },
+          ],
+        },
+      ],
+    };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce(report)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...report, likelihood: "high" });
+    const client = { query } as unknown as ConvexReactClient;
+
+    await expect(
+      loadConvexAdminQuoteReuseReport(client, submission.id)
+    ).resolves.toEqual(report);
+    expect(query).toHaveBeenCalledWith(expect.anything(), {
+      id: submission.id,
+    });
+    await expect(
+      loadConvexAdminQuoteReuseReport(client, submission.id)
+    ).resolves.toBeNull();
+    await expect(
+      loadConvexAdminQuoteReuseReport(client, submission.id)
+    ).rejects.toThrow();
+
+    expect(formatQuoteReuseLikelihood(0)).toBe("0%");
+    expect(formatQuoteReuseLikelihood(0.004)).toBe("<1%");
+    expect(formatQuoteReuseLikelihood(0.725)).toBe("73%");
+    expect(formatQuoteReuseLikelihood(1)).toBe("100%");
+    expect(formatQuoteReuseLikelihood(1.5)).toBe("100%");
+    expect(formatQuoteReuseLikelihood(-0.2)).toBe("0%");
+    expect(quoteReuseTone(0.6)).toContain("text-destructive");
+    expect(quoteReuseTone(0.25)).toContain("text-amber-700");
+    expect(quoteReuseTone(0.24)).toBe("text-muted-foreground");
   });
 });

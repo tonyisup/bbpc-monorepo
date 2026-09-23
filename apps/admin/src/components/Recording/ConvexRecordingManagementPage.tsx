@@ -74,9 +74,14 @@ import {
   formatPlainDate,
   getPacificTodayPlainDate,
 } from "../../lib/dates";
-import { getAdminAssignmentPath, getAdminEpisodePath } from "../../lib/routes";
+import {
+  getAdminAssignmentPath,
+  getAdminEpisodePath,
+  getAdminQuotabungaEpisodePath,
+} from "../../lib/routes";
 import { cn } from "../../lib/utils";
 
+import { QuoteReuseChance } from "../Quotabunga/QuoteReuseChance";
 import RatingIcon from "../Review/RatingIcon";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
@@ -810,11 +815,7 @@ export function QuotabungaRecordingRound({
             </div>
             <div className="flex gap-2">
               <Button asChild size="sm" variant="outline">
-                <Link
-                  href={`/quotabunga?episodeId=${encodeURIComponent(
-                    episodeId
-                  )}`}
-                >
+                <Link href={getAdminQuotabungaEpisodePath(episodeId)}>
                   Manage round <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -855,16 +856,22 @@ export function QuotabungaRecordingRound({
                   <p className="text-sm text-muted-foreground">
                     {submission.sourceTitle} · {submission.sourceType}
                   </p>
-                  {submission.clipUrl !== null && (
-                    <a
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
-                      href={submission.clipUrl}
-                      rel="noreferrer noopener"
-                      target="_blank"
-                    >
-                      Open clip <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <QuoteReuseChance
+                      quoteText={submission.quoteText}
+                      submissionId={submission.id}
+                    />
+                    {submission.clipUrl !== null && (
+                      <a
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
+                        href={submission.clipUrl}
+                        rel="noreferrer noopener"
+                        target="_blank"
+                      >
+                        Open clip <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
                   <select
                     aria-label={`Placement for ${
                       submission.user.name ?? submission.sourceTitle

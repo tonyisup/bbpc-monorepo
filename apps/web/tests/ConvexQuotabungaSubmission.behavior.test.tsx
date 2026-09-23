@@ -7,6 +7,7 @@ import type {
 import {
   act,
   create,
+  type ReactTestInstance,
   type ReactTestRenderer,
 } from "react-test-renderer";
 import {
@@ -18,12 +19,23 @@ import {
   vi,
 } from "vitest";
 
+interface DuplicateCheckResult {
+  possibleMatch: boolean;
+  transcriptMatches?: Array<{
+    episodeNumber: number;
+    episodeTitle: string;
+    episodeSlug: string | null;
+    start: number;
+    excerpt: string;
+  }>;
+}
+
 const mocks = vi.hoisted(() => ({
   checkDuplicate: vi.fn<
     (
       client: unknown,
       input: { quoteText: string; sourceTitle: string },
-    ) => Promise<{ possibleMatch: boolean }>
+    ) => Promise<DuplicateCheckResult>
   >(),
   convex: {},
   load: vi.fn<() => Promise<unknown>>(),
@@ -155,6 +167,12 @@ function enterQuote(
   });
 }
 
+function instanceText(instance: ReactTestInstance): string {
+  return instance.children
+    .map((child) => (typeof child === "string" ? child : instanceText(child)))
+    .join("");
+}
+
 function renderedText(rendered: ReactTestRenderer) {
   return JSON.stringify(rendered.toJSON());
 }
@@ -222,7 +240,7 @@ describe("ConvexQuotabungaSubmission duplicate checks", () => {
   });
 
   test("suppresses a stale duplicate response after the quote changes", async () => {
-    const staleCheck = deferred<{ possibleMatch: boolean }>();
+    const staleCheck = deferred<DuplicateCheckResult>();
     mocks.checkDuplicate
       .mockImplementationOnce(() => staleCheck.promise)
       .mockResolvedValue({ possibleMatch: false });
@@ -269,5 +287,79 @@ describe("ConvexQuotabungaSubmission duplicate checks", () => {
       .findAllByType("button")
       .find((button) => button.props.type === "submit");
     expect(submitButton?.props.disabled).toBe(false);
+  });
+
+  test("lists earlier episodes whose transcripts contain the quote", async () => {
+    mocks.checkDuplicate.mockResolvedValueOnce({
+      possibleMatch: false,
+      transcriptMatches: [
+        {
+          episodeNumber: 142,
+          episodeTitle: "Heat",
+          episodeSlug: "heat",
+          start: 3723,
+          excerpt: "…and he says don't let yourself get attached…",
+        },
+        {
+          episodeNumber: 98,
+          episodeTitle: "Unlinked",
+          episodeSlug: null,
+          start: 65,
+          excerpt: "don't let yourself get attached to anything",
+        },
+      ],
+    });
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Don't let yourself get attached to anything");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    const text = renderedText(rendered);
+    expect(text).toContain("Possibly heard on the show.");
+    expect(text).not.toContain("Possible duplicate.");
+    expect(text).toContain("1:02:03");
+    expect(text).toContain("don't let yourself get attached");
+    const liveRegions = rendered.root.findAll(
+      (node) => node.type === "p" && node.props.role === "status",
+    );
+    expect(liveRegions).toHaveLength(1);
+    const liveText = liveRegions[0] ? instanceText(liveRegions[0]) : "";
+    expect(liveText).toContain("Possibly heard on the show.");
+    expect(liveText).not.toContain("attached");
+    const links = rendered.root.findAllByType("a");
+    expect(links.map((link) => link.props.href)).toEqual(["/episodes/heat"]);
+    expect(links[0]?.props.target).toBe("_blank");
+    const submitButton = rendered.root
+      .findAllByType("button")
+      .find((button) => button.props.type === "submit");
+    expect(submitButton?.props.disabled).toBe(false);
+  });
+
+  test("hides transcript matches once the quote changes", async () => {
+    mocks.checkDuplicate
+      .mockResolvedValueOnce({
+        possibleMatch: false,
+        transcriptMatches: [
+          {
+            episodeNumber: 142,
+            episodeTitle: "Heat",
+            episodeSlug: "heat",
+            start: 10,
+            excerpt: "hold on to ya",
+          },
+        ],
+      })
+      .mockImplementation(() => new Promise(() => undefined));
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(renderedText(rendered)).toContain("Possibly heard on the show.");
+
+    enterQuote(rendered, "A completely different quote");
+    expect(renderedText(rendered)).not.toContain("Possibly heard on the show.");
   });
 });

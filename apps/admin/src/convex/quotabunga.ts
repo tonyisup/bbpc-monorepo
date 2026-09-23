@@ -99,9 +99,62 @@ const idResultSchema = z.object({
   id: z.string().min(1),
 });
 
+// The contract promises plain numbers; display code clamps them to 0–1.
+const likelihoodSchema = z.number();
+
+const quoteReuseReportSchema = z.object({
+  submission: z.object({
+    id: z.string().min(1),
+    quoteText: z.string(),
+    sourceTitle: z.string(),
+    sourceType: quoteSourceTypeSchema,
+    status: quoteStatusSchema,
+    user: quoteAdminUserSchema,
+    episode: quoteEpisodeSchema,
+  }),
+  likelihood: likelihoodSchema,
+  limited: z.boolean(),
+  episodes: z.array(
+    z.object({
+      episode: quoteEpisodeSchema.extend({
+        date: z.string().nullable(),
+        slug: z.string().nullable(),
+      }),
+      likelihood: likelihoodSchema,
+      submissions: z.array(
+        z.object({
+          id: z.string().min(1),
+          quoteText: z.string(),
+          sourceTitle: z.string(),
+          sourceType: quoteSourceTypeSchema,
+          status: quoteStatusSchema,
+          // Evidence rows come from any episode, including legacy data, so one
+          // unexpected placement must not reject the whole report.
+          placement: z.number().nullable(),
+          user: quoteAdminUserSchema,
+          similarity: likelihoodSchema,
+          sourceTitleMatches: z.boolean(),
+          likelihood: likelihoodSchema,
+        })
+      ),
+      transcriptPassages: z.array(
+        z.object({
+          start: z.number().nonnegative(),
+          end: z.number().nonnegative(),
+          excerpt: z.string(),
+          similarity: likelihoodSchema,
+          likelihood: likelihoodSchema,
+        })
+      ),
+    })
+  ),
+});
+
 const listAdminEpisodesReference = api.games.quotes.listAdminEpisodes;
 
 const listAdminForEpisodeReference = api.games.quotes.listAdminForEpisode;
+
+const getAdminReuseReportReference = api.games.quotes.getAdminReuseReport;
 
 const createForUserReference = api.games.quotes.createForUser;
 
@@ -122,6 +175,8 @@ export type ConvexAdminQuoteEpisode = z.infer<typeof quoteAdminEpisodeSchema>;
 export type ConvexAdminQuoteSubmission = z.infer<
   typeof quoteAdminSubmissionSchema
 >;
+export type ConvexQuoteReuseReport = z.infer<typeof quoteReuseReportSchema>;
+export type ConvexQuoteReuseEpisode = ConvexQuoteReuseReport["episodes"][number];
 export type ConvexQuoteAwardSnapshot = z.infer<typeof quoteAwardSnapshotSchema>;
 export type ConvexQuoteAwardResult = z.infer<typeof quoteAwardResultSchema>;
 
@@ -158,6 +213,43 @@ export async function loadConvexAdminQuoteSubmissions(
         episodeId: documentId("episodes", episodeId),
       })
     );
+}
+
+export async function loadConvexAdminQuoteReuseReport(
+  client: ConvexReactClient,
+  id: string
+): Promise<ConvexQuoteReuseReport | null> {
+  return quoteReuseReportSchema.nullable().parse(
+    await client.query(getAdminReuseReportReference, {
+      id: documentId("quoteSubmissions", id),
+    })
+  );
+}
+
+const HIGH_REUSE_LIKELIHOOD = 0.6;
+const MEDIUM_REUSE_LIKELIHOOD = 0.25;
+
+function clampLikelihood(likelihood: number): number {
+  return Math.min(Math.max(likelihood, 0), 1);
+}
+
+/** Format a 0–1 reuse likelihood as a whole percentage without hiding weak evidence. */
+export function formatQuoteReuseLikelihood(likelihood: number): string {
+  const clamped = clampLikelihood(likelihood);
+  const percent = Math.round(clamped * 100);
+  return clamped > 0 && percent === 0 ? "<1%" : `${String(percent)}%`;
+}
+
+/** Text and border colors for a reuse likelihood: red when likely, amber when possible. */
+export function quoteReuseTone(likelihood: number): string {
+  const clamped = clampLikelihood(likelihood);
+  if (clamped >= HIGH_REUSE_LIKELIHOOD) {
+    return "border-destructive/50 text-destructive";
+  }
+  if (clamped >= MEDIUM_REUSE_LIKELIHOOD) {
+    return "border-amber-500/50 text-amber-700 dark:border-amber-400/50 dark:text-amber-300";
+  }
+  return "text-muted-foreground";
 }
 
 export async function createConvexAdminQuoteForUser(
