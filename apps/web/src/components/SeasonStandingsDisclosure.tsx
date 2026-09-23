@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import {
+  PointChangeBadge,
+  useLatestPointChange,
+} from "@/components/GamePointChange";
 import GamePerformanceTracking from "@/components/GamePerformanceTracking";
 import {
   formatSeasonProgress,
@@ -16,6 +21,17 @@ export function SeasonStandingsDisclosure({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const progress = data === null ? null : getSeasonProgress(data);
+  const { accountStatus } = useBbpcAuth();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  // Unlike the nav badge, this one stays visible: the game page is where
+  // members come to see their last-episode result.
+  const pointChange = useLatestPointChange(
+    mounted && accountStatus === "ready"
+  );
+  const change = pointChange.latest?.change ?? 0;
 
   return (
     <details
@@ -31,11 +47,15 @@ export function SeasonStandingsDisclosure({
               · {formatSeasonProgress(progress)}
             </span>
           )}
+          {change !== 0 && (
+            <PointChangeBadge change={change} className="ml-2 align-middle" />
+          )}
         </span>
         <span className="text-sm font-medium text-zinc-400">
           {isOpen ? "Close chart" : "Open chart"}
         </span>
       </summary>
+      {pointChange.loader}
       {isOpen && (
         <div className="border-t border-white/10 p-3 sm:p-5">
           <GamePerformanceTracking data={data} />

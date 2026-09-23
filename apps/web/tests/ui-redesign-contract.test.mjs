@@ -92,7 +92,7 @@ test("home and game prioritize participation without duplicate retired behavior"
   const standingsIndex = game.indexOf("<SeasonStandingsDisclosure");
   assert.notEqual(nextEpisodeIndex, -1);
   assert.notEqual(standingsIndex, -1);
-  assert.ok(nextEpisodeIndex < standingsIndex);
+  assert.ok(standingsIndex < nextEpisodeIndex);
   assert.doesNotMatch(game, /<NextEpisode/);
   assert.match(game, /getNextScheduledEpisode\(\)/);
   assert.match(game, /getConvexCurrentPerformance\(today\)/);

@@ -73,6 +73,28 @@ class PointChangeErrorBoundary extends Component<
 }
 
 /**
+ * Loads the member's point change from the last episode. Render `loader`
+ * somewhere in the tree; `latest` stays null until the query answers.
+ */
+export function useLatestPointChange(enabled: boolean): {
+  latest: LatestPointChange | null;
+  loader: ReactNode;
+} {
+  const [latest, setLatest] = useState<LatestPointChange | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      setLatest(null);
+    }
+  }, [enabled]);
+  const loader = enabled ? (
+    <PointChangeErrorBoundary>
+      <LatestPointChangeQuery onChange={setLatest} />
+    </PointChangeErrorBoundary>
+  ) : null;
+  return { latest: enabled ? latest : null, loader };
+}
+
+/**
  * Returns the member's unseen point change from the last episode, or null.
  * Visiting the game page marks the current change as seen.
  */
@@ -80,17 +102,12 @@ export function useUnseenPointChange(
   enabled: boolean,
   onGamePage: boolean
 ): { change: number | null; loader: ReactNode } {
-  const [latest, setLatest] = useState<LatestPointChange | null>(null);
+  const { latest, loader } = useLatestPointChange(enabled);
   const [seen, setSeen] = useState<string | null>(null);
 
   useEffect(() => {
     setSeen(readSeen());
   }, []);
-  useEffect(() => {
-    if (!enabled) {
-      setLatest(null);
-    }
-  }, [enabled]);
   useEffect(() => {
     if (onGamePage && latest !== null && latest.key !== seen) {
       writeSeen(latest.key);
@@ -98,17 +115,8 @@ export function useUnseenPointChange(
     }
   }, [latest, onGamePage, seen]);
 
-  const loader = enabled ? (
-    <PointChangeErrorBoundary>
-      <LatestPointChangeQuery onChange={setLatest} />
-    </PointChangeErrorBoundary>
-  ) : null;
   const change =
-    enabled &&
-    !onGamePage &&
-    latest !== null &&
-    latest.change !== 0 &&
-    latest.key !== seen
+    !onGamePage && latest !== null && latest.change !== 0 && latest.key !== seen
       ? latest.change
       : null;
   return { change, loader };
