@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   Save,
+  Search,
   Settings,
   Shield,
   Tag,
@@ -105,6 +106,8 @@ import {
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+
+import { filterPendingSyllabus } from "./pendingSyllabusFilter";
 
 function operationMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -208,6 +211,7 @@ export function ConvexUserDetailPage() {
   const today = getPacificTodayPlainDate();
   const [user, setUser] = useState<ConvexUserDetail | null>(null);
   const [syllabus, setSyllabus] = useState<ConvexUserSyllabusEntry[]>([]);
+  const [pendingQuery, setPendingQuery] = useState("");
   const [seasons, setSeasons] = useState<ConvexAdminSeason[]>([]);
   const [roles, setRoles] = useState<ConvexAdminRole[]>([]);
   const [catalog, setCatalog] = useState<ConvexAdminGameCatalog | null>(
@@ -561,6 +565,9 @@ export function ConvexUserDetailPage() {
   const pendingSyllabus = syllabus.filter(
     (entry) => entry.assignment === null
   );
+  const pendingMatches = filterPendingSyllabus(pendingSyllabus, pendingQuery);
+  const pendingFilterActive =
+    pendingSyllabus.length > 0 && pendingQuery.trim().length > 0;
   const assignedSyllabus = syllabus.filter(
     (entry) => entry.assignment !== null
   );
@@ -992,10 +999,43 @@ export function ConvexUserDetailPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <section className="space-y-3">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Pending queue
-                  </h3>
-                  {pendingSyllabus.map((entry, index) => (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                      Pending queue
+                    </h3>
+                    {pendingSyllabus.length > 0 && (
+                      <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          aria-label="Search pending queue"
+                          className="pl-9 pr-9"
+                          onChange={(event) =>
+                            setPendingQuery(event.target.value)
+                          }
+                          placeholder="Search title, year, or notes..."
+                          value={pendingQuery}
+                        />
+                        {pendingQuery.length > 0 && (
+                          <Button
+                            aria-label="Clear pending queue search"
+                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                            onClick={() => setPendingQuery("")}
+                            size="icon"
+                            variant="ghost"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {pendingFilterActive && (
+                    <p className="text-xs text-muted-foreground">
+                      Showing {pendingMatches.length} of{" "}
+                      {pendingSyllabus.length}. Clear the search to reorder.
+                    </p>
+                  )}
+                  {pendingMatches.map(({ entry, queueIndex: index }) => (
                     <div
                       className={cn(
                         "flex flex-col gap-4 rounded-lg border p-4 lg:flex-row lg:items-center",
@@ -1005,7 +1045,9 @@ export function ConvexUserDetailPage() {
                     >
                       <div className="flex gap-1">
                         <Button
-                          disabled={busy !== null || index === 0}
+                          disabled={
+                            busy !== null || pendingFilterActive || index === 0
+                          }
                           onClick={() => movePending(entry.id, -1)}
                           size="icon"
                           variant="ghost"
@@ -1015,6 +1057,7 @@ export function ConvexUserDetailPage() {
                         <Button
                           disabled={
                             busy !== null ||
+                            pendingFilterActive ||
                             index === pendingSyllabus.length - 1
                           }
                           onClick={() => movePending(entry.id, 1)}
@@ -1075,6 +1118,11 @@ export function ConvexUserDetailPage() {
                   {pendingSyllabus.length === 0 && (
                     <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                       No pending syllabus entries.
+                    </p>
+                  )}
+                  {pendingSyllabus.length > 0 && pendingMatches.length === 0 && (
+                    <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      No pending entries match &ldquo;{pendingQuery.trim()}&rdquo;.
                     </p>
                   )}
                 </section>
