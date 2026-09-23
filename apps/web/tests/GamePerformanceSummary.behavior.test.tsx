@@ -1,6 +1,21 @@
-import { describe, expect, test } from "vitest";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { describe, expect, test, vi } from "vitest";
 
-import {
+vi.mock("recharts", () => {
+  const Stub = () => null;
+  return {
+    Area: Stub,
+    AreaChart: Stub,
+    CartesianGrid: Stub,
+    Legend: Stub,
+    ResponsiveContainer: Stub,
+    Tooltip: Stub,
+    XAxis: Stub,
+    YAxis: Stub,
+  };
+});
+
+import GamePerformanceTracking, {
   buildChartData,
   buildSummaryRows,
 } from "@/components/GamePerformanceTracking";
@@ -35,5 +50,35 @@ describe("performance tracking summary", () => {
       lastEpisodeLabel: null,
       rows: [{ lastEpisodeScore: 0 }, { lastEpisodeScore: 0 }],
     });
+  });
+
+  test("renders the last episode column and season progress", () => {
+    const points = [
+      { userId: "u1", earnedAt: Date.parse("2026-09-11T02:00:00Z"), pointValue: 4 },
+    ];
+    let renderer: ReactTestRenderer | undefined;
+    act(() => {
+      renderer = create(
+        <GamePerformanceTracking
+          data={{
+            season: {
+              id: "season-1",
+              title: "Season 5",
+              endedOn: null,
+              episodeCount: 20,
+            },
+            recordedEpisodeCount: 7,
+            userSummary: [{ id: "u1", name: "Ada", total: 4 }],
+            points,
+          }}
+        />
+      );
+    });
+    const text = JSON.stringify(renderer?.toJSON());
+
+    expect(text).toContain("Last Episode");
+    expect(text).toContain("\"Sep 10\"");
+    expect(text).not.toContain("Net Change");
+    expect(text).toContain("Season progress");
   });
 });

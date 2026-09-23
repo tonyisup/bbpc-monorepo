@@ -8,6 +8,7 @@ import {
   deleteConvexAdminSeason,
   loadConvexAdminGameTypes,
   loadConvexAdminSeasonsPage,
+  type ConvexAdminSeasonInput,
   updateConvexAdminSeason,
 } from "./seasons";
 
@@ -116,5 +117,23 @@ describe("Convex admin season adapter", () => {
       isDone: true,
       continueCursor: "done",
     });
+  });
+
+  test("sends episodeCount only when the form sets or changes it", async () => {
+    const mutation = vi.fn().mockResolvedValue(season);
+    const client = { mutation } as unknown as ConvexReactClient;
+
+    await createConvexAdminSeason(client, { ...input, episodeCount: null });
+    const unchangedInput: ConvexAdminSeasonInput = { ...input };
+    delete unchangedInput.episodeCount;
+    await updateConvexAdminSeason(client, season.id, unchangedInput);
+    await updateConvexAdminSeason(client, season.id, {
+      ...input,
+      episodeCount: null,
+    });
+
+    expect(mutation.mock.calls[0]?.[1]).not.toHaveProperty("episodeCount");
+    expect(mutation.mock.calls[1]?.[1]).not.toHaveProperty("episodeCount");
+    expect(mutation.mock.calls[2]?.[1]).toMatchObject({ episodeCount: null });
   });
 });

@@ -11,6 +11,7 @@ import {
   collectAllRecordingUsers,
   getAssignmentRecordingDisclosure,
   getEpisodeSeasonPosition,
+  getSeasonFinaleState,
   getRecordingGuessSettlementPreview,
   groupRecordingGuessesByListener,
   isRecordingGuessRevealed,
@@ -518,5 +519,18 @@ describe("getEpisodeSeasonPosition", () => {
         seasonEpisodes
       )
     ).toBeNull();
+  });
+});
+
+describe("getSeasonFinaleState", () => {
+  it("flags the finale and episodes past the season length", () => {
+    expect(getSeasonFinaleState(19, 20)).toBeNull();
+    expect(getSeasonFinaleState(20, 20)).toBe("finale");
+    expect(getSeasonFinaleState(21, 20)).toBe("overrun");
+  });
+
+  it("stays quiet without a position or a fixed length", () => {
+    expect(getSeasonFinaleState(null, 20)).toBeNull();
+    expect(getSeasonFinaleState(20, null)).toBeNull();
   });
 });

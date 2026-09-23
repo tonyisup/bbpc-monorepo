@@ -491,6 +491,15 @@ describe("game foundation API", () => {
       episodeCount: 12,
     });
     expect(season.episodeCount).toBe(12);
+    await expectDomainError(
+      createSeason(t, {
+        gameTypeId: gameType.id,
+        title: "Invalid length",
+        startedOn: "2026-01-01",
+        episodeCount: 0,
+      }),
+      "VALIDATION_FAILED",
+    );
     const pointTypeId = await t.run(async (ctx) => {
       const createdPointTypeId = await ctx.db.insert("gamePointTypes", {
         title: "Manual bonus",
@@ -630,6 +639,31 @@ describe("game foundation API", () => {
         "VALIDATION_FAILED",
       );
     }
+    for (const episodeCount of [1, 500]) {
+      await expect(
+        t.withIdentity(ADMIN_IDENTITY).mutation(
+          api.games.seasons.update,
+          {
+            clientApiVersion: BBPC_API_VERSION,
+            id: season.id,
+            episodeCount,
+          },
+        ),
+      ).resolves.toMatchObject({ episodeCount });
+    }
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(api.games.seasons.update, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: season.id,
+        title: "Season 1 renamed",
+      }),
+    ).resolves.toMatchObject({ episodeCount: 500 });
+    await t.withIdentity(ADMIN_IDENTITY).mutation(api.games.seasons.update, {
+      clientApiVersion: BBPC_API_VERSION,
+      id: season.id,
+      title: "Season 1",
+      episodeCount: null,
+    });
     await expect(
       t.withIdentity(ADMIN_IDENTITY).mutation(
         api.games.seasons.update,

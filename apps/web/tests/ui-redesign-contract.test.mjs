@@ -93,6 +93,9 @@ test("home and game prioritize participation without duplicate retired behavior"
   assert.notEqual(nextEpisodeIndex, -1);
   assert.notEqual(standingsIndex, -1);
   assert.ok(standingsIndex < nextEpisodeIndex);
+  assert.doesNotMatch(game, /8 weeks/);
+  assert.match(game, /Each season lasts \$\{performance\.season\.episodeCount\} episodes/);
+  assert.match(game, /Each season lasts a set number of episodes/);
   assert.doesNotMatch(game, /<NextEpisode/);
   assert.match(game, /getNextScheduledEpisode\(\)/);
   assert.match(game, /getConvexCurrentPerformance\(today\)/);

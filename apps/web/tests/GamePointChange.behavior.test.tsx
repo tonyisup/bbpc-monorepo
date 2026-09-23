@@ -110,6 +110,7 @@ describe("useUnseenPointChange", () => {
     latestChange = undefined;
     mocks.useQuery.mockReset();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   test("shows the change until the game page is visited", () => {
@@ -124,6 +125,35 @@ describe("useUnseenPointChange", () => {
 
     mocks.useQuery.mockReturnValue(result([[LATEST, 5], [LATEST, 2]]));
     expect(render({ enabled: true, onGamePage: false })).toBe(7);
+  });
+
+  test("hides the badge when its query fails", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.useQuery.mockImplementation(() => {
+      throw new Error("Could not find public function myLatestPointChange");
+    });
+
+    expect(render({ enabled: true, onGamePage: false })).toBeNull();
+  });
+
+  test("still shows and clears the badge when storage is blocked", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    });
+
+    expect(render({ enabled: true, onGamePage: false })).toBe(5);
+    expect(render({ enabled: true, onGamePage: true })).toBeNull();
+    expect(render({ enabled: true, onGamePage: false })).toBeNull();
+  });
+
+  test("clears the badge when the member signs out", () => {
+    expect(render({ enabled: true, onGamePage: false })).toBe(5);
+    expect(render({ enabled: false, onGamePage: false })).toBeNull();
   });
 
   test("stays hidden for signed-out visitors and zero changes", () => {

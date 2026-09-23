@@ -28,14 +28,15 @@ vi.mock("@/components/GamePerformanceTracking", () => ({
 }));
 
 import { SeasonStandingsDisclosure } from "@/components/SeasonStandingsDisclosure";
+import type { GamePerformanceData } from "@/types/game";
 
 const LATEST = Date.parse("2026-09-11T04:00:00Z");
 
 let renderer: ReactTestRenderer | null = null;
 
-function summaryText(): string {
+function summaryText(data: GamePerformanceData | null = null): string {
   act(() => {
-    renderer = create(<SeasonStandingsDisclosure data={null} />);
+    renderer = create(<SeasonStandingsDisclosure data={data} />);
   });
   const summary = renderer?.root.findByType("summary");
   const collect = (node: unknown): string =>
@@ -67,10 +68,45 @@ describe("SeasonStandingsDisclosure", () => {
     expect(summaryText()).toContain("+5");
   });
 
+  test("shows a lost-points badge and no badge for a zero change", () => {
+    mocks.useQuery.mockReturnValue({
+      seasonId: "season-1",
+      lastScoredAt: LATEST,
+      points: [{ earnedAt: LATEST, pointValue: -3 }],
+    });
+    expect(summaryText()).toContain("-3 points last episode");
+
+    act(() => renderer?.unmount());
+    mocks.useQuery.mockReturnValue({
+      seasonId: "season-1",
+      lastScoredAt: LATEST,
+      points: [],
+    });
+    expect(summaryText()).not.toContain("last episode");
+  });
+
+  test("shows season progress beside the title", () => {
+    mocks.accountStatus = "not-applicable";
+
+    expect(
+      summaryText({
+        season: {
+          id: "season-1",
+          title: "Season 5",
+          endedOn: null,
+          episodeCount: 20,
+        },
+        recordedEpisodeCount: 7,
+        userSummary: [],
+        points: [],
+      })
+    ).toContain("7 of 20 episodes");
+  });
+
   test("shows no badge for signed-out visitors", () => {
     mocks.accountStatus = "not-applicable";
 
-    expect(summaryText()).not.toContain("+");
+    expect(summaryText()).not.toContain("last episode");
     expect(mocks.useQuery).not.toHaveBeenCalled();
   });
 });
