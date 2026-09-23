@@ -17,9 +17,18 @@ import {
   validateQuoteTimestamp,
 } from "./games/quoteWriteModel.js";
 import {
+  SHORT_TRANSCRIPT_MATCH_THRESHOLD,
+  TRANSCRIPT_MATCH_THRESHOLD,
+  combineReuseLikelihoods,
   quoteSearchAnchors,
   quotesPossiblyMatch,
+  submissionReuseLikelihood,
+  transcriptMatchThreshold,
+  transcriptReuseLikelihood,
+  transcriptQuoteMatch,
+  transcriptSearchQuery,
 } from "./games/quoteSimilarity.js";
+import { MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_ADMIN } from "./games/limits.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -253,6 +262,32 @@ async function insertQuote(
   });
 }
 
+async function insertPassage(
+  t: TestBackend,
+  input: {
+    episodeId: Id<"episodes">;
+    text: string;
+    start?: number;
+    end?: number;
+    isPublic?: boolean;
+  },
+): Promise<void> {
+  await t.run(async (ctx) => {
+    await ctx.db.insert("transcriptPassages", {
+      episodeId: input.episodeId,
+      isPublic: input.isPublic ?? true,
+      hash: "synthetic-transcript",
+      sequence: 0,
+      start: input.start ?? 0,
+      end: input.end ?? (input.start ?? 0) + 30,
+      text: input.text,
+    });
+  });
+}
+
+const GODFATHER_PASSAGE =
+  "okay so my quote this week is from the godfather and it goes I'm gonna make him an offer he can't refuse which honestly is the best line in the movie and nobody can tell me otherwise";
+
 describe("Quotabunga workflows", () => {
   test("returns no search anchors for quotes below the minimum length", () => {
     expect(quoteSearchAnchors("Tiny")).toEqual([]);
@@ -475,7 +510,7 @@ describe("Quotabunga workflows", () => {
           sourceTitle: "Godfather",
         },
       ),
-    ).resolves.toEqual({ possibleMatch: true });
+    ).resolves.toEqual({ possibleMatch: true, transcriptMatches: [] });
     await expect(
       t.withIdentity(MEMBER_IDENTITY).query(
         api.games.quotes.checkPossibleDuplicate,
@@ -484,7 +519,7 @@ describe("Quotabunga workflows", () => {
           sourceTitle: "",
         },
       ),
-    ).resolves.toEqual({ possibleMatch: true });
+    ).resolves.toEqual({ possibleMatch: true, transcriptMatches: [] });
     await expect(
       t.withIdentity(MEMBER_IDENTITY).query(
         api.games.quotes.checkPossibleDuplicate,
@@ -493,7 +528,7 @@ describe("Quotabunga workflows", () => {
           sourceTitle: "Godfather",
         },
       ),
-    ).resolves.toEqual({ possibleMatch: false });
+    ).resolves.toEqual({ possibleMatch: false, transcriptMatches: [] });
 
     expect(memberId).not.toBe(otherId);
   });
@@ -519,7 +554,7 @@ describe("Quotabunga workflows", () => {
           sourceTitle: "Terminator",
         },
       ),
-    ).resolves.toEqual({ possibleMatch: false });
+    ).resolves.toEqual({ possibleMatch: false, transcriptMatches: [] });
   });
 
   test("handles short quotes and historical matches without an active round", async () => {
@@ -545,7 +580,7 @@ describe("Quotabunga workflows", () => {
         api.games.quotes.checkPossibleDuplicate,
         { quoteText: "Short", sourceTitle: "" },
       ),
-    ).resolves.toEqual({ possibleMatch: false });
+    ).resolves.toEqual({ possibleMatch: false, transcriptMatches: [] });
     await expect(
       t.withIdentity(MEMBER_IDENTITY).query(
         api.games.quotes.checkPossibleDuplicate,
@@ -554,7 +589,7 @@ describe("Quotabunga workflows", () => {
           sourceTitle: "Star Wars",
         },
       ),
-    ).resolves.toEqual({ possibleMatch: true });
+    ).resolves.toEqual({ possibleMatch: true, transcriptMatches: [] });
     await expectDomainError(
       t.withIdentity(MEMBER_IDENTITY).query(
         api.games.quotes.checkPossibleDuplicate,
@@ -1496,5 +1531,505 @@ describe("Quotabunga workflows", () => {
       ),
       "CONFLICT",
     );
+  });
+
+  test("finds a quote inside a longer transcript passage", () => {
+    const match = transcriptQuoteMatch(
+      "Im going to make him an offer he cannot refuse",
+      GODFATHER_PASSAGE,
+    );
+    expect(match?.similarity).toBeGreaterThanOrEqual(
+      TRANSCRIPT_MATCH_THRESHOLD,
+    );
+    expect(match?.excerpt).toContain("offer he can't refuse");
+    expect(match?.excerpt.startsWith("…")).toBe(true);
+    expect(match?.excerpt.endsWith("…")).toBe(true);
+    expect(
+      transcriptQuoteMatch("Tiny", GODFATHER_PASSAGE),
+    ).toBeNull();
+  });
+
+  test("does not treat a passage that only shares words as a transcript match", () => {
+    const quote = "Nobody puts Baby in a corner";
+    const match = transcriptQuoteMatch(
+      quote,
+      "we put the baby monitor in a corner of the room and nobody noticed it for a week",
+    );
+    expect(match?.similarity ?? 0).toBeLessThan(
+      transcriptMatchThreshold(quote),
+    );
+  });
+
+  test("requires near-exact transcript matches for short quotes and bounds search terms", () => {
+    expect(transcriptMatchThreshold("I'll be back")).toBe(
+      SHORT_TRANSCRIPT_MATCH_THRESHOLD,
+    );
+    expect(transcriptMatchThreshold("May the Force be with you")).toBe(
+      TRANSCRIPT_MATCH_THRESHOLD,
+    );
+    expect(transcriptSearchQuery("Tiny")).toBeNull();
+    expect(transcriptSearchQuery("I'll be back, I'll be back")).toBe(
+      "i ll be back",
+    );
+    const longQuote = Array.from(
+      { length: 20 },
+      (_, index) => `word${"x".repeat(index)}`,
+    ).join(" ");
+    expect(transcriptSearchQuery(longQuote)?.split(" ")).toHaveLength(16);
+  });
+
+  test("weighs reuse evidence by similarity, status, and source", () => {
+    const exact = {
+      similarity: 1,
+      status: "INCLUDED" as const,
+      placed: false,
+      sourceTitleMatches: true,
+    };
+    expect(submissionReuseLikelihood(exact)).toBeCloseTo(0.95);
+    expect(
+      submissionReuseLikelihood({ ...exact, status: "SUBMITTED" }),
+    ).toBeCloseTo(0.6);
+    expect(
+      submissionReuseLikelihood({ ...exact, status: "REJECTED", placed: true }),
+    ).toBeCloseTo(0.95);
+    expect(
+      submissionReuseLikelihood({ ...exact, sourceTitleMatches: false }),
+    ).toBeCloseTo(0.475);
+    expect(
+      submissionReuseLikelihood({ ...exact, similarity: 0.6 }),
+    ).toBe(0);
+    expect(
+      submissionReuseLikelihood({ ...exact, similarity: 0.68 }),
+    ).toBeCloseTo(0.475);
+    expect(combineReuseLikelihoods([])).toBe(0);
+    // Distinct evidence in two episodes compounds.
+    expect(
+      combineReuseLikelihoods([
+        { distinct: 0.5, other: 0 },
+        { distinct: 0.5, other: 0 },
+      ]),
+    ).toBeCloseTo(0.75);
+    // Near-misses count once, through the strongest of them.
+    expect(
+      combineReuseLikelihoods([
+        { distinct: 0, other: 0.4 },
+        { distinct: 0, other: 0.3 },
+        { distinct: 0.5, other: 0.2 },
+      ]),
+    ).toBeCloseTo(1 - 0.5 * 0.6);
+  });
+
+  test("warns listeners about published transcripts that contain the quote", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const hiddenEpisodeId = await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", foundation.oldEpisodeId, {
+        slug: "old-episode",
+      });
+      return await ctx.db.insert("episodes", {
+        number: 9,
+        title: "Hidden episode",
+        status: "draft",
+      });
+    });
+    await insertPassage(t, {
+      episodeId: foundation.oldEpisodeId,
+      text: GODFATHER_PASSAGE,
+      start: 3723,
+    });
+    // Not public in the index, and public in the index but no longer published.
+    await insertPassage(t, {
+      episodeId: foundation.recordingEpisodeId,
+      text: GODFATHER_PASSAGE,
+      isPublic: false,
+    });
+    await insertPassage(t, {
+      episodeId: hiddenEpisodeId,
+      text: GODFATHER_PASSAGE,
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Im going to make him an offer he cannot refuse",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).resolves.toMatchObject({
+      possibleMatch: false,
+      transcriptMatches: [
+        {
+          episodeNumber: 10,
+          episodeTitle: "Old episode",
+          episodeSlug: "old-episode",
+          start: 3723,
+        },
+      ],
+    });
+    const { transcriptMatches } = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.quotes.checkPossibleDuplicate, {
+        quoteText: "Im going to make him an offer he cannot refuse",
+        sourceTitle: "",
+      });
+    expect(transcriptMatches).toHaveLength(1);
+    expect(transcriptMatches[0]?.excerpt).toContain("offer he can't refuse");
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.quotes.checkPossibleDuplicate,
+        {
+          quoteText: "Leave the gun. Take the cannoli.",
+          sourceTitle: "Godfather",
+        },
+      ),
+    ).resolves.toEqual({ possibleMatch: false, transcriptMatches: [] });
+  });
+
+  test("estimates administrator reuse likelihood from earlier episodes only", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const { olderEpisodeId, laterEpisodeId } = await t.run(async (ctx) => ({
+      olderEpisodeId: await ctx.db.insert("episodes", {
+        number: 9,
+        title: "Older episode",
+        status: "published",
+        slug: "older-episode",
+        date: "2026-01-09",
+      }),
+      laterEpisodeId: await ctx.db.insert("episodes", {
+        number: 14,
+        title: "Later episode",
+        status: "published",
+      }),
+    }));
+    const subjectId = await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.recordingEpisodeId,
+      seasonId: foundation.seasonId,
+      status: "INCLUDED",
+      quoteText: "I'm gonna make him an offer he can't refuse.",
+      sourceTitle: "The Godfather",
+    });
+    const earlierId = await insertQuote(t, {
+      userId: otherId,
+      episodeId: foundation.oldEpisodeId,
+      seasonId: foundation.seasonId,
+      status: "INCLUDED",
+      placement: 1,
+      quoteText: "Im going to make him an offer he cannot refuse",
+      sourceTitle: "Godfather",
+    });
+    for (const episodeId of [
+      foundation.recordingEpisodeId,
+      laterEpisodeId,
+    ]) {
+      await insertQuote(t, {
+        userId: otherId,
+        episodeId,
+        seasonId: foundation.seasonId,
+        quoteText: "I'm gonna make him an offer he can't refuse.",
+        sourceTitle: "The Godfather",
+      });
+    }
+    await insertQuote(t, {
+      userId: otherId,
+      episodeId: olderEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "Leave the gun. Take the cannoli.",
+      sourceTitle: "The Godfather",
+    });
+    for (const episodeId of [
+      olderEpisodeId,
+      foundation.recordingEpisodeId,
+      laterEpisodeId,
+    ]) {
+      await insertPassage(t, {
+        episodeId,
+        text: GODFATHER_PASSAGE,
+        start: 125,
+        isPublic: episodeId !== foundation.recordingEpisodeId,
+      });
+    }
+
+    await expectDomainError(
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.quotes.getAdminReuseReport, { id: subjectId }),
+      "FORBIDDEN",
+    );
+    const report = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.quotes.getAdminReuseReport, { id: subjectId });
+    expect(report?.submission).toMatchObject({
+      id: subjectId,
+      user: { name: "Quote Member" },
+      episode: { number: 11 },
+    });
+    expect(report?.episodes.map(({ episode }) => episode.number)).toEqual([
+      9, 10,
+    ]);
+    const episodes = report?.episodes ?? [];
+    const [older, old] = episodes;
+    expect(older).toMatchObject({
+      episode: { slug: "older-episode", date: "2026-01-09" },
+      submissions: [],
+      transcriptPassages: [{ start: 125, similarity: 1 }],
+    });
+    expect(episodes[0]?.transcriptPassages[0]?.excerpt).toContain(
+      "offer he can't refuse",
+    );
+    expect(old).toMatchObject({
+      submissions: [
+        {
+          id: earlierId,
+          status: "INCLUDED",
+          placement: 1,
+          sourceTitleMatches: true,
+          user: { name: "Quote Other" },
+        },
+      ],
+      transcriptPassages: [],
+    });
+    expect(report?.likelihood).toBeGreaterThan(
+      Math.max(...episodes.map(({ likelihood }) => likelihood)),
+    );
+    expect(report?.likelihood).toBeLessThan(1);
+    expect(report?.limited).toBe(false);
+
+    const unrelatedId = await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.nextEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "Nobody puts Baby in a corner",
+      sourceTitle: "Dirty Dancing",
+    });
+    await expect(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.quotes.getAdminReuseReport, { id: unrelatedId }),
+    ).resolves.toMatchObject({ likelihood: 0, episodes: [] });
+    await t.run(async (ctx) => {
+      await ctx.db.delete("quoteSubmissions", unrelatedId);
+    });
+    await expect(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.quotes.getAdminReuseReport, { id: unrelatedId }),
+    ).resolves.toBeNull();
+  });
+
+  test("scores weak, rejected, and short-quote evidence below strong evidence", () => {
+    const base = {
+      similarity: 1,
+      status: "REJECTED" as const,
+      placed: false,
+      sourceTitleMatches: true,
+    };
+    expect(submissionReuseLikelihood(base)).toBeCloseTo(0.35);
+    // Halfway between the evidence floor and the warning threshold.
+    expect(
+      submissionReuseLikelihood({
+        ...base,
+        status: "INCLUDED",
+        similarity: 0.64,
+      }),
+    ).toBeCloseTo(0.25 * 0.95);
+    expect(transcriptReuseLikelihood("I'll be back", 1)).toBeCloseTo(0.45);
+    expect(
+      transcriptReuseLikelihood("May the Force be with you", 1),
+    ).toBeCloseTo(0.9);
+  });
+
+  test("handles transcript passages with no shared words or shorter than the quote", () => {
+    expect(
+      transcriptQuoteMatch(
+        "Nobody puts Baby in a corner",
+        "completely unrelated chatter about lunch",
+      ),
+    ).toBeNull();
+    const match = transcriptQuoteMatch(
+      "I'm gonna make him an offer he can't refuse",
+      "an offer he can't refuse",
+    );
+    expect(match?.excerpt).toBe("an offer he can't refuse");
+    expect(match?.similarity ?? 1).toBeLessThan(TRANSCRIPT_MATCH_THRESHOLD);
+  });
+
+  test("returns at most three transcript episodes, best match first", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    await advanceToS3(t);
+    await seedFoundation(t);
+    const episodeIds = await t.run(async (ctx) =>
+      Promise.all(
+        [1, 2, 3, 4].map(async (number) =>
+          ctx.db.insert("episodes", {
+            number,
+            title: `Published ${String(number)}`,
+            status: "published",
+            ...(number === 1 ? {} : { slug: `published-${String(number)}` }),
+          }),
+        ),
+      ),
+    );
+    const [first, second, third, fourth] = episodeIds;
+    if (!first || !second || !third || !fourth) {
+      throw new Error("Episodes were not created.");
+    }
+    // Episode 1 has the only exact match; the others read it with drift.
+    const drifted =
+      "and it goes Im going to make him an offer he cannot refuse which is great";
+    await insertPassage(t, { episodeId: first, text: GODFATHER_PASSAGE, start: 5 });
+    await insertPassage(t, { episodeId: first, text: drifted, start: 500 });
+    for (const episodeId of [second, third, fourth]) {
+      await insertPassage(t, { episodeId, text: drifted, start: 60 });
+    }
+
+    const { transcriptMatches } = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.quotes.checkPossibleDuplicate, {
+        quoteText: "I'm gonna make him an offer he can't refuse.",
+        sourceTitle: "",
+      });
+    expect(
+      transcriptMatches.map(({ episodeNumber, episodeSlug, start }) => ({
+        episodeNumber,
+        episodeSlug,
+        start,
+      })),
+    ).toEqual([
+      { episodeNumber: 1, episodeSlug: null, start: 5 },
+      { episodeNumber: 4, episodeSlug: "published-4", start: 60 },
+      { episodeNumber: 3, episodeSlug: "published-3", start: 60 },
+    ]);
+  });
+
+  test("includes unpublished earlier transcripts and keeps three distinct passages per episode", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const subjectId = await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.recordingEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'm gonna make him an offer he can't refuse.",
+      sourceTitle: "The Godfather",
+    });
+    // Overlapping windows collapse to one; five distinct ones are capped at three.
+    for (const [start, end] of [
+      [0, 30],
+      [10, 40],
+      [100, 130],
+      [200, 230],
+      [300, 330],
+      [400, 430],
+    ] as const) {
+      await insertPassage(t, {
+        episodeId: foundation.oldEpisodeId,
+        text: GODFATHER_PASSAGE,
+        start,
+        end,
+        isPublic: false,
+      });
+    }
+
+    const report = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.quotes.getAdminReuseReport, { id: subjectId });
+    const passages = report?.episodes[0]?.transcriptPassages ?? [];
+    expect(report?.episodes).toHaveLength(1);
+    expect(passages).toHaveLength(3);
+    for (const passage of passages) {
+      for (const other of passages) {
+        if (passage !== other) {
+          expect(
+            passage.start <= other.end && other.start <= passage.end,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
+  test("reports a capped search and fails closed on a missing subject episode", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const subjectId = await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.recordingEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'm gonna make him an offer he can't refuse.",
+      sourceTitle: "The Godfather",
+    });
+    for (
+      let index = 0;
+      index < MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_ADMIN;
+      index += 1
+    ) {
+      await insertPassage(t, {
+        episodeId: foundation.oldEpisodeId,
+        text: GODFATHER_PASSAGE,
+        start: index * 100,
+      });
+    }
+    await expect(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.quotes.getAdminReuseReport, { id: subjectId }),
+    ).resolves.toMatchObject({ limited: true });
+
+    await t.run(async (ctx) => {
+      await ctx.db.delete("episodes", foundation.recordingEpisodeId);
+    });
+    await expectDomainError(
+      t
+        .withIdentity(ADMIN_IDENTITY)
+        .query(api.games.quotes.getAdminReuseReport, { id: subjectId }),
+      "CONFLICT",
+    );
+  });
+
+  test("does not compound an everyday phrase heard across many episodes", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const subjectId = await insertQuote(t, {
+      userId: memberId,
+      episodeId: foundation.nextEpisodeId,
+      seasonId: foundation.seasonId,
+      quoteText: "I'll be back",
+      sourceTitle: "The Terminator",
+    });
+    const earlierIds = await t.run(async (ctx) =>
+      Promise.all(
+        [1, 2, 3, 4, 5].map(async (number) =>
+          ctx.db.insert("episodes", {
+            number,
+            title: `Chat ${String(number)}`,
+            status: "published",
+          }),
+        ),
+      ),
+    );
+    for (const episodeId of earlierIds) {
+      await insertPassage(t, {
+        episodeId,
+        text: "hold that thought I'll be back after the break",
+      });
+    }
+
+    const report = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.quotes.getAdminReuseReport, { id: subjectId });
+    expect(report?.episodes).toHaveLength(5);
+    expect(report?.likelihood).toBeCloseTo(0.45);
   });
 });

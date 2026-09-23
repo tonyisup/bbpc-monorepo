@@ -270,8 +270,17 @@ export const currentQuoteSubmissionValidator = v.object({
   ),
 });
 
+export const quoteTranscriptMatchValidator = v.object({
+  episodeNumber: v.number(),
+  episodeTitle: v.string(),
+  episodeSlug: nullableStringValidator,
+  start: v.number(),
+  excerpt: v.string(),
+});
+
 export const quoteSimilarityResultValidator = v.object({
   possibleMatch: v.boolean(),
+  transcriptMatches: v.array(quoteTranscriptMatchValidator),
 });
 
 export const quoteAdminUserValidator = v.object({
@@ -373,4 +382,52 @@ export const gamblingEditableSnapshotValidator = v.object({
 export const assignmentGamblingGroupValidator = v.object({
   assignmentId: v.id("assignments"),
   entries: v.array(gamblingEntryValidator),
+});
+
+export const quoteReuseEpisodeValidator = quoteEpisodeValidator.extend({
+  date: nullableStringValidator,
+  slug: nullableStringValidator,
+});
+
+export const quoteReuseSubmissionValidator = v.object({
+  id: v.id("quoteSubmissions"),
+  quoteText: v.string(),
+  sourceTitle: v.string(),
+  sourceType: quoteSourceTypeValidator,
+  status: quoteStatusValidator,
+  placement: nullableNumberValidator,
+  user: quoteAdminUserValidator,
+  similarity: v.number(),
+  sourceTitleMatches: v.boolean(),
+  likelihood: v.number(),
+});
+
+export const quoteReusePassageValidator = v.object({
+  start: v.number(),
+  end: v.number(),
+  excerpt: v.string(),
+  similarity: v.number(),
+  likelihood: v.number(),
+});
+
+export const quoteReuseReportValidator = v.object({
+  submission: v.object({
+    id: v.id("quoteSubmissions"),
+    quoteText: v.string(),
+    sourceTitle: v.string(),
+    sourceType: quoteSourceTypeValidator,
+    status: quoteStatusValidator,
+    user: quoteAdminUserValidator,
+    episode: quoteEpisodeValidator,
+  }),
+  likelihood: v.number(),
+  limited: v.boolean(),
+  episodes: v.array(
+    v.object({
+      episode: quoteReuseEpisodeValidator,
+      likelihood: v.number(),
+      submissions: v.array(quoteReuseSubmissionValidator),
+      transcriptPassages: v.array(quoteReusePassageValidator),
+    }),
+  ),
 });

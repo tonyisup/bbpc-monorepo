@@ -7637,7 +7637,16 @@ export type PublicApiType = {
         "query",
         "public",
         { quoteText: string; sourceTitle: string },
-        { possibleMatch: boolean }
+        {
+          possibleMatch: boolean;
+          transcriptMatches: Array<{
+            episodeNumber: number;
+            episodeSlug: string | null;
+            episodeTitle: string;
+            excerpt: string;
+            start: number;
+          }>;
+        }
       >;
       currentForMe: FunctionReference<
         "query",
@@ -7708,6 +7717,69 @@ export type PublicApiType = {
             name: string | null;
           };
           userId: Id<"users">;
+        } | null
+      >;
+      getAdminReuseReport: FunctionReference<
+        "query",
+        "public",
+        { id: Id<"quoteSubmissions"> },
+        {
+          episodes: Array<{
+            episode: {
+              date: string | null;
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            likelihood: number;
+            submissions: Array<{
+              id: Id<"quoteSubmissions">;
+              likelihood: number;
+              placement: number | null;
+              quoteText: string;
+              similarity: number;
+              sourceTitle: string;
+              sourceTitleMatches: boolean;
+              sourceType: "MOVIE" | "TV" | "OTHER";
+              status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+              user: {
+                email: string | null;
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+              };
+            }>;
+            transcriptPassages: Array<{
+              end: number;
+              excerpt: string;
+              likelihood: number;
+              similarity: number;
+              start: number;
+            }>;
+          }>;
+          likelihood: number;
+          limited: boolean;
+          submission: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"quoteSubmissions">;
+            quoteText: string;
+            sourceTitle: string;
+            sourceType: "MOVIE" | "TV" | "OTHER";
+            status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+            user: {
+              email: string | null;
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          };
         } | null
       >;
       listAdminEpisodes: FunctionReference<

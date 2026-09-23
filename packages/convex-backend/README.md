@@ -531,7 +531,24 @@ While a member enters a quote, `games.quotes.checkPossibleDuplicate` performs a 
 full-text candidate search and returns only whether a similar prior submission may
 exist. The advisory check accepts an optional source title, excludes the member's own
 current submission, and never prevents a submission when it finds a possible match or
-is temporarily unavailable.
+is temporarily unavailable. The same check searches public transcript passages and
+returns up to three published episodes whose transcript contains a close match, with
+the passage timestamp and a short excerpt. Transcripts are already public, so these
+matches name the episode; other listeners' submissions stay a yes/no answer. Quotes of
+fewer than four words need a near-exact transcript match.
+
+`games.quotes.getAdminReuseReport` estimates how likely a submission's quote was
+already used, for administrators. It compares the quote with similar submissions and
+with all transcript passages from episodes numbered before the submission's own
+episode, and returns each episode's evidence with a 0–1 likelihood. Within an episode
+the strongest evidence counts. Across episodes, clear matches combine as independent
+chances, while near-misses and short everyday phrases count only once, so many weak
+hits cannot add up to a confident result. Included or placed submissions and matching
+source titles weigh more; rejected submissions and short transcript phrases weigh
+less. Transcript matching uses at most a quote's first 60 words. Candidate searches
+are bounded, and `limited` reports when a search stopped at its limit while its last
+result was still relevant. The number is a heuristic estimate, not a calibrated
+probability.
 
 Administrator operations provide bounded episode selectors, exact and per-episode reads,
 submission creation and correction, moderation, seeded bracket ordering, placement
