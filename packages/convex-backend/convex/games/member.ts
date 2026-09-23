@@ -11,6 +11,7 @@ import { calculateAvailablePointsForUser } from "./gamblingReadModel.js";
 import {
   LATEST_POINT_CHANGE_WINDOW_MS,
   MAX_POINTS_FOR_LATEST_CHANGE,
+  PACIFIC_DAY_END_OFFSET_MS,
   validatePointPageSize,
 } from "./limits.js";
 import { hydratePointCore, pointValue } from "./pointReadModel.js";
@@ -80,17 +81,19 @@ export const myLatestPointChange = authenticatedQuery({
   args: { today: v.string() },
   returns: v.union(latestPointChangeValidator, v.null()),
   handler: async (ctx, args) => {
-    const season = await findCurrentSeason(
-      ctx,
-      validatePlainDate(args.today, "Current season date"),
-    );
+    const today = validatePlainDate(args.today, "Current season date");
+    const season = await findCurrentSeason(ctx, today);
     if (season === null) {
       return null;
     }
+    // A point dated after today (for example, a typo in its date) must not
+    // pin every member's last episode to that future day.
+    const endOfToday =
+      Date.parse(`${today}T00:00:00Z`) + PACIFIC_DAY_END_OFFSET_MS;
     const latest = await ctx.db
       .query("points")
       .withIndex("by_seasonId_and_earnedAt", (index) =>
-        index.eq("seasonId", season._id),
+        index.eq("seasonId", season._id).lt("earnedAt", endOfToday),
       )
       .order("desc")
       .first();

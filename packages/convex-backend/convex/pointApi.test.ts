@@ -804,6 +804,37 @@ describe("point API", () => {
     });
   });
 
+  test("ignores points dated after today when finding the last episode", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const { seasonId } = await seedGameFoundation(t);
+    // 9pm Pacific on Jul 23, and a mistyped point years ahead.
+    const latest = Date.parse("2026-07-24T04:00:00Z");
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 5,
+      earnedAt: latest,
+    });
+    await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      adjustment: 9,
+      earnedAt: Date.parse("2062-01-01T00:00:00Z"),
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(
+        api.games.member.myLatestPointChange,
+        { today: "2026-07-24" },
+      ),
+    ).resolves.toEqual({
+      seasonId,
+      lastScoredAt: latest,
+      points: [{ earnedAt: latest, pointValue: 5 }],
+    });
+  });
+
   test("rejects a latest point change beyond its point limit", async () => {
     const t = createTestBackend();
     const { memberId } = await seedActors(t);

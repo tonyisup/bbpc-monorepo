@@ -14,6 +14,9 @@ export const MAX_POINTS_FOR_AGGREGATE = 2000;
 export const MAX_POINTS_FOR_LATEST_CHANGE = 200;
 // Wide enough to hold any Pacific calendar day that ends at the latest point.
 export const LATEST_POINT_CHANGE_WINDOW_MS = 36 * 60 * 60 * 1000;
+// A Pacific day ends by 08:00 UTC the next day. During daylight time this
+// runs an hour past midnight, which only matters for a point dated then.
+export const PACIFIC_DAY_END_OFFSET_MS = 32 * 60 * 60 * 1000;
 export const MAX_ACTIVE_WAGERS_FOR_TOTAL = 2000;
 export const MAX_POINT_RELATIONSHIPS = 100;
 export const MAX_ASSIGNMENT_POINT_LINKS_FOR_TOTALS = 1000;

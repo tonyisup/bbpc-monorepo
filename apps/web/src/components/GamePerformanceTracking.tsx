@@ -19,7 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
-import { formatPlainDate } from "@/lib/dates";
+import { formatPlainDate, getPacificTodayPlainDate } from "@/lib/dates";
 import { pacificPointDay } from "@/lib/pointDays";
 import type { GamePerformanceData } from "@/types/game";
 
@@ -68,14 +68,18 @@ export const buildChartData = (
 
 /**
  * Points are awarded while recording, so the latest Pacific scoring day stands
- * in for the last episode. Manual adjustments made that day count too.
+ * in for the last episode. Manual adjustments made that day count too. Points
+ * dated after `today` are ignored so a mistyped date can't pin the column.
  */
 export const buildSummaryRows = (
   chartData: Record<string, number | string>[],
   points: PerformancePoint[],
-  userSummary: PerformanceSummaryItem[]
+  userSummary: PerformanceSummaryItem[],
+  today: string
 ) => {
-  const lastPoint = points.at(-1);
+  const lastPoint = points.findLast(
+    (point) => pacificPointDay(point.earnedAt) <= today
+  );
   const lastEpisodeDay =
     lastPoint === undefined ? null : pacificPointDay(lastPoint.earnedAt);
   const lastEpisodePoints = new Map<string, number>();
@@ -117,7 +121,12 @@ export default function GamePerformanceTracking({
   }
 
   const chartData = buildChartData(data.points, data.userSummary);
-  const summary = buildSummaryRows(chartData, data.points, data.userSummary);
+  const summary = buildSummaryRows(
+    chartData,
+    data.points,
+    data.userSummary,
+    getPacificTodayPlainDate()
+  );
   const progress = getSeasonProgress(data);
 
   return (

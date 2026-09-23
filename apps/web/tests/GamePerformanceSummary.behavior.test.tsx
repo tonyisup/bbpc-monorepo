@@ -36,7 +36,7 @@ describe("performance tracking summary", () => {
     ];
     const chartData = buildChartData(points, userSummary);
 
-    expect(buildSummaryRows(chartData, points, userSummary)).toEqual({
+    expect(buildSummaryRows(chartData, points, userSummary, "2026-09-23")).toEqual({
       lastEpisodeLabel: "Sep 10",
       rows: [
         { id: "u1", name: "Ada", latestScore: 6, peakScore: 6, lastEpisodeScore: 1 },
@@ -45,8 +45,27 @@ describe("performance tracking summary", () => {
     });
   });
 
+  test("ignores points dated after today", () => {
+    const points = [
+      { userId: "u1", earnedAt: Date.parse("2026-09-11T02:00:00Z"), pointValue: 4 },
+      { userId: "u2", earnedAt: Date.parse("2062-01-01T00:00:00Z"), pointValue: 9 },
+    ];
+
+    expect(
+      buildSummaryRows(
+        buildChartData(points, userSummary),
+        points,
+        userSummary,
+        "2026-09-23"
+      )
+    ).toMatchObject({
+      lastEpisodeLabel: "Sep 10",
+      rows: [{ lastEpisodeScore: 4 }, { lastEpisodeScore: 0 }],
+    });
+  });
+
   test("has no last episode before any scoring", () => {
-    expect(buildSummaryRows([], [], userSummary)).toMatchObject({
+    expect(buildSummaryRows([], [], userSummary, "2026-09-23")).toMatchObject({
       lastEpisodeLabel: null,
       rows: [{ lastEpisodeScore: 0 }, { lastEpisodeScore: 0 }],
     });
