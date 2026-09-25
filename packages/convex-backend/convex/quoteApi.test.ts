@@ -859,12 +859,12 @@ describe("Quotabunga workflows", () => {
         status: "published",
       });
       await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
-        predictionClosesAt: 1_000,
+        predictionClosesAt: Date.now() + 600_000,
       });
     });
 
     await expect(
-      member.query(api.games.quotes.currentForMe, { now: 500 }),
+      member.query(api.games.quotes.currentForMe, { now: Date.now() }),
     ).resolves.toMatchObject({
       episode: { id: foundation.recordingEpisodeId, number: 11 },
       isOpen: true,
@@ -872,19 +872,23 @@ describe("Quotabunga workflows", () => {
     const created = await member.mutation(api.games.quotes.submitMine, {
       clientApiVersion: BBPC_API_VERSION,
       ...memberContent,
-      now: 500,
     });
     expect(created).toMatchObject({ quoteText: "Great quote" });
     await expect(
       member.mutation(api.games.quotes.withdrawMine, {
         clientApiVersion: BBPC_API_VERSION,
-        now: 999,
       }),
     ).resolves.toEqual({ id: created.id });
 
-    // The deadline passes: the flag, submissions, and withdrawals all lock.
+    // The deadline passes: the flag, submissions, and withdrawals all lock,
+    // and a client cannot reopen the round by sending an earlier clock.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
+        predictionClosesAt: Date.now() - 1,
+      });
+    });
     await expect(
-      member.query(api.games.quotes.currentForMe, { now: 1_000 }),
+      member.query(api.games.quotes.currentForMe, { now: Date.now() }),
     ).resolves.toMatchObject({
       episode: { id: foundation.recordingEpisodeId },
       isOpen: false,
@@ -893,7 +897,7 @@ describe("Quotabunga workflows", () => {
       member.mutation(api.games.quotes.submitMine, {
         clientApiVersion: BBPC_API_VERSION,
         ...memberContent,
-        now: 1_000,
+        now: 500,
       }),
       "CONFLICT",
       { reason: "ROUND_LOCKED" },
@@ -901,7 +905,6 @@ describe("Quotabunga workflows", () => {
     await expectDomainError(
       member.mutation(api.games.quotes.withdrawMine, {
         clientApiVersion: BBPC_API_VERSION,
-        now: 1_000,
       }),
       "CONFLICT",
       { reason: "ROUND_LOCKED" },
@@ -914,13 +917,12 @@ describe("Quotabunga workflows", () => {
       });
     });
     await expect(
-      member.query(api.games.quotes.currentForMe, { now: 500 }),
+      member.query(api.games.quotes.currentForMe, { now: Date.now() }),
     ).resolves.toMatchObject({ isOpen: false });
     await expectDomainError(
       member.mutation(api.games.quotes.submitMine, {
         clientApiVersion: BBPC_API_VERSION,
         ...memberContent,
-        now: 500,
       }),
       "CONFLICT",
       { reason: "ROUND_LOCKED" },
@@ -952,6 +954,7 @@ describe("Quotabunga workflows", () => {
     await expect(
       member.query(api.games.quotes.mineForEpisode, {
         episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
       }),
     ).resolves.toMatchObject({
       episode: { id: foundation.nextEpisodeId },
@@ -961,6 +964,7 @@ describe("Quotabunga workflows", () => {
     await expect(
       member.query(api.games.quotes.mineForEpisode, {
         episodeId: foundation.oldEpisodeId,
+        now: Date.now(),
       }),
     ).resolves.toMatchObject({
       episode: { id: foundation.oldEpisodeId, number: 10 },
@@ -976,6 +980,7 @@ describe("Quotabunga workflows", () => {
     await expect(
       member.query(api.games.quotes.mineForEpisode, {
         episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
       }),
     ).resolves.toMatchObject({ submission: { id: created.id } });
     await expectDomainError(
@@ -1014,12 +1019,14 @@ describe("Quotabunga workflows", () => {
     await expectDomainError(
       member.query(api.games.quotes.mineForEpisode, {
         episodeId: removedEpisodeId,
+        now: Date.now(),
       }),
       "NOT_FOUND",
     );
     await expectDomainError(
       t.query(api.games.quotes.mineForEpisode, {
         episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
       }),
       "AUTHENTICATION_REQUIRED",
     );

@@ -528,9 +528,10 @@ aired episode shows the member's entry locked. Entries follow the same round win
 predictions and wagers: a `next` episode accepts
 writes, and a `recording` episode accepts them until its `predictionClosesAt` deadline,
 so all three lock together. `submitMine`, `withdrawMine`, and `checkPossibleDuplicate`
-take an optional `episodeId` naming the episode, falling back to the current one, and the
-reads and writes take an optional `now` (epoch milliseconds) from the client's clock with
-the server clock as the fallback. Ownership is always derived from the linked Clerk identity, and the mutation
+take an optional `episodeId` naming the episode, falling back to the current one. Writes
+judge the window on the server clock; `submitMine`'s optional `now` only stamps the entry.
+`mineForEpisode` requires the client's `now` (epoch milliseconds) for its `isOpen` flag and
+`currentForMe` accepts it, falling back to the server clock. Ownership is always derived from the linked Clerk identity, and the mutation
 upserts at most one submission per user and episode. Scored submissions cannot be edited
 or withdrawn. Member responses expose the public quote
 fields and score state but never administrator notes.

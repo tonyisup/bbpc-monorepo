@@ -8379,7 +8379,7 @@ export type PublicApiType = {
       mineForEpisode: FunctionReference<
         "query",
         "public",
-        { episodeId: Id<"episodes">; now?: number },
+        { episodeId: Id<"episodes">; now: number },
         {
           episode: {
             id: Id<"episodes">;
@@ -8492,7 +8492,7 @@ export type PublicApiType = {
       withdrawMine: FunctionReference<
         "mutation",
         "public",
-        { clientApiVersion: string; episodeId?: Id<"episodes">; now?: number },
+        { clientApiVersion: string; episodeId?: Id<"episodes"> },
         { id: Id<"quoteSubmissions"> }
       >;
     };

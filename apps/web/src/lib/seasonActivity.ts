@@ -83,9 +83,9 @@ const dateLabelFormatter = new Intl.DateTimeFormat("en-US", {
 
 /**
  * Cumulative totals per Pacific scoring day for the member, the season's
- * top player other than them, and the field average. Points are awarded
- * while recording, so a scoring day stands in for an episode, as on the
- * game page.
+ * top player other than them, and the field average across everyone who
+ * has scored so far. Points are awarded while recording, so a scoring day
+ * stands in for an episode, as on the game page.
  */
 export function buildSeasonSeries(
   overview: Pick<ConvexSeasonOverview, "userSummary" | "points">,
@@ -105,7 +105,6 @@ export function buildSeasonSeries(
               ? ("Runner-up" as const)
               : ("Leader" as const),
         };
-  const playerCount = overview.userSummary.length;
   const running = new Map<string, number>();
   const rows = new Map<string, SeasonSeriesRow>();
   for (const point of overview.points) {
@@ -122,10 +121,7 @@ export function buildSeasonSeries(
       you: running.get(userId) ?? 0,
       comparison:
         comparison === null ? null : (running.get(comparison.id) ?? 0),
-      average:
-        playerCount === 0
-          ? 0
-          : Math.round((fieldTotal / playerCount) * 10) / 10,
+      average: Math.round((fieldTotal / running.size) * 10) / 10,
     });
   }
   return { rows: [...rows.values()], comparison };

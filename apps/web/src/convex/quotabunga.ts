@@ -133,7 +133,6 @@ export async function withdrawConvexQuotabunga(
     await client.mutation(withdrawMineReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
       episodeId: documentId("episodes", episodeId),
-      now: Date.now(),
     })
   );
 }

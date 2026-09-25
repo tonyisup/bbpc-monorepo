@@ -253,7 +253,7 @@ export const mySeasons = authenticatedQuery({
         for (const point of seasonPoints) {
           total += valueOf(point, pointTypes);
         }
-        const [hydrated, available, recordedEpisodeCount, performance] =
+        const [hydrated, available, recordedEpisodeCount, standing] =
           await Promise.all([
             hydrateSeason(ctx, season),
             isCurrent
@@ -261,7 +261,12 @@ export const mySeasons = authenticatedQuery({
               : null,
             isCurrent ? countSeasonEpisodesThrough(ctx, season, today) : null,
             isCurrent
-              ? loadSeasonPerformance(ctx, season._id, "Current season standing")
+              ? loadSeasonStanding(
+                  ctx,
+                  season._id,
+                  userId,
+                  "Current season standing",
+                )
               : null,
           ]);
         return {
@@ -271,10 +276,7 @@ export const mySeasons = authenticatedQuery({
           pointCount: seasonPoints.length,
           available,
           recordedEpisodeCount,
-          standing:
-            performance === null
-              ? null
-              : findSeasonStanding(performance.userSummary, userId),
+          standing,
         };
       }),
     );

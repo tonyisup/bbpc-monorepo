@@ -261,7 +261,7 @@ export const currentForMe = authenticatedQuery({
  * locked but still readable once it has aired.
  */
 export const mineForEpisode = authenticatedQuery({
-  args: { episodeId: v.id("episodes"), now: v.optional(v.number()) },
+  args: { episodeId: v.id("episodes"), now: v.number() },
   returns: currentQuoteSubmissionValidator,
   handler: async (ctx, args) => {
     const episode = await ctx.db.get("episodes", args.episodeId);
@@ -275,7 +275,7 @@ export const mineForEpisode = authenticatedQuery({
     );
     return {
       episode: toQuoteEpisode(episode),
-      isOpen: isEpisodeRoundOpen(episode, args.now ?? Date.now()),
+      isOpen: isEpisodeRoundOpen(episode, args.now),
       submission:
         submission === null
           ? null
@@ -366,7 +366,13 @@ export const submitMine = authenticatedMutation({
       args.now ?? Date.now(),
       "Quote update time",
     );
-    const episode = await requireWritableEpisode(ctx, args.episodeId, now);
+    // The window is judged on the server clock; `now` only stamps the entry,
+    // so a client cannot reopen a closed round by sending an earlier time.
+    const episode = await requireWritableEpisode(
+      ctx,
+      args.episodeId,
+      Date.now(),
+    );
     const existing = await findQuoteForEpisodeUser(
       ctx,
       episode._id,
@@ -435,17 +441,14 @@ export const submitMine = authenticatedMutation({
 });
 
 export const withdrawMine = authenticatedMutation({
-  args: {
-    episodeId: v.optional(v.id("episodes")),
-    now: v.optional(v.number()),
-  },
+  args: { episodeId: v.optional(v.id("episodes")) },
   returns: v.object({ id: v.id("quoteSubmissions") }),
   handler: async (ctx, args) => {
-    const now = validateQuoteTimestamp(
-      args.now ?? Date.now(),
-      "Quote withdrawal time",
+    const episode = await requireWritableEpisode(
+      ctx,
+      args.episodeId,
+      Date.now(),
     );
-    const episode = await requireWritableEpisode(ctx, args.episodeId, now);
     const submission = await findQuoteForEpisodeUser(
       ctx,
       episode._id,
