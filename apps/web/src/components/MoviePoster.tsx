@@ -23,7 +23,14 @@ export function MoviePoster({
       aria-hidden="true"
     >
       {poster !== null && (
-        <Image src={poster} alt="" fill sizes="56px" className="object-cover" />
+        <Image
+          src={poster}
+          alt=""
+          fill
+          sizes="56px"
+          className="object-cover"
+          unoptimized
+        />
       )}
     </div>
   );

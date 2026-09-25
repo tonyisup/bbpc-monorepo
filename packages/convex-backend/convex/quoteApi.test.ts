@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -847,90 +847,95 @@ describe("Quotabunga workflows", () => {
   });
 
   test("locks Quotabunga on the same deadline as predictions", async () => {
-    const t = createTestBackend();
-    await seedActors(t);
-    await initializeS1(t);
-    await advanceFromS1ToS3(t);
-    const foundation = await seedFoundation(t);
-    const member = t.withIdentity(MEMBER_IDENTITY);
-    // Only the recording episode remains, inside its ten-minute grace window.
-    await t.run(async (ctx) => {
-      await ctx.db.patch("episodes", foundation.nextEpisodeId, {
-        status: "published",
+    const beforeDeadline = 1_700_000_000_000;
+    const predictionClosesAt = beforeDeadline + 600_000;
+    const afterDeadline = predictionClosesAt + 1;
+    vi.useFakeTimers();
+    vi.setSystemTime(beforeDeadline);
+    try {
+      const t = createTestBackend();
+      await seedActors(t);
+      await initializeS1(t);
+      await advanceFromS1ToS3(t);
+      const foundation = await seedFoundation(t);
+      const member = t.withIdentity(MEMBER_IDENTITY);
+      // Only the recording episode remains, inside its ten-minute grace window.
+      await t.run(async (ctx) => {
+        await ctx.db.patch("episodes", foundation.nextEpisodeId, {
+          status: "published",
+        });
+        await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
+          predictionClosesAt,
+        });
       });
-      await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
-        predictionClosesAt: Date.now() + 600_000,
-      });
-    });
 
-    await expect(
-      member.query(api.games.quotes.currentForMe, { now: Date.now() }),
-    ).resolves.toMatchObject({
-      episode: { id: foundation.recordingEpisodeId, number: 11 },
-      isOpen: true,
-    });
-    // Without a client clock the legacy read stays conservative.
-    await expect(
-      member.query(api.games.quotes.currentForMe, {}),
-    ).resolves.toMatchObject({ isOpen: false });
-    const created = await member.mutation(api.games.quotes.submitMine, {
-      clientApiVersion: BBPC_API_VERSION,
-      ...memberContent,
-    });
-    expect(created).toMatchObject({ quoteText: "Great quote" });
-    await expect(
-      member.mutation(api.games.quotes.withdrawMine, {
-        clientApiVersion: BBPC_API_VERSION,
-      }),
-    ).resolves.toEqual({ id: created.id });
-
-    // The deadline passes: the flag, submissions, and withdrawals all lock,
-    // and a client cannot reopen the round by sending an earlier clock.
-    await t.run(async (ctx) => {
-      await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
-        predictionClosesAt: Date.now() - 1,
+      await expect(
+        member.query(api.games.quotes.currentForMe, { now: beforeDeadline }),
+      ).resolves.toMatchObject({
+        episode: { id: foundation.recordingEpisodeId, number: 11 },
+        isOpen: true,
       });
-    });
-    await expect(
-      member.query(api.games.quotes.currentForMe, { now: Date.now() }),
-    ).resolves.toMatchObject({
-      episode: { id: foundation.recordingEpisodeId },
-      isOpen: false,
-    });
-    await expectDomainError(
-      member.mutation(api.games.quotes.submitMine, {
+      // Without a client clock the legacy read stays conservative.
+      await expect(
+        member.query(api.games.quotes.currentForMe, {}),
+      ).resolves.toMatchObject({ isOpen: false });
+      const created = await member.mutation(api.games.quotes.submitMine, {
         clientApiVersion: BBPC_API_VERSION,
         ...memberContent,
-        now: 500,
-      }),
-      "CONFLICT",
-      { reason: "ROUND_LOCKED" },
-    );
-    await expectDomainError(
-      member.mutation(api.games.quotes.withdrawMine, {
-        clientApiVersion: BBPC_API_VERSION,
-      }),
-      "CONFLICT",
-      { reason: "ROUND_LOCKED" },
-    );
-
-    // A recording episode with no deadline never accepts entries.
-    await t.run(async (ctx) => {
-      await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
-        predictionClosesAt: undefined,
       });
-    });
-    await expect(
-      member.query(api.games.quotes.currentForMe, { now: Date.now() }),
-    ).resolves.toMatchObject({ isOpen: false });
-    await expectDomainError(
-      member.mutation(api.games.quotes.submitMine, {
-        clientApiVersion: BBPC_API_VERSION,
-        ...memberContent,
-      }),
-      "CONFLICT",
-      { reason: "ROUND_LOCKED" },
-    );
+      expect(created).toMatchObject({ quoteText: "Great quote" });
+      await expect(
+        member.mutation(api.games.quotes.withdrawMine, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
+      ).resolves.toEqual({ id: created.id });
+
+      // The deadline passes: the flag, submissions, and withdrawals all lock,
+      // and a client cannot reopen the round by sending an earlier clock.
+      vi.setSystemTime(afterDeadline);
+      await expect(
+        member.query(api.games.quotes.currentForMe, { now: afterDeadline }),
+      ).resolves.toMatchObject({
+        episode: { id: foundation.recordingEpisodeId },
+        isOpen: false,
+      });
+      await expectDomainError(
+        member.mutation(api.games.quotes.submitMine, {
+          clientApiVersion: BBPC_API_VERSION,
+          ...memberContent,
+          now: 500,
+        }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+      await expectDomainError(
+        member.mutation(api.games.quotes.withdrawMine, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+
+      // A recording episode with no deadline never accepts entries.
+      await t.run(async (ctx) => {
+        await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
+          predictionClosesAt: undefined,
+        });
+      });
+      await expect(
+        member.query(api.games.quotes.currentForMe, { now: afterDeadline }),
+      ).resolves.toMatchObject({ isOpen: false });
+      await expectDomainError(
+        member.mutation(api.games.quotes.submitMine, {
+          clientApiVersion: BBPC_API_VERSION,
+          ...memberContent,
+        }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("scopes the own-entry duplicate exclusion to the episode the client names", async () => {
