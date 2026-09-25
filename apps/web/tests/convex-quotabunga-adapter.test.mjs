@@ -14,7 +14,7 @@ const [participation, component, adapter] = await Promise.all([
 
 test("Convex Quotabunga uses authenticated owner-derived functions", () => {
   for (const name of [
-    "games/quotes:currentForMe",
+    "games/quotes:mineForEpisode",
     "games/quotes:checkPossibleDuplicate",
     "games/quotes:submitMine",
     "games/quotes:withdrawMine",
@@ -33,6 +33,8 @@ test("Convex Quotabunga does not depend on the SQL auth or transport stack", () 
   assert.doesNotMatch(component, /next-auth|trpc|prisma|server\/db/u);
   assert.match(component, /submission\.scored/u);
   assert.match(component, /current\?\.isOpen/u);
+  assert.match(component, /api\.episodes\.public\.predictionWindow/u);
+  assert.match(component, /getPredictionRoundState\(windowStatus, true, closesAt, now\)/u);
   assert.match(component, /getConvexDomainErrorCode/u);
 });
 
@@ -44,5 +46,10 @@ test("game participation exposes quote writes only after canonical identity reso
     /<ConvexQuotabungaSubmission/u
   );
   assert.match(participation, /<ConvexPredictionGame/u);
+  assert.match(
+    participation,
+    /<ConvexQuotabungaSubmission[\s\S]*?episodeId=\{episodeId\}/u
+  );
+  assert.match(adapter, /documentId\("episodes", episodeId\)/u);
   assert.doesNotMatch(participation, /backend|<PredictionGame|<QuotabungaSubmission \/>/u);
 });

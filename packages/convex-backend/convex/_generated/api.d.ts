@@ -65,6 +65,7 @@ import type * as games_quoteSimilarity from "../games/quoteSimilarity.js";
 import type * as games_quoteWriteModel from "../games/quoteWriteModel.js";
 import type * as games_quotes from "../games/quotes.js";
 import type * as games_readModel from "../games/readModel.js";
+import type * as games_roundWindow from "../games/roundWindow.js";
 import type * as games_seasons from "../games/seasons.js";
 import type * as games_tagReadModel from "../games/tagReadModel.js";
 import type * as games_tagWriteModel from "../games/tagWriteModel.js";
@@ -229,6 +230,7 @@ declare const fullApi: ApiFromModules<{
   "games/quoteWriteModel": typeof games_quoteWriteModel;
   "games/quotes": typeof games_quotes;
   "games/readModel": typeof games_readModel;
+  "games/roundWindow": typeof games_roundWindow;
   "games/seasons": typeof games_seasons;
   "games/tagReadModel": typeof games_tagReadModel;
   "games/tagWriteModel": typeof games_tagWriteModel;

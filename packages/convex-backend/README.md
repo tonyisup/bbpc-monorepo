@@ -521,10 +521,18 @@ bounded value-free labels and appear only in audit metadata.
 
 ## Quotabunga API
 
-Authenticated members can read their current `next` or `recording` episode submission.
-Only a `next` episode accepts writes, ownership is always derived from the linked Clerk
-identity, and the mutation upserts at most one submission per user and episode. Scored
-submissions cannot be edited or withdrawn. Member responses expose the public quote
+Authenticated members read their entry for any one episode with `games.quotes.mineForEpisode`
+(`NOT_FOUND` for an unknown episode); `currentForMe` still resolves the newest `next` or
+`recording` episode. Entries stay attached to the episode they were submitted for, so an
+aired episode shows the member's entry locked. Entries follow the same round window as
+predictions and wagers: a `next` episode accepts
+writes, and a `recording` episode accepts them until its `predictionClosesAt` deadline,
+so all three lock together. `submitMine`, `withdrawMine`, and `checkPossibleDuplicate`
+take an optional `episodeId` naming the episode, falling back to the current one, and the
+reads and writes take an optional `now` (epoch milliseconds) from the client's clock with
+the server clock as the fallback. Ownership is always derived from the linked Clerk identity, and the mutation
+upserts at most one submission per user and episode. Scored submissions cannot be edited
+or withdrawn. Member responses expose the public quote
 fields and score state but never administrator notes.
 
 While a member enters a quote, `games.quotes.checkPossibleDuplicate` performs a bounded

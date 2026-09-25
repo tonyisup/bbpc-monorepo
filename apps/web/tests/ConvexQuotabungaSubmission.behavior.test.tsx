@@ -41,10 +41,15 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn<() => Promise<unknown>>(),
   submit: vi.fn<() => Promise<void>>(),
   withdraw: vi.fn<() => Promise<void>>(),
+  window: undefined as
+    | { status: string | null; closesAt: number | null }
+    | null
+    | undefined,
 }));
 
 vi.mock("convex/react", () => ({
   useConvex: () => mocks.convex,
+  useQuery: () => mocks.window,
 }));
 
 vi.mock("@/convex/quotabunga", () => ({
@@ -131,16 +136,22 @@ vi.mock("sonner", () => ({
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
 
 const openRound = {
-  episode: { number: "EP-TEST" },
+  episode: { id: "episode-test", number: "EP-TEST", status: "next" },
   isOpen: true,
   submission: null,
 };
 
 let renderer: ReactTestRenderer | null = null;
 
-async function renderSubmission() {
+async function renderSubmission(episodeStatus = "next") {
   await act(async () => {
-    renderer = create(<ConvexQuotabungaSubmission isAdmin={false} />);
+    renderer = create(
+      <ConvexQuotabungaSubmission
+        isAdmin={false}
+        episodeId="episode-test"
+        episodeStatus={episodeStatus}
+      />
+    );
     await Promise.resolve();
   });
   await act(async () => {
@@ -191,6 +202,7 @@ describe("ConvexQuotabungaSubmission duplicate checks", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.stubGlobal("window", globalThis);
+    mocks.window = undefined;
     mocks.load.mockResolvedValue(openRound);
     mocks.checkDuplicate.mockResolvedValue({ possibleMatch: false });
   });
@@ -361,5 +373,134 @@ describe("ConvexQuotabungaSubmission duplicate checks", () => {
 
     enterQuote(rendered, "A completely different quote");
     expect(renderedText(rendered)).not.toContain("Possibly heard on the show.");
+  });
+});
+
+describe("ConvexQuotabungaSubmission round window", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    vi.stubGlobal("window", globalThis);
+    mocks.window = undefined;
+    mocks.checkDuplicate.mockResolvedValue({ possibleMatch: false });
+  });
+
+  afterEach(() => {
+    if (renderer !== null) {
+      act(() => renderer?.unmount());
+      renderer = null;
+    }
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  test("keeps the form open during the recording grace period with a countdown", async () => {
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      episode: { ...openRound.episode, status: "recording" },
+    });
+    mocks.window = { status: "recording", closesAt: 100_000 + 90_000 };
+    const rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain("Entries lock with the picks in 1:30");
+    expect(
+      rendered.root.findAllByProps(
+        { id: "convex-quotabunga-quote" },
+        { deep: false }
+      )
+    ).toHaveLength(1);
+  });
+
+  test("locks once the prediction deadline passes even if the load said open", async () => {
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      episode: { ...openRound.episode, status: "recording" },
+    });
+    mocks.window = { status: "recording", closesAt: 100_000 - 1 };
+    const rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain("are locked");
+    expect(
+      rendered.root.findAllByProps(
+        { id: "convex-quotabunga-quote" },
+        { deep: false }
+      )
+    ).toHaveLength(0);
+  });
+
+  test("shows an aired episode's entry as final without edit controls", async () => {
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      episode: { ...openRound.episode, status: "published" },
+      isOpen: false,
+      submission: {
+        id: "quote-1",
+        quoteText: "Hold on to ya",
+        sourceTitle: "Heat",
+        sourceType: "MOVIE",
+        clipUrl: null,
+        clipStartSeconds: null,
+        listenerNotes: null,
+        status: "INCLUDED",
+        bracketOrder: null,
+        placement: null,
+        scored: false,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    });
+    mocks.window = { status: "published", closesAt: null };
+    const rendered = await renderSubmission("published");
+    const text = renderedText(rendered);
+    expect(text).toContain("Hold on to ya");
+    expect(text).toContain("This episode has aired");
+    expect(text).not.toContain("Submit to Quotabunga");
+    expect(
+      rendered.root.findAllByType("button").map((b) => instanceText(b))
+    ).not.toContain("Withdraw");
+    expect(mocks.load).toHaveBeenCalledWith(mocks.convex, "episode-test");
+  });
+
+  test("closes the form on an aired episode without an entry", async () => {
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      episode: { ...openRound.episode, status: "published" },
+      isOpen: false,
+    });
+    mocks.window = { status: "published", closesAt: null };
+    const rendered = await renderSubmission("published");
+    expect(renderedText(rendered)).toContain("are closed");
+    expect(
+      rendered.root.findAllByProps(
+        { id: "convex-quotabunga-quote" },
+        { deep: false }
+      )
+    ).toHaveLength(0);
+  });
+
+  test("locks a submitted entry's edit controls when the window closes", async () => {
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      episode: { ...openRound.episode, status: "recording" },
+      submission: {
+        id: "quote-1",
+        quoteText: "Hold on to ya",
+        sourceTitle: "Heat",
+        sourceType: "MOVIE",
+        clipUrl: null,
+        clipStartSeconds: null,
+        listenerNotes: null,
+        status: "SUBMITTED",
+        bracketOrder: null,
+        placement: null,
+        scored: false,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    });
+    mocks.window = { status: "recording", closesAt: 100_000 - 1 };
+    const rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain("locked for recording");
+    expect(rendered.root.findAllByType("button").map((b) => instanceText(b))).not.toContain("Withdraw");
   });
 });

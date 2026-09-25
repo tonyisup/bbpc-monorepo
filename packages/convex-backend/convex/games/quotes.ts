@@ -9,6 +9,7 @@ import {
 } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
+import { isEpisodeRoundOpen } from "./roundWindow.js";
 import {
   MAX_QUOTE_EPISODE_SELECTOR_SIZE,
   MAX_QUOTE_RANDOM_SEED_LENGTH,
@@ -229,13 +230,12 @@ function quoteAwardSnapshotsMatch(
 }
 
 export const currentForMe = authenticatedQuery({
-  args: {},
+  // The client sends its clock so the open flag follows the same deadline as
+  // predictions; a client from before this argument gets the server clock.
+  args: { now: v.optional(v.number()) },
   returns: currentQuoteSubmissionValidator,
-  handler: async (ctx) => {
-    const episode = await findSubmissionEpisode(ctx, [
-      "next",
-      "recording",
-    ]);
+  handler: async (ctx, args) => {
+    const episode = await findSubmissionEpisode(ctx);
     if (episode === null) {
       return { episode: null, isOpen: false, submission: null };
     }
@@ -246,7 +246,7 @@ export const currentForMe = authenticatedQuery({
     );
     return {
       episode: toQuoteEpisode(episode),
-      isOpen: episode.status === "next",
+      isOpen: isEpisodeRoundOpen(episode, args.now ?? Date.now()),
       submission:
         submission === null
           ? null
@@ -255,8 +255,65 @@ export const currentForMe = authenticatedQuery({
   },
 });
 
+/**
+ * The member's entry for one episode, wherever that episode is in its life:
+ * open while it is the next round or within the recording grace period, and
+ * locked but still readable once it has aired.
+ */
+export const mineForEpisode = authenticatedQuery({
+  args: { episodeId: v.id("episodes"), now: v.optional(v.number()) },
+  returns: currentQuoteSubmissionValidator,
+  handler: async (ctx, args) => {
+    const episode = await ctx.db.get("episodes", args.episodeId);
+    if (episode === null) {
+      domainError("NOT_FOUND", "The episode is unavailable.");
+    }
+    const submission = await findQuoteForEpisodeUser(
+      ctx,
+      episode._id,
+      ctx.actor.user._id,
+    );
+    return {
+      episode: toQuoteEpisode(episode),
+      isOpen: isEpisodeRoundOpen(episode, args.now ?? Date.now()),
+      submission:
+        submission === null
+          ? null
+          : toMemberQuoteSubmission(submission),
+    };
+  },
+});
+
+/**
+ * The episode a write applies to: the one the client named, else the newest
+ * next or recording episode. Either way it must still be inside the round
+ * window, the same window predictions and wagers use.
+ */
+async function requireWritableEpisode(
+  ctx: Parameters<typeof findSubmissionEpisode>[0],
+  episodeId: Id<"episodes"> | undefined,
+  now: number,
+): Promise<Doc<"episodes">> {
+  const episode =
+    episodeId === undefined
+      ? await findSubmissionEpisode(ctx)
+      : await ctx.db.get("episodes", episodeId);
+  if (episodeId !== undefined && episode === null) {
+    domainError("NOT_FOUND", "The episode is unavailable.");
+  }
+  if (episode === null || !isEpisodeRoundOpen(episode, now)) {
+    domainError(
+      "CONFLICT",
+      "Quotabunga submissions are currently closed.",
+      { details: { reason: "ROUND_LOCKED" } },
+    );
+  }
+  return episode;
+}
+
 export const checkPossibleDuplicate = authenticatedQuery({
   args: {
+    episodeId: v.optional(v.id("episodes")),
     quoteText: v.string(),
     sourceTitle: v.string(),
   },
@@ -268,14 +325,11 @@ export const checkPossibleDuplicate = authenticatedQuery({
         ? ""
         : validateQuoteSourceTitle(args.sourceTitle);
     const ownCurrentSubmissionPromise = (async () => {
-      const currentEpisode = await findSubmissionEpisode(ctx, ["next"]);
-      return currentEpisode === null
+      const episodeId =
+        args.episodeId ?? (await findSubmissionEpisode(ctx))?._id ?? null;
+      return episodeId === null
         ? null
-        : await findQuoteForEpisodeUser(
-            ctx,
-            currentEpisode._id,
-            ctx.actor.user._id,
-          );
+        : await findQuoteForEpisodeUser(ctx, episodeId, ctx.actor.user._id);
     })();
     const [{ candidates }, ownCurrentSubmission, transcriptMatches] =
       await Promise.all([
@@ -302,19 +356,17 @@ export const checkPossibleDuplicate = authenticatedQuery({
 export const submitMine = authenticatedMutation({
   args: {
     ...quoteContentArgs,
+    episodeId: v.optional(v.id("episodes")),
     today: v.string(),
     now: v.optional(v.number()),
   },
   returns: quoteMemberSubmissionValidator,
   handler: async (ctx, args) => {
-    const episode = await findSubmissionEpisode(ctx, ["next"]);
-    if (episode === null) {
-      domainError(
-        "CONFLICT",
-        "Quotabunga submissions are currently closed.",
-        { details: { reason: "ROUND_LOCKED" } },
-      );
-    }
+    const now = validateQuoteTimestamp(
+      args.now ?? Date.now(),
+      "Quote update time",
+    );
+    const episode = await requireWritableEpisode(ctx, args.episodeId, now);
     const existing = await findQuoteForEpisodeUser(
       ctx,
       episode._id,
@@ -326,10 +378,6 @@ export const submitMine = authenticatedMutation({
         "A scored quote submission cannot be edited.",
       );
     }
-    const now = validateQuoteTimestamp(
-      args.now ?? Date.now(),
-      "Quote update time",
-    );
     const content = contentPatch(args);
     let submissionId: Id<"quoteSubmissions">;
     let created: boolean;
@@ -387,17 +435,17 @@ export const submitMine = authenticatedMutation({
 });
 
 export const withdrawMine = authenticatedMutation({
-  args: {},
+  args: {
+    episodeId: v.optional(v.id("episodes")),
+    now: v.optional(v.number()),
+  },
   returns: v.object({ id: v.id("quoteSubmissions") }),
-  handler: async (ctx) => {
-    const episode = await findSubmissionEpisode(ctx, ["next"]);
-    if (episode === null) {
-      domainError(
-        "CONFLICT",
-        "Quotabunga submissions are currently locked.",
-        { details: { reason: "ROUND_LOCKED" } },
-      );
-    }
+  handler: async (ctx, args) => {
+    const now = validateQuoteTimestamp(
+      args.now ?? Date.now(),
+      "Quote withdrawal time",
+    );
+    const episode = await requireWritableEpisode(ctx, args.episodeId, now);
     const submission = await findQuoteForEpisodeUser(
       ctx,
       episode._id,

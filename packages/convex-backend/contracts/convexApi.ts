@@ -8105,7 +8105,7 @@ export type PublicApiType = {
       checkPossibleDuplicate: FunctionReference<
         "query",
         "public",
-        { quoteText: string; sourceTitle: string },
+        { episodeId?: Id<"episodes">; quoteText: string; sourceTitle: string },
         {
           possibleMatch: boolean;
           transcriptMatches: Array<{
@@ -8120,7 +8120,7 @@ export type PublicApiType = {
       currentForMe: FunctionReference<
         "query",
         "public",
-        Record<string, never>,
+        { now?: number },
         {
           episode: {
             id: Id<"episodes">;
@@ -8376,6 +8376,35 @@ export type PublicApiType = {
           userId: Id<"users">;
         }
       >;
+      mineForEpisode: FunctionReference<
+        "query",
+        "public",
+        { episodeId: Id<"episodes">; now?: number },
+        {
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            status: string | null;
+            title: string;
+          } | null;
+          isOpen: boolean;
+          submission: {
+            bracketOrder: number | null;
+            clipStartSeconds: number | null;
+            clipUrl: string | null;
+            createdAt: number;
+            id: Id<"quoteSubmissions">;
+            listenerNotes: string | null;
+            placement: number | null;
+            quoteText: string;
+            scored: boolean;
+            sourceTitle: string;
+            sourceType: "MOVIE" | "TV" | "OTHER";
+            status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+            updatedAt: number;
+          } | null;
+        }
+      >;
       submitMine: FunctionReference<
         "mutation",
         "public",
@@ -8383,6 +8412,7 @@ export type PublicApiType = {
           clientApiVersion: string;
           clipStartSeconds?: number | null;
           clipUrl?: string | null;
+          episodeId?: Id<"episodes">;
           listenerNotes?: string | null;
           now?: number;
           quoteText: string;
@@ -8462,7 +8492,7 @@ export type PublicApiType = {
       withdrawMine: FunctionReference<
         "mutation",
         "public",
-        { clientApiVersion: string },
+        { clientApiVersion: string; episodeId?: Id<"episodes">; now?: number },
         { id: Id<"quoteSubmissions"> }
       >;
     };

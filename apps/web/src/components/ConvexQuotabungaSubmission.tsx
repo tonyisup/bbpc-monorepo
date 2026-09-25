@@ -1,7 +1,9 @@
 "use client";
 
 import { formatTranscriptTime } from "@bbpc/episode-search";
-import { useConvex } from "convex/react";
+import { api } from "@tonyisup/bbpc-convex-api";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
+import { useConvex, useQuery } from "convex/react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -35,12 +37,23 @@ import {
 } from "@/convex/quotabunga";
 import { getConvexDomainErrorCode } from "@/convex/identity";
 import { useAdminCollapse } from "@/hooks/useAdminCollapse";
+import {
+  PredictionRoundState,
+  getPredictionRoundState,
+} from "@/lib/predictionRound.mjs";
 import { getEpisodePath } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
 const QUOTE_DUPLICATE_CHECK_DELAY_MS = 500;
 const QUOTE_DUPLICATE_REFRESH_INTERVAL_MS = 30_000;
 const MIN_QUOTE_DUPLICATE_CHECK_LENGTH = 8;
+
+function formatCountdown(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
 
 function operationError(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
@@ -133,7 +146,16 @@ function TranscriptMatchList({
   );
 }
 
-export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
+export function ConvexQuotabungaSubmission({
+  isAdmin,
+  episodeId,
+  episodeStatus,
+}: {
+  isAdmin: boolean;
+  /** The episode this panel belongs to; entries stay attached to it. */
+  episodeId: string;
+  episodeStatus: string;
+}) {
   const convex = useConvex();
   const [current, setCurrent] = useState<ConvexCurrentQuoteSubmission | null>(
     null
@@ -160,6 +182,49 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     useAdminCollapse(isAdmin);
 
   const submission = current?.submission ?? null;
+
+  // Quotes lock on the same deadline as predictions, so watch the episode's
+  // window live instead of trusting the open flag from the initial load.
+  const liveWindow = useQuery(api.episodes.public.predictionWindow, {
+    episodeId: documentId("episodes", episodeId),
+  });
+  const windowStatus =
+    liveWindow === undefined ? episodeStatus : (liveWindow?.status ?? null);
+  const hasAired = windowStatus === "published";
+  const closesAt = liveWindow === undefined ? null : (liveWindow?.closesAt ?? null);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const currentTime = Date.now();
+    setNow(currentTime);
+    if (
+      windowStatus !== "recording" ||
+      closesAt === null ||
+      currentTime >= closesAt
+    ) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const tick = Date.now();
+      setNow(tick);
+      if (tick >= closesAt) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [windowStatus, closesAt]);
+  const isOpen =
+    liveWindow === undefined
+      ? current?.isOpen === true
+      : getPredictionRoundState(windowStatus, true, closesAt, now) ===
+        PredictionRoundState.OPEN;
+  const closingCountdown =
+    isOpen && windowStatus === "recording" && closesAt !== null
+      ? formatCountdown(closesAt - now)
+      : null;
+  useEffect(() => {
+    if (!isOpen) {
+      setIsEditing(false);
+    }
+  }, [isOpen]);
+
   const duplicateInputKey = `${quoteText.trim()}\u0000${sourceTitle.trim()}`;
   const hasPossibleDuplicate =
     duplicateCheck?.inputKey === duplicateInputKey &&
@@ -189,7 +254,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const result = await loadConvexQuotabunga(convex);
+      const result = await loadConvexQuotabunga(convex, episodeId);
       if (loadGenerationRef.current === generation) {
         setCurrent(result);
       }
@@ -204,7 +269,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
         setIsLoading(false);
       }
     }
-  }, [convex]);
+  }, [convex, episodeId]);
 
   useEffect(() => {
     void reload();
@@ -230,7 +295,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     const normalizedSource = sourceTitle.trim();
     if (
       !isEditing ||
-      current?.isOpen !== true ||
+      !isOpen ||
       normalizedQuote.length < MIN_QUOTE_DUPLICATE_CHECK_LENGTH
     ) {
       return;
@@ -244,6 +309,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
       }
       isCheckInFlight = true;
       void checkConvexQuotabungaDuplicate(convex, {
+        episodeId,
         quoteText: normalizedQuote,
         sourceTitle: normalizedSource,
       })
@@ -274,7 +340,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
       window.clearTimeout(timeout);
       window.clearInterval(interval);
     };
-  }, [convex, current?.isOpen, isEditing, quoteText, sourceTitle]);
+  }, [convex, episodeId, isOpen, isEditing, quoteText, sourceTitle]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -302,7 +368,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     setIsSaving(true);
     setErrorMessage(null);
     try {
-      await submitConvexQuotabunga(convex, {
+      await submitConvexQuotabunga(convex, episodeId, {
         quoteText: normalizedQuote,
         sourceTitle: normalizedSource,
         sourceType,
@@ -332,7 +398,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
     setIsWithdrawing(true);
     setErrorMessage(null);
     try {
-      await withdrawConvexQuotabunga(convex);
+      await withdrawConvexQuotabunga(convex, episodeId);
       resetForm();
       await reload();
       setIsEditing(true);
@@ -362,7 +428,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
         titleWrapperClassName={cn(!isAdmin && "w-full text-center")}
         title={
           <h2 className="text-2xl font-black text-foreground">
-            Submit to Quotabunga
+            {isOpen ? "Submit to Quotabunga" : "Quotabunga"}
           </h2>
         }
         description={
@@ -405,12 +471,22 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
             <p className="text-center text-gray-300">
               Submissions are closed until the next episode is announced.
             </p>
-          ) : current !== null && !current.isOpen && submission === null ? (
+          ) : current !== null && !isOpen && submission === null ? (
             <p className="text-center text-gray-300">
-              Submissions for episode {current.episode?.number} are locked.
+              {hasAired
+                ? `Quotabunga entries for episode ${current.episode?.number} are closed.`
+                : `Submissions for episode ${current.episode?.number} are locked.`}
             </p>
           ) : submission !== null && !isEditing ? (
             <div className="space-y-4">
+              {closingCountdown !== null ? (
+                <p
+                  className="text-center text-sm font-medium text-amber-400"
+                  role="status"
+                >
+                  {`Entries lock with the picks in ${closingCountdown}.`}
+                </p>
+              ) : null}
               <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
                 <div className="mb-3 flex items-center gap-2 text-green-400">
                   <CheckCircle2 className="h-5 w-5" />
@@ -438,7 +514,7 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
                 ) : null}
               </div>
 
-              {current?.isOpen && !submission.scored ? (
+              {isOpen && !submission.scored ? (
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsEditing(true)}>
                     <Pencil className="h-4 w-4" /> Edit
@@ -460,6 +536,8 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
                 <p className="text-center text-sm font-medium text-amber-400">
                   {submission.scored
                     ? "This entry has been scored and can no longer be changed."
+                    : hasAired
+                    ? "This episode has aired, so this entry is final."
                     : "This round is locked for recording."}
                 </p>
               )}
@@ -469,6 +547,14 @@ export function ConvexQuotabungaSubmission({ isAdmin }: { isAdmin: boolean }) {
               className="space-y-4"
               onSubmit={(event) => void handleSubmit(event)}
             >
+              {closingCountdown !== null ? (
+                <p
+                  className="text-center text-sm font-medium text-amber-400"
+                  role="status"
+                >
+                  {`Entries lock with the picks in ${closingCountdown}.`}
+                </p>
+              ) : null}
               <div className="space-y-2">
                 <label
                   htmlFor="convex-quotabunga-quote"
