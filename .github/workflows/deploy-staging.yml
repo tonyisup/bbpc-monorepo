@@ -2,7 +2,7 @@ name: Deploy Convex staging
 
 on:
   push:
-    branches:
+    branches-ignore:
       - main
     paths:
       - ".github/workflows/deploy-staging.yml"
