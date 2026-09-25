@@ -521,26 +521,29 @@ bounded value-free labels and appear only in audit metadata.
 
 ## Quotabunga API
 
-Authenticated members read their entry for any one episode with `games.quotes.mineForEpisode`
-(`NOT_FOUND` for an unknown episode); `currentForMe` still resolves the newest `next` or
-`recording` episode. Entries stay attached to the episode they were submitted for, so an
-aired episode shows the member's entry locked. Entries follow the same round window as
-predictions and wagers: a `next` episode accepts
-writes, and a `recording` episode accepts them until its `predictionClosesAt` deadline,
-so all three lock together. `submitMine`, `withdrawMine`, and `checkPossibleDuplicate`
-take an optional `episodeId` naming the episode, falling back to the current one. Writes
-judge the window on the server clock; `submitMine`'s optional `now` only stamps the entry.
-`mineForEpisode` requires the client's `now` (epoch milliseconds) for its `isOpen` flag;
-`currentForMe` accepts it and, without one, reports only a `next` episode as open. Ownership is always derived from the linked Clerk identity, and the mutation
-upserts at most one submission per user and episode. Scored submissions cannot be edited
-or withdrawn. Member responses expose the public quote
+Authenticated members read their entry for any one episode with
+`games.quotes.mineForEpisode` (`NOT_FOUND` for an unknown episode). `currentForMe` still
+resolves the newest `next` or `recording` episode and stays deployed only for web clients
+released before `mineForEpisode`. Entries stay attached to the episode they were
+submitted for, so an aired episode shows the member's entry locked. Entries follow the
+same round window as predictions and wagers: a `next` episode accepts writes, and a
+`recording` episode accepts them until its `predictionClosesAt` deadline, so all three
+lock together. `submitMine`, `withdrawMine`, and `checkPossibleDuplicate` take an
+optional `episodeId` naming the episode, falling back to the current one. Writes judge
+the window on the server clock; `submitMine`'s optional `now` only stamps the entry. A
+write outside the window fails with `CONFLICT` (`ROUND_LOCKED`), and a write naming an
+unknown episode is `NOT_FOUND`. `mineForEpisode` requires the client's `now` (epoch
+milliseconds) for its `isOpen` flag; `currentForMe` accepts it and, without one, reports
+only a `next` episode as open. Ownership is always derived from the linked Clerk
+identity, and the mutation upserts at most one submission per user and episode. Scored
+submissions cannot be edited or withdrawn. Member responses expose the public quote
 fields and score state but never administrator notes.
 
 While a member enters a quote, `games.quotes.checkPossibleDuplicate` performs a bounded
 full-text candidate search and returns only whether a similar prior submission may
 exist. The advisory check accepts an optional source title, excludes the member's own
-current submission, and never prevents a submission when it finds a possible match or
-is temporarily unavailable. The same check searches public transcript passages and
+submission for that episode, and never prevents a submission when it finds a possible
+match or is temporarily unavailable. The same check searches public transcript passages and
 returns up to three published episodes whose transcript contains a close match, with
 the passage timestamp and a short excerpt. Transcripts are already public, so these
 matches name the episode; other listeners' submissions stay a yes/no answer. Quotes of
@@ -601,7 +604,9 @@ when the chain has no episode.
 
 ## Member season API
 
-Authenticated members read their own season history through `games.member`:
+Authenticated members read their own season history through `games.member`. `today` is
+the caller's `YYYY-MM-DD` date, and every function that takes a `seasonId` returns
+`NOT_FOUND` for an unknown season.
 
 - `mySeasons({ today })` lists the seasons the caller has scored in, plus the current
   season even before their first point, current season first and then newest start
@@ -609,23 +614,27 @@ Authenticated members read their own season history through `games.member`:
   `pointCount`, and, for the current season only, `available` points (earned minus
   pending and locked wagers), `recordedEpisodeCount`, and `standing` (`rank` among
   every scoring player and `playerCount`, equal totals sharing a rank). Past seasons
-  return `null` for those three. Each season is its own bounded read; more than 2000
-  points for one member in one season fail with `CONFLICT`, and a season with more
-  than 2000 points in total has no `standing`.
+  return `null` for those three, and the current season's `standing` is also `null`
+  before the caller's first point. It inspects at most 100 seasons and fails with
+  `CONFLICT` beyond that. Each season is its own bounded read; more than 2000 points
+  for one member in one season fail with `CONFLICT`, and a season with more than 2000
+  points in total has no `standing`.
 - `mySeasonOverview({ seasonId, today })` returns the same summary for any one season,
-  with `available` and `standing` resolved, plus every player's `userSummary` and
-  season `points` in the `currentPerformance` shape. A season with more than 2000
-  points keeps the member's own totals but returns `rankingAvailable: false`, `null`
-  standing, and empty `userSummary` and `points`. An unknown season is `NOT_FOUND`.
+  with `available`, `recordedEpisodeCount`, and `standing` resolved, plus every
+  player's `userSummary` and season `points` in the `currentPerformance` shape. A
+  season with more than 2000 points keeps the member's own totals but returns
+  `rankingAvailable: false`, `null` standing, and empty `userSummary` and `points`.
 - `mySeasonPointsPage({ seasonId, paginationOpts })` pages the caller's points in that
-  season, newest first. Each item is a point plus its `assignment` (with movie and
-  episode) and `episode` (`id`, `number`, `title`, `status`, `slug`), resolved through
-  the point's assignment link, guess, or wager, falling back to its quote's episode.
-  Manual adjustments carry `null` for both.
+  season, newest first, at most 100 per page. Each item is a point plus its
+  `assignment` (with movie and episode) and `episode` (`id`, `number`, `title`,
+  `status`, `slug`), resolved through the point's assignment link, guess, or wager,
+  falling back to its quote's episode. Manual adjustments carry `null` for both.
 - `mySeasonStanding({ seasonId })` returns the caller's `standing` in any one season, or
-  `null` before their first point there or when the season is too large to rank. The profile asks it once per past season.
+  `null` before their first point there or when the season is too large to rank. The
+  profile asks it once per past season.
 - `mySeasonWagers({ seasonId })` returns the caller's wagers in that season, newest
-  first, as `games.gambling` entries.
+  first, as `games.gambling` entries. More than 500 wagers in one season fail with
+  `CONFLICT`.
 
 ## Ranked-list API
 
