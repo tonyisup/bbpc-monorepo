@@ -84,6 +84,10 @@
   .bbpc-muted {
     color: var(--bbpc-muted);
   }
+
+  .bbpc-label {
+    @apply text-xs font-bold uppercase tracking-[0.08em] text-zinc-400;
+  }
 }
 
 .hero-image {

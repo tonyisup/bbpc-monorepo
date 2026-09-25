@@ -112,3 +112,16 @@ export function validateTagVotePageSize(numItems: number): void {
     );
   }
 }
+
+export function assertPointAggregateLimit(
+  points: unknown[],
+  label: string,
+): void {
+  if (points.length > MAX_POINTS_FOR_AGGREGATE) {
+    domainError(
+      "CONFLICT",
+      `${label} exceeds the supported point limit.`,
+      { details: { limit: MAX_POINTS_FOR_AGGREGATE } },
+    );
+  }
+}

@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import type { MutationCtx, QueryCtx } from "../_generated/server.js";
 import { MAX_ROLES_PER_USER } from "../identity/limits.js";
 import { domainError } from "../lib/errors.js";
+import { isEpisodeRoundOpen } from "./roundWindow.js";
 import { MAX_HOST_GUESSES_PER_BATCH } from "./limits.js";
 import { requireGuess } from "./guessReadModel.js";
 import {
@@ -68,14 +69,7 @@ export async function requireOpenPredictionAssignment(
       { details: { assignmentId: assignment._id } },
     );
   }
-  const withinRecordingGracePeriod =
-    episode.status === "recording" &&
-    episode.predictionClosesAt !== undefined &&
-    Date.now() < episode.predictionClosesAt;
-  if (
-    !assignment.playable ||
-    (episode.status !== "next" && !withinRecordingGracePeriod)
-  ) {
+  if (!assignment.playable || !isEpisodeRoundOpen(episode, Date.now())) {
     domainError(
       "CONFLICT",
       "Prediction round is not open.",

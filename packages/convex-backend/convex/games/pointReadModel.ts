@@ -16,12 +16,14 @@ import type {
   pointCoreValidator,
   pointDetailValidator,
   pointEpisodeValidator,
+  pointMemberActivityValidator,
 } from "./validators.js";
 
 type PointReadContext = QueryCtx;
 type PointCore = Infer<typeof pointCoreValidator>;
 type PointDetail = Infer<typeof pointDetailValidator>;
 type PointEpisode = Infer<typeof pointEpisodeValidator>;
+type PointMemberActivity = Infer<typeof pointMemberActivityValidator>;
 
 function nullable<T>(value: T | undefined): T | null {
   return value ?? null;
@@ -241,16 +243,21 @@ export async function calculatePointTotal(
   return total;
 }
 
+export interface PointSource {
+  assignment: Doc<"assignments"> | null;
+  episode: Doc<"episodes"> | null;
+}
+
 /**
  * Points have no episode field, so the episode comes from whatever the point
  * was awarded for: an assignment link, a guess, a wager, or a quote. Manual
  * adjustments have none. The lookups run together; the first match wins in
- * that order.
+ * that order. A quote has an episode but no assignment.
  */
-export async function findPointEpisode(
+export async function findPointSource(
   ctx: PointReadContext,
   pointId: Id<"points">,
-): Promise<PointEpisode | null> {
+): Promise<PointSource> {
   const [link, guess, wager, quote] = await Promise.all([
     ctx.db
       .query("assignmentPointLinks")
@@ -283,15 +290,52 @@ export async function findPointEpisode(
   } else if (wager !== null) {
     assignmentId = wager.assignmentId ?? null;
   }
+  const assignment =
+    assignmentId === null
+      ? null
+      : await ctx.db.get("assignments", assignmentId);
   const episodeId =
     assignmentId === null
       ? (quote?.episodeId ?? null)
-      : ((await ctx.db.get("assignments", assignmentId))?.episodeId ?? null);
-  if (episodeId === null) {
-    return null;
-  }
-  const episode = await ctx.db.get("episodes", episodeId);
+      : (assignment?.episodeId ?? null);
+  const episode =
+    episodeId === null ? null : await ctx.db.get("episodes", episodeId);
+  return { assignment, episode };
+}
+
+export async function findPointEpisode(
+  ctx: PointReadContext,
+  pointId: Id<"points">,
+): Promise<PointEpisode | null> {
+  const { episode } = await findPointSource(ctx, pointId);
   return episode === null
     ? null
     : { id: episode._id, number: episode.number, title: episode.title };
+}
+
+export async function hydratePointMemberActivity(
+  ctx: PointReadContext,
+  point: Doc<"points">,
+): Promise<PointMemberActivity> {
+  const [core, source] = await Promise.all([
+    hydratePointCore(ctx, point),
+    findPointSource(ctx, point._id),
+  ]);
+  const assignment =
+    source.assignment === null
+      ? null
+      : await hydrateAssignment(ctx, source.assignment);
+  const episode =
+    assignment !== null
+      ? assignment.episode
+      : source.episode === null
+        ? null
+        : {
+            id: source.episode._id,
+            number: source.episode.number,
+            title: source.episode.title,
+            status: nullable(source.episode.status),
+            slug: nullable(source.episode.slug),
+          };
+  return { ...core, episode, assignment };
 }
