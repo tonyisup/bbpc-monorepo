@@ -169,7 +169,7 @@ export function PointChangeBadge({
         "rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums",
         // Gains green, losses amber, so red stays the site accent.
         change > 0
-          ? "bg-emerald-600 text-white"
+          ? "bg-emerald-700 text-white"
           : change < 0
           ? "bg-amber-400 text-zinc-900"
           : "bg-zinc-700 text-zinc-100",

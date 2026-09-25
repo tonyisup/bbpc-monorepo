@@ -15,8 +15,8 @@ import {
 
 const statusClass: Record<ConvexSeasonWager["status"], string> = {
   won: "bg-emerald-500/15 text-emerald-300",
-  lost: "bg-red-500/15 text-red-300",
-  locked: "bg-amber-500/15 text-amber-300",
+  lost: "bg-amber-500/15 text-amber-300",
+  locked: "bg-sky-500/15 text-sky-300",
   pending: "bg-zinc-500/20 text-zinc-200",
   rejected: "bg-zinc-500/20 text-zinc-400",
 };
