@@ -470,6 +470,134 @@ describe("member season API", () => {
     );
   });
 
+  test("shares a rank between equal totals and rejects anonymous reads", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeasons(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("points", {
+        userId: seeded.newcomerId,
+        seasonId: seeded.currentSeasonId,
+        reason: "Tie",
+        earnedAt: 9,
+        adjustment: 24,
+      });
+    });
+    await expect(
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.member.mySeasonStanding, {
+          seasonId: seeded.currentSeasonId,
+        }),
+    ).resolves.toEqual({ rank: 2, playerCount: 3 });
+    await expect(
+      t
+        .withIdentity(NEWCOMER_IDENTITY)
+        .query(api.games.member.mySeasonStanding, {
+          seasonId: seeded.currentSeasonId,
+        }),
+    ).resolves.toEqual({ rank: 2, playerCount: 3 });
+
+    await expectDomainError(
+      t.query(api.games.member.mySeasonPointsPage, {
+        seasonId: seeded.currentSeasonId,
+        paginationOpts: { numItems: 5, cursor: null },
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+    await expectDomainError(
+      t.query(api.games.member.mySeasonWagers, {
+        seasonId: seeded.currentSeasonId,
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+    const removedSeasonId = await t.run(async (ctx) => {
+      const gameType = await ctx.db.query("gameTypes").first();
+      if (gameType === null) {
+        throw new Error("Expected a game type");
+      }
+      const id = await ctx.db.insert("seasons", {
+        title: "Removed",
+        gameTypeId: gameType._id,
+      });
+      await ctx.db.delete("seasons", id);
+      return id;
+    });
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    await expectDomainError(
+      member.query(api.games.member.mySeasonWagers, {
+        seasonId: removedSeasonId,
+      }),
+      "NOT_FOUND",
+    );
+    await expectDomainError(
+      member.query(api.games.member.mySeasonPointsPage, {
+        seasonId: removedSeasonId,
+        paginationOpts: { numItems: 5, cursor: null },
+      }),
+      "NOT_FOUND",
+    );
+    await expectDomainError(
+      member.query(api.games.member.mySeasonStanding, {
+        seasonId: removedSeasonId,
+      }),
+      "NOT_FOUND",
+    );
+  });
+
+  test("keeps a member's own numbers when a season is too large to rank", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeasons(t);
+    // Push the current season past the aggregate limit with the rival's points.
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 2_001; index += 1) {
+        await ctx.db.insert("points", {
+          userId: seeded.rivalId,
+          seasonId: seeded.currentSeasonId,
+          reason: "Flood",
+          earnedAt: 100 + index,
+          adjustment: 1,
+        });
+      }
+    });
+    const member = t.withIdentity(MEMBER_IDENTITY);
+
+    const seasons = await member.query(api.games.member.mySeasons, {
+      today: TODAY,
+    });
+    expect(seasons).toHaveLength(2);
+    expect(seasons[0]).toMatchObject({
+      isCurrent: true,
+      total: 24,
+      pointCount: 4,
+      available: 20,
+      standing: null,
+    });
+
+    await expect(
+      member.query(api.games.member.mySeasonOverview, {
+        seasonId: seeded.currentSeasonId,
+        today: TODAY,
+      }),
+    ).resolves.toMatchObject({
+      total: 24,
+      pointCount: 4,
+      available: 20,
+      standing: null,
+      userSummary: [],
+      points: [],
+    });
+    await expect(
+      member.query(api.games.member.mySeasonStanding, {
+        seasonId: seeded.currentSeasonId,
+      }),
+    ).resolves.toBeNull();
+    // The public standings keep their hard limit.
+    await expectDomainError(
+      t.query(api.games.public.currentPerformance, { today: TODAY }),
+      "CONFLICT",
+    );
+  });
+
   test("lists the member's season wagers newest first", async () => {
     const t = createTestBackend();
     const seeded = await seedSeasons(t);

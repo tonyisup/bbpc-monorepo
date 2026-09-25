@@ -6,15 +6,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { SeasonPointsChart } from "@/components/SeasonPointsChart";
-import { SeasonProgress } from "@/components/SeasonProgress";
+import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
 import {
   CurrentSeasonBadge,
   PlayGameLink,
   SeasonStatTile,
   formatEpisodeCount,
   formatSeasonDates,
+  formatStakedDetail,
   formatStanding,
   formatStandingDetail,
+  pointsLabel,
 } from "@/components/SeasonSummary";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,11 +44,7 @@ interface SeasonPageData {
 }
 
 const tabTriggerClass =
-  "rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-semibold text-zinc-400 data-[state=active]:border-red-500 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none";
-
-function pointsLabel(count: number): string {
-  return `${count} ${count === 1 ? "point" : "points"}`;
-}
+  "rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-semibold text-zinc-400 hover:border-white/20 hover:text-zinc-200 data-[state=active]:border-red-500 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none";
 
 export function ConvexSeasonPage({ seasonId }: { seasonId: string }) {
   return (
@@ -142,16 +140,8 @@ function SeasonPageContent({
 
   const { overview, wagers } = data;
   const wagerSummary = summarizeSeasonWagers(wagers);
-  const staked = overview.total - overview.available;
   const playerCount = overview.userSummary.length;
-  const progress =
-    overview.season.episodeCount !== null &&
-    overview.recordedEpisodeCount !== null
-      ? {
-          recorded: overview.recordedEpisodeCount,
-          total: overview.season.episodeCount,
-        }
-      : null;
+  const progress = getSeasonProgress(overview);
   const subtitle = [
     formatSeasonDates(overview.season),
     formatEpisodeCount(overview.season.episodeCount),
@@ -185,9 +175,7 @@ function SeasonPageContent({
           <SeasonStatTile
             label="Available"
             value={overview.available}
-            detail={
-              staked > 0 ? `${staked} in open wagers` : "Nothing wagered"
-            }
+            detail={formatStakedDetail(overview.total - overview.available)}
           />
           <SeasonStatTile
             label="Standing"

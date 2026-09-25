@@ -125,6 +125,44 @@ describe("season series", () => {
       comparison: null,
     });
   });
+
+  test("calls a co-leader tied and averages over players who have scored", () => {
+    const tied = buildSeasonSeries(
+      {
+        userSummary: [
+          { id: "me", name: "Me", total: 10 },
+          { id: "rival", name: "Dana", total: 10 },
+        ],
+        points: [
+          { userId: "me", earnedAt: DAY_ONE, pointValue: 10 },
+          { userId: "rival", earnedAt: DAY_TWO, pointValue: 10 },
+        ],
+      },
+      "me"
+    );
+    expect(tied.comparison?.label).toBe("Tied");
+    expect(tied.rows).toEqual([
+      { date: "Sep 15", you: 10, comparison: 0, average: 10 },
+      { date: "Sep 22", you: 10, comparison: 10, average: 10 },
+    ]);
+  });
+
+  test("buckets late-evening Pacific points into the same day", () => {
+    const lateNight = Date.UTC(2026, 8, 16, 6, 30); // Sep 15, 23:30 Pacific
+    const series = buildSeasonSeries(
+      {
+        userSummary: [{ id: "me", name: "Me", total: 13 }],
+        points: [
+          { userId: "me", earnedAt: DAY_ONE, pointValue: 10 },
+          { userId: "me", earnedAt: lateNight, pointValue: 3 },
+        ],
+      },
+      "me"
+    );
+    expect(series.rows).toEqual([
+      { date: "Sep 15", you: 13, comparison: null, average: 13 },
+    ]);
+  });
 });
 
 describe("season wagers", () => {

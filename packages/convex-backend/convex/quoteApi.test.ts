@@ -929,6 +929,41 @@ describe("Quotabunga workflows", () => {
     );
   });
 
+  test("scopes the own-entry duplicate exclusion to the episode the client names", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await initializeS1(t);
+    const foundation = await seedFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("quoteSubmissions", {
+        userId: memberId,
+        episodeId: foundation.recordingEpisodeId,
+        seasonId: foundation.seasonId,
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+        sourceType: "MOVIE",
+        status: "SUBMITTED",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    });
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    await expect(
+      member.query(api.games.quotes.checkPossibleDuplicate, {
+        episodeId: foundation.recordingEpisodeId,
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      }),
+    ).resolves.toMatchObject({ possibleMatch: false });
+    await expect(
+      member.query(api.games.quotes.checkPossibleDuplicate, {
+        episodeId: foundation.nextEpisodeId,
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      }),
+    ).resolves.toMatchObject({ possibleMatch: true });
+  });
+
   test("keeps entries attached to their episode and locks aired ones", async () => {
     const t = createTestBackend();
     const { memberId } = await seedActors(t);

@@ -1,14 +1,13 @@
-import type { GamePerformanceData } from "@/types/game";
-
 export interface SeasonProgressValue {
   recorded: number;
   total: number;
 }
 
 /** Progress exists only for fixed-length seasons the backend could count. */
-export function getSeasonProgress(
-  data: GamePerformanceData
-): SeasonProgressValue | null {
+export function getSeasonProgress(data: {
+  season: { episodeCount: number | null };
+  recordedEpisodeCount: number | null;
+}): SeasonProgressValue | null {
   const total = data.season.episodeCount;
   const recorded = data.recordedEpisodeCount;
   if (total === null || recorded === null) {

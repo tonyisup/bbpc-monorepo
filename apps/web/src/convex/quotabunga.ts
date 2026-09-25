@@ -120,7 +120,6 @@ export async function submitConvexQuotabunga(
       episodeId: documentId("episodes", episodeId),
       ...input,
       today: getPacificTodayPlainDate(),
-      now: Date.now(),
     })
   );
 }

@@ -219,6 +219,12 @@ export function ConvexQuotabungaSubmission({
     isOpen && windowStatus === "recording" && closesAt !== null
       ? formatCountdown(closesAt - now)
       : null;
+  const closingNotice =
+    closingCountdown === null ? null : (
+      <p className="text-center text-sm font-medium text-amber-400" role="status">
+        {`Entries lock with the picks in ${closingCountdown}.`}
+      </p>
+    );
   useEffect(() => {
     if (!isOpen) {
       setIsEditing(false);
@@ -467,10 +473,6 @@ export function ConvexQuotabungaSubmission({
             <div className="flex justify-center py-6">
               <Loader2 className="animate-spin" aria-label="Loading entry" />
             </div>
-          ) : current?.episode === null ? (
-            <p className="text-center text-gray-300">
-              Submissions are closed until the next episode is announced.
-            </p>
           ) : current !== null && !isOpen && submission === null ? (
             <p className="text-center text-gray-300">
               {hasAired
@@ -479,14 +481,7 @@ export function ConvexQuotabungaSubmission({
             </p>
           ) : submission !== null && !isEditing ? (
             <div className="space-y-4">
-              {closingCountdown !== null ? (
-                <p
-                  className="text-center text-sm font-medium text-amber-400"
-                  role="status"
-                >
-                  {`Entries lock with the picks in ${closingCountdown}.`}
-                </p>
-              ) : null}
+              {closingNotice}
               <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
                 <div className="mb-3 flex items-center gap-2 text-green-400">
                   <CheckCircle2 className="h-5 w-5" />
@@ -547,14 +542,7 @@ export function ConvexQuotabungaSubmission({
               className="space-y-4"
               onSubmit={(event) => void handleSubmit(event)}
             >
-              {closingCountdown !== null ? (
-                <p
-                  className="text-center text-sm font-medium text-amber-400"
-                  role="status"
-                >
-                  {`Entries lock with the picks in ${closingCountdown}.`}
-                </p>
-              ) : null}
+              {closingNotice}
               <div className="space-y-2">
                 <label
                   htmlFor="convex-quotabunga-quote"

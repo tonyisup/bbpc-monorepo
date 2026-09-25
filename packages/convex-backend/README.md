@@ -530,8 +530,8 @@ writes, and a `recording` episode accepts them until its `predictionClosesAt` de
 so all three lock together. `submitMine`, `withdrawMine`, and `checkPossibleDuplicate`
 take an optional `episodeId` naming the episode, falling back to the current one. Writes
 judge the window on the server clock; `submitMine`'s optional `now` only stamps the entry.
-`mineForEpisode` requires the client's `now` (epoch milliseconds) for its `isOpen` flag and
-`currentForMe` accepts it, falling back to the server clock. Ownership is always derived from the linked Clerk identity, and the mutation
+`mineForEpisode` requires the client's `now` (epoch milliseconds) for its `isOpen` flag;
+`currentForMe` accepts it and, without one, reports only a `next` episode as open. Ownership is always derived from the linked Clerk identity, and the mutation
 upserts at most one submission per user and episode. Scored submissions cannot be edited
 or withdrawn. Member responses expose the public quote
 fields and score state but never administrator notes.
@@ -609,18 +609,21 @@ Authenticated members read their own season history through `games.member`:
   `pointCount`, and, for the current season only, `available` points (earned minus
   pending and locked wagers), `recordedEpisodeCount`, and `standing` (`rank` among
   every scoring player and `playerCount`, equal totals sharing a rank). Past seasons
-  return `null` for those three. More than 2000 points for one member fail with
-  `CONFLICT`.
+  return `null` for those three. Each season is its own bounded read; more than 2000
+  points for one member in one season fail with `CONFLICT`, and a season with more
+  than 2000 points in total has no `standing`.
 - `mySeasonOverview({ seasonId, today })` returns the same summary for any one season,
   with `available` and `standing` resolved, plus every player's `userSummary` and
-  season `points` in the `currentPerformance` shape. An unknown season is `NOT_FOUND`.
+  season `points` in the `currentPerformance` shape. A season with more than 2000
+  points keeps the member's own totals but returns `null` standing and empty
+  `userSummary` and `points`. An unknown season is `NOT_FOUND`.
 - `mySeasonPointsPage({ seasonId, paginationOpts })` pages the caller's points in that
   season, newest first. Each item is a point plus its `assignment` (with movie and
   episode) and `episode` (`id`, `number`, `title`, `status`, `slug`), resolved through
   the point's assignment link, guess, or wager, falling back to its quote's episode.
   Manual adjustments carry `null` for both.
 - `mySeasonStanding({ seasonId })` returns the caller's `standing` in any one season, or
-  `null` before their first point there. The profile asks it once per past season.
+  `null` before their first point there or when the season is too large to rank. The profile asks it once per past season.
 - `mySeasonWagers({ seasonId })` returns the caller's wagers in that season, newest
   first, as `games.gambling` entries.
 

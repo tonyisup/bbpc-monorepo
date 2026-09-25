@@ -229,9 +229,13 @@ function quoteAwardSnapshotsMatch(
   });
 }
 
+/**
+ * Kept for web clients deployed before the panel moved to `mineForEpisode`
+ * (2026-09-25); remove once no client on the current contract calls it.
+ * Without a client clock the flag stays conservative rather than reading the
+ * wall clock in a query: a recording episode reads as closed.
+ */
 export const currentForMe = authenticatedQuery({
-  // The client sends its clock so the open flag follows the same deadline as
-  // predictions; a client from before this argument gets the server clock.
   args: { now: v.optional(v.number()) },
   returns: currentQuoteSubmissionValidator,
   handler: async (ctx, args) => {
@@ -246,7 +250,10 @@ export const currentForMe = authenticatedQuery({
     );
     return {
       episode: toQuoteEpisode(episode),
-      isOpen: isEpisodeRoundOpen(episode, args.now ?? Date.now()),
+      isOpen:
+        args.now === undefined
+          ? episode.status === "next"
+          : isEpisodeRoundOpen(episode, args.now),
       submission:
         submission === null
           ? null

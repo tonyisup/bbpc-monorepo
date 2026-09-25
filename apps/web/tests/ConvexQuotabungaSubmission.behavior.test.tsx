@@ -412,6 +412,28 @@ describe("ConvexQuotabungaSubmission round window", () => {
     ).toHaveLength(1);
   });
 
+  test("locks the form when the countdown reaches the deadline", async () => {
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      episode: { ...openRound.episode, status: "recording" },
+    });
+    mocks.window = { status: "recording", closesAt: 100_000 + 90_000 };
+    const rendered = await renderSubmission("recording");
+    expect(renderedText(rendered)).toContain("Entries lock with the picks in 1:30");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(90_000);
+    });
+    const text = renderedText(rendered);
+    expect(text).toContain("are locked");
+    expect(text).not.toContain("Entries lock with the picks");
+    expect(
+      rendered.root.findAllByProps(
+        { id: "convex-quotabunga-quote" },
+        { deep: false }
+      )
+    ).toHaveLength(0);
+  });
+
   test("locks once the prediction deadline passes even if the load said open", async () => {
     mocks.load.mockResolvedValue({
       ...openRound,

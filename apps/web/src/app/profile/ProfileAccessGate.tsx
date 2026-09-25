@@ -44,10 +44,12 @@ export function ProfileAccessGate({
 
   if (status === "loading" || accountStatus === "resolving") {
     return (
-      <div
-        className="container min-h-[50vh] animate-pulse px-4 py-16"
-        aria-label={`Loading ${label}`}
-      />
+      <div className="bbpc-page max-w-4xl">
+        <div
+          className="h-40 animate-pulse rounded-lg bg-white/[0.04]"
+          aria-label={`Loading ${label}`}
+        />
+      </div>
     );
   }
 

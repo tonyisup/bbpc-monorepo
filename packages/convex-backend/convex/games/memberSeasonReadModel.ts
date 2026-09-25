@@ -3,7 +3,10 @@ import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
-import { MAX_POINTS_FOR_AGGREGATE } from "./limits.js";
+import {
+  MAX_POINTS_FOR_AGGREGATE,
+  assertPointAggregateLimit,
+} from "./limits.js";
 import { pointValue } from "./pointReadModel.js";
 import type {
   performancePointValidator,
@@ -65,11 +68,15 @@ export function valueOf(
   );
 }
 
+/**
+ * Every point in a season, oldest first, or null once the season has more
+ * than the aggregate limit. Callers decide whether that is an error (the
+ * public standings) or a section to leave blank (a member's own pages).
+ */
 async function readSeasonPoints(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
-  label: string,
-): Promise<Array<Doc<"points">>> {
+): Promise<Array<Doc<"points">> | null> {
   const points = await ctx.db
     .query("points")
     .withIndex("by_seasonId_and_earnedAt", (index) =>
@@ -77,14 +84,7 @@ async function readSeasonPoints(
     )
     .order("asc")
     .take(MAX_POINTS_FOR_AGGREGATE + 1);
-  if (points.length > MAX_POINTS_FOR_AGGREGATE) {
-    domainError(
-      "CONFLICT",
-      `${label} exceeds the supported point limit.`,
-      { details: { limit: MAX_POINTS_FOR_AGGREGATE } },
-    );
-  }
-  return points;
+  return points.length > MAX_POINTS_FOR_AGGREGATE ? null : points;
 }
 
 /**
@@ -97,7 +97,26 @@ export async function loadSeasonPerformance(
   seasonId: Id<"seasons">,
   label: string,
 ): Promise<SeasonPerformance> {
-  const points = await readSeasonPoints(ctx, seasonId, label);
+  const performance = await tryLoadSeasonPerformance(ctx, seasonId);
+  if (performance === null) {
+    domainError(
+      "CONFLICT",
+      `${label} exceeds the supported point limit.`,
+      { details: { limit: MAX_POINTS_FOR_AGGREGATE } },
+    );
+  }
+  return performance;
+}
+
+/** Like loadSeasonPerformance, but null when the season is too big to total. */
+export async function tryLoadSeasonPerformance(
+  ctx: SeasonReadContext,
+  seasonId: Id<"seasons">,
+): Promise<SeasonPerformance | null> {
+  const points = await readSeasonPoints(ctx, seasonId);
+  if (points === null) {
+    return null;
+  }
   const userIds = new Set<Id<"users">>();
   for (const point of points) {
     userIds.add(point.userId);
@@ -152,16 +171,26 @@ export async function loadSeasonPerformance(
 
 /**
  * One player's standing in a season without loading anyone's profile: the
- * season's points and their point types are the only reads.
+ * season's points and their point types are the only reads. Null when the
+ * player has no season point, or when the season is too big to rank.
  */
 export async function loadSeasonStanding(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
   userId: Id<"users">,
-  label: string,
 ): Promise<SeasonStanding | null> {
-  const points = await readSeasonPoints(ctx, seasonId, label);
+  const points = await readSeasonPoints(ctx, seasonId);
+  if (points === null) {
+    return null;
+  }
   const pointTypes = await loadPointTypes(ctx, points);
+  return standingFromTotals(totalsByUser(points, pointTypes), userId);
+}
+
+export function totalsByUser(
+  points: ReadonlyArray<Doc<"points">>,
+  pointTypes: Map<Id<"gamePointTypes">, Doc<"gamePointTypes">>,
+): Map<Id<"users">, number> {
   const totals = new Map<Id<"users">, number>();
   for (const point of points) {
     totals.set(
@@ -169,7 +198,26 @@ export async function loadSeasonStanding(
       (totals.get(point.userId) ?? 0) + valueOf(point, pointTypes),
     );
   }
-  return standingFromTotals(totals, userId);
+  return totals;
+}
+
+/**
+ * The member's own points in one season. A single member cannot realistically
+ * exceed the aggregate limit in one season, so that is a conflict.
+ */
+export async function readMemberSeasonPoints(
+  ctx: SeasonReadContext,
+  userId: Id<"users">,
+  seasonId: Id<"seasons">,
+): Promise<Array<Doc<"points">>> {
+  const points = await ctx.db
+    .query("points")
+    .withIndex("by_userId_and_seasonId", (index) =>
+      index.eq("userId", userId).eq("seasonId", seasonId),
+    )
+    .take(MAX_POINTS_FOR_AGGREGATE + 1);
+  assertPointAggregateLimit(points, "Member season points");
+  return points;
 }
 
 /**

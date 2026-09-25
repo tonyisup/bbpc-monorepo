@@ -10,6 +10,7 @@ import {
   WAGER_STATUS_LABELS,
   formatSignedPoints,
   formatWagerRecord,
+  signedPointsClass,
 } from "@/lib/seasonActivity";
 
 const statusClass: Record<ConvexSeasonWager["status"], string> = {
@@ -107,7 +108,9 @@ export function SeasonWagers({
                 <td className="px-4 py-3 text-zinc-200">
                   {wager.gamblingType.title} ×{wager.gamblingType.multiplier}
                 </td>
-                <td className="px-4 py-3 text-zinc-200">{wager.points} pts</td>
+                <td className="px-4 py-3 tabular-nums text-zinc-200">
+                  {wager.points} pts
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusClass[wager.status]}`}
@@ -120,11 +123,9 @@ export function SeasonWagers({
                     <span className="text-zinc-500">—</span>
                   ) : (
                     <span
-                      className={`font-bold ${
-                        wager.awardPoint.total >= 0
-                          ? "text-emerald-400"
-                          : "text-red-400"
-                      }`}
+                      className={`font-bold tabular-nums ${signedPointsClass(
+                        wager.awardPoint.total
+                      )}`}
                     >
                       {formatSignedPoints(wager.awardPoint.total)}
                     </span>

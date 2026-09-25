@@ -6,15 +6,17 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { useLatestPointChange } from "@/components/GamePointChange";
-import { SeasonProgress } from "@/components/SeasonProgress";
+import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
 import {
   CurrentSeasonBadge,
   PlayGameLink,
   SeasonStatTile,
   formatEpisodeCount,
   formatSeasonDates,
+  formatStakedDetail,
   formatStanding,
   formatStandingDetail,
+  pointsLabel,
 } from "@/components/SeasonSummary";
 import {
   type ConvexSeasonStanding,
@@ -24,14 +26,14 @@ import {
 } from "@/convex/seasons";
 import { getPacificTodayPlainDate } from "@/lib/dates";
 import { getProfileSeasonPath } from "@/lib/routes";
-import { formatSignedPoints, ordinal } from "@/lib/seasonActivity";
+import {
+  formatSignedPoints,
+  ordinal,
+  signedPointsClass,
+} from "@/lib/seasonActivity";
 
 const viewSeasonClass =
-  "inline-flex items-center gap-1.5 text-sm font-semibold text-red-300";
-
-function pointsLabel(count: number): string {
-  return `${count} ${count === 1 ? "point" : "points"}`;
-}
+  "inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-red-300 transition-colors hover:text-red-200";
 
 /**
  * Past-season standings arrive after the list, one query per season, since
@@ -149,11 +151,7 @@ function CurrentSeasonCard({
 }) {
   const { season } = summary;
   const available = summary.available ?? 0;
-  const staked = summary.total - available;
-  const progress =
-    season.episodeCount !== null && summary.recordedEpisodeCount !== null
-      ? { recorded: summary.recordedEpisodeCount, total: season.episodeCount }
-      : null;
+  const progress = getSeasonProgress(summary);
 
   return (
     <article className="bbpc-panel overflow-hidden border-red-500/40">
@@ -185,9 +183,7 @@ function CurrentSeasonCard({
           <SeasonStatTile
             label="Available"
             value={available}
-            detail={
-              staked > 0 ? `${staked} in open wagers` : "Nothing wagered"
-            }
+            detail={formatStakedDetail(summary.total - available)}
           />
           <SeasonStatTile
             label="Last episode"
@@ -195,11 +191,7 @@ function CurrentSeasonCard({
               lastEpisodeChange === null ? (
                 "—"
               ) : (
-                <span
-                  className={
-                    lastEpisodeChange < 0 ? "text-red-400" : "text-emerald-400"
-                  }
-                >
+                <span className={signedPointsClass(lastEpisodeChange)}>
                   {formatSignedPoints(lastEpisodeChange)}
                 </span>
               )

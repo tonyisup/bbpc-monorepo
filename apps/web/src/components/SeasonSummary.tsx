@@ -8,9 +8,9 @@ import { formatPlainDate } from "@/lib/dates";
 import { ordinal } from "@/lib/seasonActivity";
 
 /** The one-tap route from a season summary into the current round. */
-export function PlayGameLink({ className }: { className?: string }) {
+export function PlayGameLink() {
   return (
-    <Button asChild size="sm" className={className}>
+    <Button asChild size="sm">
       <Link href="/game">
         <GamepadIcon aria-hidden="true" />
         Go play
@@ -73,6 +73,15 @@ export function formatEpisodeCount(count: number | null): string | null {
     return null;
   }
   return count === 1 ? "1 episode" : `${count} episodes`;
+}
+
+export function pointsLabel(count: number): string {
+  return `${count} ${count === 1 ? "point" : "points"}`;
+}
+
+/** What the Available tile says under its number. */
+export function formatStakedDetail(staked: number): string {
+  return staked > 0 ? `${staked} in open wagers` : "Nothing wagered";
 }
 
 export function formatStanding(standing: ConvexSeasonStanding): string {

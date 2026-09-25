@@ -18,6 +18,7 @@ import {
   type EpisodePointGroup,
   formatSignedPoints,
   groupSeasonPointsByEpisode,
+  signedPointsClass,
 } from "@/lib/seasonActivity";
 
 interface HistoryState {
@@ -97,11 +98,20 @@ export function SeasonPointsByEpisode({ seasonId }: { seasonId: string }) {
     () => groupSeasonPointsByEpisode(history.points),
     [history.points]
   );
+  // Pages cut across episodes, so the oldest loaded episode may still have
+  // older points to come; its subtotal is marked until the last page lands.
+  const partialKey = history.isDone
+    ? null
+    : (history.points.at(-1)?.episode?.id ?? "none");
 
   return (
     <div className="space-y-4">
       {groups.map((group) => (
-        <EpisodeGroup key={group.key} group={group} />
+        <EpisodeGroup
+          key={group.key}
+          group={group}
+          partial={group.key === partialKey}
+        />
       ))}
 
       {!isLoading && history.points.length === 0 && !failed ? (
@@ -143,16 +153,22 @@ export function SeasonPointsByEpisode({ seasonId }: { seasonId: string }) {
   );
 }
 
-function EpisodeHeading({ episode }: { episode: EpisodePointGroup["episode"] }) {
+function EpisodeHeading({
+  episode,
+  id,
+}: {
+  episode: EpisodePointGroup["episode"];
+  id: string;
+}) {
   if (episode === null) {
     return (
-      <span className="text-lg font-bold text-white">
+      <h3 id={id} className="text-lg font-bold text-white">
         Season adjustments
         <span className="font-medium text-zinc-400">
           {" "}
           · not tied to an episode
         </span>
-      </span>
+      </h3>
     );
   }
   const label = `Episode ${episode.number}`;
@@ -162,23 +178,25 @@ function EpisodeHeading({ episode }: { episode: EpisodePointGroup["episode"] }) 
     );
   if (episode.slug === null) {
     return (
-      <span className="text-lg font-bold text-white">
+      <h3 id={id} className="text-lg font-bold text-white">
         {label}
         {title}
-      </span>
+      </h3>
     );
   }
   return (
-    <Link
-      href={getEpisodePath(episode.slug)}
-      className="inline-flex items-center gap-2 text-lg font-bold text-white transition-colors hover:text-red-300"
-    >
-      <span>
-        {label}
-        {title}
-      </span>
-      <ArrowRight className="h-4 w-4 text-zinc-400" aria-hidden="true" />
-    </Link>
+    <h3 id={id} className="text-lg font-bold text-white">
+      <Link
+        href={getEpisodePath(episode.slug)}
+        className="inline-flex items-center gap-2 transition-colors hover:text-red-300"
+      >
+        <span>
+          {label}
+          {title}
+        </span>
+        <ArrowRight className="h-4 w-4 text-zinc-400" aria-hidden="true" />
+      </Link>
+    </h3>
   );
 }
 
@@ -227,9 +245,9 @@ function PointRow({ point }: { point: ConvexSeasonPoint }) {
         </p>
       </div>
       <p
-        className={`ml-4 text-2xl font-bold ${
-          point.total >= 0 ? "text-emerald-400" : "text-red-400"
-        }`}
+        className={`ml-4 text-2xl font-bold tabular-nums ${signedPointsClass(
+          point.total
+        )}`}
       >
         {formatSignedPoints(point.total)}
       </p>
@@ -237,24 +255,29 @@ function PointRow({ point }: { point: ConvexSeasonPoint }) {
   );
 }
 
-function EpisodeGroup({ group }: { group: EpisodePointGroup }) {
+function EpisodeGroup({
+  group,
+  partial,
+}: {
+  group: EpisodePointGroup;
+  partial: boolean;
+}) {
+  const headingId = `season-points-${group.key}`;
   return (
-    <section
-      className="bbpc-panel overflow-hidden"
-      aria-label={
-        group.episode === null
-          ? "Season adjustments"
-          : `Episode ${group.episode.number}`
-      }
-    >
+    <section className="bbpc-panel overflow-hidden" aria-labelledby={headingId}>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3">
-        <EpisodeHeading episode={group.episode} />
+        <EpisodeHeading episode={group.episode} id={headingId} />
         <span
-          className={`text-lg font-bold ${
-            group.subtotal >= 0 ? "text-emerald-400" : "text-red-400"
-          }`}
+          className={`text-lg font-bold tabular-nums ${signedPointsClass(
+            group.subtotal
+          )}`}
         >
           {formatSignedPoints(group.subtotal)}
+          {partial ? (
+            <span className="ml-1 text-xs font-medium text-zinc-500">
+              so far
+            </span>
+          ) : null}
         </span>
       </header>
       <div className="space-y-5 p-4">

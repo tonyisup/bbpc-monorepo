@@ -3,7 +3,7 @@ import type {
   ConvexSeasonPoint,
   ConvexSeasonWager,
 } from "@/convex/seasons";
-import { pacificPointDay } from "@/lib/pointDays";
+import { formatPacificDayLabel, pacificPointDay } from "@/lib/pointDays";
 
 export interface AssignmentPointBlock {
   key: string;
@@ -71,15 +71,19 @@ export interface SeasonSeries {
   comparison: {
     id: string;
     name: string | null;
-    label: "Leader" | "Runner-up";
+    label: "Leader" | "Runner-up" | "Tied";
   } | null;
 }
 
-const dateLabelFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "2-digit",
-  timeZone: "America/Los_Angeles",
-});
+function comparisonLabel(
+  mine: number | undefined,
+  other: number
+): "Leader" | "Runner-up" | "Tied" {
+  if (mine === undefined || mine < other) {
+    return "Leader";
+  }
+  return mine > other ? "Runner-up" : "Tied";
+}
 
 /**
  * Cumulative totals per Pacific scoring day for the member, the season's
@@ -100,24 +104,19 @@ export function buildSeasonSeries(
       : {
           id: other.id,
           name: other.name,
-          label:
-            mine !== undefined && mine.total > other.total
-              ? ("Runner-up" as const)
-              : ("Leader" as const),
+          label: comparisonLabel(mine?.total, other.total),
         };
   const running = new Map<string, number>();
   const rows = new Map<string, SeasonSeriesRow>();
+  let fieldTotal = 0;
   for (const point of overview.points) {
     running.set(
       point.userId,
       (running.get(point.userId) ?? 0) + point.pointValue
     );
-    let fieldTotal = 0;
-    for (const total of running.values()) {
-      fieldTotal += total;
-    }
+    fieldTotal += point.pointValue;
     rows.set(pacificPointDay(point.earnedAt), {
-      date: dateLabelFormatter.format(new Date(point.earnedAt)),
+      date: formatPacificDayLabel(point.earnedAt),
       you: running.get(userId) ?? 0,
       comparison:
         comparison === null ? null : (running.get(comparison.id) ?? 0),
@@ -175,6 +174,11 @@ export function formatWagerRecord(summary: SeasonWagerSummary): string {
 
 export function formatSignedPoints(value: number): string {
   return value > 0 ? `+${value}` : `${value}`;
+}
+
+/** Gains read green, losses red; zero counts as a gain. */
+export function signedPointsClass(value: number): string {
+  return value < 0 ? "text-red-400" : "text-emerald-400";
 }
 
 export function ordinal(value: number): string {

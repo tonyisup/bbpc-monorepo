@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/card";
 import { SeasonProgress, getSeasonProgress } from "@/components/SeasonProgress";
 import { formatPlainDate, getPacificTodayPlainDate } from "@/lib/dates";
-import { pacificPointDay } from "@/lib/pointDays";
+import { formatPacificDayLabel, pacificPointDay } from "@/lib/pointDays";
 import type { GamePerformanceData } from "@/types/game";
 
 const COLORS = [
@@ -32,11 +32,6 @@ const COLORS = [
   "#ec4899",
   "#06b6d4",
 ];
-const dateLabelFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "2-digit",
-  timeZone: "America/Los_Angeles",
-});
 
 type PerformancePoint = GamePerformanceData["points"][number];
 type PerformanceSummaryItem = GamePerformanceData["userSummary"][number];
@@ -53,7 +48,7 @@ export const buildChartData = (
   }
 
   for (const point of points) {
-    const dateKey = dateLabelFormatter.format(new Date(point.earnedAt));
+    const dateKey = formatPacificDayLabel(point.earnedAt);
 
     runningTotals[point.userId] =
       (runningTotals[point.userId] ?? 0) + point.pointValue;
@@ -96,7 +91,7 @@ export const buildSummaryRows = (
     lastEpisodeLabel:
       lastPoint === undefined
         ? null
-        : dateLabelFormatter.format(new Date(lastPoint.earnedAt)),
+        : formatPacificDayLabel(lastPoint.earnedAt),
     rows: userSummary.map((user) => {
       const series = chartData.map((point) => Number(point[user.id] ?? 0));
 
