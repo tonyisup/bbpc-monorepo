@@ -33,14 +33,9 @@ const seasonSummarySchema = z.object({
   standing: standingSchema,
 });
 
-const seasonOverviewSchema = z.object({
-  season: seasonSchema,
-  isCurrent: z.boolean(),
-  total: z.number().finite(),
-  pointCount: z.number().int().nonnegative(),
+const seasonOverviewSchema = seasonSummarySchema.extend({
   available: z.number().finite(),
-  recordedEpisodeCount: z.number().int().nonnegative().nullable(),
-  standing: standingSchema,
+  rankingAvailable: z.boolean(),
   userSummary: z.array(
     z.object({
       total: z.number().finite(),
@@ -148,6 +143,8 @@ export interface ConvexSeasonOverview {
   available: number;
   recordedEpisodeCount: number | null;
   standing: ConvexSeasonStanding;
+  /** False when the season is too large to total; standings and points are empty. */
+  rankingAvailable: boolean;
   /** Every scoring player, highest total first. */
   userSummary: Array<{ id: string; name: string | null; total: number }>;
   /** Every season point, oldest first. */

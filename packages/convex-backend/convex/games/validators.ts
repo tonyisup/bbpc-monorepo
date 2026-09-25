@@ -486,6 +486,8 @@ export const memberSeasonOverviewValidator = v.object({
   available: v.number(),
   recordedEpisodeCount: nullableNumberValidator,
   standing: v.union(seasonStandingValidator, v.null()),
+  /** False when the season is too large to total; standings and points are then empty. */
+  rankingAvailable: v.boolean(),
   userSummary: v.array(performanceUserValidator),
   points: v.array(performancePointValidator),
 });

@@ -209,13 +209,13 @@ function AssignmentHeading({
   return (
     <div className="flex items-center gap-3">
       <MoviePoster poster={assignment.movie.poster} />
-      <h4 className="text-sm font-semibold text-indigo-300">
+      <h4 className="text-sm font-semibold text-zinc-100">
         {assignment.slug === null ? (
           movie
         ) : (
           <Link
             href={getAssignmentPath(assignment.slug)}
-            className="transition-colors hover:text-indigo-200"
+            className="transition-colors hover:text-red-300"
           >
             {movie}
           </Link>
@@ -240,7 +240,7 @@ function PointRow({ point }: { point: ConvexSeasonPoint }) {
             {point.gamePointType.description}
           </p>
         ) : null}
-        <p className="mt-1.5 font-mono text-xs text-zinc-500">
+        <p className="mt-1.5 text-xs text-zinc-500">
           {formatInstantLocal(new Date(point.earnedAt), { dateStyle: "long" })}
         </p>
       </div>
@@ -282,14 +282,7 @@ function EpisodeGroup({
       </header>
       <div className="space-y-5 p-4">
         {group.blocks.map((block) => (
-          <div
-            key={block.key}
-            className={
-              block.assignment === null
-                ? "space-y-2"
-                : "space-y-2 border-l-2 border-indigo-500/50 pl-4"
-            }
-          >
+          <div key={block.key} className="space-y-2">
             {block.assignment !== null && (
               <AssignmentHeading assignment={block.assignment} />
             )}

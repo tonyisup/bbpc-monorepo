@@ -176,26 +176,20 @@ export function formatSignedPoints(value: number): string {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
-/** Gains read green, losses red; zero counts as a gain. */
+/** Gains read green, losses amber; red stays the site accent. Zero is a gain. */
 export function signedPointsClass(value: number): string {
-  return value < 0 ? "text-red-400" : "text-emerald-400";
+  return value < 0 ? "text-amber-300" : "text-emerald-400";
 }
 
+const ordinalRules = new Intl.PluralRules("en-US", { type: "ordinal" });
+const ordinalSuffix: Partial<Record<Intl.LDMLPluralRule, string>> = {
+  one: "st",
+  two: "nd",
+  few: "rd",
+};
+
 export function ordinal(value: number): string {
-  const lastTwo = value % 100;
-  if (lastTwo >= 11 && lastTwo <= 13) {
-    return `${value}th`;
-  }
-  switch (value % 10) {
-    case 1:
-      return `${value}st`;
-    case 2:
-      return `${value}nd`;
-    case 3:
-      return `${value}rd`;
-    default:
-      return `${value}th`;
-  }
+  return `${value}${ordinalSuffix[ordinalRules.select(value)] ?? "th"}`;
 }
 
 export const WAGER_STATUS_LABELS: Record<ConvexSeasonWager["status"], string> =

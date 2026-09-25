@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
     ) => Promise<DuplicateCheckResult>
   >(),
   convex: {},
+  errorCode: vi.fn<(error: unknown) => string | null>(() => null),
   load: vi.fn<() => Promise<unknown>>(),
   submit: vi.fn<() => Promise<void>>(),
   withdraw: vi.fn<() => Promise<void>>(),
@@ -75,7 +76,7 @@ vi.mock("@/convex/quotabunga", () => ({
 }));
 
 vi.mock("@/convex/identity", () => ({
-  getConvexDomainErrorCode: () => null,
+  getConvexDomainErrorCode: (error: unknown) => mocks.errorCode(error),
 }));
 
 vi.mock("@/components/AdminCollapsibleHeader", () => ({
@@ -147,6 +148,8 @@ vi.mock("sonner", () => ({
     success: vi.fn(),
   },
 }));
+
+import { toast } from "sonner";
 
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
 
@@ -540,5 +543,124 @@ describe("ConvexQuotabungaSubmission round window", () => {
     const rendered = await renderSubmission();
     expect(renderedText(rendered)).toContain("locked for recording");
     expect(rendered.root.findAllByType("button").map((b) => instanceText(b))).not.toContain("Withdraw");
+  });
+});
+
+const savedEntry = {
+  id: "quote-1",
+  quoteText: "Hold on to ya",
+  sourceTitle: "Heat",
+  sourceType: "MOVIE",
+  clipUrl: null,
+  clipStartSeconds: null,
+  listenerNotes: null,
+  status: "SUBMITTED",
+  bracketOrder: null,
+  placement: null,
+  scored: false,
+  createdAt: 1,
+  updatedAt: 1,
+};
+
+async function submitForm(rendered: ReactTestRenderer) {
+  await act(async () => {
+    await rendered.root.findByType("form").props.onSubmit({
+      preventDefault() {},
+    });
+  });
+}
+
+function findButton(rendered: ReactTestRenderer, label: string) {
+  const button = rendered.root
+    .findAllByType("button")
+    .find((candidate) => instanceText(candidate) === label);
+  if (button === undefined) {
+    throw new Error(`No ${label} button rendered.`);
+  }
+  return button;
+}
+
+describe("ConvexQuotabungaSubmission writes", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", globalThis);
+    mocks.window = undefined;
+    mocks.errorCode.mockReturnValue(null);
+    mocks.load.mockResolvedValue(openRound);
+    mocks.submit.mockResolvedValue(undefined);
+    mocks.withdraw.mockResolvedValue(undefined);
+    mocks.checkDuplicate.mockResolvedValue({ possibleMatch: false });
+  });
+
+  afterEach(() => {
+    if (renderer !== null) {
+      act(() => renderer?.unmount());
+      renderer = null;
+    }
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  test("submits the entry for this episode and reloads it", async () => {
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        quoteText: "Hold on to ya",
+        sourceTitle: "Heat",
+        sourceType: "MOVIE",
+        clipUrl: null,
+        clipStartSeconds: null,
+        listenerNotes: null,
+      })
+    );
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+  });
+
+  test("refuses an empty entry without calling the backend", async () => {
+    const rendered = await renderSubmission();
+    await submitForm(rendered);
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(renderedText(rendered)).toContain("Add a quote and source");
+  });
+
+  test("reloads the round after a locked-round conflict", async () => {
+    mocks.submit.mockRejectedValue(new Error("locked"));
+    mocks.errorCode.mockReturnValue("CONFLICT");
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    await submitForm(rendered);
+    // The reload clears the inline message; the toast carries it.
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringContaining("This round was locked or changed")
+    );
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+  });
+
+  test("withdraws this episode's entry after the member confirms", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    const rendered = await renderSubmission();
+    await act(async () => {
+      await findButton(rendered, "Withdraw").props.onClick();
+    });
+    expect(mocks.withdraw).toHaveBeenCalledWith(mocks.convex, "episode-test");
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+  });
+
+  test("keeps the entry when the member declines the confirmation", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    const rendered = await renderSubmission();
+    await act(async () => {
+      await findButton(rendered, "Withdraw").props.onClick();
+    });
+    expect(mocks.withdraw).not.toHaveBeenCalled();
+    expect(renderedText(rendered)).toContain("Hold on to ya");
   });
 });

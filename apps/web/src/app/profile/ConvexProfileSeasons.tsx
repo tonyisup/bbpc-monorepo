@@ -201,7 +201,12 @@ function CurrentSeasonCard({
           <SeasonStatTile
             label="Standing"
             value={formatStanding(summary.standing)}
-            detail={formatStandingDetail(summary.standing, summary.pointCount)}
+            detail={formatStandingDetail(
+              summary.standing,
+              // The list has no flag; a member with points but no rank is in
+              // a season too large to rank.
+              summary.standing !== null || summary.pointCount === 0
+            )}
           />
         </div>
         {progress !== null && <SeasonProgress progress={progress} />}

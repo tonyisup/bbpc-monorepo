@@ -294,12 +294,12 @@ export const mineForEpisode = authenticatedQuery({
 /**
  * The episode a write applies to: the one the client named, else the newest
  * next or recording episode. Either way it must still be inside the round
- * window, the same window predictions and wagers use.
+ * window, the same window predictions and wagers use, judged on the server
+ * clock so a client cannot reopen a closed round by sending an earlier time.
  */
 async function requireWritableEpisode(
   ctx: Parameters<typeof findSubmissionEpisode>[0],
   episodeId: Id<"episodes"> | undefined,
-  now: number,
 ): Promise<Doc<"episodes">> {
   const episode =
     episodeId === undefined
@@ -308,7 +308,7 @@ async function requireWritableEpisode(
   if (episodeId !== undefined && episode === null) {
     domainError("NOT_FOUND", "The episode is unavailable.");
   }
-  if (episode === null || !isEpisodeRoundOpen(episode, now)) {
+  if (episode === null || !isEpisodeRoundOpen(episode, Date.now())) {
     domainError(
       "CONFLICT",
       "Quotabunga submissions are currently closed.",
@@ -373,13 +373,8 @@ export const submitMine = authenticatedMutation({
       args.now ?? Date.now(),
       "Quote update time",
     );
-    // The window is judged on the server clock; `now` only stamps the entry,
-    // so a client cannot reopen a closed round by sending an earlier time.
-    const episode = await requireWritableEpisode(
-      ctx,
-      args.episodeId,
-      Date.now(),
-    );
+    // `now` only stamps the entry; the window is judged on the server clock.
+    const episode = await requireWritableEpisode(ctx, args.episodeId);
     const existing = await findQuoteForEpisodeUser(
       ctx,
       episode._id,
@@ -451,11 +446,7 @@ export const withdrawMine = authenticatedMutation({
   args: { episodeId: v.optional(v.id("episodes")) },
   returns: v.object({ id: v.id("quoteSubmissions") }),
   handler: async (ctx, args) => {
-    const episode = await requireWritableEpisode(
-      ctx,
-      args.episodeId,
-      Date.now(),
-    );
+    const episode = await requireWritableEpisode(ctx, args.episodeId);
     const submission = await findQuoteForEpisodeUser(
       ctx,
       episode._id,

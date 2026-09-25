@@ -6947,6 +6947,7 @@ export type PublicApiType = {
             pointValue: number;
             userId: Id<"users">;
           }>;
+          rankingAvailable: boolean;
           userSummary: Array<{
             total: number;
             user: {

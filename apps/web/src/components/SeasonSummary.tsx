@@ -38,9 +38,7 @@ export function SeasonStatTile({
 }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3.5 py-3">
-      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-400">
-        {label}
-      </span>
+      <span className="bbpc-label">{label}</span>
       <span className="text-2xl font-bold leading-tight text-white">
         {value}
       </span>
@@ -88,16 +86,13 @@ export function formatStanding(standing: ConvexSeasonStanding): string {
   return standing === null ? "—" : ordinal(standing.rank);
 }
 
-/**
- * A member with points but no standing is in a season too large to rank;
- * the backend blanks standings past its aggregate limit.
- */
+/** The backend blanks standings past its aggregate limit; say so. */
 export function formatStandingDetail(
   standing: ConvexSeasonStanding,
-  pointCount: number
+  rankingAvailable: boolean
 ): string {
   if (standing === null) {
-    return pointCount > 0 ? "Season too large to rank" : "No points yet";
+    return rankingAvailable ? "No points yet" : "Season too large to rank";
   }
   return standing.playerCount === 1
     ? "the only scorer"

@@ -70,11 +70,12 @@ function BackLink() {
 }
 
 function playersLabel(overview: ConvexSeasonOverview): string {
+  if (!overview.rankingAvailable) {
+    return "Standings unavailable for a season this large";
+  }
   const playerCount = overview.userSummary.length;
   if (playerCount === 0) {
-    return overview.pointCount > 0
-      ? "Standings unavailable for a season this large"
-      : "No players yet";
+    return "No players yet";
   }
   return playerCount === 1 ? "1 player" : `${playerCount} players`;
 }
@@ -159,8 +160,6 @@ function SeasonPageContent({
   const wagerSummary =
     wagers === null || wagers === "failed" ? null : summarizeSeasonWagers(wagers);
   const progress = overview.isCurrent ? getSeasonProgress(overview) : null;
-  const rankingUnavailable =
-    overview.pointCount > 0 && overview.points.length === 0;
   const subtitle = [
     formatSeasonDates(overview.season),
     formatEpisodeCount(overview.season.episodeCount),
@@ -201,7 +200,7 @@ function SeasonPageContent({
             value={formatStanding(overview.standing)}
             detail={formatStandingDetail(
               overview.standing,
-              overview.pointCount
+              overview.rankingAvailable
             )}
           />
           <SeasonStatTile
@@ -219,7 +218,10 @@ function SeasonPageContent({
         {progress !== null && <SeasonProgress progress={progress} />}
       </header>
 
-      <SeasonPointsChart series={series} unavailable={rankingUnavailable} />
+      <SeasonPointsChart
+        series={series}
+        unavailable={!overview.rankingAvailable}
+      />
 
       <Tabs defaultValue="points" className="space-y-5">
         <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-b border-white/10 bg-transparent p-0">

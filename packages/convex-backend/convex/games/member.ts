@@ -316,6 +316,7 @@ export const mySeasonOverview = authenticatedQuery({
         performance === null
           ? null
           : findSeasonStanding(performance.userSummary, userId),
+      rankingAvailable: performance !== null,
       userSummary: performance?.userSummary ?? [],
       points: performance?.points ?? [],
     };

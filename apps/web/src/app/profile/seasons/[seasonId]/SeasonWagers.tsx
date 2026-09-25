@@ -24,9 +24,7 @@ const statusClass: Record<ConvexSeasonWager["status"], string> = {
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline gap-2">
-      <dt className="text-xs font-bold uppercase tracking-[0.08em] text-zinc-400">
-        {label}
-      </dt>
+      <dt className="bbpc-label">{label}</dt>
       <dd className="font-bold text-white">{value}</dd>
     </div>
   );
@@ -70,7 +68,7 @@ export function SeasonWagers({
       </dl>
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="min-w-full text-left text-sm" aria-label="Season wagers">
-          <thead className="border-b border-white/10 text-xs uppercase tracking-[0.2em] text-zinc-500">
+          <thead className="bbpc-label border-b border-white/10">
             <tr>
               <th className="px-4 py-3 font-semibold">Episode</th>
               <th className="px-4 py-3 font-semibold">Movie</th>

@@ -28,12 +28,12 @@ function accountMessage(
   }
 }
 
+const widthClass = { "4xl": "max-w-4xl", "5xl": "max-w-5xl" } as const;
+
 /**
  * The loading, sign-in, and unavailable-account states every member page
  * shares. Children render only for a resolved, linked account.
  */
-const widthClass = { "4xl": "max-w-4xl", "5xl": "max-w-5xl" } as const;
-
 export function ProfileAccessGate({
   label,
   width = "4xl",
@@ -61,7 +61,7 @@ export function ProfileAccessGate({
   if (status === "unauthenticated" || user === null) {
     return (
       <div className="container flex min-h-[50vh] flex-col items-center justify-center px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold">Sign in to view your {label}</h1>
+        <h1 className="text-2xl font-bold">{`Sign in to view your ${label}`}</h1>
         <Button className="mt-6" onClick={signIn}>
           Sign in
         </Button>

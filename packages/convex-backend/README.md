@@ -615,8 +615,8 @@ Authenticated members read their own season history through `games.member`:
 - `mySeasonOverview({ seasonId, today })` returns the same summary for any one season,
   with `available` and `standing` resolved, plus every player's `userSummary` and
   season `points` in the `currentPerformance` shape. A season with more than 2000
-  points keeps the member's own totals but returns `null` standing and empty
-  `userSummary` and `points`. An unknown season is `NOT_FOUND`.
+  points keeps the member's own totals but returns `rankingAvailable: false`, `null`
+  standing, and empty `userSummary` and `points`. An unknown season is `NOT_FOUND`.
 - `mySeasonPointsPage({ seasonId, paginationOpts })` pages the caller's points in that
   season, newest first. Each item is a point plus its `assignment` (with movie and
   episode) and `episode` (`id`, `number`, `title`, `status`, `slug`), resolved through

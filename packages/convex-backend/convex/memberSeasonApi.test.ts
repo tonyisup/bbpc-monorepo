@@ -328,6 +328,7 @@ describe("member season API", () => {
       available: 20,
       recordedEpisodeCount: 2,
       standing: { rank: 2, playerCount: 2 },
+      rankingAvailable: true,
     });
     expect(current.userSummary.map((entry) => entry.user.id)).toEqual([
       seeded.rivalId,
@@ -583,6 +584,7 @@ describe("member season API", () => {
       pointCount: 4,
       available: 20,
       standing: null,
+      rankingAvailable: false,
       userSummary: [],
       points: [],
     });
