@@ -35,6 +35,7 @@ test("the profile shows season summaries and sends detail to the season page", (
   assert.match(profileSeasons, /useLatestPointChange\(true\)/u);
   assert.match(profileSeasons, /loadConvexSeasonStanding\(convex, entry\.season\.id\)/u);
   assert.doesNotMatch(profileSeasons, /mySeasonPointsPage|loadConvexSeasonPointsPage/u);
+  assert.match(profileSeasons, /<PlayGameLink \/>/u);
 });
 
 test("the season route renders the member season page behind the access gate", () => {
@@ -44,4 +45,5 @@ test("the season route renders the member season page behind the access gate", (
   assert.match(seasonPage, /loadConvexSeasonOverview\(convex, seasonId/u);
   assert.match(seasonPage, /<SeasonPointsByEpisode seasonId=\{seasonId\} \/>/u);
   assert.match(seasonPage, /<SeasonWagers wagers=\{wagers\}/u);
+  assert.match(seasonPage, /overview\.isCurrent && <PlayGameLink \/>/u);
 });

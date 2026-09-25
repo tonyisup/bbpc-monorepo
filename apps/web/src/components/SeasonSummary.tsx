@@ -1,8 +1,23 @@
+import { GamepadIcon } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { ConvexSeasonInfo, ConvexSeasonStanding } from "@/convex/seasons";
 import { formatPlainDate } from "@/lib/dates";
 import { ordinal } from "@/lib/seasonActivity";
+
+/** The one-tap route from a season summary into the current round. */
+export function PlayGameLink({ className }: { className?: string }) {
+  return (
+    <Button asChild size="sm" className={className}>
+      <Link href="/game">
+        <GamepadIcon aria-hidden="true" />
+        Go play
+      </Link>
+    </Button>
+  );
+}
 
 export function CurrentSeasonBadge() {
   return (

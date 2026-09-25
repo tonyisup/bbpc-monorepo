@@ -9,6 +9,7 @@ import { useLatestPointChange } from "@/components/GamePointChange";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import {
   CurrentSeasonBadge,
+  PlayGameLink,
   SeasonStatTile,
   formatEpisodeCount,
   formatSeasonDates,
@@ -171,6 +172,7 @@ function CurrentSeasonCard({
             View season
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
+          <PlayGameLink />
         </div>
       </header>
       <div className="space-y-5 p-5">

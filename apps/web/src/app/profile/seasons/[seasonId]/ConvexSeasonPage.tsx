@@ -9,6 +9,7 @@ import { SeasonPointsChart } from "@/components/SeasonPointsChart";
 import { SeasonProgress } from "@/components/SeasonProgress";
 import {
   CurrentSeasonBadge,
+  PlayGameLink,
   SeasonStatTile,
   formatEpisodeCount,
   formatSeasonDates,
@@ -168,9 +169,12 @@ function SeasonPageContent({
           <p className="bbpc-kicker">Your season</p>
           {overview.isCurrent && <CurrentSeasonBadge />}
         </div>
-        <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
-          {overview.season.title}
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
+            {overview.season.title}
+          </h1>
+          {overview.isCurrent && <PlayGameLink />}
+        </div>
         <p className="text-zinc-400">{subtitle}</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SeasonStatTile
