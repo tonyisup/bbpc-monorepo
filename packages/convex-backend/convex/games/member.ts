@@ -227,18 +227,22 @@ export const mySeasons = authenticatedQuery({
         { details: { limit: MAX_SEASONS_TO_INSPECT } },
       );
     }
+    const played = (
+      await Promise.all(
+        seasons.map(async (season) => ({
+          season,
+          isCurrent: current !== null && current._id === season._id,
+          seasonPoints: await readMemberSeasonPoints(ctx, userId, season._id),
+        })),
+      )
+    ).filter((entry) => entry.isCurrent || entry.seasonPoints.length > 0);
+    // Point types are global, so read them once for every season's points.
+    const pointTypes = await loadPointTypes(
+      ctx,
+      played.flatMap((entry) => entry.seasonPoints),
+    );
     const summaries = await Promise.all(
-      seasons.map(async (season) => {
-        const isCurrent = current !== null && current._id === season._id;
-        const seasonPoints = await readMemberSeasonPoints(
-          ctx,
-          userId,
-          season._id,
-        );
-        if (!isCurrent && seasonPoints.length === 0) {
-          return null;
-        }
-        const pointTypes = await loadPointTypes(ctx, seasonPoints);
+      played.map(async ({ season, isCurrent, seasonPoints }) => {
         let total = 0;
         for (const point of seasonPoints) {
           total += valueOf(point, pointTypes);
@@ -263,9 +267,7 @@ export const mySeasons = authenticatedQuery({
         };
       }),
     );
-    return summaries
-      .filter((summary) => summary !== null)
-      .sort(compareSeasons);
+    return summaries.sort(compareSeasons);
   },
 });
 

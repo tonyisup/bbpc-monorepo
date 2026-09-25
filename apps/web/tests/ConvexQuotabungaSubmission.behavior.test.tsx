@@ -47,6 +47,21 @@ const mocks = vi.hoisted(() => ({
     | undefined,
 }));
 
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: {
+    href: string;
+    children?: ReactNode;
+  } & Record<string, unknown>) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock("convex/react", () => ({
   useConvex: () => mocks.convex,
   useQuery: () => mocks.window,
@@ -492,6 +507,7 @@ describe("ConvexQuotabungaSubmission round window", () => {
     mocks.window = { status: "published", closesAt: null };
     const rendered = await renderSubmission("published");
     expect(renderedText(rendered)).toContain("are closed");
+    expect(renderedText(rendered)).toContain("Submit to the current round");
     expect(
       rendered.root.findAllByProps(
         { id: "convex-quotabunga-quote" },

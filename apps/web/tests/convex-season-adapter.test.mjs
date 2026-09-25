@@ -41,8 +41,9 @@ test("the profile shows season summaries and sends detail to the season page", (
 test("the season route renders the member season page behind the access gate", () => {
   assert.match(seasonRoute, /params: Promise<\{ seasonId: string \}>/u);
   assert.match(seasonRoute, /<ConvexSeasonPage seasonId=\{seasonId\} \/>/u);
-  assert.match(seasonPage, /<ProfileAccessGate label="season">/u);
+  assert.match(seasonPage, /<ProfileAccessGate label="season" width="5xl">/u);
   assert.match(seasonPage, /loadConvexSeasonOverview\(convex, seasonId/u);
+  assert.match(seasonPage, /loadConvexSeasonWagers\(convex, seasonId\)/u);
   assert.match(seasonPage, /<SeasonPointsByEpisode seasonId=\{seasonId\} \/>/u);
   assert.match(seasonPage, /<SeasonWagers wagers=\{wagers\}/u);
   assert.match(seasonPage, /overview\.isCurrent && <PlayGameLink \/>/u);

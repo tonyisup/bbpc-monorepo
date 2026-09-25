@@ -869,6 +869,10 @@ describe("Quotabunga workflows", () => {
       episode: { id: foundation.recordingEpisodeId, number: 11 },
       isOpen: true,
     });
+    // Without a client clock the legacy read stays conservative.
+    await expect(
+      member.query(api.games.quotes.currentForMe, {}),
+    ).resolves.toMatchObject({ isOpen: false });
     const created = await member.mutation(api.games.quotes.submitMine, {
       clientApiVersion: BBPC_API_VERSION,
       ...memberContent,

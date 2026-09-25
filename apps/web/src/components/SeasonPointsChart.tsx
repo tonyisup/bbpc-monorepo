@@ -13,7 +13,14 @@ import {
 
 import type { SeasonSeries } from "@/lib/seasonActivity";
 
-export function SeasonPointsChart({ series }: { series: SeasonSeries }) {
+export function SeasonPointsChart({
+  series,
+  unavailable = false,
+}: {
+  series: SeasonSeries;
+  /** The season has points but is too large for the backend to total. */
+  unavailable?: boolean;
+}) {
   const comparisonName =
     series.comparison === null
       ? null
@@ -26,7 +33,9 @@ export function SeasonPointsChart({ series }: { series: SeasonSeries }) {
       </div>
       {series.rows.length === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/10 px-4 py-10 text-center text-sm text-zinc-400">
-          The chart fills in once this season has scoring activity.
+          {unavailable
+            ? "Standings are unavailable for a season this large."
+            : "The chart fills in once this season has scoring activity."}
         </p>
       ) : (
         <div className="mt-4 h-[280px] w-full">

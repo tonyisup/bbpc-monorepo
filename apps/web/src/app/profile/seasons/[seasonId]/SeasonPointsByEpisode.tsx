@@ -98,21 +98,21 @@ export function SeasonPointsByEpisode({ seasonId }: { seasonId: string }) {
     () => groupSeasonPointsByEpisode(history.points),
     [history.points]
   );
-  // Pages cut across episodes, so the oldest loaded episode may still have
-  // older points to come; its subtotal is marked until the last page lands.
-  const partialKey = history.isDone
-    ? null
-    : (history.points.at(-1)?.episode?.id ?? "none");
+  // Pages are cut by time, not by episode, and late awards land days after
+  // an episode's picks, so any group can still have older points to come.
+  // Every subtotal stays marked until the last page lands.
+  const partial = !history.isDone;
 
   return (
     <div className="space-y-4">
       {groups.map((group) => (
-        <EpisodeGroup
-          key={group.key}
-          group={group}
-          partial={group.key === partialKey}
-        />
+        <EpisodeGroup key={group.key} group={group} partial={partial} />
       ))}
+      {partial && groups.length > 0 ? (
+        <p className="text-xs text-zinc-500">
+          Subtotals cover the points loaded so far.
+        </p>
+      ) : null}
 
       {!isLoading && history.points.length === 0 && !failed ? (
         <p className="text-sm text-zinc-400">No points this season yet.</p>

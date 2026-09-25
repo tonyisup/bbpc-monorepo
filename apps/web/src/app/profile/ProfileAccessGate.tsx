@@ -32,11 +32,16 @@ function accountMessage(
  * The loading, sign-in, and unavailable-account states every member page
  * shares. Children render only for a resolved, linked account.
  */
+const widthClass = { "4xl": "max-w-4xl", "5xl": "max-w-5xl" } as const;
+
 export function ProfileAccessGate({
   label,
+  width = "4xl",
   children,
 }: {
   label: string;
+  /** Matches the loaded page's column so the skeleton doesn't jump. */
+  width?: keyof typeof widthClass;
   children: (user: ProfileAccessUser) => ReactNode;
 }) {
   const { accountIssue, accountStatus, refreshAccount, signIn, status, user } =
@@ -44,7 +49,7 @@ export function ProfileAccessGate({
 
   if (status === "loading" || accountStatus === "resolving") {
     return (
-      <div className="bbpc-page max-w-4xl">
+      <div className={`bbpc-page ${widthClass[width]}`}>
         <div
           className="h-40 animate-pulse rounded-lg bg-white/[0.04]"
           aria-label={`Loading ${label}`}

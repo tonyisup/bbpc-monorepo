@@ -88,9 +88,16 @@ export function formatStanding(standing: ConvexSeasonStanding): string {
   return standing === null ? "—" : ordinal(standing.rank);
 }
 
-export function formatStandingDetail(standing: ConvexSeasonStanding): string {
+/**
+ * A member with points but no standing is in a season too large to rank;
+ * the backend blanks standings past its aggregate limit.
+ */
+export function formatStandingDetail(
+  standing: ConvexSeasonStanding,
+  pointCount: number
+): string {
   if (standing === null) {
-    return "No points yet";
+    return pointCount > 0 ? "Season too large to rank" : "No points yet";
   }
   return standing.playerCount === 1
     ? "the only scorer"

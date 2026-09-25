@@ -38,17 +38,15 @@ import { ProfileAccessGate } from "../../ProfileAccessGate";
 import { SeasonPointsByEpisode } from "./SeasonPointsByEpisode";
 import { SeasonWagers } from "./SeasonWagers";
 
-interface SeasonPageData {
-  overview: ConvexSeasonOverview;
-  wagers: ConvexSeasonWager[];
-}
+/** Wagers load beside the overview; a failure there only affects its tab. */
+type WagerState = ConvexSeasonWager[] | "failed" | null;
 
 const tabTriggerClass =
   "rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-semibold text-zinc-400 hover:border-white/20 hover:text-zinc-200 data-[state=active]:border-red-500 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none";
 
 export function ConvexSeasonPage({ seasonId }: { seasonId: string }) {
   return (
-    <ProfileAccessGate label="season">
+    <ProfileAccessGate label="season" width="5xl">
       {(user) => (
         <SeasonPageContent
           key={`${user.appUserId}:${seasonId}`}
@@ -71,6 +69,16 @@ function BackLink() {
   );
 }
 
+function playersLabel(overview: ConvexSeasonOverview): string {
+  const playerCount = overview.userSummary.length;
+  if (playerCount === 0) {
+    return overview.pointCount > 0
+      ? "Standings unavailable for a season this large"
+      : "No players yet";
+  }
+  return playerCount === 1 ? "1 player" : `${playerCount} players`;
+}
+
 function SeasonPageContent({
   seasonId,
   userId,
@@ -79,23 +87,22 @@ function SeasonPageContent({
   userId: string;
 }) {
   const convex = useConvex();
-  const [data, setData] = useState<SeasonPageData | null>(null);
+  const [overview, setOverview] = useState<ConvexSeasonOverview | null>(null);
+  const [wagers, setWagers] = useState<WagerState>(null);
   const [failed, setFailed] = useState(false);
   const loadGenerationRef = useRef(0);
 
   useEffect(() => {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
-    setData(null);
+    setOverview(null);
+    setWagers(null);
     setFailed(false);
 
-    void Promise.all([
-      loadConvexSeasonOverview(convex, seasonId, getPacificTodayPlainDate()),
-      loadConvexSeasonWagers(convex, seasonId),
-    ])
-      .then(([overview, wagers]) => {
+    void loadConvexSeasonOverview(convex, seasonId, getPacificTodayPlainDate())
+      .then((result) => {
         if (loadGenerationRef.current === generation) {
-          setData({ overview, wagers });
+          setOverview(result);
         }
       })
       .catch(() => {
@@ -103,11 +110,22 @@ function SeasonPageContent({
           setFailed(true);
         }
       });
+    void loadConvexSeasonWagers(convex, seasonId)
+      .then((result) => {
+        if (loadGenerationRef.current === generation) {
+          setWagers(result);
+        }
+      })
+      .catch(() => {
+        if (loadGenerationRef.current === generation) {
+          setWagers("failed");
+        }
+      });
   }, [convex, seasonId]);
 
   const series = useMemo(
-    () => (data === null ? null : buildSeasonSeries(data.overview, userId)),
-    [data, userId]
+    () => (overview === null ? null : buildSeasonSeries(overview, userId)),
+    [overview, userId]
   );
 
   if (failed) {
@@ -126,7 +144,7 @@ function SeasonPageContent({
     );
   }
 
-  if (data === null || series === null) {
+  if (overview === null || series === null) {
     return (
       <div className="bbpc-page max-w-5xl space-y-6">
         <BackLink />
@@ -138,14 +156,15 @@ function SeasonPageContent({
     );
   }
 
-  const { overview, wagers } = data;
-  const wagerSummary = summarizeSeasonWagers(wagers);
-  const playerCount = overview.userSummary.length;
-  const progress = getSeasonProgress(overview);
+  const wagerSummary =
+    wagers === null || wagers === "failed" ? null : summarizeSeasonWagers(wagers);
+  const progress = overview.isCurrent ? getSeasonProgress(overview) : null;
+  const rankingUnavailable =
+    overview.pointCount > 0 && overview.points.length === 0;
   const subtitle = [
     formatSeasonDates(overview.season),
     formatEpisodeCount(overview.season.episodeCount),
-    playerCount === 1 ? "1 player" : `${playerCount} players`,
+    playersLabel(overview),
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");
@@ -180,18 +199,27 @@ function SeasonPageContent({
           <SeasonStatTile
             label="Standing"
             value={formatStanding(overview.standing)}
-            detail={formatStandingDetail(overview.standing)}
+            detail={formatStandingDetail(
+              overview.standing,
+              overview.pointCount
+            )}
           />
           <SeasonStatTile
             label="Wager record"
-            value={formatWagerRecord(wagerSummary)}
-            detail={`Net ${formatSignedPoints(wagerSummary.net)}`}
+            value={wagerSummary === null ? "—" : formatWagerRecord(wagerSummary)}
+            detail={
+              wagerSummary === null
+                ? wagers === "failed"
+                  ? "Wagers unavailable"
+                  : "Loading wagers"
+                : `Net ${formatSignedPoints(wagerSummary.net)}`
+            }
           />
         </div>
         {progress !== null && <SeasonProgress progress={progress} />}
       </header>
 
-      <SeasonPointsChart series={series} />
+      <SeasonPointsChart series={series} unavailable={rankingUnavailable} />
 
       <Tabs defaultValue="points" className="space-y-5">
         <TabsList className="h-auto w-full justify-start gap-1 rounded-none border-b border-white/10 bg-transparent p-0">
@@ -210,7 +238,18 @@ function SeasonPageContent({
           <SeasonPointsByEpisode seasonId={seasonId} />
         </TabsContent>
         <TabsContent value="wagers" className="mt-0">
-          <SeasonWagers wagers={wagers} summary={wagerSummary} />
+          {wagers === "failed" ? (
+            <p className="text-sm text-red-300" role="alert">
+              Your wagers for this season could not be loaded.
+            </p>
+          ) : wagers === null || wagerSummary === null ? (
+            <div
+              className="h-24 animate-pulse rounded-xl bg-white/[0.04]"
+              aria-label="Loading wagers"
+            />
+          ) : (
+            <SeasonWagers wagers={wagers} summary={wagerSummary} />
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -4,6 +4,7 @@ import { formatTranscriptTime } from "@bbpc/episode-search";
 import { api } from "@tonyisup/bbpc-convex-api";
 import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
 import { useConvex, useQuery } from "convex/react";
+import Link from "next/link";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -219,6 +220,14 @@ export function ConvexQuotabungaSubmission({
     isOpen && windowStatus === "recording" && closesAt !== null
       ? formatCountdown(closesAt - now)
       : null;
+  const currentRoundLink = hasAired ? (
+    <Link
+      href="/game"
+      className="inline-flex items-center gap-1 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
+    >
+      Submit to the current round
+    </Link>
+  ) : null;
   const closingNotice =
     closingCountdown === null ? null : (
       <p className="text-center text-sm font-medium text-amber-400" role="status">
@@ -474,11 +483,14 @@ export function ConvexQuotabungaSubmission({
               <Loader2 className="animate-spin" aria-label="Loading entry" />
             </div>
           ) : current !== null && !isOpen && submission === null ? (
-            <p className="text-center text-gray-300">
-              {hasAired
-                ? `Quotabunga entries for episode ${current.episode?.number} are closed.`
-                : `Submissions for episode ${current.episode?.number} are locked.`}
-            </p>
+            <div className="space-y-3 text-center">
+              <p className="text-gray-300">
+                {hasAired
+                  ? `Quotabunga entries for episode ${current.episode?.number} are closed.`
+                  : `Submissions for episode ${current.episode?.number} are locked.`}
+              </p>
+              {currentRoundLink}
+            </div>
           ) : submission !== null && !isEditing ? (
             <div className="space-y-4">
               {closingNotice}
@@ -528,13 +540,16 @@ export function ConvexQuotabungaSubmission({
                   </Button>
                 </div>
               ) : (
-                <p className="text-center text-sm font-medium text-amber-400">
-                  {submission.scored
-                    ? "This entry has been scored and can no longer be changed."
-                    : hasAired
-                    ? "This episode has aired, so this entry is final."
-                    : "This round is locked for recording."}
-                </p>
+                <div className="space-y-2 text-center">
+                  <p className="text-sm font-medium text-amber-400">
+                    {submission.scored
+                      ? "This entry has been scored and can no longer be changed."
+                      : hasAired
+                      ? "This episode has aired, so this entry is final."
+                      : "This round is locked for recording."}
+                  </p>
+                  {currentRoundLink}
+                </div>
               )}
             </div>
           ) : current !== null ? (
