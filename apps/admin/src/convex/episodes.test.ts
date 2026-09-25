@@ -77,6 +77,28 @@ describe("Convex admin episode catalog adapter", () => {
     await expect(loadConvexAdminEpisodesPage(client, null)).rejects.toThrow();
   });
 
+  test("passes sorting and date filters through to subsequent pages", async () => {
+    const query = vi.fn().mockResolvedValue({
+      page: [episode],
+      isDone: true,
+      continueCursor: "done",
+    });
+    const client = { query } as unknown as ConvexReactClient;
+    await loadConvexAdminEpisodesPage(client, "next-page", {
+      dateFrom: "2026-01-01",
+      dateTo: "2026-12-31",
+      sortBy: "date",
+      sortDirection: "asc",
+    });
+    expect(query).toHaveBeenCalledWith(expect.anything(), {
+      dateFrom: "2026-01-01",
+      dateTo: "2026-12-31",
+      sortBy: "date",
+      sortDirection: "asc",
+      paginationOpts: { cursor: "next-page", numItems: ADMIN_EPISODES_PAGE_SIZE },
+    });
+  });
+
   test("validates bounded episode target search", async () => {
     const query = vi.fn().mockResolvedValue([episode]);
     const client = { query } as unknown as ConvexReactClient;

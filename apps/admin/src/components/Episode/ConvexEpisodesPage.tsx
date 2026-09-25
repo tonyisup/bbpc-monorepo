@@ -1,5 +1,14 @@
 import { useConvex } from "convex/react";
-import { Loader2, Plus, RefreshCw, Search, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  X,
+} from "lucide-react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -8,6 +17,7 @@ import { toast } from "sonner";
 
 import {
   type ConvexAdminEpisode,
+  type EpisodeSort,
   createConvexAdminEpisode,
   loadConvexAdminEpisodesPage,
 } from "@/convex/episodes";
@@ -162,12 +172,51 @@ function statusVariant(
   return "outline";
 }
 
+function EpisodeSortHeader({
+  column,
+  sort,
+  onSort,
+}: {
+  column: EpisodeSort["sortBy"];
+  sort: EpisodeSort;
+  onSort: (column: EpisodeSort["sortBy"]) => void;
+}) {
+  const active = sort.sortBy === column;
+  const ascending = sort.sortDirection === "asc";
+  const Icon = active ? (ascending ? ArrowUp : ArrowDown) : ArrowUpDown;
+  const nextDirection = active && !ascending ? "ascending" : "descending";
+
+  return (
+    <TableHead
+      className={column === "number" ? "w-[100px]" : undefined}
+      aria-sort={active ? (ascending ? "ascending" : "descending") : undefined}
+      scope="col"
+    >
+      <Button
+        className="-ml-3 gap-2"
+        size="sm"
+        variant="ghost"
+        type="button"
+        aria-label={`Sort by episode ${column}, ${nextDirection}`}
+        onClick={() => onSort(column)}
+      >
+        {column === "number" ? "Number" : "Date"}
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </TableHead>
+  );
+}
+
 export function ConvexEpisodesPage() {
   const convex = useConvex();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [sort, setSort] = useState<EpisodeSort>({
+    sortBy: "number",
+    sortDirection: "desc",
+  });
   const [fuzzySearch, setFuzzySearch] = useState(true);
   const urlTimer = useRef<ReturnType<typeof setTimeout>>();
   const pageGeneration = useRef(0);
@@ -242,6 +291,16 @@ export function ConvexEpisodesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [revision, setRevision] = useState(0);
 
+  const changeSort = (column: EpisodeSort["sortBy"]) => {
+    setSort((current) => ({
+      sortBy: column,
+      sortDirection:
+        current.sortBy === column && current.sortDirection === "desc"
+          ? "asc"
+          : "desc",
+    }));
+  };
+
   useEffect(() => {
     let active = true;
     pageGeneration.current += 1;
@@ -254,6 +313,7 @@ export function ConvexEpisodesPage() {
     void loadConvexAdminEpisodesPage(convex, null, {
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
+      ...sort,
     })
       .then((result) => {
         if (active) {
@@ -271,7 +331,7 @@ export function ConvexEpisodesPage() {
       active = false;
       pageGeneration.current += 1;
     };
-  }, [convex, revision, dateFrom, dateTo, rangeError, router.isReady]);
+  }, [convex, revision, dateFrom, dateTo, rangeError, router.isReady, sort]);
 
   const refresh = () => {
     pageGeneration.current += 1;
@@ -291,6 +351,7 @@ export function ConvexEpisodesPage() {
     void loadConvexAdminEpisodesPage(convex, continueCursor, {
       ...(dateFrom ? { dateFrom } : {}),
       ...(dateTo ? { dateTo } : {}),
+      ...sort,
     })
       .then((result) => {
         if (generation !== pageGeneration.current) return;
@@ -488,13 +549,24 @@ export function ConvexEpisodesPage() {
           </div>
         ) : (
           <div className="rounded-md border bg-card">
-            <Table>
+            <Table
+              aria-label="Episodes"
+              aria-busy={episodes === null || isLoadingMore}
+            >
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[100px]">Number</TableHead>
+                  <EpisodeSortHeader
+                    column="number"
+                    sort={sort}
+                    onSort={changeSort}
+                  />
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
+                  <EpisodeSortHeader
+                    column="date"
+                    sort={sort}
+                    onSort={changeSort}
+                  />
                   <TableHead>Relationships</TableHead>
                 </TableRow>
               </TableHeader>

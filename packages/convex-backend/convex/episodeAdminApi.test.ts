@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import { ConvexError } from "convex/values";
+import type { FunctionReturnType } from "convex/server";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 
@@ -289,6 +290,76 @@ describe("administrator episode API", () => {
       );
     }
   });
+
+  test.each([
+    ["number", "asc", [-1, 2, 3, 9, 10, 11], [2, 3, 10]],
+    ["number", "desc", [11, 10, 9, 3, 2, -1], [10, 3, 2]],
+    ["date", "asc", [-1, 11, 10, 2, 3, 9], [10, 2, 3]],
+    ["date", "desc", [9, 3, 2, 10, 11, -1], [3, 2, 10]],
+  ] as const)(
+    "sorts all pages by %s %s, including date filters and undated episodes",
+    async (sortBy, sortDirection, expected, filteredExpected) => {
+      const t = createTestBackend();
+      await seedAdmin(t);
+      await t.run(async (ctx) => {
+        for (const [number, date, status] of [
+          [2, "2026-09-15", "published"],
+          [10, "2026-09-01", "pending"],
+          [-1, undefined, "pending"],
+          [3, "2026-09-15", "recording"],
+          [11, "2026-08-31", "published"],
+          [9, "2026-10-01", "pending"],
+        ] as const) {
+          await ctx.db.insert("episodes", {
+            number,
+            title: `Episode ${String(number)}`,
+            ...(date === undefined ? {} : { date }),
+            status,
+          });
+        }
+      });
+      const admin = t.withIdentity(ADMIN_IDENTITY);
+      const ranges: Array<{
+        dateFrom?: string;
+        dateTo?: string;
+        expected: readonly number[];
+      }> = [
+        { expected },
+        {
+          dateFrom: "2026-09-01",
+          dateTo: "2026-09-15",
+          expected: filteredExpected,
+        },
+        {
+          dateFrom: "2026-09-01",
+          expected: expected.filter((number) => number !== -1 && number !== 11),
+        },
+        {
+          dateTo: "2026-09-15",
+          expected: expected.filter((number) => number !== -1 && number !== 9),
+        },
+      ];
+      for (const { expected: expectedNumbers, ...range } of ranges) {
+        const numbers: number[] = [];
+        let cursor: string | null = null;
+        let done = false;
+        for (let page = 0; page < 10 && !done; page += 1) {
+          const result: FunctionReturnType<typeof api.episodes.admin.listPage> =
+            await admin.query(api.episodes.admin.listPage, {
+              ...range,
+              sortBy,
+              sortDirection,
+              paginationOpts: { cursor, numItems: 2 },
+            });
+          numbers.push(...result.page.map((episode) => episode.number));
+          cursor = result.continueCursor;
+          done = result.isDone;
+        }
+        expect(done).toBe(true);
+        expect(numbers).toEqual(expectedNumbers);
+      }
+    },
+  );
 
   test("requires administrator access and the application write gate", async () => {
     const t = createTestBackend();
