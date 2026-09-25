@@ -55,6 +55,7 @@ import type * as games_guessWriteModel from "../games/guessWriteModel.js";
 import type * as games_guesses from "../games/guesses.js";
 import type * as games_limits from "../games/limits.js";
 import type * as games_member from "../games/member.js";
+import type * as games_memberSeasonReadModel from "../games/memberSeasonReadModel.js";
 import type * as games_pointReadModel from "../games/pointReadModel.js";
 import type * as games_pointWriteModel from "../games/pointWriteModel.js";
 import type * as games_points from "../games/points.js";
@@ -218,6 +219,7 @@ declare const fullApi: ApiFromModules<{
   "games/guesses": typeof games_guesses;
   "games/limits": typeof games_limits;
   "games/member": typeof games_member;
+  "games/memberSeasonReadModel": typeof games_memberSeasonReadModel;
   "games/pointReadModel": typeof games_pointReadModel;
   "games/pointWriteModel": typeof games_pointWriteModel;
   "games/points": typeof games_points;

@@ -27,6 +27,7 @@
     "@radix-ui/react-scroll-area": "^1.2.4",
     "@radix-ui/react-separator": "^1.1.2",
     "@radix-ui/react-slot": "^1.2.0",
+    "@radix-ui/react-tabs": "^1.1.21",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@t3-oss/env-nextjs": "^0.9.2",
     "@tonyisup/bbpc-convex-api": "workspace:0.1.0",

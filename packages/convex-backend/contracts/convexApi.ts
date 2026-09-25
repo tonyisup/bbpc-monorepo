@@ -6934,6 +6934,274 @@ export type PublicApiType = {
           splitCursor?: string | null;
         }
       >;
+      mySeasonOverview: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons">; today: string },
+        {
+          available: number;
+          isCurrent: boolean;
+          pointCount: number;
+          points: Array<{
+            earnedAt: number;
+            pointValue: number;
+            userId: Id<"users">;
+          }>;
+          userSummary: Array<{
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          recordedEpisodeCount: number | null;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          standing: { playerCount: number; rank: number } | null;
+          total: number;
+        }
+      >;
+      mySeasonPointsPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          seasonId: Id<"seasons">;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              episodeCount: number | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              };
+              playable: boolean;
+              slug: string | null;
+              type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              };
+            } | null;
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            } | null;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      mySeasonWagers: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons"> },
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              episodeCount: number | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      mySeasons: FunctionReference<
+        "query",
+        "public",
+        { today: string },
+        Array<{
+          available: number | null;
+          isCurrent: boolean;
+          pointCount: number;
+          recordedEpisodeCount: number | null;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          standing: { playerCount: number; rank: number } | null;
+          total: number;
+        }>
+      >;
     };
     points: {
       create: FunctionReference<

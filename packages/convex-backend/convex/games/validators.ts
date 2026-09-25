@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 
-import { assignmentDetailValidator } from "../assignments/validators.js";
+import {
+  assignmentDetailValidator,
+  assignmentEpisodeValidator,
+} from "../assignments/validators.js";
 import { ratingValidator } from "../ratings/validators.js";
 import { assignmentReviewDetailValidator } from "../reviews/validators.js";
 
@@ -453,4 +456,45 @@ export const quoteReuseReportValidator = v.object({
       transcriptPassages: v.array(quoteReusePassageValidator),
     }),
   ),
+});
+
+export const seasonStandingValidator = v.object({
+  rank: v.number(),
+  playerCount: v.number(),
+});
+
+/**
+ * One row of the signed-in member's season list. Standing, available points,
+ * and episode progress are resolved for the current season only; past
+ * seasons carry `null` there and the season page computes them on demand.
+ */
+export const memberSeasonSummaryValidator = v.object({
+  season: seasonValidator,
+  isCurrent: v.boolean(),
+  total: v.number(),
+  pointCount: v.number(),
+  available: nullableNumberValidator,
+  recordedEpisodeCount: nullableNumberValidator,
+  standing: v.union(seasonStandingValidator, v.null()),
+});
+
+export const memberSeasonOverviewValidator = v.object({
+  season: seasonValidator,
+  isCurrent: v.boolean(),
+  total: v.number(),
+  pointCount: v.number(),
+  available: v.number(),
+  recordedEpisodeCount: nullableNumberValidator,
+  standing: v.union(seasonStandingValidator, v.null()),
+  userSummary: v.array(performanceUserValidator),
+  points: v.array(performancePointValidator),
+});
+
+/**
+ * A member's own point with the assignment and episode it was earned for,
+ * so the season page can group history by episode and link to it.
+ */
+export const pointMemberActivityValidator = pointCoreValidator.extend({
+  episode: v.union(assignmentEpisodeValidator, v.null()),
+  assignment: v.union(assignmentDetailValidator, v.null()),
 });

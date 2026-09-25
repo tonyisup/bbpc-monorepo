@@ -590,6 +590,29 @@ Administrator `games.points.listForSeasonPage` items carry an `episode` (`id`,
 assignment, falling back to its quote's episode. It is `null` for manual adjustments or
 when the chain has no episode.
 
+## Member season API
+
+Authenticated members read their own season history through `games.member`:
+
+- `mySeasons({ today })` lists the seasons the caller has scored in, plus the current
+  season even before their first point, current season first and then newest start
+  date. Each row carries the season, `isCurrent`, the caller's `total` and
+  `pointCount`, and, for the current season only, `available` points (earned minus
+  pending and locked wagers), `recordedEpisodeCount`, and `standing` (`rank` among
+  every scoring player and `playerCount`, equal totals sharing a rank). Past seasons
+  return `null` for those three. More than 2000 points for one member fail with
+  `CONFLICT`.
+- `mySeasonOverview({ seasonId, today })` returns the same summary for any one season,
+  with `available` and `standing` resolved, plus every player's `userSummary` and
+  season `points` in the `currentPerformance` shape. An unknown season is `NOT_FOUND`.
+- `mySeasonPointsPage({ seasonId, paginationOpts })` pages the caller's points in that
+  season, newest first. Each item is a point plus its `assignment` (with movie and
+  episode) and `episode` (`id`, `number`, `title`, `status`, `slug`), resolved through
+  the point's assignment link, guess, or wager, falling back to its quote's episode.
+  Manual adjustments carry `null` for both.
+- `mySeasonWagers({ seasonId })` returns the caller's wagers in that season, newest
+  first, as `games.gambling` entries.
+
 ## Ranked-list API
 
 Authenticated users can list their own ranked lists, filter by target kind, read a list
