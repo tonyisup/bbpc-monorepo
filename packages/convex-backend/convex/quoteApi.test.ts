@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -844,6 +844,236 @@ describe("Quotabunga workflows", () => {
       ]),
     );
     expect(JSON.stringify(audits)).not.toContain("Great quote");
+  });
+
+  test("locks Quotabunga on the same deadline as predictions", async () => {
+    const beforeDeadline = 1_700_000_000_000;
+    const predictionClosesAt = beforeDeadline + 600_000;
+    const afterDeadline = predictionClosesAt + 1;
+    vi.useFakeTimers();
+    vi.setSystemTime(beforeDeadline);
+    try {
+      const t = createTestBackend();
+      await seedActors(t);
+      await initializeS1(t);
+      await advanceFromS1ToS3(t);
+      const foundation = await seedFoundation(t);
+      const member = t.withIdentity(MEMBER_IDENTITY);
+      // Only the recording episode remains, inside its ten-minute grace window.
+      await t.run(async (ctx) => {
+        await ctx.db.patch("episodes", foundation.nextEpisodeId, {
+          status: "published",
+        });
+        await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
+          predictionClosesAt,
+        });
+      });
+
+      await expect(
+        member.query(api.games.quotes.currentForMe, { now: beforeDeadline }),
+      ).resolves.toMatchObject({
+        episode: { id: foundation.recordingEpisodeId, number: 11 },
+        isOpen: true,
+      });
+      // Without a client clock the legacy read stays conservative.
+      await expect(
+        member.query(api.games.quotes.currentForMe, {}),
+      ).resolves.toMatchObject({ isOpen: false });
+      const created = await member.mutation(api.games.quotes.submitMine, {
+        clientApiVersion: BBPC_API_VERSION,
+        ...memberContent,
+      });
+      expect(created).toMatchObject({ quoteText: "Great quote" });
+      await expect(
+        member.mutation(api.games.quotes.withdrawMine, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
+      ).resolves.toEqual({ id: created.id });
+
+      // The deadline passes: the flag, submissions, and withdrawals all lock,
+      // and a client cannot reopen the round by sending an earlier clock.
+      vi.setSystemTime(afterDeadline);
+      await expect(
+        member.query(api.games.quotes.currentForMe, { now: afterDeadline }),
+      ).resolves.toMatchObject({
+        episode: { id: foundation.recordingEpisodeId },
+        isOpen: false,
+      });
+      await expectDomainError(
+        member.mutation(api.games.quotes.submitMine, {
+          clientApiVersion: BBPC_API_VERSION,
+          ...memberContent,
+          now: 500,
+        }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+      await expectDomainError(
+        member.mutation(api.games.quotes.withdrawMine, {
+          clientApiVersion: BBPC_API_VERSION,
+        }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+
+      // A recording episode with no deadline never accepts entries.
+      await t.run(async (ctx) => {
+        await ctx.db.patch("episodes", foundation.recordingEpisodeId, {
+          predictionClosesAt: undefined,
+        });
+      });
+      await expect(
+        member.query(api.games.quotes.currentForMe, { now: afterDeadline }),
+      ).resolves.toMatchObject({ isOpen: false });
+      await expectDomainError(
+        member.mutation(api.games.quotes.submitMine, {
+          clientApiVersion: BBPC_API_VERSION,
+          ...memberContent,
+        }),
+        "CONFLICT",
+        { reason: "ROUND_LOCKED" },
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("scopes the own-entry duplicate exclusion to the episode the client names", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await initializeS1(t);
+    const foundation = await seedFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("quoteSubmissions", {
+        userId: memberId,
+        episodeId: foundation.recordingEpisodeId,
+        seasonId: foundation.seasonId,
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+        sourceType: "MOVIE",
+        status: "SUBMITTED",
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    });
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    await expect(
+      member.query(api.games.quotes.checkPossibleDuplicate, {
+        episodeId: foundation.recordingEpisodeId,
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      }),
+    ).resolves.toMatchObject({ possibleMatch: false });
+    await expect(
+      member.query(api.games.quotes.checkPossibleDuplicate, {
+        episodeId: foundation.nextEpisodeId,
+        quoteText: "I'll be back.",
+        sourceTitle: "The Terminator",
+      }),
+    ).resolves.toMatchObject({ possibleMatch: true });
+  });
+
+  test("keeps entries attached to their episode and locks aired ones", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    await initializeS1(t);
+    await advanceFromS1ToS3(t);
+    const foundation = await seedFoundation(t);
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("quoteSubmissions", {
+        userId: memberId,
+        episodeId: foundation.oldEpisodeId,
+        seasonId: foundation.seasonId,
+        quoteText: "Old favorite",
+        sourceTitle: "Old movie",
+        sourceType: "MOVIE",
+        status: "INCLUDED",
+        placement: 2,
+        createdAt: 1,
+        updatedAt: 1,
+      });
+    });
+
+    await expect(
+      member.query(api.games.quotes.mineForEpisode, {
+        episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
+      }),
+    ).resolves.toMatchObject({
+      episode: { id: foundation.nextEpisodeId },
+      isOpen: true,
+      submission: null,
+    });
+    await expect(
+      member.query(api.games.quotes.mineForEpisode, {
+        episodeId: foundation.oldEpisodeId,
+        now: Date.now(),
+      }),
+    ).resolves.toMatchObject({
+      episode: { id: foundation.oldEpisodeId, number: 10 },
+      isOpen: false,
+      submission: { quoteText: "Old favorite", placement: 2 },
+    });
+
+    const created = await member.mutation(api.games.quotes.submitMine, {
+      clientApiVersion: BBPC_API_VERSION,
+      ...memberContent,
+      episodeId: foundation.nextEpisodeId,
+    });
+    await expect(
+      member.query(api.games.quotes.mineForEpisode, {
+        episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
+      }),
+    ).resolves.toMatchObject({ submission: { id: created.id } });
+    await expectDomainError(
+      member.mutation(api.games.quotes.submitMine, {
+        clientApiVersion: BBPC_API_VERSION,
+        ...memberContent,
+        episodeId: foundation.oldEpisodeId,
+      }),
+      "CONFLICT",
+      { reason: "ROUND_LOCKED" },
+    );
+    await expectDomainError(
+      member.mutation(api.games.quotes.withdrawMine, {
+        clientApiVersion: BBPC_API_VERSION,
+        episodeId: foundation.oldEpisodeId,
+      }),
+      "CONFLICT",
+      { reason: "ROUND_LOCKED" },
+    );
+    await expect(
+      member.mutation(api.games.quotes.withdrawMine, {
+        clientApiVersion: BBPC_API_VERSION,
+        episodeId: foundation.nextEpisodeId,
+      }),
+    ).resolves.toEqual({ id: created.id });
+
+    const removedEpisodeId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("episodes", {
+        number: 99,
+        title: "Removed",
+        status: "published",
+      });
+      await ctx.db.delete("episodes", id);
+      return id;
+    });
+    await expectDomainError(
+      member.query(api.games.quotes.mineForEpisode, {
+        episodeId: removedEpisodeId,
+        now: Date.now(),
+      }),
+      "NOT_FOUND",
+    );
+    await expectDomainError(
+      t.query(api.games.quotes.mineForEpisode, {
+        episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
   });
 
   test("provides bounded administrator episode and submission reads", async () => {

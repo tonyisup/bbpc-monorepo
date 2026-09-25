@@ -110,7 +110,12 @@ export function GameParticipation({
           episodeStatus={episodeStatus}
         />
       ) : null}
-      <ConvexQuotabungaSubmission key={user.appUserId} isAdmin={user.isAdmin} />
+      <ConvexQuotabungaSubmission
+        key={`${user.appUserId}:${episodeId}`}
+        isAdmin={user.isAdmin}
+        episodeId={episodeId}
+        episodeStatus={episodeStatus}
+      />
     </div>
   );
 }

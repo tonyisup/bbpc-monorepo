@@ -102,12 +102,10 @@ describe("movie links", () => {
       .fn()
       .mockResolvedValueOnce([
         { id: "entry-1", order: 0, movie, assignment: null },
-      ])
-      .mockResolvedValueOnce(0);
-    const summary = await loadConvexProfileSummary(
-      { query } as unknown as ConvexReactClient,
-      "2026-09-11"
-    );
+      ]);
+    const summary = await loadConvexProfileSummary({
+      query,
+    } as unknown as ConvexReactClient);
     expect(summary.syllabusPreview[0]?.movie.tmdbId).toBe(42);
   });
   test("loads the saved account preference and defaults older profiles to IMDb", async () => {

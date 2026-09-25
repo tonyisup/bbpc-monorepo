@@ -3,7 +3,11 @@ import { describe, expect, test, vi } from "vitest";
 
 import { checkConvexQuotabungaDuplicate } from "@/convex/quotabunga";
 
-const input = { quoteText: "Hold on to ya", sourceTitle: "Heat" };
+const input = {
+  episodeId: "episode-test",
+  quoteText: "Hold on to ya",
+  sourceTitle: "Heat",
+};
 const match = {
   episodeNumber: 142,
   episodeTitle: "Heat",

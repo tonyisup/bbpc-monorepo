@@ -6,8 +6,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import SyllabusPreview from "@/components/SyllabusPreview";
-import UserPoints from "@/components/UserPoints";
-import { getPacificTodayPlainDate } from "@/lib/dates";
 import {
   type ConvexProfileSummary as ProfileSummary,
   loadConvexProfileSummary,
@@ -25,7 +23,7 @@ export function ConvexProfileSummary({ appUserId }: { appUserId: string }) {
     setSummary(null);
     setFailed(false);
 
-    void loadConvexProfileSummary(convex, getPacificTodayPlainDate())
+    void loadConvexProfileSummary(convex)
       .then((result) => {
         if (loadGenerationRef.current === generation) {
           setSummary(result);
@@ -41,7 +39,7 @@ export function ConvexProfileSummary({ appUserId }: { appUserId: string }) {
   if (failed) {
     return (
       <p className="text-sm text-red-300" role="alert">
-        Your syllabus and game balance could not be loaded.
+        Your syllabus could not be loaded.
       </p>
     );
   }
@@ -49,35 +47,26 @@ export function ConvexProfileSummary({ appUserId }: { appUserId: string }) {
   if (summary === null) {
     return (
       <div
-        className="h-48 w-full animate-pulse rounded-lg bg-white/[0.04]"
-        aria-label="Loading syllabus and game balance"
+        className="h-28 w-full animate-pulse rounded-lg bg-white/[0.04]"
+        aria-label="Loading syllabus"
       />
     );
   }
 
   return (
-    <>
-      <section className="flex w-full flex-col items-center justify-center gap-4">
-        <h2 className="self-start text-xl font-bold tracking-tight">
-          My Syllabus
-        </h2>
-        <div className="flex w-full items-center gap-4">
-          <Link href="/syllabus" aria-label="Edit syllabus">
-            <Pencil className="h-4 w-4" />
-          </Link>
-          <SyllabusPreview
-            count={summary.syllabusCount}
-            syllabus={summary.syllabusPreview}
-          />
-        </div>
-      </section>
-
-      <section className="flex w-full flex-col items-center justify-center gap-4">
-        <h2 className="self-start text-xl font-bold tracking-tight">
-          Game Stuff
-        </h2>
-        <UserPoints points={summary.availablePoints} />
-      </section>
-    </>
+    <section className="flex w-full flex-col items-center justify-center gap-4">
+      <h2 className="self-start text-xl font-bold tracking-tight">
+        My Syllabus
+      </h2>
+      <div className="flex w-full items-center gap-4">
+        <Link href="/syllabus" aria-label="Edit syllabus">
+          <Pencil className="h-4 w-4" />
+        </Link>
+        <SyllabusPreview
+          count={summary.syllabusCount}
+          syllabus={summary.syllabusPreview}
+        />
+      </div>
+    </section>
   );
 }

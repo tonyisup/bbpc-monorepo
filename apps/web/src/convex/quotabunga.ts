@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@tonyisup/bbpc-convex-api";
+import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
 
 import type { ConvexReactClient } from "convex/react";
 
@@ -54,7 +55,7 @@ const possibleQuoteDuplicateSchema = z.object({
   transcriptMatches: z.array(quoteTranscriptMatchSchema).default([]),
 });
 
-const currentForMeReference = api.games.quotes.currentForMe;
+const mineForEpisodeReference = api.games.quotes.mineForEpisode;
 
 const checkPossibleDuplicateReference = api.games.quotes.checkPossibleDuplicate;
 
@@ -82,38 +83,55 @@ export interface ConvexQuoteSubmissionInput {
   listenerNotes: string | null;
 }
 
-export async function loadConvexQuotabunga(client: ConvexReactClient) {
+/** The member's entry for one episode, with whether it still accepts writes. */
+export async function loadConvexQuotabunga(
+  client: ConvexReactClient,
+  episodeId: string
+) {
   return currentQuoteSubmissionSchema.parse(
-    await client.query(currentForMeReference, {})
+    await client.query(mineForEpisodeReference, {
+      episodeId: documentId("episodes", episodeId),
+      now: Date.now(),
+    })
   );
 }
 
 export async function checkConvexQuotabungaDuplicate(
   client: ConvexReactClient,
-  input: { quoteText: string; sourceTitle: string }
+  input: { episodeId: string; quoteText: string; sourceTitle: string }
 ) {
   return possibleQuoteDuplicateSchema.parse(
-    await client.query(checkPossibleDuplicateReference, input)
+    await client.query(checkPossibleDuplicateReference, {
+      episodeId: documentId("episodes", input.episodeId),
+      quoteText: input.quoteText,
+      sourceTitle: input.sourceTitle,
+    })
   );
 }
 
 export async function submitConvexQuotabunga(
   client: ConvexReactClient,
+  episodeId: string,
   input: ConvexQuoteSubmissionInput
 ) {
   return quoteSubmissionSchema.parse(
     await client.mutation(submitMineReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
+      episodeId: documentId("episodes", episodeId),
       ...input,
       today: getPacificTodayPlainDate(),
     })
   );
 }
 
-export async function withdrawConvexQuotabunga(client: ConvexReactClient) {
+export async function withdrawConvexQuotabunga(
+  client: ConvexReactClient,
+  episodeId: string
+) {
   return withdrawnSubmissionSchema.parse(
     await client.mutation(withdrawMineReference, {
       clientApiVersion: BBPC_CLIENT_API_VERSION,
+      episodeId: documentId("episodes", episodeId),
     })
   );
 }

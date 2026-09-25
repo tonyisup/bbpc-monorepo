@@ -6934,6 +6934,281 @@ export type PublicApiType = {
           splitCursor?: string | null;
         }
       >;
+      mySeasonOverview: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons">; today: string },
+        {
+          available: number;
+          isCurrent: boolean;
+          pointCount: number;
+          points: Array<{
+            earnedAt: number;
+            pointValue: number;
+            userId: Id<"users">;
+          }>;
+          rankingAvailable: boolean;
+          userSummary: Array<{
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          recordedEpisodeCount: number | null;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          standing: { playerCount: number; rank: number } | null;
+          total: number;
+        }
+      >;
+      mySeasonPointsPage: FunctionReference<
+        "query",
+        "public",
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          seasonId: Id<"seasons">;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              episodeCount: number | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+            assignment: {
+              episode: {
+                id: Id<"episodes">;
+                number: number;
+                slug: string | null;
+                status: string | null;
+                title: string;
+              };
+              id: Id<"assignments">;
+              movie: {
+                id: Id<"movies">;
+                poster: string | null;
+                title: string;
+                tmdbId: number | null;
+                url: string;
+                year: number;
+              };
+              playable: boolean;
+              slug: string | null;
+              type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+              user: {
+                id: Id<"users">;
+                image: string | null;
+                name: string | null;
+                status: "active" | "disabled";
+              };
+            } | null;
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            } | null;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        }
+      >;
+      mySeasonStanding: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons"> },
+        { playerCount: number; rank: number } | null
+      >;
+      mySeasonWagers: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons"> },
+        Array<{
+          assignment: {
+            episode: {
+              id: Id<"episodes">;
+              number: number;
+              slug: string | null;
+              status: string | null;
+              title: string;
+            };
+            id: Id<"assignments">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            };
+            playable: boolean;
+            slug: string | null;
+            type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+              status: "active" | "disabled";
+            };
+          } | null;
+          awardPoint: {
+            adjustment: number | null;
+            earnedAt: number;
+            gamePointType: {
+              description: string | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"gamePointTypes">;
+              lookupId: string;
+              points: number;
+              title: string;
+            } | null;
+            id: Id<"points">;
+            reason: string | null;
+            season: {
+              description: string | null;
+              endedOn: string | null;
+              episodeCount: number | null;
+              gameType: {
+                description: string | null;
+                id: Id<"gameTypes">;
+                lookupId: string;
+                title: string;
+              };
+              id: Id<"seasons">;
+              startedOn: string | null;
+              title: string;
+            };
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          } | null;
+          createdAt: number;
+          gamblingType: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"gamblingTypes">;
+            isActive: boolean;
+            lookupId: string;
+            multiplier: number;
+            title: string;
+          };
+          id: Id<"gamblingEntries">;
+          notes: string | null;
+          points: number;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          } | null;
+          status: "pending" | "locked" | "won" | "lost" | "rejected";
+          targetUser: {
+            id: Id<"users">;
+            image: string | null;
+            name: string | null;
+          } | null;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+        }>
+      >;
+      mySeasons: FunctionReference<
+        "query",
+        "public",
+        { today: string },
+        Array<{
+          available: number | null;
+          isCurrent: boolean;
+          pointCount: number;
+          recordedEpisodeCount: number | null;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          standing: { playerCount: number; rank: number } | null;
+          total: number;
+        }>
+      >;
     };
     points: {
       create: FunctionReference<
@@ -7831,7 +8106,7 @@ export type PublicApiType = {
       checkPossibleDuplicate: FunctionReference<
         "query",
         "public",
-        { quoteText: string; sourceTitle: string },
+        { episodeId?: Id<"episodes">; quoteText: string; sourceTitle: string },
         {
           possibleMatch: boolean;
           transcriptMatches: Array<{
@@ -7846,7 +8121,7 @@ export type PublicApiType = {
       currentForMe: FunctionReference<
         "query",
         "public",
-        Record<string, never>,
+        { now?: number },
         {
           episode: {
             id: Id<"episodes">;
@@ -8102,6 +8377,35 @@ export type PublicApiType = {
           userId: Id<"users">;
         }
       >;
+      mineForEpisode: FunctionReference<
+        "query",
+        "public",
+        { episodeId: Id<"episodes">; now: number },
+        {
+          episode: {
+            id: Id<"episodes">;
+            number: number;
+            status: string | null;
+            title: string;
+          } | null;
+          isOpen: boolean;
+          submission: {
+            bracketOrder: number | null;
+            clipStartSeconds: number | null;
+            clipUrl: string | null;
+            createdAt: number;
+            id: Id<"quoteSubmissions">;
+            listenerNotes: string | null;
+            placement: number | null;
+            quoteText: string;
+            scored: boolean;
+            sourceTitle: string;
+            sourceType: "MOVIE" | "TV" | "OTHER";
+            status: "SUBMITTED" | "INCLUDED" | "REJECTED";
+            updatedAt: number;
+          } | null;
+        }
+      >;
       submitMine: FunctionReference<
         "mutation",
         "public",
@@ -8109,6 +8413,7 @@ export type PublicApiType = {
           clientApiVersion: string;
           clipStartSeconds?: number | null;
           clipUrl?: string | null;
+          episodeId?: Id<"episodes">;
           listenerNotes?: string | null;
           now?: number;
           quoteText: string;
@@ -8188,7 +8493,7 @@ export type PublicApiType = {
       withdrawMine: FunctionReference<
         "mutation",
         "public",
-        { clientApiVersion: string },
+        { clientApiVersion: string; episodeId?: Id<"episodes"> },
         { id: Id<"quoteSubmissions"> }
       >;
     };

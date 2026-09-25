@@ -115,12 +115,16 @@ export async function findQuoteForEpisodeUser(
     .unique();
 }
 
+/**
+ * The episode Quotabunga entries belong to: the newest episode that is next
+ * or recording. Whether it still accepts entries is a separate question the
+ * shared round window answers.
+ */
 export async function findSubmissionEpisode(
   ctx: QuoteReadContext,
-  statuses: readonly ["next", "recording"] | readonly ["next"],
 ): Promise<Doc<"episodes"> | null> {
   const candidates = await Promise.all(
-    statuses.map(async (status) => {
+    (["next", "recording"] as const).map(async (status) => {
       return await ctx.db
         .query("episodes")
         .withIndex("by_status_and_number", (index) =>
