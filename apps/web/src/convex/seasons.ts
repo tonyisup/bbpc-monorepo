@@ -114,7 +114,11 @@ const seasonWagerSchema = z.object({
     .object({
       id: z.string().min(1),
       slug: z.string().nullable(),
-      movie: z.object({ title: z.string(), year: z.number() }),
+      movie: z.object({
+        title: z.string(),
+        year: z.number(),
+        poster: z.string().nullable(),
+      }),
       episode: seasonEpisodeSchema,
     })
     .nullable(),

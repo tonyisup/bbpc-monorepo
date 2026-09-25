@@ -130,7 +130,18 @@ describe("season series", () => {
 describe("season wagers", () => {
   test("summarizes the record, open stakes, and net from settled wagers", () => {
     const summary = summarizeSeasonWagers([
-      wager({ id: "w1", status: "won", points: 5, awardPoint: { total: 10 } }),
+      wager({
+        id: "w1",
+        status: "won",
+        points: 5,
+        awardPoint: { total: 10 },
+        assignment: {
+          id: "a-heat",
+          slug: "heat",
+          movie: { title: "Heat", year: 1995, poster: null },
+          episode: episode418,
+        },
+      }),
       wager({ id: "w2", status: "lost", points: 4, awardPoint: { total: -4 } }),
       wager({ id: "w3", status: "pending", points: 8 }),
       wager({ id: "w4", status: "locked", points: 8 }),

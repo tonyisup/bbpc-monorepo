@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { MoviePoster } from "@/components/MoviePoster";
 import type { ConvexSeasonWager } from "@/convex/seasons";
 import { getEpisodePath } from "@/lib/routes";
 import {
@@ -88,9 +89,20 @@ export function SeasonWagers({
                   <EpisodeCell wager={wager} />
                 </td>
                 <td className="px-4 py-3 text-zinc-200">
-                  {wager.assignment === null
-                    ? "—"
-                    : `${wager.assignment.movie.title} (${wager.assignment.movie.year})`}
+                  {wager.assignment === null ? (
+                    "—"
+                  ) : (
+                    <span className="flex items-center gap-3">
+                      <MoviePoster
+                        poster={wager.assignment.movie.poster}
+                        className="h-12 w-8"
+                      />
+                      <span>
+                        {wager.assignment.movie.title} (
+                        {wager.assignment.movie.year})
+                      </span>
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-zinc-200">
                   {wager.gamblingType.title} ×{wager.gamblingType.multiplier}

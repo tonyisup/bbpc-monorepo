@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { MoviePoster } from "@/components/MoviePoster";
 import { Button } from "@/components/ui/button";
 import {
   type ConvexSeasonPoint,
@@ -188,22 +189,24 @@ function AssignmentHeading({
 }) {
   const movie = `${assignment.movie.title} (${assignment.movie.year})`;
   return (
-    <h4 className="text-sm font-semibold text-indigo-300">
-      {assignment.slug === null ? (
-        movie
-      ) : (
-        <Link
-          href={getAssignmentPath(assignment.slug)}
-          className="transition-colors hover:text-indigo-200"
-        >
-          {movie}
-        </Link>
-      )}
-      <span className="font-medium text-zinc-500">
-        {" "}
-        · {ASSIGNMENT_TYPE_LABELS[assignment.type]}
-      </span>
-    </h4>
+    <div className="flex items-center gap-3">
+      <MoviePoster poster={assignment.movie.poster} />
+      <h4 className="text-sm font-semibold text-indigo-300">
+        {assignment.slug === null ? (
+          movie
+        ) : (
+          <Link
+            href={getAssignmentPath(assignment.slug)}
+            className="transition-colors hover:text-indigo-200"
+          >
+            {movie}
+          </Link>
+        )}
+        <span className="block font-medium text-zinc-500">
+          {ASSIGNMENT_TYPE_LABELS[assignment.type]}
+        </span>
+      </h4>
+    </div>
   );
 }
 
