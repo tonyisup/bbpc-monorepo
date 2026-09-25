@@ -28,12 +28,6 @@ const platforms: PlatformLink[] = [
     iconClassName: "text-[#a970ff]",
   },
   {
-    href: "https://soundcloud.com/badboyspodcast",
-    label: "SoundCloud",
-    icon: SiSoundcloud,
-    iconClassName: "text-[#ff5500]",
-  },
-  {
     href: "https://open.spotify.com/show/7kNwGU5aJhw4IZ7x7V6jsl",
     label: "Spotify",
     icon: SiSpotify,
@@ -57,7 +51,7 @@ export function ListenHere() {
         >
           Listen and support
         </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {platforms.map((platform) => {
             const Icon = platform.icon;
             return (
