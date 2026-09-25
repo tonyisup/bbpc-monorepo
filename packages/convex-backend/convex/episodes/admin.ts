@@ -190,20 +190,40 @@ export const listPage = adminQuery({
     paginationOpts: paginationOptsValidator,
     dateFrom: v.optional(v.string()),
     dateTo: v.optional(v.string()),
+    sortBy: v.optional(v.union(v.literal("number"), v.literal("date"))),
+    sortDirection: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
   },
   returns: paginationResultValidator(episodeAdminDetailValidator),
   handler: async (ctx, args) => {
     validateEpisodePageSize(args.paginationOpts.numItems);
     validateEpisodeDateRange(args);
-    const episodes =
-      args.dateFrom || args.dateTo
+    const hasDateRange = args.dateFrom !== undefined || args.dateTo !== undefined;
+    // Keep the existing ordering for callers that do not request a sort.
+    const sortBy = args.sortBy ?? (hasDateRange ? "date" : "number");
+    let episodes =
+      sortBy === "date"
         ? ctx.db.query("episodes").withIndex("by_date_and_status", (index) => {
+            if (!hasDateRange) return index;
             // A lower bound also excludes episodes without a date in an end-only range.
             const range = index.gte("date", args.dateFrom ?? "0000-01-01");
             return args.dateTo ? range.lte("date", args.dateTo) : range;
           })
         : ctx.db.query("episodes").withIndex("by_number");
-    const result = await episodes.order("desc").paginate(args.paginationOpts);
+    if (sortBy === "number" && hasDateRange) {
+      // convex-query-audit: allow-filter Date bounds cannot use the number index; filter before pagination to retain global number ordering.
+      episodes = episodes.filter((filter) => {
+        const from = filter.gte(
+          filter.field("date"),
+          args.dateFrom ?? "0000-01-01",
+        );
+        return args.dateTo
+          ? filter.and(from, filter.lte(filter.field("date"), args.dateTo))
+          : from;
+      });
+    }
+    const result = await episodes
+      .order(args.sortDirection ?? "desc")
+      .paginate(args.paginationOpts);
     return {
       ...result,
       page: await Promise.all(

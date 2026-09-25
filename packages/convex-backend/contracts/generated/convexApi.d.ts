@@ -2143,6 +2143,8 @@ export type PublicApiType = {
                     maximumRowsRead?: number;
                     numItems: number;
                 };
+                sortBy?: "number" | "date";
+                sortDirection?: "asc" | "desc";
             }, {
                 continueCursor: string;
                 isDone: boolean;

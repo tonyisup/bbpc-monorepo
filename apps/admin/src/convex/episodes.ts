@@ -101,6 +101,11 @@ export interface EpisodeDateRange {
   dateTo?: string;
 }
 
+export interface EpisodeSort {
+  sortBy: "number" | "date";
+  sortDirection: "asc" | "desc";
+}
+
 export interface ConvexAdminEpisodesPage {
   episodes: ConvexAdminEpisode[];
   isDone: boolean;
@@ -110,11 +115,11 @@ export interface ConvexAdminEpisodesPage {
 export async function loadConvexAdminEpisodesPage(
   client: ConvexReactClient,
   cursor: string | null,
-  dateRange: EpisodeDateRange = {}
+  options: EpisodeDateRange & Partial<EpisodeSort> = {}
 ): Promise<ConvexAdminEpisodesPage> {
   const result = episodesPageSchema.parse(
     await client.query(listEpisodesReference, {
-      ...dateRange,
+      ...options,
       paginationOpts: {
         cursor,
         numItems: ADMIN_EPISODES_PAGE_SIZE,

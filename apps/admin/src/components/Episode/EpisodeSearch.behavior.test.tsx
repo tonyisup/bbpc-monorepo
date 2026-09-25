@@ -158,6 +158,84 @@ function button(label: string) {
   return found;
 }
 
+test("toggles number and date sorting, resets pages, and keeps the sort with filters and search", async () => {
+  await render();
+  const headers = () => renderer.root.findAllByType("th");
+  expect(headers()[0]?.props["aria-sort"]).toBe("descending");
+  expect(headers()[3]?.props["aria-sort"]).toBeUndefined();
+  expect(button("Number").props["aria-label"]).toBe(
+    "Sort by episode number, ascending"
+  );
+  await act(async () => {
+    button("Load More").props.onClick();
+  });
+  expect(text()).toContain(second.title);
+
+  for (const [label, sortBy, sortDirection] of [
+    ["Number", "number", "asc"],
+    ["Number", "number", "desc"],
+    ["Date", "date", "desc"],
+    ["Date", "date", "asc"],
+  ] as const) {
+    await act(async () => {
+      button(label).props.onClick();
+    });
+    expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
+      sortBy,
+      sortDirection,
+      paginationOpts: { cursor: null, numItems: 20 },
+    });
+    expect(text()).not.toContain(second.title);
+    const active = headers().filter((header) => header.props["aria-sort"]);
+    expect(active).toHaveLength(1);
+    expect(active[0]?.props["aria-sort"]).toBe(
+      sortDirection === "asc" ? "ascending" : "descending"
+    );
+  }
+  await changeDate("from", "2026-09-01");
+  await act(async () => {
+    button("Load More").props.onClick();
+  });
+  expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
+    dateFrom: "2026-09-01",
+    sortBy: "date",
+    sortDirection: "asc",
+    paginationOpts: { cursor: "second-page", numItems: 20 },
+  });
+  await search("Interstellar");
+  await search("");
+  expect(headers()[3]?.props["aria-sort"]).toBe("ascending");
+});
+
+test("ignores an old load-more response after changing sort order", async () => {
+  await render();
+  let resolvePage!: (value: unknown) => void;
+  mocks.client.query.mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolvePage = resolve;
+    })
+  );
+  await act(async () => {
+    button("Load More").props.onClick();
+  });
+  await act(async () => {
+    button("Date").props.onClick();
+  });
+  await act(async () => {
+    resolvePage({ page: [second], isDone: true, continueCursor: "done" });
+  });
+  expect(text()).not.toContain(second.title);
+  expect(button("Load More").props.disabled).toBe(false);
+  await act(async () => {
+    button("Load More").props.onClick();
+  });
+  expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
+    sortBy: "date",
+    sortDirection: "desc",
+    paginationOpts: { cursor: "second-page", numItems: 20 },
+  });
+});
+
 test.each([true, false])(
   "matches episode numbers with fuzzy search %s",
   async (fuzzy) => {
@@ -225,6 +303,8 @@ test("restores bookmarked dates, resets pagination, and preserves the search whe
   expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
     dateFrom: "2026-09-01",
     dateTo: "2026-09-15",
+    sortBy: "number",
+    sortDirection: "desc",
     paginationOpts: { cursor: null, numItems: 20 },
   });
   await act(async () => {
@@ -233,12 +313,16 @@ test("restores bookmarked dates, resets pagination, and preserves the search whe
   expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
     dateFrom: "2026-09-01",
     dateTo: "2026-09-15",
+    sortBy: "number",
+    sortDirection: "desc",
     paginationOpts: { cursor: "second-page", numItems: 20 },
   });
   await changeDate("to", "2026-09-30");
   expect(mocks.client.query).toHaveBeenLastCalledWith(expect.anything(), {
     dateFrom: "2026-09-01",
     dateTo: "2026-09-30",
+    sortBy: "number",
+    sortDirection: "desc",
     paginationOpts: { cursor: null, numItems: 20 },
   });
   expect(text()).not.toContain(second.title);
