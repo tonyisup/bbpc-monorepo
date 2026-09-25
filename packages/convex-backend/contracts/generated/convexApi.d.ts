@@ -6719,6 +6719,12 @@ export type PublicApiType = {
                 pageStatus?: "SplitRecommended" | "SplitRequired" | null;
                 splitCursor?: string | null;
             }>;
+            mySeasonStanding: FunctionReference<"query", "public", {
+                seasonId: Id<"seasons">;
+            }, {
+                playerCount: number;
+                rank: number;
+            } | null>;
             mySeasonWagers: FunctionReference<"query", "public", {
                 seasonId: Id<"seasons">;
             }, Array<{

@@ -441,6 +441,35 @@ describe("member season API", () => {
     );
   });
 
+  test("resolves the member's standing in any one season", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeasons(t);
+    const member = t.withIdentity(MEMBER_IDENTITY);
+
+    await expect(
+      member.query(api.games.member.mySeasonStanding, {
+        seasonId: seeded.pastSeasonId,
+      }),
+    ).resolves.toEqual({ rank: 1, playerCount: 1 });
+    await expect(
+      member.query(api.games.member.mySeasonStanding, {
+        seasonId: seeded.currentSeasonId,
+      }),
+    ).resolves.toEqual({ rank: 2, playerCount: 2 });
+    await expect(
+      t.withIdentity(NEWCOMER_IDENTITY).query(
+        api.games.member.mySeasonStanding,
+        { seasonId: seeded.pastSeasonId },
+      ),
+    ).resolves.toBeNull();
+    await expectDomainError(
+      t.query(api.games.member.mySeasonStanding, {
+        seasonId: seeded.pastSeasonId,
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+  });
+
   test("lists the member's season wagers newest first", async () => {
     const t = createTestBackend();
     const seeded = await seedSeasons(t);

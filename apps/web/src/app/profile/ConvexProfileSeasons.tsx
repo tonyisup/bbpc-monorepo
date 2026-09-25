@@ -15,10 +15,15 @@ import {
   formatStanding,
   formatStandingDetail,
 } from "@/components/SeasonSummary";
-import { type ConvexSeasonSummary, loadConvexSeasons } from "@/convex/seasons";
+import {
+  type ConvexSeasonStanding,
+  type ConvexSeasonSummary,
+  loadConvexSeasonStanding,
+  loadConvexSeasons,
+} from "@/convex/seasons";
 import { getPacificTodayPlainDate } from "@/lib/dates";
 import { getProfileSeasonPath } from "@/lib/routes";
-import { formatSignedPoints } from "@/lib/seasonActivity";
+import { formatSignedPoints, ordinal } from "@/lib/seasonActivity";
 
 const viewSeasonClass =
   "inline-flex items-center gap-1.5 text-sm font-semibold text-red-300";
@@ -27,9 +32,17 @@ function pointsLabel(count: number): string {
   return `${count} ${count === 1 ? "point" : "points"}`;
 }
 
+/**
+ * Past-season standings arrive after the list, one query per season, since
+ * each is its own season-wide read. Missing means still loading; "failed"
+ * means that season's read failed.
+ */
+type StandingLookup = Record<string, ConvexSeasonStanding | "failed">;
+
 export function ConvexProfileSeasons({ appUserId }: { appUserId: string }) {
   const convex = useConvex();
   const [seasons, setSeasons] = useState<ConvexSeasonSummary[] | null>(null);
+  const [standings, setStandings] = useState<StandingLookup>({});
   const [failed, setFailed] = useState(false);
   const loadGenerationRef = useRef(0);
   const pointChange = useLatestPointChange(true);
@@ -38,12 +51,36 @@ export function ConvexProfileSeasons({ appUserId }: { appUserId: string }) {
     const generation = loadGenerationRef.current + 1;
     loadGenerationRef.current = generation;
     setSeasons(null);
+    setStandings({});
     setFailed(false);
 
     void loadConvexSeasons(convex, getPacificTodayPlainDate())
       .then((result) => {
-        if (loadGenerationRef.current === generation) {
-          setSeasons(result);
+        if (loadGenerationRef.current !== generation) {
+          return;
+        }
+        setSeasons(result);
+        for (const entry of result) {
+          if (entry.isCurrent || entry.standing !== null) {
+            continue;
+          }
+          void loadConvexSeasonStanding(convex, entry.season.id)
+            .then((standing) => {
+              if (loadGenerationRef.current === generation) {
+                setStandings((current) => ({
+                  ...current,
+                  [entry.season.id]: standing,
+                }));
+              }
+            })
+            .catch(() => {
+              if (loadGenerationRef.current === generation) {
+                setStandings((current) => ({
+                  ...current,
+                  [entry.season.id]: "failed",
+                }));
+              }
+            });
         }
       })
       .catch(() => {
@@ -89,7 +126,11 @@ export function ConvexProfileSeasons({ appUserId }: { appUserId: string }) {
                 lastEpisodeChange={pointChange.latest?.change ?? null}
               />
             ) : (
-              <PastSeasonRow key={entry.season.id} summary={entry} />
+              <PastSeasonRow
+                key={entry.season.id}
+                summary={entry}
+                standing={entry.standing ?? standings[entry.season.id]}
+              />
             )
           )}
         </div>
@@ -175,9 +216,30 @@ function CurrentSeasonCard({
   );
 }
 
-function PastSeasonRow({ summary }: { summary: ConvexSeasonSummary }) {
+function formatFinish(
+  standing: ConvexSeasonStanding | "failed" | undefined
+): string | null {
+  if (standing === undefined) {
+    return null;
+  }
+  if (standing === "failed" || standing === null) {
+    return "—";
+  }
+  return standing.playerCount === 1
+    ? ordinal(standing.rank)
+    : `${ordinal(standing.rank)} of ${standing.playerCount}`;
+}
+
+function PastSeasonRow({
+  summary,
+  standing,
+}: {
+  summary: ConvexSeasonSummary;
+  standing: ConvexSeasonStanding | "failed" | undefined;
+}) {
   const { season } = summary;
   const episodes = formatEpisodeCount(season.episodeCount);
+  const finish = formatFinish(standing);
   return (
     <Link
       href={getProfileSeasonPath(season.id)}
@@ -195,6 +257,17 @@ function PastSeasonRow({ summary }: { summary: ConvexSeasonSummary }) {
         <span>
           <span className="text-zinc-400">Final </span>
           <strong className="text-lg text-white">{summary.total}</strong>
+        </span>
+        <span>
+          <span className="text-zinc-400">Finished </span>
+          {finish === null ? (
+            <span
+              className="inline-block h-3 w-12 animate-pulse rounded bg-white/10 align-middle"
+              aria-label="Loading standing"
+            />
+          ) : (
+            <strong className="text-white">{finish}</strong>
+          )}
         </span>
         <span>
           <span className="text-zinc-400">Points </span>

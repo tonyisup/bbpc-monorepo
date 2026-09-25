@@ -24,6 +24,7 @@ import {
   findSeasonStanding,
   loadPointTypes,
   loadSeasonPerformance,
+  loadSeasonStanding,
   valueOf,
 } from "./memberSeasonReadModel.js";
 import {
@@ -45,6 +46,7 @@ import {
   pointCoreValidator,
   pointMemberActivityValidator,
   pointSeasonTargetValidator,
+  seasonStandingValidator,
 } from "./validators.js";
 import { requireSeason, validatePlainDate } from "./writeModel.js";
 
@@ -348,6 +350,24 @@ export const mySeasonPointsPage = authenticatedQuery({
         result.page.map((point) => hydratePointMemberActivity(ctx, point)),
       ),
     };
+  },
+});
+
+/**
+ * The member's standing in any one season. The profile asks this for each
+ * past season separately, since every answer is its own season-wide read.
+ */
+export const mySeasonStanding = authenticatedQuery({
+  args: { seasonId: v.id("seasons") },
+  returns: v.union(seasonStandingValidator, v.null()),
+  handler: async (ctx, args) => {
+    await requireSeason(ctx, args.seasonId);
+    return await loadSeasonStanding(
+      ctx,
+      args.seasonId,
+      ctx.actor.user._id,
+      "Season standing",
+    );
   },
 });
 

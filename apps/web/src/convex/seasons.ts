@@ -128,6 +128,7 @@ const seasonWagerSchema = z.object({
 const mySeasonsReference = api.games.member.mySeasons;
 const mySeasonOverviewReference = api.games.member.mySeasonOverview;
 const mySeasonPointsPageReference = api.games.member.mySeasonPointsPage;
+const mySeasonStandingReference = api.games.member.mySeasonStanding;
 const mySeasonWagersReference = api.games.member.mySeasonWagers;
 
 export const SEASON_POINTS_PAGE_SIZE = 20;
@@ -202,6 +203,17 @@ export async function loadConvexSeasonWagers(
 ): Promise<ConvexSeasonWager[]> {
   return z.array(seasonWagerSchema).parse(
     await client.query(mySeasonWagersReference, {
+      seasonId: documentId("seasons", seasonId),
+    })
+  );
+}
+
+export async function loadConvexSeasonStanding(
+  client: ConvexReactClient,
+  seasonId: string
+): Promise<ConvexSeasonStanding> {
+  return standingSchema.parse(
+    await client.query(mySeasonStandingReference, {
       seasonId: documentId("seasons", seasonId),
     })
   );

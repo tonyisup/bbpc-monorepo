@@ -12,7 +12,7 @@ export function ConvexProfilePage() {
   return (
     <ProfileAccessGate label="profile">
       {(user) => (
-        <div className="container flex flex-col items-start justify-center gap-12 px-4 py-16">
+        <div className="bbpc-page flex max-w-4xl flex-col gap-12">
           <h1 className="text-2xl font-extrabold tracking-tight md:text-3xl">
             {user.email ?? user.name ?? "Profile"}
           </h1>

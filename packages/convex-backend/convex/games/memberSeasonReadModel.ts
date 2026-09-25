@@ -65,16 +65,11 @@ export function valueOf(
   );
 }
 
-/**
- * Reads a whole season's points and totals them per player. The public
- * standings and the member season page share this; both are bounded by the
- * same aggregate limit.
- */
-export async function loadSeasonPerformance(
+async function readSeasonPoints(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
   label: string,
-): Promise<SeasonPerformance> {
+): Promise<Array<Doc<"points">>> {
   const points = await ctx.db
     .query("points")
     .withIndex("by_seasonId_and_earnedAt", (index) =>
@@ -89,6 +84,20 @@ export async function loadSeasonPerformance(
       { details: { limit: MAX_POINTS_FOR_AGGREGATE } },
     );
   }
+  return points;
+}
+
+/**
+ * Reads a whole season's points and totals them per player. The public
+ * standings and the member season page share this; both are bounded by the
+ * same aggregate limit.
+ */
+export async function loadSeasonPerformance(
+  ctx: SeasonReadContext,
+  seasonId: Id<"seasons">,
+  label: string,
+): Promise<SeasonPerformance> {
+  const points = await readSeasonPoints(ctx, seasonId, label);
   const userIds = new Set<Id<"users">>();
   for (const point of points) {
     userIds.add(point.userId);
@@ -142,22 +151,54 @@ export async function loadSeasonPerformance(
 }
 
 /**
+ * One player's standing in a season without loading anyone's profile: the
+ * season's points and their point types are the only reads.
+ */
+export async function loadSeasonStanding(
+  ctx: SeasonReadContext,
+  seasonId: Id<"seasons">,
+  userId: Id<"users">,
+  label: string,
+): Promise<SeasonStanding | null> {
+  const points = await readSeasonPoints(ctx, seasonId, label);
+  const pointTypes = await loadPointTypes(ctx, points);
+  const totals = new Map<Id<"users">, number>();
+  for (const point of points) {
+    totals.set(
+      point.userId,
+      (totals.get(point.userId) ?? 0) + valueOf(point, pointTypes),
+    );
+  }
+  return standingFromTotals(totals, userId);
+}
+
+/**
  * Where a player sits among everyone who has scored this season. Equal
  * totals share a rank. A player without a season point has no standing.
  */
-export function findSeasonStanding(
-  userSummary: PerformanceUser[],
+export function standingFromTotals(
+  totals: ReadonlyMap<Id<"users">, number>,
   userId: Id<"users">,
 ): SeasonStanding | null {
-  const mine = userSummary.find((entry) => entry.user.id === userId);
+  const mine = totals.get(userId);
   if (mine === undefined) {
     return null;
   }
   let ahead = 0;
-  for (const entry of userSummary) {
-    if (entry.total > mine.total) {
+  for (const total of totals.values()) {
+    if (total > mine) {
       ahead += 1;
     }
   }
-  return { rank: ahead + 1, playerCount: userSummary.length };
+  return { rank: ahead + 1, playerCount: totals.size };
+}
+
+export function findSeasonStanding(
+  userSummary: ReadonlyArray<{ user: { id: Id<"users"> }; total: number }>,
+  userId: Id<"users">,
+): SeasonStanding | null {
+  return standingFromTotals(
+    new Map(userSummary.map((entry) => [entry.user.id, entry.total])),
+    userId,
+  );
 }

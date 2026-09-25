@@ -610,6 +610,8 @@ Authenticated members read their own season history through `games.member`:
   episode) and `episode` (`id`, `number`, `title`, `status`, `slug`), resolved through
   the point's assignment link, guess, or wager, falling back to its quote's episode.
   Manual adjustments carry `null` for both.
+- `mySeasonStanding({ seasonId })` returns the caller's `standing` in any one season, or
+  `null` before their first point there. The profile asks it once per past season.
 - `mySeasonWagers({ seasonId })` returns the caller's wagers in that season, newest
   first, as `games.gambling` entries.
 

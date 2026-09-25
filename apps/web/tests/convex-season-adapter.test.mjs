@@ -19,6 +19,7 @@ test("the season adapter reads runtime-validated member season data", () => {
   assert.match(adapter, /api\.games\.member\.mySeasons/u);
   assert.match(adapter, /api\.games\.member\.mySeasonOverview/u);
   assert.match(adapter, /api\.games\.member\.mySeasonPointsPage/u);
+  assert.match(adapter, /api\.games\.member\.mySeasonStanding/u);
   assert.match(adapter, /api\.games\.member\.mySeasonWagers/u);
   assert.match(adapter, /documentId\("seasons", seasonId\)/u);
   assert.match(adapter, /seasonSummarySchema\)\s*\.parse/u);
@@ -32,6 +33,7 @@ test("the profile shows season summaries and sends detail to the season page", (
   assert.doesNotMatch(profilePage, /ConvexPointHistory|UserPoints/u);
   assert.match(profileSeasons, /getProfileSeasonPath\(season\.id\)/u);
   assert.match(profileSeasons, /useLatestPointChange\(true\)/u);
+  assert.match(profileSeasons, /loadConvexSeasonStanding\(convex, entry\.season\.id\)/u);
   assert.doesNotMatch(profileSeasons, /mySeasonPointsPage|loadConvexSeasonPointsPage/u);
 });
 
