@@ -106,7 +106,7 @@ export function QuotabungaClipFields({
           aria-controls={finderId}
           onClick={() => setFinderOpen((open) => !open)}
         >
-          {finderOpen ? "Back to simple form" : "Use Quote Finder"}
+          {finderOpen ? "Hide Quote Finder" : "Use Quote Finder"}
         </Button>
       </div>
       <div id={finderId}>

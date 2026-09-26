@@ -620,7 +620,7 @@ describe("ConvexQuotabungaSubmission writes", () => {
     ).toHaveLength(0);
 
     act(() => findButton(rendered, "Use Quote Finder").props.onClick());
-    const toggle = findButton(rendered, "Back to simple form");
+    const toggle = findButton(rendered, "Hide Quote Finder");
     expect(toggle.props["aria-expanded"]).toBe(true);
     expect(
       rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
