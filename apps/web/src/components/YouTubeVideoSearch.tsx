@@ -154,9 +154,6 @@ export function YouTubeVideoSearch({
           Search
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Choose a video to load it into the quote player below.
-      </p>
       {visible?.loading && (
         <p role="status" className="text-sm text-muted-foreground">
           Searching YouTube…
@@ -200,6 +197,9 @@ export function YouTubeVideoSearch({
           <p role="status" className="sr-only">
             {visible.videos.length} videos found.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Choose a video to load it into the quote player below.
+          </p>
           <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">
             {visible.videos.map((video) => (
               <li
@@ -240,7 +240,7 @@ export function YouTubeVideoSearch({
                     onSelect(`https://www.youtube.com/watch?v=${video.id}`);
                     setResultsOpen(false);
                     setSelectionNotice(
-                      `Loaded “${video.title}” into the quote player.`
+                      `Loaded into the quote player: ${video.title}`
                     );
                   }}
                 >
