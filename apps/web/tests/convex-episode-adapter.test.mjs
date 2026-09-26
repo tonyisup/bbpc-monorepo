@@ -104,6 +104,12 @@ test("Clerk middleware matches routes before Next.js locale rewriting", () => {
   assert.equal(middleware.match(/locale: false/gu)?.length, 3);
 });
 
+test("Clerk accepts sessions from a preview's deployment URL and branch alias", () => {
+  assert.match(middleware, /process\.env\.VERCEL_URL/u);
+  assert.match(middleware, /process\.env\.VERCEL_BRANCH_URL/u);
+  assert.match(middleware, /\.\.\.vercelPreviewOrigins/u);
+});
+
 test("the public episode presentation contract is storage-neutral", () => {
   assert.doesNotMatch(episodeTypes, /@prisma\/client/u);
   assert.match(episodeTypes, /date: Date \| string \| null/u);
