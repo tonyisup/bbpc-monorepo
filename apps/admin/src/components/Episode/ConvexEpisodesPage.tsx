@@ -50,6 +50,16 @@ import { EpisodeSearchResults } from "./EpisodeSearchResults";
 
 const FUZZY_SEARCH_STORAGE_KEY = "bbpc-admin-episode-fuzzy-search";
 
+function recordingFilename(recording: string): string {
+  let filename = "Recording";
+  try {
+    filename = new URL(recording).pathname.split("/").pop() || filename;
+    return decodeURIComponent(filename);
+  } catch {
+    return filename;
+  }
+}
+
 function dateRangeError(from: string, to: string): string | null {
   for (const value of [from, to]) {
     if (!value) continue;
@@ -567,20 +577,21 @@ export function ConvexEpisodesPage() {
                     sort={sort}
                     onSort={changeSort}
                   />
+                  <TableHead>Recording</TableHead>
                   <TableHead>Relationships</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {episodes === null && (
                   <TableRow>
-                    <TableCell className="h-24 text-center" colSpan={5}>
+                    <TableCell className="h-24 text-center" colSpan={6}>
                       <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 )}
                 {episodes?.length === 0 && (
                   <TableRow>
-                    <TableCell className="h-24 text-center" colSpan={5}>
+                    <TableCell className="h-24 text-center" colSpan={6}>
                       {hasDateRange
                         ? "No episodes found in this date range."
                         : "No episodes found."}
@@ -619,6 +630,20 @@ export function ConvexEpisodesPage() {
                       {episode.date === null
                         ? "-"
                         : formatPlainDate(episode.date)}
+                    </TableCell>
+                    <TableCell>
+                      {episode.recording ? (
+                        <a
+                          className="break-all text-primary underline underline-offset-4"
+                          href={episode.recording}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {recordingFilename(episode.recording)}
+                        </a>
+                      ) : (
+                        "-"
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {episode.assignments.length} assignments ·{" "}
