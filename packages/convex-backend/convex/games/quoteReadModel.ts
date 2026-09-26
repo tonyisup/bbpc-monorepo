@@ -70,6 +70,7 @@ export function toMemberQuoteSubmission(
     sourceType: submission.sourceType,
     clipUrl: submission.clipUrl ?? null,
     clipStartSeconds: submission.clipStartSeconds ?? null,
+    clipEndSeconds: submission.clipEndSeconds ?? null,
     listenerNotes: submission.listenerNotes ?? null,
     status: submission.status,
     bracketOrder: submission.bracketOrder ?? null,

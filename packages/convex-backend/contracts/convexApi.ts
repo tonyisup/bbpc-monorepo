@@ -8057,6 +8057,7 @@ export type PublicApiType = {
         {
           clientApiVersion: string;
           clipStartSeconds?: number | null;
+          clipEndSeconds?: number | null;
           clipUrl?: string | null;
           episodeId: Id<"episodes">;
           listenerNotes?: string | null;
@@ -8071,6 +8072,7 @@ export type PublicApiType = {
           adminNotes: string | null;
           bracketOrder: number | null;
           clipStartSeconds: number | null;
+          clipEndSeconds: number | null;
           clipUrl: string | null;
           createdAt: number;
           episode: {
@@ -8135,6 +8137,7 @@ export type PublicApiType = {
           submission: {
             bracketOrder: number | null;
             clipStartSeconds: number | null;
+            clipEndSeconds: number | null;
             clipUrl: string | null;
             createdAt: number;
             id: Id<"quoteSubmissions">;
@@ -8157,6 +8160,7 @@ export type PublicApiType = {
           adminNotes: string | null;
           bracketOrder: number | null;
           clipStartSeconds: number | null;
+          clipEndSeconds: number | null;
           clipUrl: string | null;
           createdAt: number;
           episode: {
@@ -8274,6 +8278,7 @@ export type PublicApiType = {
           adminNotes: string | null;
           bracketOrder: number | null;
           clipStartSeconds: number | null;
+          clipEndSeconds: number | null;
           clipUrl: string | null;
           createdAt: number;
           episode: {
@@ -8332,6 +8337,13 @@ export type PublicApiType = {
         },
         { id: Id<"quoteSubmissions"> }
       >;
+      reserveVideoSearch: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string },
+        | { ok: true }
+        | { ok: false; retryAt: number; scope: "user" | "site" }
+      >;
       setStatus: FunctionReference<
         "mutation",
         "public",
@@ -8345,6 +8357,7 @@ export type PublicApiType = {
           adminNotes: string | null;
           bracketOrder: number | null;
           clipStartSeconds: number | null;
+          clipEndSeconds: number | null;
           clipUrl: string | null;
           createdAt: number;
           episode: {
@@ -8394,6 +8407,7 @@ export type PublicApiType = {
           submission: {
             bracketOrder: number | null;
             clipStartSeconds: number | null;
+            clipEndSeconds: number | null;
             clipUrl: string | null;
             createdAt: number;
             id: Id<"quoteSubmissions">;
@@ -8414,6 +8428,7 @@ export type PublicApiType = {
         {
           clientApiVersion: string;
           clipStartSeconds?: number | null;
+          clipEndSeconds?: number | null;
           clipUrl?: string | null;
           episodeId?: Id<"episodes">;
           listenerNotes?: string | null;
@@ -8426,6 +8441,7 @@ export type PublicApiType = {
         {
           bracketOrder: number | null;
           clipStartSeconds: number | null;
+          clipEndSeconds: number | null;
           clipUrl: string | null;
           createdAt: number;
           id: Id<"quoteSubmissions">;
@@ -8446,6 +8462,7 @@ export type PublicApiType = {
           adminNotes?: string | null;
           clientApiVersion: string;
           clipStartSeconds?: number | null;
+          clipEndSeconds?: number | null;
           clipUrl?: string | null;
           id: Id<"quoteSubmissions">;
           listenerNotes?: string | null;
@@ -8458,6 +8475,7 @@ export type PublicApiType = {
           adminNotes: string | null;
           bracketOrder: number | null;
           clipStartSeconds: number | null;
+          clipEndSeconds: number | null;
           clipUrl: string | null;
           createdAt: number;
           episode: {

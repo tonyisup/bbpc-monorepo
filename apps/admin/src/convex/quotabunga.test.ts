@@ -31,6 +31,7 @@ const submission = {
   sourceType: "MOVIE" as const,
   clipUrl: null,
   clipStartSeconds: null,
+  clipEndSeconds: null,
   listenerNotes: null,
   status: "INCLUDED" as const,
   bracketOrder: 1,
@@ -66,6 +67,7 @@ const content = {
   sourceType: submission.sourceType,
   clipUrl: null,
   clipStartSeconds: null,
+  clipEndSeconds: null,
   listenerNotes: null,
 };
 
@@ -161,6 +163,50 @@ describe("Convex Quotabunga admin adapter", () => {
         placement: 1,
       },
     });
+  });
+
+  test("parses fractional clip starts, rows saved before end times and forwards clip ranges", async () => {
+    // Rows and backends from before clip end times omit the field.
+    const legacy: Record<string, unknown> = {
+      ...submission,
+      clipUrl: "https://youtu.be/abcdefghijk",
+      clipStartSeconds: 42.125,
+    };
+    delete legacy.clipEndSeconds;
+    const ranged = {
+      ...submission,
+      id: "quote-2",
+      clipUrl: "https://youtu.be/abcdefghijk",
+      clipStartSeconds: 1.5,
+      clipEndSeconds: 3.25,
+    };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([legacy, ranged])
+      .mockResolvedValueOnce([{ ...ranged, clipEndSeconds: -1 }]);
+    const mutation = vi.fn().mockResolvedValueOnce(ranged);
+    const client = { query, mutation } as unknown as ConvexReactClient;
+
+    await expect(
+      loadConvexAdminQuoteSubmissions(client, episode.id)
+    ).resolves.toEqual([{ ...legacy, clipEndSeconds: null }, ranged]);
+    await expect(
+      loadConvexAdminQuoteSubmissions(client, episode.id)
+    ).rejects.toThrow();
+    await expect(
+      updateConvexAdminQuoteContent(client, {
+        ...content,
+        clipUrl: ranged.clipUrl,
+        clipStartSeconds: 1.5,
+        clipEndSeconds: 3.25,
+        id: ranged.id,
+        adminNotes: null,
+      })
+    ).resolves.toEqual(ranged);
+    expect(mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ clipStartSeconds: 1.5, clipEndSeconds: 3.25 })
+    );
   });
 
   test("rejects drifted canonical relationships and scored state", async () => {

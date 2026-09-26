@@ -45,6 +45,7 @@ import {
   loadConvexAdminUsersPage,
   type ConvexAdminUser,
 } from "@/convex/users";
+import { clipSeconds, MAX_CLIP_SECONDS } from "@/lib/clipTimes";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -68,6 +69,7 @@ interface QuoteFormState {
   sourceType: ConvexQuoteSourceType;
   clipUrl: string;
   clipStartSeconds: string;
+  clipEndSeconds: string;
   listenerNotes: string;
   adminNotes: string;
 }
@@ -85,6 +87,7 @@ const emptyForm: QuoteFormState = {
   sourceType: "MOVIE",
   clipUrl: "",
   clipStartSeconds: "",
+  clipEndSeconds: "",
   listenerNotes: "",
   adminNotes: "",
 };
@@ -350,6 +353,7 @@ export function ConvexQuotabungaPage() {
       sourceType: submission.sourceType,
       clipUrl: submission.clipUrl ?? "",
       clipStartSeconds: submission.clipStartSeconds?.toString() ?? "",
+      clipEndSeconds: submission.clipEndSeconds?.toString() ?? "",
       listenerNotes: submission.listenerNotes ?? "",
       adminNotes: submission.adminNotes ?? "",
     });
@@ -365,13 +369,21 @@ export function ConvexQuotabungaPage() {
       form.clipStartSeconds.length === 0
         ? null
         : Number(form.clipStartSeconds);
+    const clipEndSeconds = form.clipEndSeconds.trim() === ""
+      ? null : Number(form.clipEndSeconds);
     if (
-      clipStartSeconds !== null &&
-      (!Number.isInteger(clipStartSeconds) ||
-        clipStartSeconds < 0 ||
-        clipStartSeconds > 86_400)
+      (clipEndSeconds !== null &&
+        (!Number.isFinite(clipEndSeconds) || clipStartSeconds === null ||
+          clipEndSeconds <= clipStartSeconds ||
+          clipEndSeconds > MAX_CLIP_SECONDS ||
+          !form.clipUrl.trim())) ||
+      (clipStartSeconds !== null &&
+        (!Number.isFinite(clipStartSeconds) ||
+          clipStartSeconds < 0 || clipStartSeconds > MAX_CLIP_SECONDS))
     ) {
-      toast.error("Clip start must be a whole number from 0 to 86400.");
+      toast.error(
+        `Clip times must be between 0 and ${String(MAX_CLIP_SECONDS)}, with the end after the start and a clip link.`
+      );
       return;
     }
     const content = {
@@ -380,6 +392,11 @@ export function ConvexQuotabungaPage() {
       sourceType: form.sourceType,
       clipUrl: nullableText(form.clipUrl),
       clipStartSeconds,
+      // Backends before clip ranges reject this argument, so send it only to
+      // set an end or clear a saved one.
+      ...(clipEndSeconds === null && (editing?.clipEndSeconds ?? null) === null
+        ? {}
+        : { clipEndSeconds }),
       listenerNotes: nullableText(form.listenerNotes),
     };
     setBusyAction("save");
@@ -721,9 +738,12 @@ export function ConvexQuotabungaPage() {
                             Open clip
                             {submission.clipStartSeconds === null
                               ? ""
-                              : ` at ${String(
+                              : ` at ${clipSeconds(
                                   submission.clipStartSeconds
-                                )}s`}
+                                )}`}
+                            {submission.clipEndSeconds !== null
+                              ? ` to ${clipSeconds(submission.clipEndSeconds)}`
+                              : ""}
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
@@ -965,7 +985,7 @@ export function ConvexQuotabungaPage() {
                 </select>
               </div>
             </div>
-            <div className="grid gap-4 sm:grid-cols-[1fr_9rem]">
+            <div className="grid gap-4 sm:grid-cols-[1fr_9rem_9rem]">
               <div className="space-y-2">
                 <label className="text-sm font-semibold" htmlFor="clipUrl">
                   Clip URL
@@ -992,7 +1012,8 @@ export function ConvexQuotabungaPage() {
                 </label>
                 <Input
                   id="clipStart"
-                  max={86_400}
+                  step="any"
+                  max={MAX_CLIP_SECONDS}
                   min={0}
                   onChange={(event) =>
                     setForm((current) => ({
@@ -1002,6 +1023,25 @@ export function ConvexQuotabungaPage() {
                   }
                   type="number"
                   value={form.clipStartSeconds}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold" htmlFor="clipEnd">
+                  End second{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                </label>
+                <Input
+                  id="clipEnd"
+                  type="number"
+                  step="any"
+                  min={0}
+                  max={MAX_CLIP_SECONDS}
+                  value={form.clipEndSeconds}
+                  onChange={(event) => setForm((current) => ({
+                    ...current, clipEndSeconds: event.target.value,
+                  }))}
                 />
               </div>
             </div>

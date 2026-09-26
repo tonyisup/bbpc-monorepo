@@ -28,7 +28,11 @@ import {
   transcriptQuoteMatch,
   transcriptSearchQuery,
 } from "./games/quoteSimilarity.js";
-import { MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_ADMIN } from "./games/limits.js";
+import {
+  MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_ADMIN,
+  VIDEO_SEARCH_SITE_BURST,
+  VIDEO_SEARCH_USER_BURST,
+} from "./games/limits.js";
 import schema from "./schema.js";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -2261,5 +2265,206 @@ describe("Quotabunga workflows", () => {
       .query(api.games.quotes.getAdminReuseReport, { id: subjectId });
     expect(report?.episodes).toHaveLength(5);
     expect(report?.likelihood).toBeCloseTo(0.45);
+  });
+});
+
+
+describe("quote clip ranges", () => {
+  test("round-trips fractional ranges, rejects invalid ends and preserves ranges for older clients", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    await initializeS1(t);
+    await seedFoundation(t);
+    await advanceFromS1ToS3(t);
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    const input = { clientApiVersion: BBPC_API_VERSION, ...memberContent, clipStartSeconds: 42.125, clipEndSeconds: 45.875 };
+    const created = await member.mutation(api.games.quotes.submitMine, input);
+    expect(created).toMatchObject({ clipStartSeconds: 42.125, clipEndSeconds: 45.875 });
+    const read = await member.query(api.games.quotes.currentForMe, {});
+    expect(read.submission).toMatchObject({ clipStartSeconds: 42.125, clipEndSeconds: 45.875 });
+    const adminRead = await t.withIdentity(ADMIN_IDENTITY).mutation(api.games.quotes.updateContent, {
+      clientApiVersion: BBPC_API_VERSION, id: created.id,
+      quoteText: "Adjusted words", sourceTitle: memberContent.sourceTitle, sourceType: memberContent.sourceType,
+      clipUrl: memberContent.clipUrl, clipStartSeconds: 42.125,
+    });
+    expect(adminRead.clipEndSeconds).toBe(45.875);
+    for (const invalid of [
+      { clipEndSeconds: 42.125 }, { clipEndSeconds: 10 }, { clipEndSeconds: 86401 },
+      { clipEndSeconds: Infinity }, { clipStartSeconds: null }, { clipUrl: null },
+    ]) {
+      await expectDomainError(member.mutation(api.games.quotes.submitMine, { ...input, ...invalid }), "VALIDATION_FAILED");
+    }
+    const cleared = await member.mutation(api.games.quotes.submitMine, { ...input, clipEndSeconds: null });
+    expect(cleared.clipEndSeconds).toBeNull();
+    await member.mutation(api.games.quotes.submitMine, input);
+    const legacyEdit = await member.mutation(api.games.quotes.submitMine, {
+      clientApiVersion: BBPC_API_VERSION, ...memberContent, clipStartSeconds: 60,
+    });
+    expect(legacyEdit.clipEndSeconds).toBeNull();
+  });
+
+  test("stores administrator ranges, lets current clients replace or clear them, and drops a range when an older client relinks", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const admin = t.withIdentity(ADMIN_IDENTITY);
+    const base = {
+      clientApiVersion: BBPC_API_VERSION,
+      episodeId: foundation.nextEpisodeId,
+      ...memberContent,
+    };
+    const created = await admin.mutation(api.games.quotes.createForUser, {
+      ...base,
+      userId: memberId,
+      clipStartSeconds: 1.5,
+      clipEndSeconds: 3.25,
+    });
+    expect(created).toMatchObject({
+      clipUrl: "https://example.test/clip",
+      clipStartSeconds: 1.5,
+      clipEndSeconds: 3.25,
+    });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(api.games.quotes.mineForEpisode, {
+        episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
+      }),
+    ).resolves.toMatchObject({
+      submission: { clipStartSeconds: 1.5, clipEndSeconds: 3.25 },
+    });
+    await expectDomainError(
+      admin.mutation(api.games.quotes.createForUser, {
+        ...base,
+        userId: otherId,
+        clipUrl: null,
+        clipEndSeconds: 3.25,
+      }),
+      "VALIDATION_FAILED",
+    );
+
+    const update = (patch: {
+      clipUrl?: string | null;
+      clipStartSeconds?: number | null;
+      clipEndSeconds?: number | null;
+    }) =>
+      admin.mutation(api.games.quotes.updateContent, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: created.id,
+        quoteText: memberContent.quoteText,
+        sourceTitle: memberContent.sourceTitle,
+        sourceType: memberContent.sourceType,
+        clipUrl: memberContent.clipUrl,
+        clipStartSeconds: 1.5,
+        ...patch,
+      });
+    expect((await update({ clipEndSeconds: 9.5 })).clipEndSeconds).toBe(9.5);
+    // An older client relinking with the same start cannot keep the old end.
+    expect(
+      (await update({ clipUrl: "https://example.test/other" })).clipEndSeconds,
+    ).toBeNull();
+    expect((await update({ clipEndSeconds: 4 })).clipEndSeconds).toBe(4);
+    const listed = await admin.query(api.games.quotes.listAdminForEpisode, {
+      episodeId: foundation.nextEpisodeId,
+    });
+    expect(listed.find((row) => row.id === created.id)).toMatchObject({
+      clipEndSeconds: 4,
+    });
+    expect((await update({ clipEndSeconds: null })).clipEndSeconds).toBeNull();
+    for (const clipStartSeconds of [-0.5, Infinity]) {
+      await expectDomainError(
+        update({ clipStartSeconds, clipEndSeconds: null }),
+        "VALIDATION_FAILED",
+      );
+    }
+  });
+});
+
+describe("Quote Finder search quota", () => {
+  const NOW = Date.UTC(2026, 8, 25, 20);
+
+  async function setup() {
+    const t = createTestBackend();
+    const actors = await seedActors(t);
+    await advanceToS3(t);
+    const reserve = (identity: TestIdentity) =>
+      t.withIdentity(identity).mutation(api.games.quotes.reserveVideoSearch, {
+        clientApiVersion: BBPC_API_VERSION,
+      });
+    return { t, actors, reserve };
+  }
+
+  test("gives each listener a burst, then refuses with a retry time", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { reserve } = await setup();
+      for (let i = 0; i < VIDEO_SEARCH_USER_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+      }
+      const refused = await reserve(MEMBER_IDENTITY);
+      if (refused.ok) throw new Error("Expected the burst to be spent.");
+      expect(refused.scope).toBe("user");
+      expect(refused.retryAt).toBeGreaterThan(NOW);
+      // One listener's limit leaves everyone else searching.
+      await expect(reserve(OTHER_IDENTITY)).resolves.toEqual({ ok: true });
+      // Tokens refill over the day: 12 a day is one every two hours.
+      vi.setSystemTime(NOW + 2 * 60 * 60 * 1000 + 1000);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("caps searches across the whole site without charging refused listeners", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, actors, reserve } = await setup();
+      const identities = Array.from(
+        { length: Math.ceil(VIDEO_SEARCH_SITE_BURST / VIDEO_SEARCH_USER_BURST) + 1 },
+        (_, index) => ({
+          tokenIdentifier: `https://issuer.example.test|searcher-${String(index)}`,
+          issuer: "https://issuer.example.test",
+          subject: `searcher-${String(index)}`,
+        }),
+      );
+      for (const [index, identity] of identities.entries()) {
+        await seedUser(t, { identity, name: `Searcher ${String(index)}` });
+      }
+      let granted = 0;
+      for (const identity of identities) {
+        for (let i = 0; i < VIDEO_SEARCH_USER_BURST; i += 1) {
+          if ((await reserve(identity)).ok) granted += 1;
+        }
+      }
+      expect(granted).toBe(VIDEO_SEARCH_SITE_BURST);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+        ok: false,
+        scope: "site",
+      });
+      // A site-wide refusal must not spend the listener's own allowance.
+      const memberBuckets = await t.run(async (ctx) =>
+        ctx.db
+          .query("rateLimits")
+          .withIndex("name", (q) =>
+            q.eq("name", "videoSearchPerUser").eq("key", actors.memberId),
+          )
+          .take(1),
+      );
+      expect(memberBuckets).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("requires a signed-in listener", async () => {
+    const { t } = await setup();
+    await expectDomainError(
+      t.mutation(api.games.quotes.reserveVideoSearch, {
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
   });
 });

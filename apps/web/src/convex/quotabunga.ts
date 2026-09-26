@@ -19,6 +19,7 @@ const quoteSubmissionSchema = z.object({
   sourceType: quoteSourceTypeSchema,
   clipUrl: z.string().nullable(),
   clipStartSeconds: z.number().nullable(),
+  clipEndSeconds: z.number().nullable().default(null),
   listenerNotes: z.string().nullable(),
   status: z.enum(["SUBMITTED", "INCLUDED", "REJECTED"]),
   bracketOrder: z.number().nullable(),
@@ -80,6 +81,7 @@ export interface ConvexQuoteSubmissionInput {
   sourceType: ConvexQuoteSourceType;
   clipUrl: string | null;
   clipStartSeconds: number | null;
+  clipEndSeconds?: number | null;
   listenerNotes: string | null;
 }
 

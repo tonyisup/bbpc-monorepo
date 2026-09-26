@@ -278,6 +278,7 @@ export const quoteMemberSubmissionValidator = v.object({
   sourceType: quoteSourceTypeValidator,
   clipUrl: nullableStringValidator,
   clipStartSeconds: nullableNumberValidator,
+  clipEndSeconds: nullableNumberValidator,
   listenerNotes: nullableStringValidator,
   status: quoteStatusValidator,
   bracketOrder: nullableNumberValidator,

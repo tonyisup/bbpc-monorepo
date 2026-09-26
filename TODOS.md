@@ -140,6 +140,25 @@ domain conflict.
 **Priority:** P3
 **Depends on:** Nothing
 
+### Cut Quote Finder editor re-renders during playback and drags
+
+**What:** Move `QuoteClipEditor`'s 100 ms playhead poll into a small child that owns
+the playhead line and time readout, and commit handle or transcript drags on pointer
+up (tracking the in-progress position locally) instead of calling `onRangeChange` on
+every pointer move.
+
+**Why:** While a clip plays, the whole editor, including every visible transcript block,
+re-renders ten times a second, and each drag step re-renders the full submission form.
+That is fine on desktop but can stutter on low-end phones.
+
+**Context:** Raised by the ship performance review of the Quote Finder; deferred to keep
+that PR focused. Keep the keyboard nudges, the clamp to the video length, and the
+preview/repeat stop working, and pause the poll while nothing is playing.
+
+**Effort:** M
+**Priority:** P3
+**Depends on:** Nothing
+
 ## Completed
 
 ### Consolidate BBPC into a monorepo after Convex migration stability

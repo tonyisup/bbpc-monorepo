@@ -10,14 +10,7 @@ import {
   type ReactTestInstance,
   type ReactTestRenderer,
 } from "react-test-renderer";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 interface DuplicateCheckResult {
   possibleMatch: boolean;
@@ -31,17 +24,26 @@ interface DuplicateCheckResult {
 }
 
 const mocks = vi.hoisted(() => ({
-  checkDuplicate: vi.fn<
-    (
-      client: unknown,
-      input: { quoteText: string; sourceTitle: string },
-    ) => Promise<DuplicateCheckResult>
-  >(),
+  checkDuplicate:
+    vi.fn<
+      (
+        client: unknown,
+        input: { quoteText: string; sourceTitle: string }
+      ) => Promise<DuplicateCheckResult>
+    >(),
   convex: {},
   errorCode: vi.fn<(error: unknown) => string | null>(() => null),
   load: vi.fn<() => Promise<unknown>>(),
   submit: vi.fn<() => Promise<void>>(),
   withdraw: vi.fn<() => Promise<void>>(),
+  editor: null as null | {
+    videoId: string;
+    start: number | null;
+    end: number | null;
+    onRangeChange: (start: number, end: number) => void;
+    onQuoteChange: (text: string) => void;
+    onDurationChange?: (duration: number) => void;
+  },
   window: undefined as
     | { status: string | null; closesAt: number | null }
     | null
@@ -153,6 +155,35 @@ import { toast } from "sonner";
 
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
 
+vi.mock("@/components/QuoteClipEditor", () => ({
+  QuoteClipEditor: (props: NonNullable<typeof mocks.editor>) => {
+    mocks.editor = props;
+    return <div>Quote player</div>;
+  },
+}));
+vi.mock("next/image", () => ({ default: () => <span /> }));
+vi.mock("@/components/FullScreenDialog", () => ({
+  FullScreenDialog: ({
+    open,
+    onOpenChange,
+    title,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title: string;
+    children: ReactNode;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={title}>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Done
+        </button>
+        {children}
+      </div>
+    ) : null,
+}));
+
 const openRound = {
   episode: { id: "episode-test", number: "EP-TEST", status: "next" },
   isOpen: true,
@@ -184,7 +215,7 @@ async function renderSubmission(episodeStatus = "next") {
 function enterQuote(
   rendered: ReactTestRenderer,
   quoteText: string,
-  sourceTitle = "Heat",
+  sourceTitle = "Heat"
 ) {
   act(() => {
     rendered.root
@@ -352,13 +383,15 @@ describe("ConvexQuotabungaSubmission duplicate checks", () => {
     expect(text).toContain("1:02:03");
     expect(text).toContain("don't let yourself get attached");
     const liveRegions = rendered.root.findAll(
-      (node) => node.type === "p" && node.props.role === "status",
+      (node) => node.type === "p" && node.props.role === "status"
     );
     expect(liveRegions).toHaveLength(1);
     const liveText = liveRegions[0] ? instanceText(liveRegions[0]) : "";
     expect(liveText).toContain("Possibly heard on the show.");
     expect(liveText).not.toContain("attached");
-    const links = rendered.root.findAllByType("a");
+    const links = rendered.root
+      .findAllByType("a")
+      .filter((link) => link.props.href.startsWith("/episodes/"));
     expect(links.map((link) => link.props.href)).toEqual(["/episodes/heat"]);
     expect(links[0]?.props.target).toBe("_blank");
     const submitButton = rendered.root
@@ -421,7 +454,9 @@ describe("ConvexQuotabungaSubmission round window", () => {
     });
     mocks.window = { status: "recording", closesAt: 100_000 + 90_000 };
     const rendered = await renderSubmission();
-    expect(renderedText(rendered)).toContain("Entries lock with the picks in 1:30");
+    expect(renderedText(rendered)).toContain(
+      "Entries lock with the picks in 1:30"
+    );
     expect(
       rendered.root.findAllByProps(
         { id: "convex-quotabunga-quote" },
@@ -437,7 +472,9 @@ describe("ConvexQuotabungaSubmission round window", () => {
     });
     mocks.window = { status: "recording", closesAt: 100_000 + 90_000 };
     const rendered = await renderSubmission("recording");
-    expect(renderedText(rendered)).toContain("Entries lock with the picks in 1:30");
+    expect(renderedText(rendered)).toContain(
+      "Entries lock with the picks in 1:30"
+    );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(90_000);
     });
@@ -542,7 +579,9 @@ describe("ConvexQuotabungaSubmission round window", () => {
     mocks.window = { status: "recording", closesAt: 100_000 - 1 };
     const rendered = await renderSubmission();
     expect(renderedText(rendered)).toContain("locked for recording");
-    expect(rendered.root.findAllByType("button").map((b) => instanceText(b))).not.toContain("Withdraw");
+    expect(
+      rendered.root.findAllByType("button").map((b) => instanceText(b))
+    ).not.toContain("Withdraw");
   });
 });
 
@@ -565,7 +604,7 @@ const savedEntry = {
 async function submitForm(rendered: ReactTestRenderer) {
   await act(async () => {
     await rendered.root.findByType("form").props.onSubmit({
-      preventDefault() {},
+      preventDefault: vi.fn(),
     });
   });
 }
@@ -601,6 +640,309 @@ describe("ConvexQuotabungaSubmission writes", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+  });
+
+  test("opens the Quote Finder full screen and returns to the simple fields", async () => {
+    const rendered = await renderSubmission();
+    expect(
+      rendered.root.findAllByProps({ id: "convex-quotabunga-end" })
+    ).toHaveLength(0);
+    expect(rendered.root.findAllByProps({ role: "dialog" })).toHaveLength(0);
+
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    expect(
+      rendered.root.findAllByProps({
+        role: "dialog",
+        "aria-label": "Quote Finder",
+      })
+    ).toHaveLength(1);
+    rendered.root.findByProps({ id: "quote-finder-clip" });
+    rendered.root.findByProps({ id: "quote-finder-end" });
+    findButton(rendered, "Search");
+
+    act(() => {
+      rendered.root
+        .findByProps({ id: "quote-finder-timestamp" })
+        .props.onChange({ target: { value: "12" } });
+      rendered.root
+        .findByProps({ id: "quote-finder-end" })
+        .props.onChange({ target: { value: "18.5" } });
+    });
+    act(() => findButton(rendered, "Done").props.onClick());
+    expect(rendered.root.findAllByProps({ role: "dialog" })).toHaveLength(0);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
+        .value
+    ).toBe("12");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-end" }).props.value
+    ).toBe("18.5");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("choosing a searched video fills the link, resets old timing and preserves quote text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            videos: [
+              { id: "lmnopqrstuv", title: "Another scene", channel: "Movies" },
+            ],
+            nextPageToken: null,
+          })
+        )
+      )
+    );
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Keep these words", "Heat");
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    act(() => {
+      rendered.root
+        .findByProps({ id: "quote-finder-clip" })
+        .props.onChange({ target: { value: "https://youtu.be/abcdefghijk" } });
+    });
+    act(() => {
+      rendered.root
+        .findByProps({ id: "quote-finder-timestamp" })
+        .props.onChange({ target: { value: "42" } });
+      rendered.root
+        .findByProps({ id: "quote-finder-end" })
+        .props.onChange({ target: { value: "52" } });
+    });
+    await act(async () => {
+      findButton(rendered, "Search").props.onClick();
+    });
+    act(() =>
+      rendered.root
+        .findByProps({ "aria-label": "Use video: Another scene" })
+        .props.onClick()
+    );
+    expect(
+      rendered.root.findByProps({ id: "quote-finder-clip" }).props.value
+    ).toBe("https://www.youtube.com/watch?v=lmnopqrstuv");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-clip" }).props.value
+    ).toBe("https://www.youtube.com/watch?v=lmnopqrstuv");
+    expect(
+      rendered.root.findByProps({ id: "quote-finder-timestamp" }).props.value
+    ).toBe("0");
+    expect(
+      rendered.root.findByProps({ id: "quote-finder-end" }).props.value
+    ).toBe("");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("Keep these words");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("submits a fractional range from the Quote Finder and refuses ranges that are reversed, past the video or missing a link", async () => {
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    expect(
+      rendered.root.findByProps({ "aria-label": "Search YouTube videos" }).props
+        .value
+    ).toBe("Heat Hold on to ya");
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    const expectRefused = async () => {
+      await submitForm(rendered);
+      expect(mocks.submit).not.toHaveBeenCalled();
+      expect(renderedText(rendered)).toContain(
+        "Clip times must be between 0 and 86400 seconds"
+      );
+    };
+
+    change("quote-finder-timestamp", "5");
+    change("quote-finder-end", "8");
+    await expectRefused();
+    expect(renderedText(rendered)).toContain("and a clip link");
+
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    expect(field("quote-finder-timestamp").props.value).toBe("12");
+    expect(field("quote-finder-end").props.value).toBe("");
+    expect(mocks.editor?.videoId).toBe("abcdefghijk");
+    act(() => mocks.editor?.onDurationChange?.(20));
+    act(() => mocks.editor?.onRangeChange(12.5, 18.25));
+    expect(field("quote-finder-timestamp").props.value).toBe("12.5");
+    expect(field("quote-finder-end").props.value).toBe("18.25");
+    expect(mocks.editor).toMatchObject({ start: 12.5, end: 18.25 });
+
+    change("quote-finder-end", "21");
+    await expectRefused();
+    change("quote-finder-end", "11");
+    await expectRefused();
+    change("quote-finder-end", "");
+    change("quote-finder-timestamp", "20");
+    await expectRefused();
+
+    change("quote-finder-timestamp", "12.5");
+    change("quote-finder-end", "18.25");
+    act(() => mocks.editor?.onQuoteChange("Hold on to ya, man"));
+    expect(field("convex-quotabunga-quote").props.value).toBe(
+      "Hold on to ya, man"
+    );
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        quoteText: "Hold on to ya, man",
+        // Saved as a watch link that opens at the chosen start for hosts.
+        clipUrl: "https://www.youtube.com/watch?v=abcdefghijk&t=12s",
+        clipStartSeconds: 12.5,
+        clipEndSeconds: 18.25,
+      })
+    );
+  });
+
+  test("shows and restores a saved range, and entries saved before end times still edit and submit", async () => {
+    const edit = (rendered: ReactTestRenderer) =>
+      act(() =>
+        rendered.root
+          .findAllByType("button")
+          .find((button) => instanceText(button).trim() === "Edit")!
+          .props.onClick()
+      );
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      submission: {
+        ...savedEntry,
+        clipUrl: "https://youtu.be/abcdefghijk",
+        clipStartSeconds: 42.125,
+        clipEndSeconds: 52.5,
+      },
+    });
+    let rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain(" · 0:42.1");
+    expect(renderedText(rendered)).toContain(" – 0:52.5");
+    edit(rendered);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
+        .value
+    ).toBe("42.125");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-end" }).props.value
+    ).toBe("52.5");
+    // Clearing a saved end sends an explicit null so the backend drops it,
+    // and the End field stays put while it is being cleared.
+    act(() =>
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-end" })
+        .props.onChange({ target: { value: "" } })
+    );
+    rendered.root.findByProps({ id: "convex-quotabunga-end" });
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenLastCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        clipStartSeconds: 42.125,
+        clipEndSeconds: null,
+      })
+    );
+    act(() => rendered.unmount());
+    mocks.submit.mockClear();
+
+    // savedEntry has no clipEndSeconds, like rows written before this change.
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      submission: {
+        ...savedEntry,
+        clipUrl: "https://example.test/clip",
+        clipStartSeconds: 42,
+      },
+    });
+    rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain(" · 0:42.0");
+    expect(renderedText(rendered)).not.toContain(" – ");
+    edit(rendered);
+    expect(
+      rendered.root.findAllByProps({ id: "convex-quotabunga-end" })
+    ).toHaveLength(0);
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        clipUrl: "https://example.test/clip",
+        clipStartSeconds: 42,
+      })
+    );
+    // With no end to set or clear, the argument is left out so a backend
+    // without clip ranges still accepts the write.
+    expect(
+      (mocks.submit.mock.calls.at(-1) as unknown[] | undefined)?.[2]
+    ).not.toHaveProperty("clipEndSeconds");
+  });
+
+  test("keeps times when the same video is relinked or the link moves to another host", async () => {
+    const rendered = await renderSubmission();
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    const times = () => [
+      field("quote-finder-timestamp").props.value,
+      field("quote-finder-end").props.value,
+    ];
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    change("quote-finder-end", "18");
+    // Same moment in another URL form, or a bare link, keeps the times.
+    change(
+      "quote-finder-clip",
+      "https://www.youtube.com/watch?v=abcdefghijk&t=12"
+    );
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk");
+    expect(times()).toEqual(["12", "18"]);
+    // A half-typed time parses as 0 and must not disturb anything either.
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=1x");
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    expect(times()).toEqual(["12", "18"]);
+    change("quote-finder-clip", "https://example.test/clip");
+    expect(times()).toEqual(["12", "18"]);
+    expect(renderedText(rendered)).not.toContain("Quote player");
+    // Switching to a different video is what resets the times.
+    change("quote-finder-clip", "https://youtu.be/lmnopqrstuv");
+    expect(times()).toEqual(["0", ""]);
+  });
+
+  test("the time fields stay the source of truth for the same video", async () => {
+    const rendered = await renderSubmission();
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    change("quote-finder-timestamp", "12.5");
+    change("quote-finder-end", "18");
+    // Deleting a timestamp one key at a time passes through t=1.
+    for (const value of [
+      "https://youtu.be/abcdefghijk?t=1",
+      "https://youtu.be/abcdefghijk?t=30",
+      "https://youtu.be/abcdefghijk",
+    ])
+      change("quote-finder-clip", value);
+    expect(field("quote-finder-timestamp").props.value).toBe("12.5");
+    expect(field("quote-finder-end").props.value).toBe("18");
+  });
+
+  test("keeps a typed start while a clip link is typed or edited", async () => {
+    const rendered = await renderSubmission();
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    change("convex-quotabunga-timestamp", "42");
+    for (const value of ["h", "https://vimeo.com/1", "https://vimeo.com/12"])
+      change("convex-quotabunga-clip", value);
+    expect(field("convex-quotabunga-timestamp").props.value).toBe("42");
+    // A bare YouTube link keeps it too, and half-typed edits don't reset it.
+    change("convex-quotabunga-clip", "https://youtu.be/abcdefghijk");
+    change("convex-quotabunga-clip", "https://youtu.be/abcdefghij");
+    change("convex-quotabunga-clip", "https://youtu.be/abcdefghijk");
+    expect(field("convex-quotabunga-timestamp").props.value).toBe("42");
   });
 
   test("submits the entry for this episode and reloads it", async () => {
@@ -644,7 +986,10 @@ describe("ConvexQuotabungaSubmission writes", () => {
 
   test("withdraws this episode's entry after the member confirms", async () => {
     mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true)
+    );
     const rendered = await renderSubmission();
     await act(async () => {
       await findButton(rendered, "Withdraw").props.onClick();
@@ -655,7 +1000,10 @@ describe("ConvexQuotabungaSubmission writes", () => {
 
   test("keeps the entry when the member declines the confirmation", async () => {
     mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
-    vi.stubGlobal("confirm", vi.fn(() => false));
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => false)
+    );
     const rendered = await renderSubmission();
     await act(async () => {
       await findButton(rendered, "Withdraw").props.onClick();

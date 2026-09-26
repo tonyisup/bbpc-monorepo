@@ -2,7 +2,7 @@ import "server-only";
 
 import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import { auth } from "@clerk/nextjs/server";
-import { fetchAction, fetchQuery } from "convex/nextjs";
+import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
 import {
   type ArgsAndOptions,
   type FunctionArgs,
@@ -24,6 +24,17 @@ function queryArgs<Query extends FunctionReference<"query">>(
 ) {
   return [args, options] as unknown as ArgsAndOptions<
     typeof query,
+    NextjsOptions
+  >;
+}
+
+function mutationArgs<Mutation extends FunctionReference<"mutation">>(
+  mutation: Mutation,
+  args: FunctionArgs<Mutation>,
+  options: NextjsOptions
+) {
+  return [args, options] as unknown as ArgsAndOptions<
+    typeof mutation,
     NextjsOptions
   >;
 }
@@ -119,4 +130,21 @@ export async function fetchActionForSignedInUser<
     return null;
   }
   return fetchAction(action, ...actionArgs(action, args, { url, token }));
+}
+
+export async function fetchMutationForSignedInUser<
+  Mutation extends FunctionReference<"mutation">
+>(
+  mutation: Mutation,
+  args: FunctionArgs<Mutation>
+): Promise<FunctionReturnType<Mutation> | null> {
+  const url = requireConvexUrl();
+  const token = await getOptionalConvexToken();
+  if (token === null) {
+    return null;
+  }
+  return fetchMutation(
+    mutation,
+    ...mutationArgs(mutation, args, { url, token })
+  );
 }

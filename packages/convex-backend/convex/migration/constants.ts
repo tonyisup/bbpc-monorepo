@@ -296,6 +296,8 @@ export const PORTABLE_CONTROL_TABLES = [
   "migrationDomainRuns",
   "migrationCheckpoints",
   "migrationScrubRuns",
+  // Quote Finder search allowances; refill on their own, safe to drop.
+  "rateLimits",
 ] as const;
 
 export const PORTABLE_SCRUBBED_TABLES = [

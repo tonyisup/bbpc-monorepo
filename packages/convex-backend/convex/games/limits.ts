@@ -1,6 +1,13 @@
 import { domainError } from "../lib/errors.js";
 
 export const MAX_GAME_TYPES = 50;
+// Each YouTube search costs 100 of the API key's default 10,000 daily quota
+// units. A token bucket admits at most capacity + rate in any 24 hours, so the
+// site stays under 100 searches however Google's reset lines up with ours.
+export const VIDEO_SEARCHES_PER_USER_PER_DAY = 12;
+export const VIDEO_SEARCH_USER_BURST = 6;
+export const VIDEO_SEARCHES_SITE_PER_DAY = 50;
+export const VIDEO_SEARCH_SITE_BURST = 45;
 export const MAX_GAME_POINT_TYPES = 100;
 export const MAX_SEASON_PAGE_SIZE = 50;
 export const MAX_SEASONS_TO_INSPECT = 100;
