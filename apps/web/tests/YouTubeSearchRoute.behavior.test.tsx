@@ -4,9 +4,13 @@ import type { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   env: { YOUTUBE_API_KEY: undefined as string | undefined },
+  reserve: vi.fn(),
 }));
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
 vi.mock("@/env.mjs", () => ({ env: mocks.env }));
+vi.mock("@/server/convex/quotes", () => ({
+  reserveVideoSearch: mocks.reserve,
+}));
 import { GET } from "@/app/api/youtube/search/route";
 import { decodeVideoTitle } from "@/lib/youtubeSearch";
 
@@ -26,6 +30,8 @@ beforeEach(() => {
   fetchMock.mockReset();
   mocks.auth.mockResolvedValue({ userId: "signed-in-listener" });
   mocks.env.YOUTUBE_API_KEY = "test-server-key";
+  mocks.reserve.mockReset();
+  mocks.reserve.mockResolvedValue({ ok: true });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -35,6 +41,55 @@ test("requires sign-in and valid input before spending search quota", async () =
   for (const query of [" ", "a", "x".repeat(201)])
     expect((await GET(request(query))).status).toBe(400);
   expect((await GET(request("movie", "x".repeat(513)))).status).toBe(400);
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(mocks.reserve).not.toHaveBeenCalled();
+});
+
+test("spends a listener's search budget and refuses once it runs out", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(Date.UTC(2026, 8, 25, 20));
+  try {
+    mocks.reserve.mockResolvedValueOnce({
+      ok: false,
+      scope: "user",
+      retryAt: Date.now() + 90 * 60_000,
+    });
+    const mine = await GET(request("movie quote"));
+    expect(mine.status).toBe(429);
+    expect(mine.headers.get("Retry-After")).toBe("5400");
+    expect(mine.headers.get("Cache-Control")).toBe("private, no-store");
+    expect((await mine.json()).error).toBe(
+      "You've used your video searches for now. Try again in 2 hours, or paste a clip link below."
+    );
+
+    mocks.reserve.mockResolvedValueOnce({
+      ok: false,
+      scope: "site",
+      retryAt: Date.now() + 20 * 60_000,
+    });
+    const site = await GET(request("movie quote"));
+    expect(site.status).toBe(429);
+    expect((await site.json()).error).toBe(
+      "Video search has hit its limit for today. Try again in 20 minutes, or paste a clip link below."
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("fails closed when the search budget can't be checked", async () => {
+  mocks.reserve.mockResolvedValueOnce(null);
+  expect((await GET(request("movie quote"))).status).toBe(401);
+  mocks.reserve.mockRejectedValueOnce(new Error("Unknown function"));
+  const failed = await GET(request("movie quote"));
+  expect(failed.status).toBe(503);
+  expect((await failed.json()).error).toContain("unavailable");
+  // Without a key, nothing is spent from the listener's budget.
+  mocks.env.YOUTUBE_API_KEY = undefined;
+  mocks.reserve.mockClear();
+  expect((await GET(request("movie quote"))).status).toBe(503);
+  expect(mocks.reserve).not.toHaveBeenCalled();
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
