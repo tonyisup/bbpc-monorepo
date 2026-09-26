@@ -38,6 +38,7 @@ import {
   validateBracketOrder,
   validatePlacement,
   validateQuoteAdminNotes,
+  validateQuoteClipEnd,
   validateQuoteClipStart,
   validateQuoteClipUrl,
   validateQuoteListenerNotes,
@@ -68,6 +69,7 @@ const quoteContentArgs = {
   sourceType: quoteSourceTypeValidator,
   clipUrl: v.optional(v.union(v.string(), v.null())),
   clipStartSeconds: v.optional(v.union(v.number(), v.null())),
+  clipEndSeconds: v.optional(v.union(v.number(), v.null())),
   listenerNotes: v.optional(v.union(v.string(), v.null())),
 };
 
@@ -83,22 +85,33 @@ interface QuoteAwardSnapshot {
   placement: number | null;
 }
 
-function contentPatch(args: {
-  quoteText: string;
-  sourceTitle: string;
-  sourceType: string;
-  clipUrl?: string | null;
-  clipStartSeconds?: number | null;
-  listenerNotes?: string | null;
-}) {
+function contentPatch(
+  args: {
+    quoteText: string;
+    sourceTitle: string;
+    sourceType: string;
+    clipUrl?: string | null;
+    clipStartSeconds?: number | null;
+    clipEndSeconds?: number | null;
+    listenerNotes?: string | null;
+  },
+  existing?: Doc<"quoteSubmissions"> | null,
+) {
+  const clipUrl = validateQuoteClipUrl(args.clipUrl ?? null);
+  const clipStartSeconds = validateQuoteClipStart(args.clipStartSeconds ?? null);
+  // Old clients preserve an end only when they leave its source and start unchanged.
+  const sameClip = existing?.clipUrl === clipUrl &&
+    existing?.clipStartSeconds === clipStartSeconds;
+  const clipEnd = args.clipEndSeconds === undefined
+    ? (sameClip ? existing?.clipEndSeconds ?? null : null)
+    : args.clipEndSeconds;
   return {
     quoteText: validateQuoteText(args.quoteText),
     sourceTitle: validateQuoteSourceTitle(args.sourceTitle),
     sourceType: validateQuoteSourceType(args.sourceType),
-    clipUrl: validateQuoteClipUrl(args.clipUrl ?? null),
-    clipStartSeconds: validateQuoteClipStart(
-      args.clipStartSeconds ?? null,
-    ),
+    clipUrl,
+    clipStartSeconds,
+    clipEndSeconds: validateQuoteClipEnd(clipEnd, clipStartSeconds, clipUrl),
     listenerNotes: validateQuoteListenerNotes(
       args.listenerNotes ?? null,
     ),
@@ -386,7 +399,7 @@ export const submitMine = authenticatedMutation({
         "A scored quote submission cannot be edited.",
       );
     }
-    const content = contentPatch(args);
+    const content = contentPatch(args, existing);
     let submissionId: Id<"quoteSubmissions">;
     let created: boolean;
     if (existing === null) {
@@ -408,6 +421,9 @@ export const submitMine = authenticatedMutation({
         ...(content.clipStartSeconds === undefined
           ? {}
           : { clipStartSeconds: content.clipStartSeconds }),
+        ...(content.clipEndSeconds === undefined
+          ? {}
+          : { clipEndSeconds: content.clipEndSeconds }),
         ...(content.listenerNotes === undefined
           ? {}
           : { listenerNotes: content.listenerNotes }),
@@ -610,6 +626,9 @@ export const createForUser = adminMutation({
       ...(content.clipStartSeconds === undefined
         ? {}
         : { clipStartSeconds: content.clipStartSeconds }),
+      ...(content.clipEndSeconds === undefined
+        ? {}
+        : { clipEndSeconds: content.clipEndSeconds }),
       ...(content.listenerNotes === undefined
         ? {}
         : { listenerNotes: content.listenerNotes }),
@@ -648,7 +667,7 @@ export const updateContent = adminMutation({
       );
     }
     await ctx.db.patch("quoteSubmissions", submission._id, {
-      ...contentPatch(args),
+      ...contentPatch(args, submission),
       adminNotes: validateQuoteAdminNotes(
         args.adminNotes ?? null,
       ),

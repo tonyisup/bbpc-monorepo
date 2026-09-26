@@ -10,14 +10,7 @@ import {
   type ReactTestInstance,
   type ReactTestRenderer,
 } from "react-test-renderer";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 interface DuplicateCheckResult {
   possibleMatch: boolean;
@@ -31,12 +24,13 @@ interface DuplicateCheckResult {
 }
 
 const mocks = vi.hoisted(() => ({
-  checkDuplicate: vi.fn<
-    (
-      client: unknown,
-      input: { quoteText: string; sourceTitle: string },
-    ) => Promise<DuplicateCheckResult>
-  >(),
+  checkDuplicate:
+    vi.fn<
+      (
+        client: unknown,
+        input: { quoteText: string; sourceTitle: string }
+      ) => Promise<DuplicateCheckResult>
+    >(),
   convex: {},
   errorCode: vi.fn<(error: unknown) => string | null>(() => null),
   load: vi.fn<() => Promise<unknown>>(),
@@ -153,6 +147,11 @@ import { toast } from "sonner";
 
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
 
+vi.mock("@/components/QuoteClipEditor", () => ({
+  QuoteClipEditor: () => <div>Quote player</div>,
+}));
+vi.mock("next/image", () => ({ default: () => <span /> }));
+
 const openRound = {
   episode: { id: "episode-test", number: "EP-TEST", status: "next" },
   isOpen: true,
@@ -184,7 +183,7 @@ async function renderSubmission(episodeStatus = "next") {
 function enterQuote(
   rendered: ReactTestRenderer,
   quoteText: string,
-  sourceTitle = "Heat",
+  sourceTitle = "Heat"
 ) {
   act(() => {
     rendered.root
@@ -352,13 +351,15 @@ describe("ConvexQuotabungaSubmission duplicate checks", () => {
     expect(text).toContain("1:02:03");
     expect(text).toContain("don't let yourself get attached");
     const liveRegions = rendered.root.findAll(
-      (node) => node.type === "p" && node.props.role === "status",
+      (node) => node.type === "p" && node.props.role === "status"
     );
     expect(liveRegions).toHaveLength(1);
     const liveText = liveRegions[0] ? instanceText(liveRegions[0]) : "";
     expect(liveText).toContain("Possibly heard on the show.");
     expect(liveText).not.toContain("attached");
-    const links = rendered.root.findAllByType("a");
+    const links = rendered.root
+      .findAllByType("a")
+      .filter((link) => link.props.href.startsWith("/episodes/"));
     expect(links.map((link) => link.props.href)).toEqual(["/episodes/heat"]);
     expect(links[0]?.props.target).toBe("_blank");
     const submitButton = rendered.root
@@ -421,7 +422,9 @@ describe("ConvexQuotabungaSubmission round window", () => {
     });
     mocks.window = { status: "recording", closesAt: 100_000 + 90_000 };
     const rendered = await renderSubmission();
-    expect(renderedText(rendered)).toContain("Entries lock with the picks in 1:30");
+    expect(renderedText(rendered)).toContain(
+      "Entries lock with the picks in 1:30"
+    );
     expect(
       rendered.root.findAllByProps(
         { id: "convex-quotabunga-quote" },
@@ -437,7 +440,9 @@ describe("ConvexQuotabungaSubmission round window", () => {
     });
     mocks.window = { status: "recording", closesAt: 100_000 + 90_000 };
     const rendered = await renderSubmission("recording");
-    expect(renderedText(rendered)).toContain("Entries lock with the picks in 1:30");
+    expect(renderedText(rendered)).toContain(
+      "Entries lock with the picks in 1:30"
+    );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(90_000);
     });
@@ -542,7 +547,9 @@ describe("ConvexQuotabungaSubmission round window", () => {
     mocks.window = { status: "recording", closesAt: 100_000 - 1 };
     const rendered = await renderSubmission();
     expect(renderedText(rendered)).toContain("locked for recording");
-    expect(rendered.root.findAllByType("button").map((b) => instanceText(b))).not.toContain("Withdraw");
+    expect(
+      rendered.root.findAllByType("button").map((b) => instanceText(b))
+    ).not.toContain("Withdraw");
   });
 });
 
@@ -565,7 +572,7 @@ const savedEntry = {
 async function submitForm(rendered: ReactTestRenderer) {
   await act(async () => {
     await rendered.root.findByType("form").props.onSubmit({
-      preventDefault() {},
+      preventDefault: vi.fn(),
     });
   });
 }
@@ -601,6 +608,88 @@ describe("ConvexQuotabungaSubmission writes", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.clearAllMocks();
+  });
+
+  test("keeps the simple clip fields until the member opens the Quote Finder", async () => {
+    const rendered = await renderSubmission();
+    expect(
+      rendered.root.findAllByProps({ id: "convex-quotabunga-end" })
+    ).toHaveLength(0);
+    expect(
+      rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
+    ).toHaveLength(0);
+
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    const toggle = findButton(rendered, "Back to simple form");
+    expect(toggle.props["aria-expanded"]).toBe(true);
+    expect(
+      rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
+    ).toHaveLength(1);
+    rendered.root.findByProps({ id: "convex-quotabunga-end" });
+    findButton(rendered, "Search");
+
+    act(() => toggle.props.onClick());
+    expect(
+      findButton(rendered, "Use Quote Finder").props["aria-expanded"]
+    ).toBe(false);
+    expect(
+      rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
+    ).toHaveLength(0);
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("choosing a searched video fills the link, resets old timing and preserves quote text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            videos: [
+              { id: "lmnopqrstuv", title: "Another scene", channel: "Movies" },
+            ],
+            nextPageToken: null,
+          })
+        )
+      )
+    );
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Keep these words", "Heat");
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    act(() => {
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-clip" })
+        .props.onChange({ target: { value: "https://youtu.be/abcdefghijk" } });
+    });
+    act(() => {
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-timestamp" })
+        .props.onChange({ target: { value: "42" } });
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-end" })
+        .props.onChange({ target: { value: "52" } });
+    });
+    await act(async () => {
+      findButton(rendered, "Search").props.onClick();
+    });
+    act(() =>
+      rendered.root
+        .findByProps({ "aria-label": "Use video: Another scene" })
+        .props.onClick()
+    );
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-clip" }).props.value
+    ).toBe("https://www.youtube.com/watch?v=lmnopqrstuv");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
+        .value
+    ).toBe("0");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-end" }).props.value
+    ).toBe("");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("Keep these words");
+    expect(mocks.submit).not.toHaveBeenCalled();
   });
 
   test("submits the entry for this episode and reloads it", async () => {
@@ -644,7 +733,10 @@ describe("ConvexQuotabungaSubmission writes", () => {
 
   test("withdraws this episode's entry after the member confirms", async () => {
     mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true)
+    );
     const rendered = await renderSubmission();
     await act(async () => {
       await findButton(rendered, "Withdraw").props.onClick();
@@ -655,7 +747,10 @@ describe("ConvexQuotabungaSubmission writes", () => {
 
   test("keeps the entry when the member declines the confirmation", async () => {
     mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
-    vi.stubGlobal("confirm", vi.fn(() => false));
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => false)
+    );
     const rendered = await renderSubmission();
     await act(async () => {
       await findButton(rendered, "Withdraw").props.onClick();

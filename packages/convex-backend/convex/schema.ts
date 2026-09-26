@@ -732,6 +732,7 @@ export default defineSchema({
     ),
     clipUrl: v.optional(v.string()),
     clipStartSeconds: v.optional(v.number()),
+    clipEndSeconds: v.optional(v.number()),
     listenerNotes: v.optional(v.string()),
     status: v.union(
       v.literal("SUBMITTED"),

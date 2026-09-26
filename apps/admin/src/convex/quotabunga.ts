@@ -45,7 +45,8 @@ const quoteAdminSubmissionSchema = z
     sourceTitle: z.string(),
     sourceType: quoteSourceTypeSchema,
     clipUrl: z.string().nullable(),
-    clipStartSeconds: z.number().int().nonnegative().nullable(),
+    clipStartSeconds: z.number().nonnegative().nullable(),
+    clipEndSeconds: z.number().nonnegative().nullable().default(null),
     listenerNotes: z.string().nullable(),
     status: quoteStatusSchema,
     bracketOrder: z.number().int().nullable(),
@@ -186,6 +187,7 @@ export interface ConvexQuoteContentInput {
   sourceType: ConvexQuoteSourceType;
   clipUrl: string | null;
   clipStartSeconds: number | null;
+  clipEndSeconds?: number | null;
   listenerNotes: string | null;
 }
 

@@ -23,6 +23,12 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { QuotabungaClipFields } from "@/components/QuotabungaClipFields";
+import {
+  formatClipTime,
+  parseYouTubeUrl,
+  validClipRange,
+} from "@/lib/quoteClip";
 import { AdminCollapsibleHeader } from "@/components/AdminCollapsibleHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -171,6 +177,9 @@ export function ConvexQuotabungaSubmission({
   const [sourceType, setSourceType] = useState<ConvexQuoteSourceType>("MOVIE");
   const [clipUrl, setClipUrl] = useState("");
   const [clipStartSeconds, setClipStartSeconds] = useState("");
+  const [clipEndSeconds, setClipEndSeconds] = useState("");
+  const [clipDuration, setClipDuration] = useState<number | null>(null);
+  const youtube = parseYouTubeUrl(clipUrl);
   const [listenerNotes, setListenerNotes] = useState("");
   const [duplicateCheck, setDuplicateCheck] = useState<{
     inputKey: string;
@@ -190,9 +199,10 @@ export function ConvexQuotabungaSubmission({
     episodeId: documentId("episodes", episodeId),
   });
   const windowStatus =
-    liveWindow === undefined ? episodeStatus : (liveWindow?.status ?? null);
+    liveWindow === undefined ? episodeStatus : liveWindow?.status ?? null;
   const hasAired = windowStatus === "published";
-  const closesAt = liveWindow === undefined ? null : (liveWindow?.closesAt ?? null);
+  const closesAt =
+    liveWindow === undefined ? null : liveWindow?.closesAt ?? null;
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const currentTime = Date.now();
@@ -230,7 +240,10 @@ export function ConvexQuotabungaSubmission({
   ) : null;
   const closingNotice =
     closingCountdown === null ? null : (
-      <p className="text-center text-sm font-medium text-amber-400" role="status">
+      <p
+        className="text-center text-sm font-medium text-amber-400"
+        role="status"
+      >
         {`Entries lock with the picks in ${closingCountdown}.`}
       </p>
     );
@@ -248,7 +261,7 @@ export function ConvexQuotabungaSubmission({
   const transcriptMatches =
     duplicateCheck?.inputKey === duplicateInputKey &&
     duplicateCheck.status === "ready"
-      ? (duplicateCheck.transcriptMatches ?? [])
+      ? duplicateCheck.transcriptMatches ?? []
       : [];
   const isDuplicateCheckUnavailable =
     duplicateCheck?.inputKey === duplicateInputKey &&
@@ -260,6 +273,8 @@ export function ConvexQuotabungaSubmission({
     setSourceType("MOVIE");
     setClipUrl("");
     setClipStartSeconds("");
+    setClipEndSeconds("");
+    setClipDuration(null);
     setListenerNotes("");
   }, []);
 
@@ -301,6 +316,7 @@ export function ConvexQuotabungaSubmission({
     setSourceType(submission.sourceType);
     setClipUrl(submission.clipUrl ?? "");
     setClipStartSeconds(submission.clipStartSeconds?.toString() ?? "");
+    setClipEndSeconds(submission.clipEndSeconds?.toString() ?? "");
     setListenerNotes(submission.listenerNotes ?? "");
     setIsEditing(false);
   }, [resetForm, submission]);
@@ -357,6 +373,16 @@ export function ConvexQuotabungaSubmission({
     };
   }, [convex, episodeId, isOpen, isEditing, quoteText, sourceTitle]);
 
+  const changeClipUrl = (nextUrl: string) => {
+    const nextVideo = parseYouTubeUrl(nextUrl);
+    if (nextVideo?.id !== youtube?.id || (!nextVideo && nextUrl !== clipUrl)) {
+      setClipStartSeconds(nextVideo ? String(nextVideo.start) : "");
+      setClipEndSeconds("");
+      setClipDuration(null);
+    }
+    setClipUrl(nextUrl);
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuote = quoteText.trim();
@@ -365,17 +391,21 @@ export function ConvexQuotabungaSubmission({
     const normalizedNotes = listenerNotes.trim();
     const parsedClipStart =
       clipStartSeconds.trim() === "" ? null : Number(clipStartSeconds);
+    const parsedClipEnd =
+      clipEndSeconds.trim() === "" ? null : Number(clipEndSeconds);
 
     if (
       normalizedQuote.length === 0 ||
       normalizedSource.length === 0 ||
-      (parsedClipStart !== null &&
-        (!Number.isSafeInteger(parsedClipStart) ||
-          parsedClipStart < 0 ||
-          parsedClipStart > 86_400))
+      !validClipRange(parsedClipStart, parsedClipEnd) ||
+      (parsedClipEnd !== null && !normalizedClipUrl) ||
+      (youtube !== null &&
+        clipDuration !== null &&
+        ((parsedClipStart !== null && parsedClipStart >= clipDuration) ||
+          (parsedClipEnd !== null && parsedClipEnd > clipDuration)))
     ) {
       setErrorMessage(
-        "Add a quote and source. Clip start must be a whole number from 0 through 86400."
+        "Add a quote and source. Clip times must be between 0 and 86400 seconds, with the end after the start, within the video, and a clip link."
       );
       return;
     }
@@ -389,6 +419,7 @@ export function ConvexQuotabungaSubmission({
         sourceType,
         clipUrl: normalizedClipUrl || null,
         clipStartSeconds: parsedClipStart,
+        clipEndSeconds: parsedClipEnd,
         listenerNotes: normalizedNotes || null,
       });
       await reload();
@@ -516,6 +547,10 @@ export function ConvexQuotabungaSubmission({
                     className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
                   >
                     View submitted clip
+                    {submission.clipStartSeconds !== null &&
+                      ` · ${formatClipTime(submission.clipStartSeconds)}`}
+                    {submission.clipEndSeconds != null &&
+                      ` – ${formatClipTime(submission.clipEndSeconds)}`}
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 ) : null}
@@ -652,47 +687,17 @@ export function ConvexQuotabungaSubmission({
                 </DuplicateStatusPanel>
               ) : null}
 
-              <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="convex-quotabunga-clip"
-                    className="text-sm font-semibold"
-                  >
-                    Clip link{" "}
-                    <span className="font-normal text-gray-500">
-                      (optional)
-                    </span>
-                  </label>
-                  <Input
-                    id="convex-quotabunga-clip"
-                    type="url"
-                    maxLength={2000}
-                    value={clipUrl}
-                    onChange={(event) => setClipUrl(event.target.value)}
-                    placeholder="https://youtube.com/..."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="convex-quotabunga-timestamp"
-                    className="text-sm font-semibold"
-                  >
-                    Start second
-                  </label>
-                  <Input
-                    id="convex-quotabunga-timestamp"
-                    type="number"
-                    min={0}
-                    max={86400}
-                    step={1}
-                    value={clipStartSeconds}
-                    onChange={(event) =>
-                      setClipStartSeconds(event.target.value)
-                    }
-                    placeholder="42"
-                  />
-                </div>
-              </div>
+              <QuotabungaClipFields
+                clipUrl={clipUrl}
+                start={clipStartSeconds}
+                end={clipEndSeconds}
+                suggestedQuery={[sourceTitle, quoteText].filter(Boolean).join(" ")}
+                onClipUrlChange={changeClipUrl}
+                onStartChange={setClipStartSeconds}
+                onEndChange={setClipEndSeconds}
+                onQuoteChange={setQuoteText}
+                onDurationChange={setClipDuration}
+              />
 
               <div className="space-y-2">
                 <label

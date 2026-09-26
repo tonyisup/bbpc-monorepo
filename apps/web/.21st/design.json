@@ -185,7 +185,8 @@
     "Use compact numbered syllabus rows and collapsed assignment history.",
     "Use BBPC dark neutral surfaces and red accents for Quotabunga, matching the rest of the listener game.",
     "Keep all prediction cards closed initially; show every assignment in a completion checklist and offer a next-unfinished-movie action.",
-    "Rating picks and wagers share a deadline ten minutes after the episode enters recording; show the live countdown and enforce the deadline on the server."
+    "Rating picks and wagers share a deadline ten minutes after the episode enters recording; show the live countdown and enforce the deadline on the server.",
+    "Quotabunga uses a YouTube preview above a red quote-range lane and a timed transcript lane; subtitle timing is preserved without inventing word boundaries."
   ],
   "evidence": [
     {

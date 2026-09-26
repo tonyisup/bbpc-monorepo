@@ -15,6 +15,17 @@ pnpm run dev:web
 Copy this app's `.env.example` to `.env.local` and provide the Clerk, Convex,
 UploadThing, and other service credentials described there.
 
+Quotabunga's optional inline video search uses `YOUTUBE_API_KEY` in
+`apps/web/.env.local`. Enable YouTube Data API v3 for that key's Google Cloud
+project and restrict the key to that API. Use a key suitable for server requests;
+a browser HTTP-referrer restriction will reject the server call. Keep the key
+server-only (never use a `NEXT_PUBLIC_` prefix). The search route requires a Clerk
+session, returns six embeddable videos per page, and caches provider responses for
+five minutes. If search is unavailable, listeners can still paste a clip link.
+
+Set the same server-side variable in the web deployment environment when deploying
+this feature. It is optional, so environments without video search still start.
+
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can
 therefore be tested atomically from the repository root with `pnpm run check`.

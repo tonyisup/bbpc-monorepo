@@ -68,6 +68,7 @@ interface QuoteFormState {
   sourceType: ConvexQuoteSourceType;
   clipUrl: string;
   clipStartSeconds: string;
+  clipEndSeconds: string;
   listenerNotes: string;
   adminNotes: string;
 }
@@ -85,6 +86,7 @@ const emptyForm: QuoteFormState = {
   sourceType: "MOVIE",
   clipUrl: "",
   clipStartSeconds: "",
+  clipEndSeconds: "",
   listenerNotes: "",
   adminNotes: "",
 };
@@ -350,6 +352,7 @@ export function ConvexQuotabungaPage() {
       sourceType: submission.sourceType,
       clipUrl: submission.clipUrl ?? "",
       clipStartSeconds: submission.clipStartSeconds?.toString() ?? "",
+      clipEndSeconds: submission.clipEndSeconds?.toString() ?? "",
       listenerNotes: submission.listenerNotes ?? "",
       adminNotes: submission.adminNotes ?? "",
     });
@@ -365,13 +368,18 @@ export function ConvexQuotabungaPage() {
       form.clipStartSeconds.length === 0
         ? null
         : Number(form.clipStartSeconds);
+    const clipEndSeconds = form.clipEndSeconds.trim() === ""
+      ? null : Number(form.clipEndSeconds);
     if (
-      clipStartSeconds !== null &&
-      (!Number.isInteger(clipStartSeconds) ||
-        clipStartSeconds < 0 ||
-        clipStartSeconds > 86_400)
+      (clipEndSeconds !== null &&
+        (!Number.isFinite(clipEndSeconds) || clipStartSeconds === null ||
+          clipEndSeconds <= clipStartSeconds || clipEndSeconds > 86400 ||
+          !form.clipUrl.trim())) ||
+      (clipStartSeconds !== null &&
+        (!Number.isFinite(clipStartSeconds) ||
+          clipStartSeconds < 0 || clipStartSeconds > 86_400))
     ) {
-      toast.error("Clip start must be a whole number from 0 to 86400.");
+      toast.error("Clip times must be between 0 and 86400, with the end after the start and a clip link.");
       return;
     }
     const content = {
@@ -380,6 +388,7 @@ export function ConvexQuotabungaPage() {
       sourceType: form.sourceType,
       clipUrl: nullableText(form.clipUrl),
       clipStartSeconds,
+      clipEndSeconds,
       listenerNotes: nullableText(form.listenerNotes),
     };
     setBusyAction("save");
@@ -724,6 +733,8 @@ export function ConvexQuotabungaPage() {
                               : ` at ${String(
                                   submission.clipStartSeconds
                                 )}s`}
+                            {submission.clipEndSeconds !== null
+                              ? ` to ${String(submission.clipEndSeconds)}s` : ""}
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
@@ -992,6 +1003,7 @@ export function ConvexQuotabungaPage() {
                 </label>
                 <Input
                   id="clipStart"
+                  step="any"
                   max={86_400}
                   min={0}
                   onChange={(event) =>
@@ -1002,6 +1014,22 @@ export function ConvexQuotabungaPage() {
                   }
                   type="number"
                   value={form.clipStartSeconds}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold" htmlFor="clipEnd">
+                  End second (optional)
+                </label>
+                <Input
+                  id="clipEnd"
+                  type="number"
+                  step="any"
+                  min={0}
+                  max={86400}
+                  value={form.clipEndSeconds}
+                  onChange={(event) => setForm((current) => ({
+                    ...current, clipEndSeconds: event.target.value,
+                  }))}
                 />
               </div>
             </div>

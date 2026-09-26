@@ -136,13 +136,34 @@ export function validateQuoteClipStart(
     return undefined;
   }
   if (
-    !Number.isSafeInteger(value) ||
+    !Number.isFinite(value) ||
     value < 0 ||
     value > MAX_CLIP_START_SECONDS
   ) {
     domainError(
       "VALIDATION_FAILED",
-      `Quote clip start must be an integer from 0 through ${String(MAX_CLIP_START_SECONDS)}.`,
+      `Quote clip start must be a number from 0 through ${String(MAX_CLIP_START_SECONDS)}.`,
+    );
+  }
+  return value;
+}
+
+export function validateQuoteClipEnd(
+  value: number | null,
+  start: number | undefined,
+  clipUrl: string | undefined,
+): number | undefined {
+  if (value === null) return undefined;
+  if (
+    !Number.isFinite(value) ||
+    value > MAX_CLIP_START_SECONDS ||
+    start === undefined ||
+    value <= start ||
+    clipUrl === undefined
+  ) {
+    domainError(
+      "VALIDATION_FAILED",
+      "Quote clip end requires a clip URL and must be after its start, within 86400 seconds.",
     );
   }
   return value;

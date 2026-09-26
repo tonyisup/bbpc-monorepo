@@ -31,6 +31,7 @@ const submission = {
   sourceType: "MOVIE" as const,
   clipUrl: null,
   clipStartSeconds: null,
+  clipEndSeconds: null,
   listenerNotes: null,
   status: "INCLUDED" as const,
   bracketOrder: 1,
@@ -66,6 +67,7 @@ const content = {
   sourceType: submission.sourceType,
   clipUrl: null,
   clipStartSeconds: null,
+  clipEndSeconds: null,
   listenerNotes: null,
 };
 

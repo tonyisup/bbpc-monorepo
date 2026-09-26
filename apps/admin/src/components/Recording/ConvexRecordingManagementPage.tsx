@@ -894,7 +894,12 @@ export function QuotabungaRecordingRound({
                         rel="noreferrer noopener"
                         target="_blank"
                       >
-                        Open clip <ExternalLink className="h-3.5 w-3.5" />
+                        Open clip
+                        {submission.clipStartSeconds !== null
+                          ? ` at ${submission.clipStartSeconds}s` : ""}
+                        {submission.clipEndSeconds !== null
+                          ? ` to ${submission.clipEndSeconds}s` : ""}
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}
                   </div>

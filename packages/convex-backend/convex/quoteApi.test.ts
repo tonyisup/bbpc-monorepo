@@ -2263,3 +2263,39 @@ describe("Quotabunga workflows", () => {
     expect(report?.likelihood).toBeCloseTo(0.45);
   });
 });
+
+
+describe("quote clip ranges", () => {
+  test("round-trips fractional ranges, rejects invalid ends and preserves ranges for older clients", async () => {
+    const t = createTestBackend();
+    await seedActors(t);
+    await initializeS1(t);
+    await seedFoundation(t);
+    await advanceFromS1ToS3(t);
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    const input = { clientApiVersion: BBPC_API_VERSION, ...memberContent, clipStartSeconds: 42.125, clipEndSeconds: 45.875 };
+    const created = await member.mutation(api.games.quotes.submitMine, input);
+    expect(created).toMatchObject({ clipStartSeconds: 42.125, clipEndSeconds: 45.875 });
+    const read = await member.query(api.games.quotes.currentForMe, {});
+    expect(read.submission).toMatchObject({ clipStartSeconds: 42.125, clipEndSeconds: 45.875 });
+    const adminRead = await t.withIdentity(ADMIN_IDENTITY).mutation(api.games.quotes.updateContent, {
+      clientApiVersion: BBPC_API_VERSION, id: created.id,
+      quoteText: "Adjusted words", sourceTitle: memberContent.sourceTitle, sourceType: memberContent.sourceType,
+      clipUrl: memberContent.clipUrl, clipStartSeconds: 42.125,
+    });
+    expect(adminRead.clipEndSeconds).toBe(45.875);
+    for (const invalid of [
+      { clipEndSeconds: 42.125 }, { clipEndSeconds: 10 }, { clipEndSeconds: 86401 },
+      { clipEndSeconds: Infinity }, { clipStartSeconds: null }, { clipUrl: null },
+    ]) {
+      await expectDomainError(member.mutation(api.games.quotes.submitMine, { ...input, ...invalid }), "VALIDATION_FAILED");
+    }
+    const cleared = await member.mutation(api.games.quotes.submitMine, { ...input, clipEndSeconds: null });
+    expect(cleared.clipEndSeconds).toBeNull();
+    await member.mutation(api.games.quotes.submitMine, input);
+    const legacyEdit = await member.mutation(api.games.quotes.submitMine, {
+      clientApiVersion: BBPC_API_VERSION, ...memberContent, clipStartSeconds: 60,
+    });
+    expect(legacyEdit.clipEndSeconds).toBeNull();
+  });
+});
