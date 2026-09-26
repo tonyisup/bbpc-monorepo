@@ -3,15 +3,27 @@
 Date: 2026-09-25
 Status: First implementation; local preview verified. Not deployed.
 
-Listeners search YouTube or paste a link into the existing submission form, select
-a time range under the embedded player, preview or repeat that range, and submit the
-quote with its start and end times. The player uses the official YouTube IFrame
+Listeners search YouTube or paste a link, select a time range under the embedded
+player, preview or repeat that range, and submit the quote with its start and end
+times from the existing submission form. The player uses the official YouTube IFrame
 API. It does not download, edit, or export video files.
 
-## Find a video without leaving the form
+## Quote Finder overlay
+
+The form keeps the simple clip link and start second fields (plus end second once
+set). Use Quote Finder opens the search, player, timeline, and transcript tools in a
+full-screen dialog so they get the whole viewport, including on phones. The dialog
+edits the same form state, so the quote, source, and clip times are already in the
+form when it closes; the form remains the only place an entry is submitted. While
+open it adds a same-URL history entry, so the phone back gesture closes the finder
+instead of leaving the episode. Done and Escape step back over that entry, and focus
+returns to the Use Quote Finder button. Search results and transcript state are
+discarded when the dialog closes.
+
+## Find a video
 
 The search field suggests the entered source and quote, but only requests results
-on Search or Enter. Results include YouTube thumbnails, titles, and channel names.
+on Search or Enter. Results are compact rows with a thumbnail, title, and channel.
 Use video fills the clip link and collapses the results so the player is visible;
 Show search results restores the same results without another API call. Selecting
 a different video resets old timing and transcript state while preserving the

@@ -151,6 +151,27 @@ vi.mock("@/components/QuoteClipEditor", () => ({
   QuoteClipEditor: () => <div>Quote player</div>,
 }));
 vi.mock("next/image", () => ({ default: () => <span /> }));
+vi.mock("@/components/FullScreenDialog", () => ({
+  FullScreenDialog: ({
+    open,
+    onOpenChange,
+    title,
+    children,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    title: string;
+    children: ReactNode;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label={title}>
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Done
+        </button>
+        {children}
+      </div>
+    ) : null,
+}));
 
 const openRound = {
   episode: { id: "episode-test", number: "EP-TEST", status: "next" },
@@ -610,31 +631,41 @@ describe("ConvexQuotabungaSubmission writes", () => {
     vi.clearAllMocks();
   });
 
-  test("keeps the simple clip fields until the member opens the Quote Finder", async () => {
+  test("opens the Quote Finder full screen and returns to the simple fields", async () => {
     const rendered = await renderSubmission();
     expect(
       rendered.root.findAllByProps({ id: "convex-quotabunga-end" })
     ).toHaveLength(0);
-    expect(
-      rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
-    ).toHaveLength(0);
+    expect(rendered.root.findAllByProps({ role: "dialog" })).toHaveLength(0);
 
     act(() => findButton(rendered, "Use Quote Finder").props.onClick());
-    const toggle = findButton(rendered, "Hide Quote Finder");
-    expect(toggle.props["aria-expanded"]).toBe(true);
     expect(
-      rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
+      rendered.root.findAllByProps({
+        role: "dialog",
+        "aria-label": "Quote Finder",
+      })
     ).toHaveLength(1);
-    rendered.root.findByProps({ id: "convex-quotabunga-end" });
+    rendered.root.findByProps({ id: "quote-finder-clip" });
+    rendered.root.findByProps({ id: "quote-finder-end" });
     findButton(rendered, "Search");
 
-    act(() => toggle.props.onClick());
+    act(() => {
+      rendered.root
+        .findByProps({ id: "quote-finder-timestamp" })
+        .props.onChange({ target: { value: "12" } });
+      rendered.root
+        .findByProps({ id: "quote-finder-end" })
+        .props.onChange({ target: { value: "18.5" } });
+    });
+    act(() => findButton(rendered, "Done").props.onClick());
+    expect(rendered.root.findAllByProps({ role: "dialog" })).toHaveLength(0);
     expect(
-      findButton(rendered, "Use Quote Finder").props["aria-expanded"]
-    ).toBe(false);
+      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
+        .value
+    ).toBe("12");
     expect(
-      rendered.root.findAllByProps({ "aria-label": "Quote Finder" })
-    ).toHaveLength(0);
+      rendered.root.findByProps({ id: "convex-quotabunga-end" }).props.value
+    ).toBe("18.5");
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
@@ -657,15 +688,15 @@ describe("ConvexQuotabungaSubmission writes", () => {
     act(() => findButton(rendered, "Use Quote Finder").props.onClick());
     act(() => {
       rendered.root
-        .findByProps({ id: "convex-quotabunga-clip" })
+        .findByProps({ id: "quote-finder-clip" })
         .props.onChange({ target: { value: "https://youtu.be/abcdefghijk" } });
     });
     act(() => {
       rendered.root
-        .findByProps({ id: "convex-quotabunga-timestamp" })
+        .findByProps({ id: "quote-finder-timestamp" })
         .props.onChange({ target: { value: "42" } });
       rendered.root
-        .findByProps({ id: "convex-quotabunga-end" })
+        .findByProps({ id: "quote-finder-end" })
         .props.onChange({ target: { value: "52" } });
     });
     await act(async () => {
@@ -677,14 +708,16 @@ describe("ConvexQuotabungaSubmission writes", () => {
         .props.onClick()
     );
     expect(
+      rendered.root.findByProps({ id: "quote-finder-clip" }).props.value
+    ).toBe("https://www.youtube.com/watch?v=lmnopqrstuv");
+    expect(
       rendered.root.findByProps({ id: "convex-quotabunga-clip" }).props.value
     ).toBe("https://www.youtube.com/watch?v=lmnopqrstuv");
     expect(
-      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
-        .value
+      rendered.root.findByProps({ id: "quote-finder-timestamp" }).props.value
     ).toBe("0");
     expect(
-      rendered.root.findByProps({ id: "convex-quotabunga-end" }).props.value
+      rendered.root.findByProps({ id: "quote-finder-end" }).props.value
     ).toBe("");
     expect(
       rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value

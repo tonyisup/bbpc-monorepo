@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
+import { FullScreenDialog } from "@/components/FullScreenDialog";
 import { QuoteClipEditor } from "@/components/QuoteClipEditor";
 import { YouTubeVideoSearch } from "@/components/YouTubeVideoSearch";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ type Props = {
   onDurationChange?: (duration: number) => void;
 };
 
-/** Keep manual entry familiar; only mount the YouTube tools when requested. */
+/** Keep manual entry familiar; open the YouTube tools full screen on request. */
 export function QuotabungaClipFields({
   clipUrl,
   start,
@@ -32,17 +33,16 @@ export function QuotabungaClipFields({
   onDurationChange,
 }: Props) {
   const [finderOpen, setFinderOpen] = useState(false);
-  const finderId = useId();
   const youtube = parseYouTubeUrl(clipUrl);
 
-  const clipField = (
+  // The form stays mounted under the dialog, so each copy needs its own ids.
+  const clipField = (idPrefix: string, label: string) => (
     <div className="min-w-0 space-y-2">
-      <label htmlFor="convex-quotabunga-clip" className="text-sm font-semibold">
-        {finderOpen ? "Or paste a clip link" : "Clip link"}{" "}
-        <span className="font-normal text-gray-500">(optional)</span>
+      <label htmlFor={`${idPrefix}-clip`} className="text-sm font-semibold">
+        {label} <span className="font-normal text-gray-500">(optional)</span>
       </label>
       <Input
-        id="convex-quotabunga-clip"
+        id={`${idPrefix}-clip`}
         type="url"
         maxLength={2000}
         value={clipUrl}
@@ -51,16 +51,16 @@ export function QuotabungaClipFields({
       />
     </div>
   );
-  const startField = (
+  const startField = (idPrefix: string) => (
     <div className="space-y-2">
       <label
-        htmlFor="convex-quotabunga-timestamp"
+        htmlFor={`${idPrefix}-timestamp`}
         className="text-sm font-semibold"
       >
         Start second
       </label>
       <Input
-        id="convex-quotabunga-timestamp"
+        id={`${idPrefix}-timestamp`}
         type="number"
         min={0}
         max={86400}
@@ -71,14 +71,16 @@ export function QuotabungaClipFields({
       />
     </div>
   );
-  const endField = (
+  const endField = (idPrefix: string, markOptional = true) => (
     <div className="space-y-2">
-      <label htmlFor="convex-quotabunga-end" className="text-sm font-semibold">
+      <label htmlFor={`${idPrefix}-end`} className="text-sm font-semibold">
         End second{" "}
-        <span className="font-normal text-gray-500">(optional)</span>
+        {markOptional && (
+          <span className="font-normal text-gray-500">(optional)</span>
+        )}
       </label>
       <Input
-        id="convex-quotabunga-end"
+        id={`${idPrefix}-end`}
         type="number"
         min={0}
         max={86400}
@@ -94,60 +96,67 @@ export function QuotabungaClipFields({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3">
         <p className="text-xs text-muted-foreground">
-          {finderOpen
-            ? "Your quote and clip times stay in the form."
-            : "Need help finding the moment?"}
+          Need help finding the moment?
         </p>
         <Button
           type="button"
           variant="link"
           className="px-0"
-          aria-expanded={finderOpen}
-          aria-controls={finderId}
-          onClick={() => setFinderOpen((open) => !open)}
+          aria-haspopup="dialog"
+          onClick={() => setFinderOpen(true)}
         >
-          {finderOpen ? "Hide Quote Finder" : "Use Quote Finder"}
+          Use Quote Finder
         </Button>
       </div>
-      <div id={finderId}>
-        {finderOpen ? (
-          <section aria-label="Quote Finder" className="space-y-4">
-            <YouTubeVideoSearch
-              suggestedQuery={suggestedQuery}
-              selectedVideoId={youtube?.id}
-              onSelect={onClipUrlChange}
-            />
-            {clipField}
-            {youtube && (
-              <QuoteClipEditor
-                key={youtube.id}
-                videoId={youtube.id}
-                initialStart={youtube.start}
-                start={start.trim() ? Number(start) : null}
-                end={end.trim() ? Number(end) : null}
-                onRangeChange={(from, to) => {
-                  onStartChange(String(from));
-                  onEndChange(String(to));
-                }}
-                onQuoteChange={onQuoteChange}
-                onDurationChange={onDurationChange}
-              />
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              {startField}
-              {endField}
-            </div>
-          </section>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
-              {clipField}
-              {startField}
-            </div>
-            {end.trim() !== "" && endField}
+      {end.trim() === "" ? (
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem]">
+          {clipField("convex-quotabunga", "Clip link")}
+          {startField("convex-quotabunga")}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-[minmax(0,1fr)_8rem_8rem]">
+          <div className="col-span-2 min-w-0 sm:col-span-1">
+            {clipField("convex-quotabunga", "Clip link")}
           </div>
-        )}
-      </div>
+          {startField("convex-quotabunga")}
+          {endField("convex-quotabunga", false)}
+        </div>
+      )}
+
+      <FullScreenDialog
+        open={finderOpen}
+        onOpenChange={setFinderOpen}
+        title="Quote Finder"
+        description="Your quote and clip times stay in the form."
+      >
+        <section aria-label="Quote Finder" className="space-y-4">
+          <YouTubeVideoSearch
+            suggestedQuery={suggestedQuery}
+            selectedVideoId={youtube?.id}
+            onSelect={onClipUrlChange}
+          />
+          {clipField("quote-finder", "Or paste a clip link")}
+          {youtube && (
+            <QuoteClipEditor
+              key={youtube.id}
+              videoId={youtube.id}
+              initialStart={youtube.start}
+              start={start.trim() ? Number(start) : null}
+              end={end.trim() ? Number(end) : null}
+              onRangeChange={(from, to) => {
+                onStartChange(String(from));
+                onEndChange(String(to));
+              }}
+              onQuoteChange={onQuoteChange}
+              onDurationChange={onDurationChange}
+            />
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            {startField("quote-finder")}
+            {endField("quote-finder")}
+          </div>
+        </section>
+      </FullScreenDialog>
     </div>
   );
 }
