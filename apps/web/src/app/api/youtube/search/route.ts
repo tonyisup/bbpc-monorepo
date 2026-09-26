@@ -2,7 +2,9 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/env.mjs";
 import {
+  MAX_PAGE_TOKEN_LENGTH,
   MAX_VIDEO_SEARCH_LENGTH,
+  MIN_VIDEO_SEARCH_LENGTH,
   normalizeVideoQuery,
 } from "@/lib/youtubeSearch";
 import { searchYouTubeVideos } from "@/server/youtubeSearch";
@@ -21,12 +23,17 @@ export async function GET(request: NextRequest) {
     );
     const pageToken = request.nextUrl.searchParams.get("pageToken");
     if (
-      query.length < 2 ||
+      query.length < MIN_VIDEO_SEARCH_LENGTH ||
       query.length > MAX_VIDEO_SEARCH_LENGTH ||
-      (pageToken !== null && (pageToken.length === 0 || pageToken.length > 512))
+      (pageToken !== null &&
+        (pageToken.length === 0 || pageToken.length > MAX_PAGE_TOKEN_LENGTH))
     ) {
       return NextResponse.json(
-        { error: "Use a search between 2 and 200 characters." },
+        {
+          error: `Use a search between ${String(
+            MIN_VIDEO_SEARCH_LENGTH
+          )} and ${String(MAX_VIDEO_SEARCH_LENGTH)} characters.`,
+        },
         { status: 400, headers }
       );
     }

@@ -36,6 +36,14 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn<() => Promise<unknown>>(),
   submit: vi.fn<() => Promise<void>>(),
   withdraw: vi.fn<() => Promise<void>>(),
+  editor: null as null | {
+    videoId: string;
+    start: number | null;
+    end: number | null;
+    onRangeChange: (start: number, end: number) => void;
+    onQuoteChange: (text: string) => void;
+    onDurationChange?: (duration: number) => void;
+  },
   window: undefined as
     | { status: string | null; closesAt: number | null }
     | null
@@ -148,7 +156,10 @@ import { toast } from "sonner";
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
 
 vi.mock("@/components/QuoteClipEditor", () => ({
-  QuoteClipEditor: () => <div>Quote player</div>,
+  QuoteClipEditor: (props: NonNullable<typeof mocks.editor>) => {
+    mocks.editor = props;
+    return <div>Quote player</div>;
+  },
 }));
 vi.mock("next/image", () => ({ default: () => <span /> }));
 vi.mock("@/components/FullScreenDialog", () => ({
@@ -723,6 +734,187 @@ describe("ConvexQuotabungaSubmission writes", () => {
       rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
     ).toBe("Keep these words");
     expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("submits a fractional range from the Quote Finder and refuses ranges that are reversed, past the video or missing a link", async () => {
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    expect(
+      rendered.root.findByProps({ "aria-label": "Search YouTube videos" }).props
+        .value
+    ).toBe("Heat Hold on to ya");
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    const expectRefused = async () => {
+      await submitForm(rendered);
+      expect(mocks.submit).not.toHaveBeenCalled();
+      expect(renderedText(rendered)).toContain(
+        "Clip times must be between 0 and 86400 seconds"
+      );
+    };
+
+    change("quote-finder-timestamp", "5");
+    change("quote-finder-end", "8");
+    await expectRefused();
+    expect(renderedText(rendered)).toContain("and a clip link");
+
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    expect(field("quote-finder-timestamp").props.value).toBe("12");
+    expect(field("quote-finder-end").props.value).toBe("");
+    expect(mocks.editor?.videoId).toBe("abcdefghijk");
+    act(() => mocks.editor?.onDurationChange?.(20));
+    act(() => mocks.editor?.onRangeChange(12.5, 18.25));
+    expect(field("quote-finder-timestamp").props.value).toBe("12.5");
+    expect(field("quote-finder-end").props.value).toBe("18.25");
+    expect(mocks.editor).toMatchObject({ start: 12.5, end: 18.25 });
+
+    change("quote-finder-end", "21");
+    await expectRefused();
+    change("quote-finder-end", "11");
+    await expectRefused();
+    change("quote-finder-end", "");
+    change("quote-finder-timestamp", "20");
+    await expectRefused();
+
+    change("quote-finder-timestamp", "12.5");
+    change("quote-finder-end", "18.25");
+    act(() => mocks.editor?.onQuoteChange("Hold on to ya, man"));
+    expect(field("convex-quotabunga-quote").props.value).toBe(
+      "Hold on to ya, man"
+    );
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        quoteText: "Hold on to ya, man",
+        clipUrl: "https://youtu.be/abcdefghijk?t=12",
+        clipStartSeconds: 12.5,
+        clipEndSeconds: 18.25,
+      })
+    );
+  });
+
+  test("shows and restores a saved range, and entries saved before end times still edit and submit", async () => {
+    const edit = (rendered: ReactTestRenderer) =>
+      act(() =>
+        rendered.root
+          .findAllByType("button")
+          .find((button) => instanceText(button).trim() === "Edit")!
+          .props.onClick()
+      );
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      submission: {
+        ...savedEntry,
+        clipUrl: "https://youtu.be/abcdefghijk",
+        clipStartSeconds: 42.125,
+        clipEndSeconds: 52.5,
+      },
+    });
+    let rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain(" · 0:42.1");
+    expect(renderedText(rendered)).toContain(" – 0:52.5");
+    edit(rendered);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
+        .value
+    ).toBe("42.125");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-end" }).props.value
+    ).toBe("52.5");
+    // Clearing a saved end sends an explicit null so the backend drops it,
+    // and the End field stays put while it is being cleared.
+    act(() =>
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-end" })
+        .props.onChange({ target: { value: "" } })
+    );
+    rendered.root.findByProps({ id: "convex-quotabunga-end" });
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenLastCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        clipStartSeconds: 42.125,
+        clipEndSeconds: null,
+      })
+    );
+    act(() => rendered.unmount());
+    mocks.submit.mockClear();
+
+    // savedEntry has no clipEndSeconds, like rows written before this change.
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      submission: {
+        ...savedEntry,
+        clipUrl: "https://example.test/clip",
+        clipStartSeconds: 42,
+      },
+    });
+    rendered = await renderSubmission();
+    expect(renderedText(rendered)).toContain(" · 0:42.0");
+    expect(renderedText(rendered)).not.toContain(" – ");
+    edit(rendered);
+    expect(
+      rendered.root.findAllByProps({ id: "convex-quotabunga-end" })
+    ).toHaveLength(0);
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledWith(
+      mocks.convex,
+      "episode-test",
+      expect.objectContaining({
+        clipUrl: "https://example.test/clip",
+        clipStartSeconds: 42,
+      })
+    );
+    // With no end to set or clear, the argument is left out so a backend
+    // without clip ranges still accepts the write.
+    expect(mocks.submit.mock.calls.at(-1)?.[2]).not.toHaveProperty(
+      "clipEndSeconds"
+    );
+  });
+
+  test("keeps times when the same video is relinked or the link moves to another host", async () => {
+    const rendered = await renderSubmission();
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    change("quote-finder-end", "18");
+    change(
+      "quote-finder-clip",
+      "https://www.youtube.com/watch?v=abcdefghijk&t=30"
+    );
+    expect(field("quote-finder-timestamp").props.value).toBe("12");
+    expect(field("quote-finder-end").props.value).toBe("18");
+    change("quote-finder-clip", "https://example.test/clip");
+    expect(field("quote-finder-timestamp").props.value).toBe("12");
+    expect(field("quote-finder-end").props.value).toBe("18");
+    expect(renderedText(rendered)).not.toContain("Quote player");
+    // Switching to a different video is what resets the times.
+    change("quote-finder-clip", "https://youtu.be/lmnopqrstuv");
+    expect(field("quote-finder-timestamp").props.value).toBe("0");
+    expect(field("quote-finder-end").props.value).toBe("");
+  });
+
+  test("keeps a typed start while a clip link is typed or edited", async () => {
+    const rendered = await renderSubmission();
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    change("convex-quotabunga-timestamp", "42");
+    for (const value of ["h", "https://vimeo.com/1", "https://vimeo.com/12"])
+      change("convex-quotabunga-clip", value);
+    expect(field("convex-quotabunga-timestamp").props.value).toBe("42");
+    // A bare YouTube link keeps it too, and half-typed edits don't reset it.
+    change("convex-quotabunga-clip", "https://youtu.be/abcdefghijk");
+    change("convex-quotabunga-clip", "https://youtu.be/abcdefghij");
+    change("convex-quotabunga-clip", "https://youtu.be/abcdefghijk");
+    expect(field("convex-quotabunga-timestamp").props.value).toBe("42");
   });
 
   test("submits the entry for this episode and reloads it", async () => {

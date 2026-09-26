@@ -2298,4 +2298,80 @@ describe("quote clip ranges", () => {
     });
     expect(legacyEdit.clipEndSeconds).toBeNull();
   });
+
+  test("stores administrator ranges, lets current clients replace or clear them, and drops a range when an older client relinks", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    const admin = t.withIdentity(ADMIN_IDENTITY);
+    const base = {
+      clientApiVersion: BBPC_API_VERSION,
+      episodeId: foundation.nextEpisodeId,
+      ...memberContent,
+    };
+    const created = await admin.mutation(api.games.quotes.createForUser, {
+      ...base,
+      userId: memberId,
+      clipStartSeconds: 1.5,
+      clipEndSeconds: 3.25,
+    });
+    expect(created).toMatchObject({
+      clipUrl: "https://example.test/clip",
+      clipStartSeconds: 1.5,
+      clipEndSeconds: 3.25,
+    });
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(api.games.quotes.mineForEpisode, {
+        episodeId: foundation.nextEpisodeId,
+        now: Date.now(),
+      }),
+    ).resolves.toMatchObject({
+      submission: { clipStartSeconds: 1.5, clipEndSeconds: 3.25 },
+    });
+    await expectDomainError(
+      admin.mutation(api.games.quotes.createForUser, {
+        ...base,
+        userId: otherId,
+        clipUrl: null,
+        clipEndSeconds: 3.25,
+      }),
+      "VALIDATION_FAILED",
+    );
+
+    const update = (patch: {
+      clipUrl?: string | null;
+      clipStartSeconds?: number | null;
+      clipEndSeconds?: number | null;
+    }) =>
+      admin.mutation(api.games.quotes.updateContent, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: created.id,
+        quoteText: memberContent.quoteText,
+        sourceTitle: memberContent.sourceTitle,
+        sourceType: memberContent.sourceType,
+        clipUrl: memberContent.clipUrl,
+        clipStartSeconds: 1.5,
+        ...patch,
+      });
+    expect((await update({ clipEndSeconds: 9.5 })).clipEndSeconds).toBe(9.5);
+    // An older client relinking with the same start cannot keep the old end.
+    expect(
+      (await update({ clipUrl: "https://example.test/other" })).clipEndSeconds,
+    ).toBeNull();
+    expect((await update({ clipEndSeconds: 4 })).clipEndSeconds).toBe(4);
+    const listed = await admin.query(api.games.quotes.listAdminForEpisode, {
+      episodeId: foundation.nextEpisodeId,
+    });
+    expect(listed.find((row) => row.id === created.id)).toMatchObject({
+      clipEndSeconds: 4,
+    });
+    expect((await update({ clipEndSeconds: null })).clipEndSeconds).toBeNull();
+    for (const clipStartSeconds of [-0.5, Infinity]) {
+      await expectDomainError(
+        update({ clipStartSeconds, clipEndSeconds: null }),
+        "VALIDATION_FAILED",
+      );
+    }
+  });
 });

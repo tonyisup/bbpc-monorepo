@@ -2,6 +2,7 @@ export type TranscriptCue = { start: number; end: number; text: string };
 
 export const MAX_CLIP_SECONDS = 86_400;
 export const MAX_CAPTION_BYTES = 500_000;
+export const MAX_QUOTE_TEXT_LENGTH = 2000;
 
 export function parseYouTubeUrl(value: string) {
   try {
@@ -75,7 +76,7 @@ function captionTime(value: string) {
 
 function captionText(value: string) {
   return value
-    .replace(/<[^>]*>/g, "")
+    .replace(/<[^<>]*>/g, "")
     .replace(
       /&(?:amp|lt|gt|quot|apos|nbsp);/g,
       (entity) =>

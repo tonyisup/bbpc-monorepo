@@ -5,10 +5,18 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 
 const HISTORY_KEY = "bbpcFullScreenDialog";
+// Next keeps custom history state across a reload or tab restore, so an entry
+// only counts as ours if this page load pushed it; stepping back over one from
+// an earlier load would reload the page and lose the form.
+const PAGE_LOAD_ID =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
 
 function ownsHistoryEntry() {
-  return Boolean(
-    (window.history.state as Record<string, unknown> | null)?.[HISTORY_KEY]
+  return (
+    (window.history.state as Record<string, unknown> | null)?.[HISTORY_KEY] ===
+    PAGE_LOAD_ID
   );
 }
 
@@ -35,17 +43,30 @@ export function FullScreenDialog({
   onOpenChangeRef.current = onOpenChange;
   // Opened from state rather than a Radix Trigger, so restore focus ourselves.
   const returnFocus = useRef<HTMLElement | null>(null);
+  // Deferred so a Strict Mode remount keeps the entry instead of popping it.
+  const pendingBack = useRef<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    if (!ownsHistoryEntry()) {
-      window.history.pushState({ [HISTORY_KEY]: true }, "");
+    if (pendingBack.current !== null) {
+      window.clearTimeout(pendingBack.current);
+      pendingBack.current = null;
+    } else if (!ownsHistoryEntry()) {
+      window.history.pushState({ [HISTORY_KEY]: PAGE_LOAD_ID }, "");
     }
     const onPopState = () => {
       if (!ownsHistoryEntry()) onOpenChangeRef.current(false);
     };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      // Closed by the parent or unmounted (say the round locked while open):
+      // drop our entry too, or the next back press would appear to do nothing.
+      pendingBack.current = window.setTimeout(() => {
+        pendingBack.current = null;
+        if (ownsHistoryEntry()) window.history.back();
+      }, 0);
+    };
   }, [open]);
 
   // Done and Escape step back over our entry; the popstate above then closes.

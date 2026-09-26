@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   decodeVideoTitle,
+  MAX_PAGE_TOKEN_LENGTH,
+  VIDEO_SEARCH_PAGE_SIZE,
   type YouTubeSearchResponse,
 } from "@/lib/youtubeSearch";
 
@@ -12,9 +14,9 @@ const providerResponse = z.object({
         snippet: z.object({ title: z.string(), channelTitle: z.string() }),
       })
     )
-    .max(6)
+    .max(VIDEO_SEARCH_PAGE_SIZE)
     .default([]),
-  nextPageToken: z.string().max(512).optional(),
+  nextPageToken: z.string().max(MAX_PAGE_TOKEN_LENGTH).optional(),
 });
 
 /** Called only by the authenticated route; the API key never reaches the browser. */
@@ -25,17 +27,19 @@ export async function searchYouTubeVideos(
 ): Promise<YouTubeSearchResponse> {
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
   url.search = new URLSearchParams({
-    key: apiKey,
     part: "snippet",
     type: "video",
     videoEmbeddable: "true",
     videoSyndicated: "true",
-    maxResults: "6",
+    maxResults: String(VIDEO_SEARCH_PAGE_SIZE),
     q: query,
     fields: "items(id/videoId,snippet(title,channelTitle)),nextPageToken",
     ...(pageToken ? { pageToken } : {}),
   }).toString();
   const response = await fetch(url, {
+    // A header keeps the key out of the URL that Next's fetch tracing,
+    // logging and cache metadata record.
+    headers: { "X-Goog-Api-Key": apiKey },
     signal: AbortSignal.timeout(8000),
     // Public video metadata can be reused across signed-in searchers for 5 minutes.
     cache: "force-cache",

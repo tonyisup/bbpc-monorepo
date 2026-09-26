@@ -5,11 +5,20 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  MAX_VIDEO_RESULTS,
   MAX_VIDEO_SEARCH_LENGTH,
+  MIN_VIDEO_SEARCH_LENGTH,
   normalizeVideoQuery,
+  youtubeSearchErrorSchema,
   youtubeSearchResponseSchema,
   type YouTubeSearchVideo,
 } from "@/lib/youtubeSearch";
+
+const UNAVAILABLE =
+  "Video search is unavailable right now. Try again or paste a clip link below.";
+
+/** A message that is safe and specific enough to show the listener. */
+class SearchError extends Error {}
 
 type SearchState = {
   query: string;
@@ -39,7 +48,8 @@ export function YouTubeVideoSearch({
   const generation = useRef(0);
   const visible = state?.query === normalized ? state : null;
   const valid =
-    normalized.length >= 2 && normalized.length <= MAX_VIDEO_SEARCH_LENGTH;
+    normalized.length >= MIN_VIDEO_SEARCH_LENGTH &&
+    normalized.length <= MAX_VIDEO_SEARCH_LENGTH;
 
   useEffect(() => {
     if (selectionNotice) selectionRef.current?.focus();
@@ -79,12 +89,15 @@ export function YouTubeVideoSearch({
       const response = await fetch(`/api/youtube/search?${params}`, {
         signal: controller.signal,
       });
-      if (!response.ok)
-        throw new Error(
-          response.status === 401
-            ? "Sign in to search for videos."
-            : "Video search is unavailable right now. Try again or paste a clip link below."
+      if (!response.ok) {
+        if (response.status === 401)
+          throw new SearchError("Sign in to search for videos.");
+        // The route explains its own refusals, such as a missing API key.
+        const body = youtubeSearchErrorSchema.safeParse(
+          await response.json().catch(() => null)
         );
+        throw new SearchError(body.success ? body.data.error : UNAVAILABLE);
+      }
       const result = youtubeSearchResponseSchema.parse(await response.json());
       if (controller.signal.aborted || generation.current !== current) return;
       const unique = new Map(
@@ -92,7 +105,7 @@ export function YouTubeVideoSearch({
       );
       setState({
         query: normalized,
-        videos: [...unique.values()].slice(0, 24),
+        videos: [...unique.values()].slice(0, MAX_VIDEO_RESULTS),
         nextPageToken: result.nextPageToken,
         loading: false,
         error: null,
@@ -104,11 +117,7 @@ export function YouTubeVideoSearch({
         videos: prior,
         nextPageToken: pageToken,
         loading: false,
-        error:
-          error instanceof Error &&
-          error.message === "Sign in to search for videos."
-            ? error.message
-            : "Video search is unavailable right now. Try again or paste a clip link below.",
+        error: error instanceof SearchError ? error.message : UNAVAILABLE,
       });
     }
   }
@@ -249,22 +258,24 @@ export function YouTubeVideoSearch({
               </li>
             ))}
           </ul>
-          {visible.nextPageToken && visible.videos.length < 24 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={visible.loading}
-              onClick={() => void search(true)}
-            >
-              More results
-            </Button>
-          )}
-          {visible.nextPageToken && visible.videos.length >= 24 && (
-            <p className="text-xs text-muted-foreground">
-              Try a more specific search to narrow these results.
-            </p>
-          )}
+          {visible.nextPageToken &&
+            visible.videos.length < MAX_VIDEO_RESULTS && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={visible.loading}
+                onClick={() => void search(true)}
+              >
+                More results
+              </Button>
+            )}
+          {visible.nextPageToken &&
+            visible.videos.length >= MAX_VIDEO_RESULTS && (
+              <p className="text-xs text-muted-foreground">
+                Try a more specific search to narrow these results.
+              </p>
+            )}
         </>
       )}
     </section>

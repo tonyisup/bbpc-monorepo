@@ -82,6 +82,7 @@ import {
   getAdminEpisodePath,
   getAdminQuotabungaEpisodePath,
 } from "../../lib/routes";
+import { clipSeconds } from "../../lib/clipTimes";
 import { cn } from "../../lib/utils";
 
 import { QuoteReuseChance } from "../Quotabunga/QuoteReuseChance";
@@ -896,9 +897,11 @@ export function QuotabungaRecordingRound({
                       >
                         Open clip
                         {submission.clipStartSeconds !== null
-                          ? ` at ${submission.clipStartSeconds}s` : ""}
+                          ? ` at ${clipSeconds(submission.clipStartSeconds)}`
+                          : ""}
                         {submission.clipEndSeconds !== null
-                          ? ` to ${submission.clipEndSeconds}s` : ""}
+                          ? ` to ${clipSeconds(submission.clipEndSeconds)}`
+                          : ""}
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}

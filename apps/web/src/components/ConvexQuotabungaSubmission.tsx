@@ -26,6 +26,8 @@ import { toast } from "sonner";
 import { QuotabungaClipFields } from "@/components/QuotabungaClipFields";
 import {
   formatClipTime,
+  MAX_CLIP_SECONDS,
+  MAX_QUOTE_TEXT_LENGTH,
   parseYouTubeUrl,
   validClipRange,
 } from "@/lib/quoteClip";
@@ -180,6 +182,8 @@ export function ConvexQuotabungaSubmission({
   const [clipEndSeconds, setClipEndSeconds] = useState("");
   const [clipDuration, setClipDuration] = useState<number | null>(null);
   const youtube = parseYouTubeUrl(clipUrl);
+  // The last complete YouTube video, so half-typed links don't reset times.
+  const lastVideoIdRef = useRef<string | null>(null);
   const [listenerNotes, setListenerNotes] = useState("");
   const [duplicateCheck, setDuplicateCheck] = useState<{
     inputKey: string;
@@ -275,6 +279,7 @@ export function ConvexQuotabungaSubmission({
     setClipStartSeconds("");
     setClipEndSeconds("");
     setClipDuration(null);
+    lastVideoIdRef.current = null;
     setListenerNotes("");
   }, []);
 
@@ -317,6 +322,9 @@ export function ConvexQuotabungaSubmission({
     setClipUrl(submission.clipUrl ?? "");
     setClipStartSeconds(submission.clipStartSeconds?.toString() ?? "");
     setClipEndSeconds(submission.clipEndSeconds?.toString() ?? "");
+    setClipDuration(null);
+    lastVideoIdRef.current =
+      parseYouTubeUrl(submission.clipUrl ?? "")?.id ?? null;
     setListenerNotes(submission.listenerNotes ?? "");
     setIsEditing(false);
   }, [resetForm, submission]);
@@ -373,13 +381,24 @@ export function ConvexQuotabungaSubmission({
     };
   }, [convex, episodeId, isOpen, isEditing, quoteText, sourceTitle]);
 
+  // Switching to another YouTube video resets its times; typing, other hosts
+  // and returning to the same video keep what the listener entered.
   const changeClipUrl = (nextUrl: string) => {
     const nextVideo = parseYouTubeUrl(nextUrl);
-    if (nextVideo?.id !== youtube?.id || (!nextVideo && nextUrl !== clipUrl)) {
-      setClipStartSeconds(nextVideo ? String(nextVideo.start) : "");
-      setClipEndSeconds("");
-      setClipDuration(null);
+    if (nextVideo && nextVideo.id !== lastVideoIdRef.current) {
+      // A new video, or a first link carrying its own t=, sets the moment;
+      // a bare first link keeps a start typed beforehand.
+      if (
+        lastVideoIdRef.current !== null ||
+        clipStartSeconds.trim() === "" ||
+        nextVideo.start > 0
+      ) {
+        setClipStartSeconds(String(nextVideo.start));
+        setClipEndSeconds("");
+      }
+      lastVideoIdRef.current = nextVideo.id;
     }
+    if (nextVideo?.id !== youtube?.id) setClipDuration(null);
     setClipUrl(nextUrl);
   };
 
@@ -405,7 +424,9 @@ export function ConvexQuotabungaSubmission({
           (parsedClipEnd !== null && parsedClipEnd > clipDuration)))
     ) {
       setErrorMessage(
-        "Add a quote and source. Clip times must be between 0 and 86400 seconds, with the end after the start, within the video, and a clip link."
+        `Add a quote and source. Clip times must be between 0 and ${String(
+          MAX_CLIP_SECONDS
+        )} seconds, with the end after the start, within the video, and a clip link.`
       );
       return;
     }
@@ -419,7 +440,11 @@ export function ConvexQuotabungaSubmission({
         sourceType,
         clipUrl: normalizedClipUrl || null,
         clipStartSeconds: parsedClipStart,
-        clipEndSeconds: parsedClipEnd,
+        // Backends before clip ranges reject this argument, so send it only
+        // to set an end or clear a saved one.
+        ...(parsedClipEnd === null && submission?.clipEndSeconds == null
+          ? {}
+          : { clipEndSeconds: parsedClipEnd }),
         listenerNotes: normalizedNotes || null,
       });
       await reload();
@@ -603,14 +628,14 @@ export function ConvexQuotabungaSubmission({
                 <Textarea
                   id="convex-quotabunga-quote"
                   required
-                  maxLength={2000}
+                  maxLength={MAX_QUOTE_TEXT_LENGTH}
                   value={quoteText}
                   onChange={(event) => setQuoteText(event.target.value)}
                   placeholder="Type the exact quote or describe the quote-worthy scene..."
                   className="min-h-28"
                 />
                 <p className="text-right text-xs text-gray-500">
-                  {quoteText.length}/2000
+                  {quoteText.length}/{MAX_QUOTE_TEXT_LENGTH}
                 </p>
               </div>
 

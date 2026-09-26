@@ -1,10 +1,18 @@
 import { describe, expect, test } from "vitest";
 import {
+  formatClipTime,
   parseYouTubeUrl,
   parseCaptions,
   selectCueRange,
   validClipRange,
 } from "@/lib/quoteClip";
+
+function timestamp(seconds: number) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(Math.floor(seconds / 3600))}:${pad(
+    Math.floor(seconds / 60) % 60
+  )}:${pad(seconds % 60)}.000`;
+}
 
 describe("quote clip sources and timing", () => {
   test("accepts YouTube share, watch and Shorts URLs without trusting lookalike hosts", () => {
@@ -65,5 +73,64 @@ describe("quote clip sources and timing", () => {
       [0, 86401],
     ])
       expect(validClipRange(start!, end!)).toBe(false);
+  });
+
+  test("reads embed, live, mobile and privacy hosts with every supported time form, clamped to 24 hours", () => {
+    const cases: Array<[string, { id: string; start: number } | null]> = [
+      [
+        "https://m.youtube.com/watch?v=abcdefghijk#t=1h2m3.5s",
+        { id: "abcdefghijk", start: 3723.5 },
+      ],
+      [
+        "https://www.youtube-nocookie.com/embed/abcdefghijk?start=12.5",
+        { id: "abcdefghijk", start: 12.5 },
+      ],
+      ["https://youtube.com/live/abcdefghijk", { id: "abcdefghijk", start: 0 }],
+      ["http://youtu.be/abcdefghijk?t=30h", { id: "abcdefghijk", start: 86_400 }],
+      ["https://youtu.be/abcdefghijk?t=soon", { id: "abcdefghijk", start: 0 }],
+      ["https://youtube.com/watch?list=abc", null],
+      ["https://youtube.com/embed/", null],
+      ["https://youtube.com/channel/abcdefghijk", null],
+      ["ftp://youtu.be/abcdefghijk", null],
+      ["not a link", null],
+    ];
+    for (const [url, expected] of cases)
+      expect(parseYouTubeUrl(url), url).toEqual(expected);
+  });
+
+  test("formats clip times to tenths without negative or overflowing seconds", () => {
+    expect(formatClipTime(0)).toBe("0:00.0");
+    expect(formatClipTime(62.25)).toBe("1:02.3");
+    expect(formatClipTime(59.96)).toBe("1:00.0");
+    expect(formatClipTime(-3)).toBe("0:00.0");
+    expect(formatClipTime(3723.5)).toBe("62:03.5");
+  });
+
+  test("skips headers, notes and empty cues, reads minute-only stamps and sorts, but refuses oversized or unreadable input", () => {
+    expect(
+      parseCaptions(
+        [
+          "﻿WEBVTT",
+          "NOTE a comment --> that looks timed",
+          "STYLE\n::cue { color: red }",
+          "00:20.000 --> 00:22.000\nLater&nbsp;line",
+          "00:01.000 --> 00:02.000\n<b></b>",
+          "00:12.000 --> 00:14.500\n<i>Earlier</i> line",
+        ].join("\n\n")
+      )
+    ).toEqual([
+      { start: 12, end: 14.5, text: "Earlier line" },
+      { start: 20, end: 22, text: "Later line" },
+    ]);
+    expect(() => parseCaptions("x".repeat(500_001))).toThrow("500 KB");
+    expect(() =>
+      parseCaptions("00:00:01.000-->00:00:02.000\nNo spaces")
+    ).toThrow("could not be read");
+    const tooMany = Array.from(
+      { length: 10_001 },
+      (_, index) => `${timestamp(index)} --> ${timestamp(index + 1)}\na`
+    ).join("\n\n");
+    expect(tooMany.length).toBeLessThan(500_000);
+    expect(() => parseCaptions(tooMany)).toThrow("10,000");
   });
 });

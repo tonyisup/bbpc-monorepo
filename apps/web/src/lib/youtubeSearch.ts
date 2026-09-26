@@ -1,6 +1,10 @@
 import { z } from "zod";
 
+export const MIN_VIDEO_SEARCH_LENGTH = 2;
 export const MAX_VIDEO_SEARCH_LENGTH = 200;
+export const MAX_PAGE_TOKEN_LENGTH = 512;
+export const VIDEO_SEARCH_PAGE_SIZE = 6;
+export const MAX_VIDEO_RESULTS = 24;
 export const youtubeSearchResponseSchema = z.object({
   videos: z
     .array(
@@ -10,8 +14,11 @@ export const youtubeSearchResponseSchema = z.object({
         channel: z.string(),
       })
     )
-    .max(6),
-  nextPageToken: z.string().max(512).nullable(),
+    .max(VIDEO_SEARCH_PAGE_SIZE),
+  nextPageToken: z.string().max(MAX_PAGE_TOKEN_LENGTH).nullable(),
+});
+export const youtubeSearchErrorSchema = z.object({
+  error: z.string().min(1).max(300),
 });
 
 export type YouTubeSearchResponse = z.infer<typeof youtubeSearchResponseSchema>;

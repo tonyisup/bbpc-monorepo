@@ -2,6 +2,12 @@ import { useState, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+type FocusEvent = { preventDefault: () => void };
+let contentProps: {
+  onOpenAutoFocus?: (event: FocusEvent) => void;
+  onCloseAutoFocus?: (event: FocusEvent) => void;
+} = {};
+
 vi.mock("@radix-ui/react-dialog", () => {
   const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
   return {
@@ -21,7 +27,13 @@ vi.mock("@radix-ui/react-dialog", () => {
         </div>
       ) : null,
     Portal: Pass,
-    Content: Pass,
+    Content: ({
+      children,
+      ...props
+    }: typeof contentProps & { children?: ReactNode }) => {
+      contentProps = props;
+      return <>{children}</>;
+    },
     Title: Pass,
     Description: Pass,
     Close: Pass,
@@ -36,8 +48,8 @@ vi.mock("@/components/ui/button", () => ({
 import { FullScreenDialog } from "@/components/FullScreenDialog";
 
 /** Same-document history: back() moves one entry and fires popstate. */
-function fakeWindow() {
-  const entries: unknown[] = [{ __NA: true }];
+function fakeWindow(initialState: unknown = { __NA: true }) {
+  const entries: unknown[] = [initialState];
   let index = 0;
   const listeners = new Set<() => void>();
   return {
@@ -63,6 +75,9 @@ function fakeWindow() {
       listeners.add(listener),
     removeEventListener: (_type: string, listener: () => void) =>
       listeners.delete(listener),
+    setTimeout: (callback: () => void, ms?: number) =>
+      globalThis.setTimeout(callback, ms),
+    clearTimeout: (id: number) => globalThis.clearTimeout(id),
   };
 }
 
@@ -95,6 +110,7 @@ const isOpen = () => view.root.findAllByProps({ role: "dialog" }).length > 0;
 
 describe("FullScreenDialog history", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     win = fakeWindow();
     vi.stubGlobal("window", win);
   });
@@ -102,10 +118,13 @@ describe("FullScreenDialog history", () => {
   afterEach(() => {
     act(() => view.unmount());
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   const close = () =>
     act(() => view.root.findByProps({ "aria-label": "Close" }).props.onClick());
+  // Removing an entry after a parent close or unmount is deferred a tick.
+  const settle = () => act(() => vi.runAllTimers());
 
   test("the back gesture closes the dialog without leaving the page", () => {
     render();
@@ -126,6 +145,62 @@ describe("FullScreenDialog history", () => {
     expect(isOpen()).toBe(false);
     expect(win.history.back).toHaveBeenCalledTimes(1);
     expect(win.history.state).toEqual({ __NA: true });
+  });
+
+  test("closes directly once another entry replaces its own", () => {
+    render();
+    act(() => setOpen(true));
+    act(() => win.history.pushState({ other: true }));
+    close();
+    settle();
+    expect(isOpen()).toBe(false);
+    expect(win.history.back).not.toHaveBeenCalled();
+  });
+
+  test("never steps back over an entry left by an earlier page load", () => {
+    // A reload or tab restore can land on the dialog's old entry, and
+    // stepping back over it would leave this page and lose the form.
+    const leftover = { __NA: true, bbpcFullScreenDialog: "earlier-load" };
+    win = fakeWindow(leftover);
+    vi.stubGlobal("window", win);
+    render();
+    act(() => setOpen(true));
+    expect(win.history.pushState).toHaveBeenCalledTimes(1);
+    close();
+    settle();
+    expect(isOpen()).toBe(false);
+    expect(win.history.back).toHaveBeenCalledTimes(1);
+    expect(win.history.state).toBe(leftover);
+  });
+
+  test("closing from the parent or unmounting removes its entry", () => {
+    render();
+    act(() => setOpen(true));
+    act(() => setOpen(false)); // e.g. entries locked while the finder was open
+    settle();
+    expect(win.history.state).toEqual({ __NA: true });
+
+    act(() => setOpen(true));
+    act(() => view.unmount());
+    settle();
+    expect(win.history.state).toEqual({ __NA: true });
+    expect(win.history.back).toHaveBeenCalledTimes(2);
+  });
+
+  test("returns focus to whatever opened it", () => {
+    class FakeElement {
+      focus = vi.fn();
+    }
+    const opener = new FakeElement();
+    vi.stubGlobal("HTMLElement", FakeElement);
+    vi.stubGlobal("document", { activeElement: opener });
+    render();
+    act(() => setOpen(true));
+    contentProps.onOpenAutoFocus?.({ preventDefault: vi.fn() });
+    const closing = { preventDefault: vi.fn() };
+    contentProps.onCloseAutoFocus?.(closing);
+    expect(closing.preventDefault).toHaveBeenCalled();
+    expect(opener.focus).toHaveBeenCalledOnce();
   });
 
   test("reopening replaces the old entry instead of stacking", () => {

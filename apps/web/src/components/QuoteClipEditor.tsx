@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import {
   formatClipTime,
   MAX_CAPTION_BYTES,
   MAX_CLIP_SECONDS,
+  MAX_QUOTE_TEXT_LENGTH,
   parseCaptions,
   selectCueRange,
   validClipRange,
@@ -23,7 +25,12 @@ type Props = {
   onRangeChange: (start: number, end: number) => void;
   onQuoteChange: (text: string) => void;
   onDurationChange?: (duration: number) => void;
+  /** Suggest a 10-second range; only for a video just picked, never a saved clip. */
+  seedDefaultRange?: boolean;
 };
+
+// Subtitle timing may overrun the player's reported length by a few frames.
+const CAPTION_END_TOLERANCE = 0.1;
 
 export function QuoteClipEditor(props: Props) {
   const { videoId, initialStart, start, end, onRangeChange, onQuoteChange } =
@@ -63,6 +70,7 @@ export function QuoteClipEditor(props: Props) {
     let readyTimeout: number | undefined;
     let instance: YouTubePlayer | null = null;
     let initialized = false;
+    let reportedLength = 0;
     setReady(false);
     setPlayerError("");
     const host = container.current;
@@ -84,7 +92,9 @@ export function QuoteClipEditor(props: Props) {
           playerVars: {
             origin: window.location.origin,
             playsinline: 1,
-            start: Math.floor(latest.current.start ?? initialStart),
+            start: Math.floor(
+              latest.current.start ?? latest.current.initialStart
+            ),
           },
           events: {
             onReady: () => {
@@ -101,14 +111,22 @@ export function QuoteClipEditor(props: Props) {
                 if (Number.isFinite(length) && length > 0) {
                   const limit = Math.min(length, MAX_CLIP_SECONDS);
                   setDuration(limit);
+                  // Live and not-yet-buffered videos can refine their length.
+                  if (limit !== reportedLength) {
+                    reportedLength = limit;
+                    latest.current.onDurationChange?.(limit);
+                  }
                   if (!initialized) {
                     initialized = true;
                     const saved = latest.current;
-                    saved.onDurationChange?.(limit);
                     const from =
                       saved.start ??
-                      Math.min(initialStart, Math.max(0, limit - 1));
-                    if (saved.end === null && from < limit)
+                      Math.min(saved.initialStart, Math.max(0, limit - 1));
+                    if (
+                      saved.seedDefaultRange &&
+                      saved.end === null &&
+                      from < limit
+                    )
                       saved.onRangeChange(from, Math.min(limit, from + 10));
                     setWindowStart(
                       Math.min(Math.max(0, from - 5), Math.max(0, limit - 1))
@@ -173,7 +191,7 @@ export function QuoteClipEditor(props: Props) {
       instance?.destroy();
       host?.replaceChildren();
     };
-  }, [videoId, initialStart, retry]);
+  }, [videoId, retry]);
 
   const from = start ?? 0;
   const to = end ?? from;
@@ -207,9 +225,11 @@ export function QuoteClipEditor(props: Props) {
     onRangeChange(nextStart, nextEnd);
   }
 
-  function seek(time: number) {
+  // Scrubbing passes allowSeekAhead=false so each step doesn't start a new
+  // buffer request; the release seeks for real.
+  function seek(time: number, allowSeekAhead = true) {
     previewing.current = false;
-    player.current?.seekTo(time, true);
+    player.current?.seekTo(time, allowSeekAhead);
     setCurrentTime(time);
   }
 
@@ -227,20 +247,25 @@ export function QuoteClipEditor(props: Props) {
 
   function selectCues(anchor: number, focus: number) {
     const range = selectCueRange(cues, anchor, focus);
-    if (range.end > limit) {
+    if (range.end > limit + CAPTION_END_TOLERANCE) {
       setCaptionError(
         "These subtitles extend beyond the video. Use a transcript from this exact clip."
       );
-      return;
+      return false;
     }
+    setCaptionError("");
     setSelection({ anchor, focus });
-    changeRange(range.start, range.end);
+    changeRange(range.start, Math.min(range.end, limit));
+    return true;
   }
 
   function importCaptions(text: string) {
     try {
       const parsed = parseCaptions(text);
-      if (duration && parsed.some((cue) => cue.end > duration + 0.1)) {
+      if (
+        duration &&
+        parsed.some((cue) => cue.end > duration + CAPTION_END_TOLERANCE)
+      ) {
         throw new Error(
           "These subtitles extend beyond the video. Use a transcript from this exact clip."
         );
@@ -323,7 +348,8 @@ export function QuoteClipEditor(props: Props) {
               player.current.playVideo();
             }}
           >
-            ▶ Preview quote
+            <Play aria-hidden="true" />
+            Preview quote
           </Button>
           <Button
             type="button"
@@ -366,11 +392,13 @@ export function QuoteClipEditor(props: Props) {
               value={Math.min(currentTime, duration)}
               onChange={(event) => {
                 const time = Number(event.target.value);
-                seek(time);
+                seek(time, false);
                 setWindowStart(
                   Math.max(0, Math.min(time - span / 2, duration - span))
                 );
               }}
+              onPointerUp={(event) => seek(Number(event.currentTarget.value))}
+              onKeyUp={(event) => seek(Number(event.currentTarget.value))}
             />
           </label>
         )}
@@ -391,13 +419,13 @@ export function QuoteClipEditor(props: Props) {
                   setWindowStart(Math.max(0, windowStart - span / 2))
                 }
               >
-                ←
+                <ChevronLeft aria-hidden="true" />
               </Button>
               <label className="text-xs">
                 Zoom{" "}
                 <select
                   aria-label="Timeline zoom"
-                  className="rounded border border-input bg-background p-1"
+                  className="h-9 rounded border border-input bg-background px-2 text-base sm:text-xs"
                   value={span}
                   onChange={(event) => setSpan(Number(event.target.value))}
                 >
@@ -419,12 +447,12 @@ export function QuoteClipEditor(props: Props) {
                   )
                 }
               >
-                →
+                <ChevronRight aria-hidden="true" />
               </Button>
             </div>
           </div>
           <div
-            className="flex justify-between font-mono text-[10px] tabular-nums text-muted-foreground"
+            className="flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground"
             aria-hidden="true"
           >
             {[0, 0.25, 0.5, 0.75, 1].map((part) => (
@@ -476,7 +504,7 @@ export function QuoteClipEditor(props: Props) {
                   aria-valuemax={edge === "start" ? to : limit}
                   aria-valuenow={time}
                   aria-valuetext={formatClipTime(time)}
-                  className="absolute inset-y-0 z-10 w-6 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm border-x-4 border-primary bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="absolute inset-y-0 z-10 w-6 -translate-x-1/2 cursor-ew-resize touch-none rounded-sm border-x-4 border-primary bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   style={{ left: `${percent(time)}%` }}
                   onPointerDown={(event) => {
                     event.preventDefault();
@@ -590,11 +618,11 @@ export function QuoteClipEditor(props: Props) {
                   event.currentTarget.parentElement?.setPointerCapture(
                     event.pointerId
                   );
-                  selectCues(anchor, index);
-                  player.current?.seekTo(
-                    cues[anchor]?.start ?? cue.start,
-                    true
-                  );
+                  if (selectCues(anchor, index))
+                    player.current?.seekTo(
+                      cues[anchor]?.start ?? cue.start,
+                      true
+                    );
                 }}
                 onClick={(event) => {
                   if (event.detail !== 0) return;
@@ -603,8 +631,8 @@ export function QuoteClipEditor(props: Props) {
                       ? cueAnchor.current
                       : index;
                   cueAnchor.current = anchor;
-                  selectCues(anchor, index);
-                  seek(cues[anchor]?.start ?? cue.start);
+                  if (selectCues(anchor, index))
+                    seek(cues[anchor]?.start ?? cue.start);
                 }}
               >
                 {cue.text}
@@ -626,7 +654,7 @@ export function QuoteClipEditor(props: Props) {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="font-mono tabular-nums">
+          <span className={cn(valid && "font-mono tabular-nums")}>
             {valid
               ? `${formatClipTime(from)} → ${formatClipTime(to)} · ${(
                   to - from
@@ -675,7 +703,10 @@ export function QuoteClipEditor(props: Props) {
               type="button"
               size="sm"
               variant="secondary"
-              disabled={!selectedMatchesRange || selected.text.length > 2000}
+              disabled={
+                !selectedMatchesRange ||
+                selected.text.length > MAX_QUOTE_TEXT_LENGTH
+              }
               onClick={() => onQuoteChange(selected.text)}
             >
               Use selected text as quote
@@ -685,9 +716,11 @@ export function QuoteClipEditor(props: Props) {
                 Select transcript blocks again to match the adjusted range.
               </p>
             )}
-            {selected.text.length > 2000 && (
+            {selected.text.length > MAX_QUOTE_TEXT_LENGTH && (
               <p className="text-xs text-amber-200">
-                Select a shorter quote (up to 2,000 characters).
+                {`Select a shorter quote (up to ${MAX_QUOTE_TEXT_LENGTH.toLocaleString(
+                  "en-US"
+                )} characters).`}
               </p>
             )}
           </div>
@@ -751,7 +784,7 @@ export function QuoteClipEditor(props: Props) {
                 placeholder={
                   "WEBVTT\n\n00:00:12.000 --> 00:00:14.500\nThe quote goes here."
                 }
-                className="font-mono text-xs"
+                className="font-mono text-base sm:text-xs"
               />
             </label>
             <Button

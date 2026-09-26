@@ -47,7 +47,15 @@ export function loadYouTubeAPI(): Promise<YouTubeAPI> {
       window.clearTimeout(timeout);
       script.removeEventListener("error", fail);
       if (error) {
-        if (!existing) script.remove();
+        if (!existing) {
+          script.remove();
+          // iframe_api leaves a { loading } stub while it fetches the widget
+          // script; if that failed, a retry would wait on the stub forever.
+          if (window.YT && !window.YT.Player) {
+            delete window.YT;
+            document.getElementById("www-widgetapi-script")?.remove();
+          }
+        }
         reject(error);
       } else if (window.YT) resolve(window.YT);
     };
