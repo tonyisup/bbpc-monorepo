@@ -1,0 +1,129 @@
+name: Deploy Convex production
+
+# Merges to main that change the backend deploy it to production, but only
+# after the owner approves the protected `convex-production` environment.
+# That approval is the separate production sign-off AGENTS.md requires; the
+# runbook is "Production deploys" in packages/convex-backend/README.md.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-production.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "packages/convex-backend/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One production deploy at a time. A newer merge waiting for approval
+# replaces an older one that is still waiting, so the latest main deploys.
+concurrency:
+  group: bbpc-convex-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify source (no secrets)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    defaults:
+      run:
+        working-directory: packages/convex-backend
+    steps:
+      # GitHub creates a missing environment with no protection when a job
+      # first uses it, which would deploy without approval. Refuse unless the
+      # environment already requires a reviewer and limits deploy branches.
+      - name: Require owner approval on the production environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/convex-production") || {
+            echo "::error::Create the convex-production environment before production can deploy (see Production deploys in packages/convex-backend/README.md)."
+            exit 1
+          }
+          reviewers=$(jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length' <<<"$environment")
+          branches=$(jq -r 'if .deployment_branch_policy == null then "any" else "restricted" end' <<<"$environment")
+          if [ "$reviewers" -lt 1 ] || [ "$branches" != "restricted" ]; then
+            echo "::error::convex-production must require a reviewer and limit deployment branches before production can deploy (see Production deploys in packages/convex-backend/README.md)."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Verify source and workspace contract
+        run: |
+          pnpm run check
+          pnpm run package:check
+
+  deploy:
+    name: Deploy to production (approval required)
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: convex-production
+    defaults:
+      run:
+        working-directory: packages/convex-backend
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PRODUCTION_DEPLOY_KEY }}
+      BBPC_EXPECTED_CONVEX_DEPLOYMENT: determined-wombat-872
+      BBPC_FORBIDDEN_CONVEX_DEPLOYMENT: merry-shepherd-928
+      BBPC_EXPECTED_ENVIRONMENT: production
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Verify production deploy target
+        run: pnpm run deploy:target:check
+
+      - name: Verify production environment
+        run: pnpm run deploy:environment:check
+
+      - name: Deploy backend
+        run: >-
+          npx convex deploy
+          --typecheck enable
+          --message "GitHub production ${GITHUB_SHA}"
+
+      - name: Verify deployed public contract
+        run: |
+          npx convex-helpers ts-api-spec --output-file "$RUNNER_TEMP/convexApi.deployed.ts"
+          pnpm run contract:compare contracts/convexApi.ts "$RUNNER_TEMP/convexApi.deployed.ts"
