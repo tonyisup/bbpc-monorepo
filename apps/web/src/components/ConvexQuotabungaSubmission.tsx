@@ -185,8 +185,6 @@ export function ConvexQuotabungaSubmission({
   const youtube = parseYouTubeUrl(clipUrl);
   // The last complete YouTube video, so half-typed links don't reset times.
   const lastVideoIdRef = useRef<string | null>(null);
-  // The last t= a link carried, so a "Share at" link can move the start.
-  const lastLinkStartRef = useRef(0);
   const [listenerNotes, setListenerNotes] = useState("");
   const [duplicateCheck, setDuplicateCheck] = useState<{
     inputKey: string;
@@ -283,7 +281,6 @@ export function ConvexQuotabungaSubmission({
     setClipEndSeconds("");
     setClipDuration(null);
     lastVideoIdRef.current = null;
-    lastLinkStartRef.current = 0;
     setListenerNotes("");
   }, []);
 
@@ -327,9 +324,8 @@ export function ConvexQuotabungaSubmission({
     setClipStartSeconds(submission.clipStartSeconds?.toString() ?? "");
     setClipEndSeconds(submission.clipEndSeconds?.toString() ?? "");
     setClipDuration(null);
-    const savedVideo = parseYouTubeUrl(submission.clipUrl ?? "");
-    lastVideoIdRef.current = savedVideo?.id ?? null;
-    lastLinkStartRef.current = savedVideo?.start ?? 0;
+    lastVideoIdRef.current =
+      parseYouTubeUrl(submission.clipUrl ?? "")?.id ?? null;
     setListenerNotes(submission.listenerNotes ?? "");
     setIsEditing(false);
   }, [resetForm, submission]);
@@ -387,7 +383,8 @@ export function ConvexQuotabungaSubmission({
   }, [convex, episodeId, isOpen, isEditing, quoteText, sourceTitle]);
 
   // Switching to another YouTube video resets its times; typing, other hosts
-  // and returning to the same video keep what the listener entered.
+  // and returning to the same video keep what the listener entered. The time
+  // fields are the source of truth; a link's t= only seeds a new video.
   const changeClipUrl = (nextUrl: string) => {
     const nextVideo = parseYouTubeUrl(nextUrl);
     if (nextVideo && nextVideo.id !== lastVideoIdRef.current) {
@@ -402,16 +399,6 @@ export function ConvexQuotabungaSubmission({
         setClipEndSeconds("");
       }
       lastVideoIdRef.current = nextVideo.id;
-      lastLinkStartRef.current = nextVideo.start;
-    } else if (
-      nextVideo &&
-      nextVideo.start > 0 &&
-      nextVideo.start !== lastLinkStartRef.current
-    ) {
-      // Same video, but the link now points at another moment.
-      setClipStartSeconds(String(nextVideo.start));
-      setClipEndSeconds("");
-      lastLinkStartRef.current = nextVideo.start;
     }
     if (nextVideo?.id !== youtube?.id) setClipDuration(null);
     setClipUrl(nextUrl);

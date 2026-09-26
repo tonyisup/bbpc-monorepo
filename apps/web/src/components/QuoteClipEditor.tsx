@@ -32,17 +32,6 @@ type Props = {
 
 // Subtitle timing may overrun the player's reported length by a few frames.
 const CAPTION_END_TOLERANCE = 0.1;
-// Keys that move a range input; others (like Tab arriving) must not seek.
-const SLIDER_KEYS = new Set([
-  "ArrowLeft",
-  "ArrowRight",
-  "ArrowUp",
-  "ArrowDown",
-  "Home",
-  "End",
-  "PageUp",
-  "PageDown",
-]);
 
 export function QuoteClipEditor(props: Props) {
   const { videoId, initialStart, start, end, onRangeChange, onQuoteChange } =
@@ -70,10 +59,14 @@ export function QuoteClipEditor(props: Props) {
   const [transcriptInput, setTranscriptInput] = useState("");
   const [cues, setCues] = useState<TranscriptCue[]>([]);
   const [captionError, setCaptionError] = useState("");
+  // `end` is the range end actually applied, which may be clamped to the video.
   const [selection, setSelection] = useState<{
     anchor: number;
     focus: number;
+    end: number;
   } | null>(null);
+  // Set while the seek slider is dragged or keyed; the release commits it.
+  const scrubbedTo = useRef<number | null>(null);
   const fileGeneration = useRef(0);
 
   useEffect(() => {
@@ -228,11 +221,8 @@ export function QuoteClipEditor(props: Props) {
         : null,
     [cues, selection]
   );
-  // A last cue may overrun the video slightly; selecting it clamps the end.
   const selectedMatchesRange =
-    selected &&
-    start === selected.start &&
-    end === Math.min(selected.end, limit);
+    selected && selection && start === selected.start && end === selection.end;
 
   function changeRange(nextStart: number, nextEnd: number) {
     previewing.current = false;
@@ -246,6 +236,12 @@ export function QuoteClipEditor(props: Props) {
     previewing.current = false;
     player.current?.seekTo(time, allowSeekAhead);
     setCurrentTime(time);
+  }
+
+  function commitScrub() {
+    if (scrubbedTo.current === null) return;
+    seek(scrubbedTo.current);
+    scrubbedTo.current = null;
   }
 
   function timeAt(event: PointerEvent<HTMLElement>) {
@@ -268,9 +264,11 @@ export function QuoteClipEditor(props: Props) {
       );
       return false;
     }
+    // A last cue may overrun the video slightly; its end is clamped.
+    const applied = Math.min(range.end, limit);
     setCaptionError("");
-    setSelection({ anchor, focus });
-    changeRange(range.start, Math.min(range.end, limit));
+    setSelection({ anchor, focus, end: applied });
+    changeRange(range.start, applied);
     return true;
   }
 
@@ -407,19 +405,17 @@ export function QuoteClipEditor(props: Props) {
               value={Math.min(currentTime, duration)}
               onChange={(event) => {
                 const time = Number(event.target.value);
+                scrubbedTo.current = time;
                 seek(time, false);
                 setWindowStart(
                   Math.max(0, Math.min(time - span / 2, duration - span))
                 );
               }}
-              onPointerUp={(event) => seek(Number(event.currentTarget.value))}
-              onPointerCancel={(event) =>
-                seek(Number(event.currentTarget.value))
-              }
-              onKeyUp={(event) => {
-                if (SLIDER_KEYS.has(event.key))
-                  seek(Number(event.currentTarget.value));
-              }}
+              // Only a real scrub commits; Tab or a scroll that cancels the
+              // touch leaves a running preview alone.
+              onPointerUp={commitScrub}
+              onPointerCancel={commitScrub}
+              onKeyUp={commitScrub}
             />
           </label>
         )}

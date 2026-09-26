@@ -909,7 +909,7 @@ describe("ConvexQuotabungaSubmission writes", () => {
     expect(times()).toEqual(["0", ""]);
   });
 
-  test("a Share-at link to the same video moves the start", async () => {
+  test("the time fields stay the source of truth for the same video", async () => {
     const rendered = await renderSubmission();
     act(() => findButton(rendered, "Use Quote Finder").props.onClick());
     const field = (id: string) => rendered.root.findByProps({ id });
@@ -918,9 +918,15 @@ describe("ConvexQuotabungaSubmission writes", () => {
     change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
     change("quote-finder-timestamp", "12.5");
     change("quote-finder-end", "18");
-    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=30");
-    expect(field("quote-finder-timestamp").props.value).toBe("30");
-    expect(field("quote-finder-end").props.value).toBe("");
+    // Deleting a timestamp one key at a time passes through t=1.
+    for (const value of [
+      "https://youtu.be/abcdefghijk?t=1",
+      "https://youtu.be/abcdefghijk?t=30",
+      "https://youtu.be/abcdefghijk",
+    ])
+      change("quote-finder-clip", value);
+    expect(field("quote-finder-timestamp").props.value).toBe("12.5");
+    expect(field("quote-finder-end").props.value).toBe("18");
   });
 
   test("keeps a typed start while a clip link is typed or edited", async () => {

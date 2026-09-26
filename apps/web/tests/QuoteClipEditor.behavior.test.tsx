@@ -187,7 +187,7 @@ describe("quote player interactions", () => {
     // Scrubbing doesn't request new buffers; releasing the slider does.
     act(() => slider().props.onChange({ target: { value: "20" } }));
     expect(media.seekTo).toHaveBeenLastCalledWith(20, false);
-    act(() => slider().props.onPointerUp({ currentTarget: { value: "20" } }));
+    act(() => slider().props.onPointerUp());
     media.getCurrentTime.mockReturnValue(20);
     act(() => {
       vi.advanceTimersByTime(100);
@@ -449,20 +449,29 @@ describe("quote player interactions", () => {
     expect(alertText()).not.toContain("extend beyond");
     expect(handle("end").props["aria-valuenow"]).toBe(100);
     expect(button("Use selected text as quote").props.disabled).toBe(false);
+    // A refined length after selecting doesn't invalidate the selection.
+    media.getDuration.mockReturnValue(100.2);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(button("Use selected text as quote").props.disabled).toBe(false);
   });
 
-  test("tabbing onto the seek slider doesn't cancel a running preview", async () => {
+  test("only a real scrub of the seek slider cancels a running preview", async () => {
     await render();
     act(() => button("Preview quote").props.onClick());
-    const slider = view.root.findByProps({ "aria-label": "Seek video" });
+    const slider = () => view.root.findByProps({ "aria-label": "Seek video" });
     const seeks = media.seekTo.mock.calls.length;
-    act(() =>
-      slider.props.onKeyUp({ key: "Tab", currentTarget: { value: "0" } })
-    );
+    // Tab arriving, or a phone scroll that cancels the touch, isn't a scrub.
+    act(() => slider().props.onKeyUp());
+    act(() => slider().props.onPointerCancel());
     expect(media.seekTo.mock.calls.length).toBe(seeks);
-    act(() =>
-      slider.props.onKeyUp({ key: "ArrowRight", currentTarget: { value: "3" } })
-    );
+    act(() => slider().props.onChange({ target: { value: "3" } }));
+    expect(media.seekTo).toHaveBeenLastCalledWith(3, false);
+    act(() => slider().props.onKeyUp());
     expect(media.seekTo).toHaveBeenLastCalledWith(3, true);
+    const committed = media.seekTo.mock.calls.length;
+    act(() => slider().props.onKeyUp());
+    expect(media.seekTo.mock.calls.length).toBe(committed);
   });
 });
