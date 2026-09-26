@@ -76,6 +76,9 @@ describe("Convex-only admin scaffold", () => {
     expect(app).not.toMatch(/SqlAdminApp|BBPC_BACKEND/u);
     expect(middleware).toMatch(/clerkMiddleware/u);
     expect(middleware).not.toMatch(/NextResponse|BBPC_BACKEND/u);
+    // Previews accept sessions on the deployment URL and the branch alias.
+    expect(middleware).toMatch(/process\.env\.VERCEL_URL/u);
+    expect(middleware).toMatch(/process\.env\.VERCEL_BRANCH_URL/u);
     expect(env).toMatch(/CLERK_SECRET_KEY: z\.string\(\)\.min\(1\)/u);
     expect(env).toMatch(
       /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z\.string\(\)\.min\(1\)/u

@@ -8,6 +8,7 @@ describe('Clerk proxy', () => {
     expect(proxy).toMatch(/const authorizedParties/u);
     expect(proxy).toMatch(/https:\/\/record\.badboyspodcast\.com/u);
     expect(proxy).toMatch(/process\.env\.VERCEL_URL/u);
+    expect(proxy).toMatch(/process\.env\.VERCEL_BRANCH_URL/u);
     expect(proxy).toMatch(/http:\/\/localhost:3000/u);
     expect(proxy).toMatch(/clerkMiddleware\(\{ authorizedParties \}\)/u);
   });
