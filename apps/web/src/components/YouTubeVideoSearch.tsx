@@ -200,11 +200,11 @@ export function YouTubeVideoSearch({
           <p role="status" className="sr-only">
             {visible.videos.length} videos found.
           </p>
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">
             {visible.videos.map((video) => (
               <li
                 key={video.id}
-                className="flex min-w-0 flex-col overflow-hidden rounded-md border border-border bg-background"
+                className="grid grid-cols-[6rem_minmax(0,1fr)] items-start gap-x-3 gap-y-2 p-2 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-center"
               >
                 <Image
                   src={`https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`}
@@ -212,9 +212,9 @@ export function YouTubeVideoSearch({
                   height={180}
                   alt=""
                   unoptimized
-                  className="aspect-video w-full object-cover"
+                  className="row-span-2 aspect-video w-full rounded object-cover sm:row-span-1"
                 />
-                <div className="flex flex-1 flex-col items-start gap-2 p-3">
+                <div className="min-w-0 space-y-1">
                   <a
                     href={`https://www.youtube.com/watch?v=${video.id}`}
                     target="_blank"
@@ -223,29 +223,29 @@ export function YouTubeVideoSearch({
                   >
                     {video.title}
                   </a>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground">
                     {video.channel}
                   </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={
-                      selectedVideoId === video.id ? "secondary" : "outline"
-                    }
-                    className="mt-auto"
-                    aria-label={`Use video: ${video.title}`}
-                    aria-pressed={selectedVideoId === video.id}
-                    onClick={() => {
-                      onSelect(`https://www.youtube.com/watch?v=${video.id}`);
-                      setResultsOpen(false);
-                      setSelectionNotice(
-                        `Loaded “${video.title}” into the quote player.`
-                      );
-                    }}
-                  >
-                    {selectedVideoId === video.id ? "Selected" : "Use video"}
-                  </Button>
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={
+                    selectedVideoId === video.id ? "secondary" : "outline"
+                  }
+                  className="justify-self-start"
+                  aria-label={`Use video: ${video.title}`}
+                  aria-pressed={selectedVideoId === video.id}
+                  onClick={() => {
+                    onSelect(`https://www.youtube.com/watch?v=${video.id}`);
+                    setResultsOpen(false);
+                    setSelectionNotice(
+                      `Loaded “${video.title}” into the quote player.`
+                    );
+                  }}
+                >
+                  {selectedVideoId === video.id ? "Selected" : "Use video"}
+                </Button>
               </li>
             ))}
           </ul>
