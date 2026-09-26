@@ -30,6 +30,7 @@ import {
   MAX_QUOTE_TEXT_LENGTH,
   parseYouTubeUrl,
   validClipRange,
+  youtubeWatchUrl,
 } from "@/lib/quoteClip";
 import { AdminCollapsibleHeader } from "@/components/AdminCollapsibleHeader";
 import { Button } from "@/components/ui/button";
@@ -438,7 +439,11 @@ export function ConvexQuotabungaSubmission({
         quoteText: normalizedQuote,
         sourceTitle: normalizedSource,
         sourceType,
-        clipUrl: normalizedClipUrl || null,
+        // Hosts open this link while recording, so YouTube clips carry
+        // the chosen start instead of opening at 0:00.
+        clipUrl: youtube
+          ? youtubeWatchUrl(youtube.id, parsedClipStart)
+          : normalizedClipUrl || null,
         clipStartSeconds: parsedClipStart,
         // Backends before clip ranges reject this argument, so send it only
         // to set an end or clear a saved one.

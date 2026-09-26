@@ -4,6 +4,14 @@ export const MAX_CLIP_SECONDS = 86_400;
 export const MAX_CAPTION_BYTES = 500_000;
 export const MAX_QUOTE_TEXT_LENGTH = 2000;
 
+/** A plain watch link; with a start, it opens at that second. */
+export function youtubeWatchUrl(id: string, start: number | null = null) {
+  const url = `https://www.youtube.com/watch?v=${id}`;
+  return start !== null && start >= 1
+    ? `${url}&t=${String(Math.floor(start))}s`
+    : url;
+}
+
 export function parseYouTubeUrl(value: string) {
   try {
     const url = new URL(value.trim());

@@ -124,7 +124,10 @@ describe("FullScreenDialog history", () => {
   const close = () =>
     act(() => view.root.findByProps({ "aria-label": "Close" }).props.onClick());
   // Removing an entry after a parent close or unmount is deferred a tick.
-  const settle = () => act(() => vi.runAllTimers());
+  const settle = () =>
+    act(() => {
+      vi.runAllTimers();
+    });
 
   test("the back gesture closes the dialog without leaving the page", () => {
     render();

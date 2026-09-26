@@ -13,6 +13,7 @@ import {
   youtubeSearchResponseSchema,
   type YouTubeSearchVideo,
 } from "@/lib/youtubeSearch";
+import { youtubeWatchUrl } from "@/lib/quoteClip";
 
 const UNAVAILABLE =
   "Video search is unavailable right now. Try again or paste a clip link below.";
@@ -45,7 +46,6 @@ export function YouTubeVideoSearch({
   const selectionRef = useRef<HTMLParagraphElement>(null);
   const [state, setState] = useState<SearchState | null>(null);
   const request = useRef<AbortController | null>(null);
-  const generation = useRef(0);
   const visible = state?.query === normalized ? state : null;
   const valid =
     normalized.length >= MIN_VIDEO_SEARCH_LENGTH &&
@@ -56,14 +56,10 @@ export function YouTubeVideoSearch({
   }, [selectionNotice]);
 
   useEffect(() => {
-    generation.current += 1;
     request.current?.abort();
     setState(null);
     setSelectionNotice("");
-    return () => {
-      generation.current += 1;
-      request.current?.abort();
-    };
+    return () => request.current?.abort();
   }, [normalized]);
 
   async function search(more = false) {
@@ -73,7 +69,6 @@ export function YouTubeVideoSearch({
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    const current = ++generation.current;
     const prior = more ? visible?.videos ?? [] : [];
     const pageToken = more ? visible?.nextPageToken ?? null : null;
     setState({
@@ -99,7 +94,7 @@ export function YouTubeVideoSearch({
         throw new SearchError(body.success ? body.data.error : UNAVAILABLE);
       }
       const result = youtubeSearchResponseSchema.parse(await response.json());
-      if (controller.signal.aborted || generation.current !== current) return;
+      if (controller.signal.aborted) return;
       const unique = new Map(
         [...prior, ...result.videos].map((video) => [video.id, video])
       );
@@ -111,7 +106,7 @@ export function YouTubeVideoSearch({
         error: null,
       });
     } catch (error) {
-      if (controller.signal.aborted || generation.current !== current) return;
+      if (controller.signal.aborted) return;
       setState({
         query: normalized,
         videos: prior,
@@ -225,7 +220,7 @@ export function YouTubeVideoSearch({
                 />
                 <div className="min-w-0 space-y-1">
                   <a
-                    href={`https://www.youtube.com/watch?v=${video.id}`}
+                    href={youtubeWatchUrl(video.id)}
                     target="_blank"
                     rel="noreferrer noopener"
                     className="line-clamp-2 text-sm font-medium hover:underline"
@@ -246,7 +241,7 @@ export function YouTubeVideoSearch({
                   aria-label={`Use video: ${video.title}`}
                   aria-pressed={selectedVideoId === video.id}
                   onClick={() => {
-                    onSelect(`https://www.youtube.com/watch?v=${video.id}`);
+                    onSelect(youtubeWatchUrl(video.id));
                     setResultsOpen(false);
                     setSelectionNotice(
                       `Loaded into the quote player: ${video.title}`

@@ -790,7 +790,8 @@ describe("ConvexQuotabungaSubmission writes", () => {
       "episode-test",
       expect.objectContaining({
         quoteText: "Hold on to ya, man",
-        clipUrl: "https://youtu.be/abcdefghijk?t=12",
+        // Saved as a watch link that opens at the chosen start for hosts.
+        clipUrl: "https://www.youtube.com/watch?v=abcdefghijk&t=12s",
         clipStartSeconds: 12.5,
         clipEndSeconds: 18.25,
       })
@@ -872,9 +873,9 @@ describe("ConvexQuotabungaSubmission writes", () => {
     );
     // With no end to set or clear, the argument is left out so a backend
     // without clip ranges still accepts the write.
-    expect(mocks.submit.mock.calls.at(-1)?.[2]).not.toHaveProperty(
-      "clipEndSeconds"
-    );
+    expect(
+      (mocks.submit.mock.calls.at(-1) as unknown[] | undefined)?.[2]
+    ).not.toHaveProperty("clipEndSeconds");
   });
 
   test("keeps times when the same video is relinked or the link moves to another host", async () => {

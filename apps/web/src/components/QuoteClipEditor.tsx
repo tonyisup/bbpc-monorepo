@@ -13,6 +13,7 @@ import {
   parseCaptions,
   selectCueRange,
   validClipRange,
+  youtubeWatchUrl,
   type TranscriptCue,
 } from "@/lib/quoteClip";
 import { loadYouTubeAPI, type YouTubePlayer } from "@/lib/youtubePlayer";
@@ -296,7 +297,7 @@ export function QuoteClipEditor(props: Props) {
         </div>
         <a
           className="text-xs text-muted-foreground underline"
-          href={`https://www.youtube.com/watch?v=${videoId}`}
+          href={youtubeWatchUrl(videoId, start)}
           target="_blank"
           rel="noreferrer noopener"
         >

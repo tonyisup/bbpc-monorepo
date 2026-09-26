@@ -5,6 +5,7 @@ import {
   parseCaptions,
   selectCueRange,
   validClipRange,
+  youtubeWatchUrl,
 } from "@/lib/quoteClip";
 
 function timestamp(seconds: number) {
@@ -15,6 +16,18 @@ function timestamp(seconds: number) {
 }
 
 describe("quote clip sources and timing", () => {
+  test("builds watch links that open at the whole second of the start", () => {
+    expect(youtubeWatchUrl("abcdefghijk")).toBe(
+      "https://www.youtube.com/watch?v=abcdefghijk"
+    );
+    expect(youtubeWatchUrl("abcdefghijk", 0.9)).toBe(
+      "https://www.youtube.com/watch?v=abcdefghijk"
+    );
+    expect(youtubeWatchUrl("abcdefghijk", 42.9)).toBe(
+      "https://www.youtube.com/watch?v=abcdefghijk&t=42s"
+    );
+  });
+
   test("accepts YouTube share, watch and Shorts URLs without trusting lookalike hosts", () => {
     for (const url of [
       "https://youtu.be/abcdefghijk?t=1m2s",
@@ -86,7 +99,10 @@ describe("quote clip sources and timing", () => {
         { id: "abcdefghijk", start: 12.5 },
       ],
       ["https://youtube.com/live/abcdefghijk", { id: "abcdefghijk", start: 0 }],
-      ["http://youtu.be/abcdefghijk?t=30h", { id: "abcdefghijk", start: 86_400 }],
+      [
+        "http://youtu.be/abcdefghijk?t=30h",
+        { id: "abcdefghijk", start: 86_400 },
+      ],
       ["https://youtu.be/abcdefghijk?t=soon", { id: "abcdefghijk", start: 0 }],
       ["https://youtube.com/watch?list=abc", null],
       ["https://youtube.com/embed/", null],

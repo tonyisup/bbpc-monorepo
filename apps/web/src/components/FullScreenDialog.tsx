@@ -29,14 +29,12 @@ export function FullScreenDialog({
   onOpenChange,
   title,
   description,
-  doneLabel = "Done",
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  doneLabel?: string;
   children: ReactNode;
 }) {
   const onOpenChangeRef = useRef(onOpenChange);
@@ -102,7 +100,7 @@ export function FullScreenDialog({
             </div>
             <DialogPrimitive.Close asChild>
               <Button type="button" size="sm" className="shrink-0">
-                {doneLabel}
+                Done
               </Button>
             </DialogPrimitive.Close>
           </header>
