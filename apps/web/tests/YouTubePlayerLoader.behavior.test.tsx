@@ -21,6 +21,7 @@ class FakeScript {
 }
 
 let head: FakeScript[];
+let widgetScript: { remove: () => void } | null = null;
 let win: { YT?: unknown } & Record<string, unknown>;
 
 async function freshLoader() {
@@ -41,6 +42,8 @@ describe("YouTube iframe API loader", () => {
     vi.stubGlobal("window", win);
     vi.stubGlobal("document", {
       querySelector: () => head.find((script) => script.src === SRC) ?? null,
+      getElementById: (id: string) =>
+        id === "www-widgetapi-script" ? widgetScript : null,
       createElement: () => new FakeScript(),
       head: { appendChild: (script: FakeScript) => head.push(script) },
     });
@@ -96,5 +99,29 @@ describe("YouTube iframe API loader", () => {
     shared.fail();
     await expect(reused).rejects.toThrow();
     expect(shared.remove).not.toHaveBeenCalled();
+  });
+
+  test("recovers when iframe_api loads but its widget script never arrives", async () => {
+    const load = await freshLoader();
+    const first = load();
+    // iframe_api declares `var YT`: a writable but non-deletable global.
+    Object.defineProperty(win, "YT", {
+      value: { loading: 1 },
+      writable: true,
+      configurable: false,
+    });
+    widgetScript = { remove: vi.fn() };
+    vi.advanceTimersByTime(15_000);
+    await expect(first).rejects.toThrow("YouTube could not load");
+    expect(win.YT).toBeUndefined();
+    expect(widgetScript.remove).toHaveBeenCalledOnce();
+    widgetScript = null;
+
+    const retry = load();
+    expect(retry).not.toBe(first);
+    expect(head).toHaveLength(1);
+    win.YT = { Player: class {} };
+    vi.advanceTimersByTime(100);
+    await expect(retry).resolves.toBe(win.YT);
   });
 });

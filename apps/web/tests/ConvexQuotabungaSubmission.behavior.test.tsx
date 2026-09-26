@@ -884,21 +884,42 @@ describe("ConvexQuotabungaSubmission writes", () => {
     const field = (id: string) => rendered.root.findByProps({ id });
     const change = (id: string, value: string) =>
       act(() => field(id).props.onChange({ target: { value } }));
+    const times = () => [
+      field("quote-finder-timestamp").props.value,
+      field("quote-finder-end").props.value,
+    ];
     change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
     change("quote-finder-end", "18");
+    // Same moment in another URL form, or a bare link, keeps the times.
     change(
       "quote-finder-clip",
-      "https://www.youtube.com/watch?v=abcdefghijk&t=30"
+      "https://www.youtube.com/watch?v=abcdefghijk&t=12"
     );
-    expect(field("quote-finder-timestamp").props.value).toBe("12");
-    expect(field("quote-finder-end").props.value).toBe("18");
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk");
+    expect(times()).toEqual(["12", "18"]);
+    // A half-typed time parses as 0 and must not disturb anything either.
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=1x");
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    expect(times()).toEqual(["12", "18"]);
     change("quote-finder-clip", "https://example.test/clip");
-    expect(field("quote-finder-timestamp").props.value).toBe("12");
-    expect(field("quote-finder-end").props.value).toBe("18");
+    expect(times()).toEqual(["12", "18"]);
     expect(renderedText(rendered)).not.toContain("Quote player");
     // Switching to a different video is what resets the times.
     change("quote-finder-clip", "https://youtu.be/lmnopqrstuv");
-    expect(field("quote-finder-timestamp").props.value).toBe("0");
+    expect(times()).toEqual(["0", ""]);
+  });
+
+  test("a Share-at link to the same video moves the start", async () => {
+    const rendered = await renderSubmission();
+    act(() => findButton(rendered, "Use Quote Finder").props.onClick());
+    const field = (id: string) => rendered.root.findByProps({ id });
+    const change = (id: string, value: string) =>
+      act(() => field(id).props.onChange({ target: { value } }));
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=12");
+    change("quote-finder-timestamp", "12.5");
+    change("quote-finder-end", "18");
+    change("quote-finder-clip", "https://youtu.be/abcdefghijk?t=30");
+    expect(field("quote-finder-timestamp").props.value).toBe("30");
     expect(field("quote-finder-end").props.value).toBe("");
   });
 

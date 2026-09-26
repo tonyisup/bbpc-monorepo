@@ -419,20 +419,28 @@ describe("quote player interactions", () => {
     expect(durationChange).toHaveBeenCalledTimes(2);
   });
 
-  test("a cue accepted at import stays selectable, and a refused selection's error clears", async () => {
+  test("a cue accepted at import stays usable, and a refused selection's error clears", async () => {
     await mount(<RangeHarness initialStart={95} />);
-    act(() => events.onReady());
     act(() =>
       view.root
         .findByProps({ "aria-label": "Timed subtitles" })
         .props.onChange({
           target: {
             value:
-              "WEBVTT\n\n00:01:38.000 --> 00:01:39.000\nEarlier.\n\n00:01:39.000 --> 00:01:40.050\nLast line.",
+              "WEBVTT\n\n00:01:38.000 --> 00:01:39.000\nEarlier.\n\n00:01:39.000 --> 00:01:40.050\nLast line.\n\n00:01:39.500 --> 00:01:45.000\nToo late.",
           },
         })
     );
+    // Loaded before the player knows the length, so import can't refuse it.
     act(() => button("Load transcript").props.onClick());
+    act(() => events.onReady());
+    act(() =>
+      view.root
+        .findByProps({ "aria-label": "Too late., 1:39.5" })
+        .props.onClick({ detail: 0, shiftKey: false })
+    );
+    expect(alertText()).toContain("extend beyond");
+
     act(() =>
       view.root
         .findByProps({ "aria-label": "Last line., 1:39.0" })
@@ -440,5 +448,21 @@ describe("quote player interactions", () => {
     );
     expect(alertText()).not.toContain("extend beyond");
     expect(handle("end").props["aria-valuenow"]).toBe(100);
+    expect(button("Use selected text as quote").props.disabled).toBe(false);
+  });
+
+  test("tabbing onto the seek slider doesn't cancel a running preview", async () => {
+    await render();
+    act(() => button("Preview quote").props.onClick());
+    const slider = view.root.findByProps({ "aria-label": "Seek video" });
+    const seeks = media.seekTo.mock.calls.length;
+    act(() =>
+      slider.props.onKeyUp({ key: "Tab", currentTarget: { value: "0" } })
+    );
+    expect(media.seekTo.mock.calls.length).toBe(seeks);
+    act(() =>
+      slider.props.onKeyUp({ key: "ArrowRight", currentTarget: { value: "3" } })
+    );
+    expect(media.seekTo).toHaveBeenLastCalledWith(3, true);
   });
 });

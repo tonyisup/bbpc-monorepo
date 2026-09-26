@@ -32,6 +32,17 @@ type Props = {
 
 // Subtitle timing may overrun the player's reported length by a few frames.
 const CAPTION_END_TOLERANCE = 0.1;
+// Keys that move a range input; others (like Tab arriving) must not seek.
+const SLIDER_KEYS = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+]);
 
 export function QuoteClipEditor(props: Props) {
   const { videoId, initialStart, start, end, onRangeChange, onQuoteChange } =
@@ -217,8 +228,11 @@ export function QuoteClipEditor(props: Props) {
         : null,
     [cues, selection]
   );
+  // A last cue may overrun the video slightly; selecting it clamps the end.
   const selectedMatchesRange =
-    selected && start === selected.start && end === selected.end;
+    selected &&
+    start === selected.start &&
+    end === Math.min(selected.end, limit);
 
   function changeRange(nextStart: number, nextEnd: number) {
     previewing.current = false;
@@ -399,7 +413,13 @@ export function QuoteClipEditor(props: Props) {
                 );
               }}
               onPointerUp={(event) => seek(Number(event.currentTarget.value))}
-              onKeyUp={(event) => seek(Number(event.currentTarget.value))}
+              onPointerCancel={(event) =>
+                seek(Number(event.currentTarget.value))
+              }
+              onKeyUp={(event) => {
+                if (SLIDER_KEYS.has(event.key))
+                  seek(Number(event.currentTarget.value));
+              }}
             />
           </label>
         )}
