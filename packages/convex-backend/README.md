@@ -52,6 +52,10 @@ Vercel deploys the apps as soon as a merge lands, so a change the current apps
 cannot use must stay backward compatible or land in a backend-only merge that is
 approved before the matching app change merges.
 
+The first step refuses to continue unless `convex-production` already exists,
+requires a reviewer and limits deployment branches: GitHub would otherwise create a
+missing environment with no protection the first time a job uses it.
+
 One-time setup: create the `convex-production` environment with @tonyisup as a
 required reviewer and `main` as the only deployment branch, then add a
 production deploy key for `determined-wombat-872` to it as
