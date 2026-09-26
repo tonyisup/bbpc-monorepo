@@ -25,7 +25,7 @@ details never belong in this repository.
 |---|---|---|
 | local | `local-tonyisup-bbpc_convex` | developer-only |
 | staging | project `bbpc-convex`, reference `staging` | S4 after backup restore, writes enabled for Vercel previews |
-| production | not provisioned for consumers | intentionally unavailable |
+| production | deployment `determined-wombat-872` | S4 since the 2026-08-02 cutover; serves Vercel Production |
 
 The staging workflow requires S4 after the development backup restore. Restores copy
 the lifecycle state and identity mappings; verify both before testing sign-in.
@@ -33,6 +33,31 @@ It uses a deployment-scoped key named
 `github-actions-staging`; the key value belongs in the GitHub `staging` environment as
 `CONVEX_STAGING_DEPLOY_KEY`. All Vercel Preview deployments target this staging
 deployment; Vercel Production deployments retain the separate production selector.
+
+### Production deploys
+
+The `Deploy Convex production` workflow runs when a merge to `main` changes the
+backend (or on manual dispatch from `main`). It first runs the source and
+workspace contract checks without secrets, then waits on the protected
+`convex-production` GitHub environment. Approving that environment is the separate
+production sign-off; only then does the job receive
+`CONVEX_PRODUCTION_DEPLOY_KEY`, verify that the key targets
+`determined-wombat-872` and not staging, check the deployment's required
+environment names and `BBPC_ENVIRONMENT`/`BBPC_API_VERSION`, deploy with
+typechecking, and compare the deployed public API with `contracts/convexApi.ts`.
+A newer merge waiting for approval replaces an older one, so the latest `main`
+deploys. Reject the approval to skip a deploy.
+
+Vercel deploys the apps as soon as a merge lands, so a change the current apps
+cannot use must stay backward compatible or land in a backend-only merge that is
+approved before the matching app change merges.
+
+One-time setup: create the `convex-production` environment with @tonyisup as a
+required reviewer and `main` as the only deployment branch, then add a
+production deploy key for `determined-wombat-872` to it as
+`CONVEX_PRODUCTION_DEPLOY_KEY`. The older
+`deploy:production:authorization:check` guard remains for the pre-cutover
+inert-deploy boundary and is not used by this workflow.
 
 ## Local development
 
