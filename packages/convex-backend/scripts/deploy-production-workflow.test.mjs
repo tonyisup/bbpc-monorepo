@@ -55,6 +55,13 @@ test("an unprotected production environment stops the run before any secret", ()
   );
   const install = verifyJob.indexOf("pnpm install --frozen-lockfile");
   assert.ok(guard >= 0 && install > guard);
+  // Any step before checkout must not inherit the package working directory,
+  // which doesn't exist until the repository is checked out.
+  const checkout = verifyJob.indexOf("name: Check out repository");
+  for (const step of verifyJob.slice(0, checkout).split("\n      - name:").slice(1)) {
+    if (/\n\s+run:/u.test(step))
+      assert.match(step, /\n\s+working-directory: \.\n/u);
+  }
   assert.match(verifyJob, /permissions:\n\s+contents: read\n\s+actions: read\n/u);
   assert.match(
     verifyJob,

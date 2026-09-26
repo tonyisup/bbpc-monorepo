@@ -42,6 +42,8 @@ jobs:
       # first uses it, which would deploy without approval. Refuse unless the
       # environment already requires a reviewer and limits deploy branches.
       - name: Require owner approval on the production environment
+        # Runs before checkout, so it can't use the job's package directory.
+        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
