@@ -39,6 +39,14 @@ const auditValue = v.union(
 );
 
 export default defineSchema({
+  // convex-helpers rate-limit buckets (Quote Finder search quota). The shape
+  // and the "name" index are what that helper reads and writes.
+  rateLimits: defineTable({
+    name: v.string(),
+    key: v.optional(v.string()),
+    value: v.number(),
+    ts: v.number(),
+  }).index("name", ["name", "key"]),
   users: defineTable({
     legacyId: v.optional(v.string()),
     name: v.optional(v.string()),

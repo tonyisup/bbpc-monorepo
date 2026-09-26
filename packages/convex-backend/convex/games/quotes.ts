@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { defineRateLimits } from "convex-helpers/server/rateLimit";
 
 import type { Doc, Id } from "../_generated/dataModel.js";
 import {
@@ -14,6 +15,10 @@ import {
   MAX_QUOTE_EPISODE_SELECTOR_SIZE,
   MAX_QUOTE_RANDOM_SEED_LENGTH,
   MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR,
+  VIDEO_SEARCH_SITE_BURST,
+  VIDEO_SEARCH_USER_BURST,
+  VIDEO_SEARCHES_PER_USER_PER_DAY,
+  VIDEO_SEARCHES_SITE_PER_DAY,
 } from "./limits.js";
 import {
   buildQuoteReuseReport,
@@ -370,6 +375,53 @@ export const checkPossibleDuplicate = authenticatedQuery({
         ),
     );
     return { possibleMatch, transcriptMatches };
+  },
+});
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const { checkRateLimit, rateLimit } = defineRateLimits({
+  // A burst while hunting for one quote, then one search every two hours.
+  videoSearchPerUser: {
+    kind: "token bucket",
+    rate: VIDEO_SEARCHES_PER_USER_PER_DAY,
+    period: DAY_MS,
+    capacity: VIDEO_SEARCH_USER_BURST,
+  },
+  // Keeps many accounts together from exhausting the API key's daily quota.
+  videoSearchSiteWide: {
+    kind: "token bucket",
+    rate: VIDEO_SEARCHES_SITE_PER_DAY,
+    period: DAY_MS,
+    capacity: VIDEO_SEARCH_SITE_BURST,
+  },
+});
+
+function refusedVideoSearch(scope: "user" | "site", retryAt?: number) {
+  // No retry time means the request can never fit; say try again tomorrow.
+  return { ok: false as const, scope, retryAt: retryAt ?? Date.now() + DAY_MS };
+}
+
+/** Spends one Quote Finder search for the caller, or says when to retry. */
+export const reserveVideoSearch = authenticatedMutation({
+  args: {},
+  returns: v.union(
+    v.object({ ok: v.literal(true) }),
+    v.object({
+      ok: v.literal(false),
+      scope: v.union(v.literal("user"), v.literal("site")),
+      retryAt: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const key = ctx.actor.user._id;
+    // Check both before spending either, so a refusal costs nothing.
+    const mine = await checkRateLimit(ctx, { name: "videoSearchPerUser", key });
+    if (!mine.ok) return refusedVideoSearch("user", mine.retryAt);
+    const site = await checkRateLimit(ctx, { name: "videoSearchSiteWide" });
+    if (!site.ok) return refusedVideoSearch("site", site.retryAt);
+    await rateLimit(ctx, { name: "videoSearchPerUser", key });
+    await rateLimit(ctx, { name: "videoSearchSiteWide" });
+    return { ok: true as const };
   },
 });
 

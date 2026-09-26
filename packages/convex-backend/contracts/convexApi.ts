@@ -8337,6 +8337,13 @@ export type PublicApiType = {
         },
         { id: Id<"quoteSubmissions"> }
       >;
+      reserveVideoSearch: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string },
+        | { ok: true }
+        | { ok: false; retryAt: number; scope: "user" | "site" }
+      >;
       setStatus: FunctionReference<
         "mutation",
         "public",
