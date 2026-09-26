@@ -539,6 +539,15 @@ identity, and the mutation upserts at most one submission per user and episode. 
 submissions cannot be edited or withdrawn. Member responses expose the public quote
 fields and score state but never administrator notes.
 
+A submission may carry a clip range. `clipStartSeconds` and the optional
+`clipEndSeconds` accept finite seconds from 0 through 86400, fractions included. An end
+also needs a `clipUrl` and must be greater than the start, or the write fails with
+`VALIDATION_FAILED`. Explicit `null` clears the end. A write that omits
+`clipEndSeconds`, as clients released before clip ranges do, keeps the saved end only
+while the URL and start are unchanged. Member and administrator responses return
+`clipEndSeconds`, or `null` for rows saved without one, and administrator
+`createForUser` and `updateContent` follow the same rules.
+
 While a member enters a quote, `games.quotes.checkPossibleDuplicate` performs a bounded
 full-text candidate search and returns only whether a similar prior submission may
 exist. The advisory check accepts an optional source title, excludes the member's own
@@ -548,6 +557,16 @@ returns up to three published episodes whose transcript contains a close match, 
 the passage timestamp and a short excerpt. Transcripts are already public, so these
 matches name the episode; other listeners' submissions stay a yes/no answer. Quotes of
 fewer than four words need a near-exact transcript match.
+
+Before the web app calls YouTube for the Quote Finder, authenticated
+`games.quotes.reserveVideoSearch` spends one search. It takes only the client API
+version and returns `{ ok: true }` or `{ ok: false, scope, retryAt }`, where `scope` is
+`user` or `site` and `retryAt` is epoch milliseconds. Two convex-helpers token buckets
+in the `rateLimits` table hold the budget: a burst of 6, then 12 searches a day per
+member, and a burst of 45, then 50 a day across the site. A bucket admits at most its
+burst plus its daily rate in any 24 hours, so the site stays under the API key's
+default quota of 100 searches a day. Both buckets are checked before either is spent,
+so a refusal costs nothing. The limits live in `convex/games/limits.ts`.
 
 `games.quotes.getAdminReuseReport` estimates how likely a submission's quote was
 already used, for administrators. It compares the quote with similar submissions and

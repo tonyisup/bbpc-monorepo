@@ -21,10 +21,14 @@ project and restrict the key to that API. Use a key suitable for server requests
 a browser HTTP-referrer restriction will reject the server call. Keep the key
 server-only (never use a `NEXT_PUBLIC_` prefix). The search route requires a Clerk
 session, returns six embeddable videos per page, and caches provider responses for
-five minutes. If search is unavailable, listeners can still paste a clip link.
+five minutes. Each search first spends from the listener's search budget in Convex
+(`games.quotes.reserveVideoSearch`); past the budget the route returns 429 with
+`Retry-After`. If search is unavailable, listeners can still paste a clip link.
 
 Set the same server-side variable in the web deployment environment when deploying
 this feature. It is optional, so environments without video search still start.
+Deploy the backend with `reserveVideoSearch` first; until then, search fails closed
+as unavailable.
 
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can
