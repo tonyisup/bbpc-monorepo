@@ -31,10 +31,31 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         working-directory: packages/convex-backend
     steps:
+      # GitHub creates a missing environment with no protection when a job
+      # first uses it, which would deploy without approval. Refuse unless the
+      # environment already requires a reviewer and limits deploy branches.
+      - name: Require owner approval on the production environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          environment=$(gh api "repos/$GITHUB_REPOSITORY/environments/convex-production") || {
+            echo "::error::Create the convex-production environment before production can deploy (see Production deploys in packages/convex-backend/README.md)."
+            exit 1
+          }
+          reviewers=$(jq '[.protection_rules[]? | select(.type == "required_reviewers") | .reviewers[]?] | length' <<<"$environment")
+          branches=$(jq -r 'if .deployment_branch_policy == null then "any" else "restricted" end' <<<"$environment")
+          if [ "$reviewers" -lt 1 ] || [ "$branches" != "restricted" ]; then
+            echo "::error::convex-production must require a reviewer and limit deployment branches before production can deploy (see Production deploys in packages/convex-backend/README.md)."
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 

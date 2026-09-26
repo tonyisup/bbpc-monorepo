@@ -49,6 +49,22 @@ test("the production key is only exposed after owner approval", () => {
   assert.doesNotMatch(staging, /CONVEX_PRODUCTION_DEPLOY_KEY|convex-production/u);
 });
 
+test("an unprotected production environment stops the run before any secret", () => {
+  const guard = verifyJob.indexOf(
+    "name: Require owner approval on the production environment",
+  );
+  const install = verifyJob.indexOf("pnpm install --frozen-lockfile");
+  assert.ok(guard >= 0 && install > guard);
+  assert.match(verifyJob, /permissions:\n\s+contents: read\n\s+actions: read\n/u);
+  assert.match(
+    verifyJob,
+    /gh api "repos\/\$GITHUB_REPOSITORY\/environments\/convex-production"\) \|\| \{/u,
+  );
+  assert.match(verifyJob, /select\(\.type == "required_reviewers"\)/u);
+  assert.match(verifyJob, /\.deployment_branch_policy == null/u);
+  assert.match(verifyJob, /\[ "\$reviewers" -lt 1 \] \|\| \[ "\$branches" != "restricted" \]/u);
+});
+
 test("production pins its target and verifies it before deploying", () => {
   assert.match(
     deployJob,
