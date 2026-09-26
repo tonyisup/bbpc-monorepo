@@ -1,7 +1,8 @@
 # Quote Finder assistant
 
 Date: 2026-09-26
-Status: Proposal. Not implemented; needs the decisions at the end and a spike.
+Status: Proposal. Gemini approved as the provider (2026-09-26). Spike written, not yet
+run; the other decisions at the end are still open.
 
 Listeners already type the quote and the movie or show before opening the Quote
 Finder. Today they then search YouTube, pick a video, scrub to the line, and drag the
@@ -124,6 +125,10 @@ found rate, start and end error, latency, and cost. A reasonable bar to ship: at
 least 70% found, with the start within 2 s. Those entries are production-derived, so
 the evaluation set stays out of the repository.
 
+The spike is `apps/web/local-tools/quote-locate` (see its README). It uses the same
+prompt, request and answer checks as the future route, from
+`apps/web/src/server/quoteLocate.mjs`, with `gemini-3.8-flash` as the default model.
+
 ## Smaller wins that need no model
 
 - When subtitles are loaded, preselect the cue range that best matches the typed
@@ -134,10 +139,11 @@ the evaluation set stays out of the repository.
 
 ## Decisions needed
 
-1. Add Google (Gemini) as a second paid API vendor for this feature?
-2. Per-listener and site-wide daily caps for assistant runs.
-3. Whether a later version should use a text model with web search before searching
+1. Per-listener and site-wide daily caps for assistant runs.
+2. Whether a later version should use a text model with web search before searching
    YouTube, for "I only half-remember it" quotes.
+
+Settled: Google (Gemini) is approved as a second paid API vendor for this feature.
 
 References: [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding),
 [Gemini media resolution](https://ai.google.dev/gemini-api/docs/media-resolution),
