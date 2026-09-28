@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -30,6 +30,8 @@ import {
 } from "./games/quoteSimilarity.js";
 import {
   MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_ADMIN,
+  QUOTE_LOCATE_SITE_BURST,
+  QUOTE_LOCATE_USER_BURST,
   VIDEO_SEARCH_SITE_BURST,
   VIDEO_SEARCH_USER_BURST,
 } from "./games/limits.js";
@@ -2466,5 +2468,178 @@ describe("Quote Finder search quota", () => {
       }),
       "AUTHENTICATION_REQUIRED",
     );
+  });
+});
+
+describe("Quote Finder assistant budget", () => {
+  const NOW = Date.UTC(2026, 8, 28, 20);
+  const SERVER_KEY = "test-quote-locate-server-key";
+
+  beforeEach(() => {
+    vi.stubEnv("QUOTE_LOCATE_SERVER_KEY", SERVER_KEY);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  async function setup() {
+    const t = createTestBackend();
+    const actors = await seedActors(t);
+    await advanceToS3(t);
+    const reserve = (identity: TestIdentity, serverKey = SERVER_KEY) =>
+      t.withIdentity(identity).mutation(api.games.quotes.reserveQuoteLocate, {
+        clientApiVersion: BBPC_API_VERSION,
+        serverKey,
+      });
+    return { t, actors, reserve };
+  }
+
+  test("gives each listener one session, then about a run every half day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, reserve } = await setup();
+      for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+      }
+      const refused = await reserve(MEMBER_IDENTITY);
+      if (refused.ok) throw new Error("Expected the session to be spent.");
+      expect(refused.scope).toBe("user");
+      expect(refused.retryAt).toBeGreaterThan(NOW);
+      await expect(reserve(OTHER_IDENTITY)).resolves.toEqual({ ok: true });
+      // Assistant runs and video searches are separate budgets.
+      await expect(
+        t.withIdentity(MEMBER_IDENTITY).mutation(
+          api.games.quotes.reserveVideoSearch,
+          { clientApiVersion: BBPC_API_VERSION },
+        ),
+      ).resolves.toEqual({ ok: true });
+      // Two a day is one every 12 hours.
+      vi.setSystemTime(NOW + 6 * 60 * 60 * 1000);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+        ok: false,
+      });
+      vi.setSystemTime(NOW + 12 * 60 * 60 * 1000 + 1000);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("caps runs across the whole site without charging refused listeners", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, actors, reserve } = await setup();
+      const identities = Array.from(
+        {
+          length:
+            Math.ceil(QUOTE_LOCATE_SITE_BURST / QUOTE_LOCATE_USER_BURST) + 1,
+        },
+        (_, index) => ({
+          tokenIdentifier: `https://issuer.example.test|locator-${String(index)}`,
+          issuer: "https://issuer.example.test",
+          subject: `locator-${String(index)}`,
+        }),
+      );
+      for (const [index, identity] of identities.entries()) {
+        await seedUser(t, { identity, name: `Locator ${String(index)}` });
+      }
+      let granted = 0;
+      for (const identity of identities) {
+        for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+          if ((await reserve(identity)).ok) granted += 1;
+        }
+      }
+      expect(granted).toBe(QUOTE_LOCATE_SITE_BURST);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+        ok: false,
+        scope: "site",
+      });
+      const memberBuckets = await t.run(async (ctx) =>
+        ctx.db
+          .query("rateLimits")
+          .withIndex("name", (q) =>
+            q.eq("name", "quoteLocatePerUser").eq("key", actors.memberId),
+          )
+          .take(1),
+      );
+      expect(memberBuckets).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("a listener refused at their own limit leaves the site budget alone", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, reserve } = await setup();
+      for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+      }
+      for (let i = 0; i < QUOTE_LOCATE_SITE_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+          ok: false,
+          scope: "user",
+        });
+      }
+      const others = Array.from(
+        {
+          length: Math.ceil(
+            (QUOTE_LOCATE_SITE_BURST - QUOTE_LOCATE_USER_BURST) /
+              QUOTE_LOCATE_USER_BURST,
+          ),
+        },
+        (_, index) => ({
+          tokenIdentifier: `https://issuer.example.test|other-locator-${String(index)}`,
+          issuer: "https://issuer.example.test",
+          subject: `other-locator-${String(index)}`,
+        }),
+      );
+      for (const [index, identity] of others.entries()) {
+        await seedUser(t, { identity, name: `Other locator ${String(index)}` });
+      }
+      let granted = 0;
+      for (const identity of others) {
+        for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+          if ((await reserve(identity)).ok) granted += 1;
+        }
+      }
+      expect(granted).toBe(QUOTE_LOCATE_SITE_BURST - QUOTE_LOCATE_USER_BURST);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("requires a signed-in listener", async () => {
+    const { t } = await setup();
+    await expectDomainError(
+      t.mutation(api.games.quotes.reserveQuoteLocate, {
+        clientApiVersion: BBPC_API_VERSION,
+        serverKey: SERVER_KEY,
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+  });
+
+  test("only the web server's key can spend a run, and a refusal spends nothing", async () => {
+    const { t, reserve } = await setup();
+    // A signed-in listener calling the mutation directly has no server key.
+    for (const guess of ["", "wrong", `${SERVER_KEY}x`, SERVER_KEY.slice(1)]) {
+      await expectDomainError(reserve(MEMBER_IDENTITY, guess), "FORBIDDEN");
+    }
+    // A backend without the key configured refuses every caller.
+    vi.stubEnv("QUOTE_LOCATE_SERVER_KEY", "");
+    await expectDomainError(reserve(MEMBER_IDENTITY), "FORBIDDEN");
+    const buckets = await t.run(async (ctx) =>
+      ctx.db
+        .query("rateLimits")
+        .withIndex("name", (q) => q.eq("name", "quoteLocateSiteWide"))
+        .take(1),
+    );
+    expect(buckets).toEqual([]);
+    vi.stubEnv("QUOTE_LOCATE_SERVER_KEY", SERVER_KEY);
+    await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
   });
 });

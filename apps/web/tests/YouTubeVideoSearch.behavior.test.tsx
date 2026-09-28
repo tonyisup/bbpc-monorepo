@@ -1,11 +1,40 @@
+import { useEffect, useState } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { YouTubeVideoSearch } from "@/components/YouTubeVideoSearch";
+import { useYouTubeSearch } from "@/hooks/useYouTubeSearch";
 
 vi.mock("next/image", () => ({ default: () => <span /> }));
 const fetchMock = vi.fn();
 const select = vi.fn();
+const focusNotice = vi.fn();
+const focusList = vi.fn();
 let view: ReactTestRenderer;
+function Search({
+  suggestedQuery,
+  selectedVideoId,
+  onSelect,
+}: {
+  suggestedQuery: string;
+  selectedVideoId?: string;
+  onSelect: (url: string) => void;
+}) {
+  const search = useYouTubeSearch(suggestedQuery);
+  // Like the form, the chosen link becomes the selected video, until the
+  // form loads another one.
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => setPicked(null), [selectedVideoId]);
+  return (
+    <YouTubeVideoSearch
+      search={search}
+      selectedVideoId={picked ?? selectedVideoId}
+      onSelect={(url) => {
+        onSelect(url);
+        setPicked(new URL(url).searchParams.get("v"));
+      }}
+    />
+  );
+}
 const video = {
   id: "abcdefghijk",
   title: "Movie scene",
@@ -17,11 +46,18 @@ const response = (videos = [video], nextPageToken: string | null = null) =>
 beforeEach(() => {
   fetchMock.mockReset();
   select.mockReset();
+  focusNotice.mockReset();
+  focusList.mockReset();
   vi.stubGlobal("fetch", fetchMock);
   act(() => {
-    view = create(
-      <YouTubeVideoSearch onSelect={select} suggestedQuery="Movie quote" />
-    );
+    view = create(<Search onSelect={select} suggestedQuery="Movie quote" />, {
+      createNodeMock: (node) =>
+        node.type === "p" && node.props.tabIndex === -1
+          ? { focus: focusNotice }
+          : node.type === "ul"
+          ? { focus: focusList }
+          : null,
+    });
   });
 });
 afterEach(() => {
@@ -204,7 +240,7 @@ test("stops paging at 24 results and marks the selected video", async () => {
 
   act(() => {
     view.update(
-      <YouTubeVideoSearch
+      <Search
         onSelect={select}
         suggestedQuery="Movie quote"
         selectedVideoId="video000003"
@@ -251,4 +287,72 @@ test("shows the route's own reason when search is switched off", async () => {
     "You can still paste a clip link below."
   );
   expect(JSON.stringify(view.toJSON())).not.toContain("Try again");
+});
+
+test("a new query clears the note about the loaded video", async () => {
+  fetchMock.mockResolvedValueOnce(response());
+  await act(async () => {
+    button("Search").props.onClick();
+  });
+  act(() =>
+    view.root
+      .findByProps({ "aria-label": "Use video: Movie scene" })
+      .props.onClick()
+  );
+  expect(JSON.stringify(view.toJSON())).toContain(
+    "Loaded into the quote player: Movie scene"
+  );
+  act(() => input().props.onChange({ target: { value: "different movie" } }));
+  expect(JSON.stringify(view.toJSON())).not.toContain(
+    "Loaded into the quote player"
+  );
+  expect(button("Search").props.disabled).toBeFalsy();
+});
+
+test("the loaded note goes once another video is loaded", async () => {
+  fetchMock.mockResolvedValueOnce(response());
+  await act(async () => {
+    button("Search").props.onClick();
+  });
+  act(() =>
+    view.root
+      .findByProps({ "aria-label": "Use video: Movie scene" })
+      .props.onClick()
+  );
+  expect(JSON.stringify(view.toJSON())).toContain(
+    "Loaded into the quote player: Movie scene"
+  );
+  // The assistant, or a pasted link, loads a different video.
+  act(() =>
+    view.update(
+      <Search
+        onSelect={select}
+        suggestedQuery="Movie quote"
+        selectedVideoId="zzzzzzzzzzz"
+      />
+    )
+  );
+  expect(JSON.stringify(view.toJSON())).not.toContain(
+    "Loaded into the quote player"
+  );
+});
+
+test("each pick moves focus to its note, and reopening the list focuses it", async () => {
+  fetchMock.mockResolvedValueOnce(response());
+  await act(async () => {
+    button("Search").props.onClick();
+  });
+  const pick = () =>
+    act(() =>
+      view.root
+        .findByProps({ "aria-label": "Use video: Movie scene" })
+        .props.onClick()
+    );
+  pick();
+  expect(focusNotice).toHaveBeenCalledTimes(1);
+  act(() => button("Show search results").props.onClick());
+  expect(focusList).toHaveBeenCalledOnce();
+  // Picking the same video again still confirms it.
+  pick();
+  expect(focusNotice).toHaveBeenCalledTimes(2);
 });

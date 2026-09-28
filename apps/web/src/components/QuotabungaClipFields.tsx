@@ -1,19 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FullScreenDialog } from "@/components/FullScreenDialog";
 import { QuoteClipEditor } from "@/components/QuoteClipEditor";
+import {
+  QuoteFinderAssistant,
+  useAssistantAccess,
+} from "@/components/QuoteFinderAssistant";
 import { YouTubeVideoSearch } from "@/components/YouTubeVideoSearch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MAX_CLIP_SECONDS, parseYouTubeUrl } from "@/lib/quoteClip";
+import { useYouTubeSearch } from "@/hooks/useYouTubeSearch";
+import {
+  MAX_CLIP_SECONDS,
+  parseYouTubeUrl,
+  youtubeWatchUrl,
+} from "@/lib/quoteClip";
+import type { QuoteLocateRequest } from "@/lib/quoteLocate";
 import { cn } from "@/lib/utils";
 
 type Props = {
   clipUrl: string;
   start: string;
   end: string;
-  suggestedQuery: string;
+  quoteText: string;
+  sourceTitle: string;
+  sourceType: QuoteLocateRequest["sourceType"];
   onClipUrlChange: (url: string) => void;
   onStartChange: (start: string) => void;
   onEndChange: (end: string) => void;
@@ -21,12 +33,41 @@ type Props = {
   onDurationChange?: (duration: number) => void;
 };
 
+/**
+ * The finder's search tools. They mount with the dialog, so each opening
+ * starts from the form's quote with no stale results.
+ */
+function FinderSearch({
+  suggestedQuery,
+  selectedVideoId,
+  onSelect,
+  ...assistant
+}: {
+  suggestedQuery: string;
+  selectedVideoId?: string;
+  onSelect: (url: string) => void;
+} & Omit<Parameters<typeof QuoteFinderAssistant>[0], "search">) {
+  const search = useYouTubeSearch(suggestedQuery);
+  return (
+    <>
+      <QuoteFinderAssistant search={search} {...assistant} />
+      <YouTubeVideoSearch
+        search={search}
+        selectedVideoId={selectedVideoId}
+        onSelect={onSelect}
+      />
+    </>
+  );
+}
+
 /** Keep manual entry familiar; open the YouTube tools full screen on request. */
 export function QuotabungaClipFields({
   clipUrl,
   start,
   end,
-  suggestedQuery,
+  quoteText,
+  sourceTitle,
+  sourceType,
   onClipUrlChange,
   onStartChange,
   onEndChange,
@@ -38,6 +79,10 @@ export function QuotabungaClipFields({
   const [finderQuery, setFinderQuery] = useState("");
   // Only a video chosen in this finder session gets a suggested range.
   const [pickedVideoId, setPickedVideoId] = useState<string | null>(null);
+  // Bumped per assistant suggestion so the player reloads at its range.
+  const [suggestion, setSuggestion] = useState(0);
+  const assistant = useAssistantAccess();
+  const player = useRef<HTMLDivElement>(null);
   const youtube = parseYouTubeUrl(clipUrl);
   // Once shown, keep End mounted so clearing it doesn't yank focus away.
   const hasEnd = end.trim() !== "";
@@ -45,14 +90,23 @@ export function QuotabungaClipFields({
   if (hasEnd && !endShown) setEndShown(true);
 
   const openFinder = () => {
-    setFinderQuery(suggestedQuery);
+    setFinderQuery([sourceTitle, quoteText].filter(Boolean).join(" "));
     setPickedVideoId(null);
+    assistant.check();
     setFinderOpen(true);
   };
   const pickClipUrl = (url: string) => {
     const video = parseYouTubeUrl(url);
     if (video) setPickedVideoId(video.id);
     onClipUrlChange(url);
+  };
+  // The assistant's range replaces the 10-second seed; the form's Submit
+  // button stays the confirmation.
+  const loadSuggestion = (videoId: string, from: number, to: number) => {
+    pickClipUrl(youtubeWatchUrl(videoId));
+    onStartChange(String(from));
+    onEndChange(String(to));
+    setSuggestion((value) => value + 1);
   };
 
   // The form stays mounted under the dialog, so each copy needs its own ids.
@@ -154,27 +208,56 @@ export function QuotabungaClipFields({
         description="Your quote and clip times stay in the form."
       >
         <section aria-label="Quote Finder" className="space-y-4">
-          <YouTubeVideoSearch
+          <FinderSearch
             suggestedQuery={finderQuery}
             selectedVideoId={youtube?.id}
             onSelect={pickClipUrl}
+            access={assistant}
+            quoteText={quoteText}
+            sourceTitle={sourceTitle}
+            sourceType={sourceType}
+            hasClip={clipUrl.trim() !== ""}
+            loadedVideoId={youtube?.id}
+            clipStart={start}
+            clipEnd={end}
+            onFound={loadSuggestion}
+            onUseWording={onQuoteChange}
+            onShowPlayer={() => {
+              // An explicit smooth scroll would override reduced motion.
+              const reduce = window.matchMedia?.(
+                "(prefers-reduced-motion: reduce)"
+              ).matches;
+              player.current?.scrollIntoView({
+                behavior: reduce ? "auto" : "smooth",
+                block: "start",
+              });
+              player.current?.focus({ preventScroll: true });
+            }}
           />
           {clipField("quote-finder", "Or paste a clip link", pickClipUrl)}
           {youtube && (
-            <QuoteClipEditor
-              key={youtube.id}
-              videoId={youtube.id}
-              initialStart={youtube.start}
-              seedDefaultRange={pickedVideoId === youtube.id}
-              start={start.trim() ? Number(start) : null}
-              end={end.trim() ? Number(end) : null}
-              onRangeChange={(from, to) => {
-                onStartChange(String(from));
-                onEndChange(String(to));
-              }}
-              onQuoteChange={onQuoteChange}
-              onDurationChange={onDurationChange}
-            />
+            <div
+              ref={player}
+              tabIndex={-1}
+              role="region"
+              aria-label="Quote player"
+              className="scroll-mt-4 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <QuoteClipEditor
+                key={`${youtube.id}:${String(suggestion)}`}
+                videoId={youtube.id}
+                initialStart={youtube.start}
+                seedDefaultRange={pickedVideoId === youtube.id}
+                start={start.trim() ? Number(start) : null}
+                end={end.trim() ? Number(end) : null}
+                onRangeChange={(from, to) => {
+                  onStartChange(String(from));
+                  onEndChange(String(to));
+                }}
+                onQuoteChange={onQuoteChange}
+                onDurationChange={onDurationChange}
+              />
+            </div>
           )}
           <div className="grid grid-cols-2 gap-4">
             {startField("quote-finder")}

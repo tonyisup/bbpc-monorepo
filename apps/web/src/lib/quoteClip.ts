@@ -10,6 +10,7 @@ export type TranscriptCue = { start: number; end: number; text: string };
 
 export const MAX_CAPTION_BYTES = 500_000;
 export const MAX_QUOTE_TEXT_LENGTH = 2000;
+export const MAX_SOURCE_TITLE_LENGTH = 500;
 
 export function formatClipTime(value: number) {
   const tenths = Math.round(Math.max(0, value) * 10);

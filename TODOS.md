@@ -159,6 +159,40 @@ preview/repeat stop working, and pause the poll while nothing is playing.
 **Priority:** P3
 **Depends on:** Nothing
 
+### Preselect the subtitle lines that match the typed quote
+
+**What:** When a listener loads subtitles in the Quote Finder, preselect the cue range
+that best matches their typed quote for them to confirm, instead of making them drag
+across the transcript blocks.
+
+**Why:** It makes the subtitle path nearly one click, with no model and no spend, for
+listeners who have an SRT or WebVTT file.
+
+**Context:** Deferred from plan: `docs/designs/quote-finder-assistant.md` ("Smaller
+wins that need no model"). `QuoteClipEditor.importCaptions` resets the selection today;
+`quoteCoverage` in `apps/web/src/server/quoteLocate.mjs` shows one way to score cues
+against the quote.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Nothing
+
+### Fetch video descriptions with Quote Finder search results
+
+**What:** Add `snippet/description` to the YouTube search `fields` in
+`apps/web/src/server/youtubeSearch.ts` and show a line of it in the results list.
+
+**Why:** It costs no extra quota and helps listeners (and later the assistant) tell a
+scene upload from a trailer or a reaction video.
+
+**Context:** Deferred from plan: `docs/designs/quote-finder-assistant.md` ("Smaller
+wins that need no model"). The search response schema in `apps/web/src/lib/youtubeSearch.ts`
+would gain an optional description.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** Nothing
+
 ## Completed
 
 ### Consolidate BBPC into a monorepo after Convex migration stability

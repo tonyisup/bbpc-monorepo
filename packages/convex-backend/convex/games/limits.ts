@@ -8,6 +8,16 @@ export const VIDEO_SEARCHES_PER_USER_PER_DAY = 12;
 export const VIDEO_SEARCH_USER_BURST = 6;
 export const VIDEO_SEARCHES_SITE_PER_DAY = 50;
 export const VIDEO_SEARCH_SITE_BURST = 45;
+// Each Quote Finder assistant run sends one video of at most 3 minutes to
+// Gemini: about $0.055 at 2027 prices when the answer and its thinking use the
+// whole 4,096-token output cap. The site bucket admits at most 90 runs in 30
+// days, which keeps even that worst case under $5 a month. The listener bucket
+// allows one 5-run session, then refills a run every 12 hours, so it takes at
+// least three accounts to keep the site bucket empty.
+export const QUOTE_LOCATES_PER_USER_PER_DAY = 2;
+export const QUOTE_LOCATE_USER_BURST = 5;
+export const QUOTE_LOCATES_SITE_PER_DAY = 2;
+export const QUOTE_LOCATE_SITE_BURST = 30;
 export const MAX_GAME_POINT_TYPES = 100;
 export const MAX_SEASON_PAGE_SIZE = 50;
 export const MAX_SEASONS_TO_INSPECT = 100;
