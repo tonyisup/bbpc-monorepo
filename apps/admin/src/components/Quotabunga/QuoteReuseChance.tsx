@@ -21,9 +21,12 @@ type ReuseState =
 export function QuoteReuseChance({
   submissionId,
   quoteText,
+  blind = false,
 }: {
   submissionId: string;
   quoteText: string;
+  /** Open the breakdown without the listener's name, for blind judging. */
+  blind?: boolean;
 }) {
   const client = useConvex();
   const [state, setState] = useState<ReuseState>({ status: "loading" });
@@ -73,7 +76,7 @@ export function QuoteReuseChance({
             ? "border-destructive/50 text-destructive"
             : "text-muted-foreground"
       )}
-      href={getAdminQuoteReusePath(submissionId)}
+      href={getAdminQuoteReusePath(submissionId, { blind })}
     >
       {state.status === "loading" ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />

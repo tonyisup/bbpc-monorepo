@@ -1,10 +1,13 @@
 import { useState, type ReactElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { YouTubeAPI } from "@/lib/youtubePlayer";
+import type { YouTubeAPI } from "@bbpc/youtube";
 
 const mocks = vi.hoisted(() => ({ load: vi.fn() }));
-vi.mock("@/lib/youtubePlayer", () => ({ loadYouTubeAPI: mocks.load }));
+vi.mock("@bbpc/youtube", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@bbpc/youtube")>()),
+  loadYouTubeAPI: mocks.load,
+}));
 import { QuoteClipEditor } from "@/components/QuoteClipEditor";
 
 const media = {

@@ -12,7 +12,9 @@ contract changes atomic.
 | `apps/admin` | `bbpc-admin` | Administrator application |
 | `apps/recording` | `bbpc-recording` | Browser recording application |
 | `packages/convex-backend` | `@tonyisup/bbpc-convex-api` | Convex schema, functions, migration tools, and generated client contract |
+| `packages/episode-search` | `@bbpc/episode-search` | Shared episode metadata matching, transcript search requests, and result merging |
 | `packages/movie-search-hints` | `@bbpc/movie-search-hints` | Shared movie-search query analysis, year-hint policy, and action helpers |
+| `packages/youtube` | `@bbpc/youtube` | Shared YouTube IFrame player loader and clip link helpers |
 
 `bbpc-pipeline` remains a separate repository and consumes the deployed HTTP API. It
 is not part of this consolidation milestone.

@@ -8,7 +8,7 @@
 /** @type {import("next").NextConfig} */
 const config = {
   reactStrictMode: true,
-  transpilePackages: ["@bbpc/movie-search-hints", "@bbpc/episode-search"],
+  transpilePackages: ["@bbpc/movie-search-hints", "@bbpc/episode-search", "@bbpc/youtube"],
   i18n: {
     locales: ["en"],
     defaultLocale: "en",
