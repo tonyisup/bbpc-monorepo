@@ -2,8 +2,8 @@
 
 Date: 2026-09-26
 Status: Proposal. Gemini approved as the provider (2026-09-26). The spike passed on
-2026-09-28 (88% of starts within 2 s; see "Spike results"). The other decisions at the
-end are still open.
+2026-09-28 (88% of starts within 2 s; see "Spike results"). The spend limit is settled
+at $5 a month, and no decisions are open.
 
 Listeners already type the quote and the movie or show before opening the Quote
 Finder. Today they then search YouTube, pick a video, scrub to the line, and drag the
@@ -50,8 +50,9 @@ Recommendation: use Gemini for the locate step and keep everything else as it is
      site-wide token buckets, both checked before either is spent, as
      `reserveVideoSearch` does);
    - calls `videos.list` once (1 quota unit for all IDs) for durations and
-     descriptions. It drops videos over about 10 minutes (full films, compilations)
-     and picks the best remaining candidate by rank and duration;
+     descriptions. It drops videos over 3 minutes (full films, compilations, and
+     the costliest scene uploads; see the budget) and picks the best remaining
+     candidate by rank and duration;
    - asks Gemini, with JSON-schema output, whether the line is spoken in that video.
      The answer is `found`, `startSeconds`, `endSeconds`, `spokenText`, and
      `confidence`;
@@ -100,14 +101,28 @@ would halve the wait on misses but double the spend on every hit.
   a minute: 5,600 input and 440 output and thinking tokens, or $0.006 per run at
   `gemini-3.8-flash`'s introductory $0.75 / $3.75 per 1M tokens. Prices double on
   2027-01-01, to about $0.012 per run.
-- Budget: new token buckets in `convex/games/limits.ts` (starting point: 3 burst,
-  6/day per listener, 60/day site-wide), plus a spend alert on the Google project.
-  Each assistant session also spends normal video searches, which stay capped by
-  the existing buckets.
+- Video length, not the number of runs, decides the bill. At 2027 prices a run costs
+  about $0.004 plus $0.00014 per second of video: about $0.03 for a 3-minute video
+  and $0.09 for a 10-minute one. The spike's clips were chosen by listeners (median
+  31 s, 3 of 34 over 3 minutes). The search results the assistant picks from are
+  often longer, full-scene uploads, which the spike didn't measure.
+- Budget: at most $5 a month. Three limits keep it there:
+  - The prepaid balance on the Google project is the hard stop. Keep auto-reload
+    off, so Google can't charge past what is loaded. When the balance is empty,
+    every request fails with HTTP 402 and the route shows the assistant as out of
+    budget until it is topped up.
+  - The route skips videos over 3 minutes, so a typical run costs at most about
+    $0.03.
+  - Token buckets in `convex/games/limits.ts`, shaped like the video search ones.
+    Site-wide: 30 burst plus 4 a day, at most about 150 runs in 30 days. That is
+    about $4.50 if every video ran the full 3 minutes and about $1.80 at the spike's
+    lengths. Per listener: 10 burst plus 2 a day, which allows one 10-run session
+    and then about one every five days, so no single player can use up the month.
+
+  Each assistant session also spends normal video searches. The existing buckets
+  still cap those, and they cost YouTube quota, not money.
 - Use a paid key. The free tier caps YouTube input at 8 hours a day, and free-tier
-  prompts may be used to improve Google's products. The project uses prepaid
-  billing: when the balance runs out, every request fails with HTTP 402 until it is
-  topped up, so the spend alert should fire well before that.
+  prompts may be used to improve Google's products.
 - The spike measured a median of 3.5 s per run and a 90th percentile of 10 s, but
   one of 34 requests took 40 s and one timed out at 120 s. Show progress, let the
   listener cancel (abort the request, as search does), cap the request well below
@@ -170,13 +185,14 @@ and default thinking were tried.
 - Add `snippet/description` to the search `fields` (no extra quota), which gives the
   locate step and the results list more context.
 
-## Decisions needed
+## Decisions
 
-1. Per-listener and site-wide daily caps for assistant runs.
-2. Whether a later version should use a text model with web search before searching
-   YouTube, for "I only half-remember it" quotes.
-
-Settled: Google (Gemini) is approved as a second paid API vendor for this feature.
+- Google (Gemini) is approved as a second paid API vendor for this feature
+  (2026-09-26).
+- The assistant may spend at most $5 a month. That sets the 3-minute video limit
+  and the run caps under "Cost, budget, and latency" (2026-09-28).
+- A later version will add a text model with web search before the YouTube search,
+  for "I only half-remember it" quotes. It is not part of v1 (2026-09-28).
 
 References: [Gemini video understanding](https://ai.google.dev/gemini-api/docs/video-understanding),
 [Gemini media resolution](https://ai.google.dev/gemini-api/docs/media-resolution),
