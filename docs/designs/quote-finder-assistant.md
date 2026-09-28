@@ -1,9 +1,9 @@
 # Quote Finder assistant
 
 Date: 2026-09-26
-Status: Proposal. Gemini approved as the provider (2026-09-26). The spike passed on
-2026-09-28 (88% of starts within 2 s; see "Spike results"). The spend limit is settled
-at $5 a month, and no decisions are open.
+Status: v1 built (2026-09-28); see "What v1 ships". Gemini approved as the provider
+(2026-09-26). The spike passed on 2026-09-28 (88% of starts within 2 s; see "Spike
+results"). The spend limit is settled at $5 a month, and no decisions are open.
 
 Listeners already type the quote and the movie or show before opening the Quote
 Finder. Today they then search YouTube, pick a video, scrub to the line, and drag the
@@ -113,11 +113,17 @@ would halve the wait on misses but double the spend on every hit.
     budget until it is topped up.
   - The route skips videos over 3 minutes, so a typical run costs at most about
     $0.03.
+  - Gemini's output, the answer plus its thinking, is capped at 4,096 tokens a run.
+    With a full 3-minute video, a run that uses the whole cap costs about $0.055 at
+    2027 prices.
   - Token buckets in `convex/games/limits.ts`, shaped like the video search ones.
-    Site-wide: 30 burst plus 4 a day, at most about 150 runs in 30 days. That is
-    about $4.50 if every video ran the full 3 minutes and about $1.80 at the spike's
-    lengths. Per listener: 10 burst plus 2 a day, which allows one 10-run session
-    and then about one every five days, so no single player can use up the month.
+    Site-wide: 30 burst plus 2 a day, at most 90 runs in 30 days. That is about $4.95
+    if every run hit both limits and about $1.10 at the spike's lengths. (The first
+    draft allowed 4 a day, 150 runs, which assumed $0.03 a run; review showed the
+    output cap could push a bad month to about $8.25.) Per listener: 5 burst plus 2 a
+    day, which allows one 5-run session and then a run every 12 hours, so no single
+    player can use up the month. The first draft allowed a burst of 10; at 5 it takes
+    at least three accounts to keep the site bucket empty.
 
   Each assistant session also spends normal video searches. The existing buckets
   still cap those, and they cost YouTube quota, not money.
@@ -148,7 +154,7 @@ to ship: at least 70% found, with the start within 2 s. Those entries are
 production-derived, so the evaluation set stays out of the repository.
 
 The spike is `apps/web/local-tools/quote-locate` (see its README). It uses the same
-prompt, request and answer checks as the future route, from
+prompt, request and answer checks as the route, from
 `apps/web/src/server/quoteLocate.mjs`, with `gemini-3.8-flash` as the default model.
 
 ### Spike results (2026-09-28)
@@ -176,6 +182,56 @@ Against those labels, `gemini-3.8-flash` at low media resolution and default thi
 
 Limits: one person labeled one export of 34 entries, and only low media resolution
 and default thinking were tried.
+
+## What v1 ships
+
+- `games.quotes.reserveQuoteLocate` with the budget above, and
+  `POST /api/quote-finder/locate`, which reserves a run, reads the candidates'
+  details, and checks the first one in search order that is public, embeddable, not
+  age-restricted and at most 3 minutes long. It answers `found` (padded range, heard
+  line, `likely` or `possible` match) or `not_found` (not heard, unreadable, timed out
+  after 45 s, or no video qualified), with the remaining candidates in both cases.
+- `GET` on the same route tells the finder whether to show the assistant: only to
+  signed-in listeners when both API keys are set. It spends nothing.
+- A **Find it for me** panel above the finder's search, which shares its results.
+- "Likely" needs high confidence and at least half of the listener's wording in the
+  heard line. The spike found neither signal separates hits from misses, so every
+  result still says to play it before submitting.
+- The finder asks the route once per page whether to offer the assistant, and
+  asks again after a sign-in or network hiccup. A refusal that retrying won't fix
+  (spent budget, missing key, older backend) holds for the page, until its
+  `Retry-After` if it has one. The route only accepts JSON posts, so another
+  site's form can't spend a listener's runs.
+- The page remembers the videos the assistant has checked or that can't be
+  checked, across openings of the finder, so no later run pays for them again, and
+  **Not it** moves on through the route's leftovers and then any listed results not
+  yet checked, including a newer search's. Every run looks for the wording the listener had when they pressed
+  **Find it for me**; **Restore my wording** brings it back after they use a heard
+  line. Cancel returns to what the panel showed before.
+- When the form already holds a clip the listener chose, a suggestion waits for
+  **Load it** instead of replacing it. A heard line is set aside when the
+  listener loads another video.
+
+Accepted risks (2026-09-28): a few accounts working together can keep the site
+bucket empty through the locate route, which turns the assistant off for everyone
+until it refills at 2 runs a day; the spend limit still holds. Calling the
+reservation mutation directly doesn't work: it requires a server key that only the
+web server holds (`QUOTE_LOCATE_SERVER_KEY`, added after review), so every spent run
+is a locate request that at least looked the videos up. A run is spent when it is reserved, so a
+failure after that (a Gemini outage, a slow video lookup, a closed finder) is not
+refunded, and **Try again** spends another.
+
+Before rollout: set one random `QUOTE_LOCATE_SERVER_KEY` in the production Convex
+deployment's environment and in Vercel Production. Set `GEMINI_API_KEY` for
+Production only. Each Convex deployment
+has its own buckets, so a key shared with Preview would let each draw on the one
+$5 balance. Confirm with a real request that an empty balance answers HTTP 402 (the
+spike saw it once) and how Gemini answers for one unreadable video (400, 403 or
+404), since the route treats 403 and 404 as failing every run.
+
+Not in v1: the Convex result cache and a PostHog rollout flag. A run whose candidates
+are all too long still spends from the budget, because checking lengths before
+reserving would let `videos.list` calls go unbudgeted.
 
 ## Smaller wins that need no model
 

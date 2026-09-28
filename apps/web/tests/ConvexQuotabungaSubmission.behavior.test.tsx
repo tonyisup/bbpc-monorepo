@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn<() => Promise<unknown>>(),
   submit: vi.fn<() => Promise<void>>(),
   withdraw: vi.fn<() => Promise<void>>(),
+  editorMounts: 0,
   editor: null as null | {
     videoId: string;
     start: number | null;
@@ -140,6 +141,7 @@ vi.mock("lucide-react", () => {
     ExternalLink: Icon,
     Loader2: Icon,
     Pencil: Icon,
+    Sparkles: Icon,
     Trash2: Icon,
   };
 });
@@ -155,12 +157,18 @@ import { toast } from "sonner";
 
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
 
-vi.mock("@/components/QuoteClipEditor", () => ({
-  QuoteClipEditor: (props: NonNullable<typeof mocks.editor>) => {
-    mocks.editor = props;
-    return <div>Quote player</div>;
-  },
-}));
+vi.mock("@/components/QuoteClipEditor", async () => {
+  const { useEffect } = await import("react");
+  return {
+    QuoteClipEditor: (props: NonNullable<typeof mocks.editor>) => {
+      mocks.editor = props;
+      useEffect(() => {
+        mocks.editorMounts += 1;
+      }, []);
+      return <div>Quote player</div>;
+    },
+  };
+});
 vi.mock("next/image", () => ({ default: () => <span /> }));
 vi.mock("@/components/FullScreenDialog", () => ({
   FullScreenDialog: ({
@@ -192,14 +200,21 @@ const openRound = {
 
 let renderer: ReactTestRenderer | null = null;
 
-async function renderSubmission(episodeStatus = "next") {
+async function renderSubmission(
+  episodeStatus = "next",
+  createNodeMock?: (element: {
+    type: unknown;
+    props: Record<string, unknown>;
+  }) => unknown
+) {
   await act(async () => {
     renderer = create(
       <ConvexQuotabungaSubmission
         isAdmin={false}
         episodeId="episode-test"
         episodeStatus={episodeStatus}
-      />
+      />,
+      createNodeMock ? { createNodeMock } : undefined
     );
     await Promise.resolve();
   });
@@ -683,15 +698,20 @@ describe("ConvexQuotabungaSubmission writes", () => {
   test("choosing a searched video fills the link, resets old timing and preserves quote text", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            videos: [
-              { id: "lmnopqrstuv", title: "Another scene", channel: "Movies" },
-            ],
-            nextPageToken: null,
-          })
-        )
+      vi.fn().mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              videos: [
+                {
+                  id: "lmnopqrstuv",
+                  title: "Another scene",
+                  channel: "Movies",
+                },
+              ],
+              nextPageToken: null,
+            })
+          )
       )
     );
     const rendered = await renderSubmission();
@@ -734,6 +754,329 @@ describe("ConvexQuotabungaSubmission writes", () => {
       rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
     ).toBe("Keep these words");
     expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("the assistant loads its suggested video and range and can replace the quote, without submitting", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/quote-finder/locate" && !init?.method)
+        return new Response(JSON.stringify({ available: true }));
+      if (url.startsWith("/api/youtube/search"))
+        return new Response(
+          JSON.stringify({
+            videos: [
+              { id: "lmnopqrstuv", title: "Diner scene", channel: "Movies" },
+              { id: "abcdefghijk", title: "Trailer", channel: "Studio" },
+            ],
+            nextPageToken: null,
+          })
+        );
+      return new Response(
+        JSON.stringify({
+          status: "found",
+          video: { id: "lmnopqrstuv", title: "Diner scene" },
+          start: 64.7,
+          end: 67.75,
+          spokenText: "I do what I do best, I take scores.",
+          match: "likely",
+          remaining: ["abcdefghijk"],
+        })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "I do what I do best", "Heat");
+    await act(async () => {
+      findButton(rendered, "Use Quote Finder").props.onClick();
+    });
+    await act(async () => {
+      findButton(rendered, "Find it for me").props.onClick();
+    });
+    const locate = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST"
+    );
+    expect(JSON.parse(String(locate?.[1]?.body))).toEqual({
+      quoteText: "I do what I do best",
+      sourceTitle: "Heat",
+      sourceType: "MOVIE",
+      videoIds: ["lmnopqrstuv", "abcdefghijk"],
+    });
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-clip" }).props.value
+    ).toBe("https://www.youtube.com/watch?v=lmnopqrstuv");
+    expect(
+      rendered.root.findByProps({ id: "quote-finder-timestamp" }).props.value
+    ).toBe("64.7");
+    expect(
+      rendered.root.findByProps({ id: "quote-finder-end" }).props.value
+    ).toBe("67.75");
+    expect(mocks.editor).toMatchObject({
+      videoId: "lmnopqrstuv",
+      start: 64.7,
+      end: 67.75,
+    });
+    // The listener's wording stays until they choose the heard line.
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("I do what I do best");
+    act(() => findButton(rendered, "Use exact wording").props.onClick());
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("I do what I do best, I take scores.");
+    expect(findButton(rendered, "Not it, try the next video")).toBeDefined();
+    // Restore brings back the listener's own wording.
+    act(() => findButton(rendered, "Restore my wording").props.onClick());
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("I do what I do best");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("the assistant reuses the search box's results and each opening starts fresh", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/quote-finder/locate" && !init?.method)
+        return new Response(JSON.stringify({ available: true }));
+      if (url.startsWith("/api/youtube/search"))
+        return new Response(
+          JSON.stringify({
+            videos: [
+              { id: "lmnopqrstuv", title: "Diner scene", channel: "Movies" },
+            ],
+            nextPageToken: null,
+          })
+        );
+      return new Response(
+        JSON.stringify({
+          status: "found",
+          video: { id: "lmnopqrstuv", title: "Diner scene" },
+          start: 12,
+          end: 15.5,
+          spokenText: "I do what I do best",
+          match: "likely",
+          remaining: [],
+        })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const searches = () =>
+      fetchMock.mock.calls.filter(([url]) =>
+        url.startsWith("/api/youtube/search")
+      );
+    const searchBox = () =>
+      rendered.root.findByProps({ "aria-label": "Search YouTube videos" });
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "I do what I do best", "Heat");
+    await act(async () => {
+      findButton(rendered, "Use Quote Finder").props.onClick();
+    });
+    await act(async () => {
+      findButton(rendered, "Search").props.onClick();
+    });
+    await act(async () => {
+      findButton(rendered, "Find it for me").props.onClick();
+    });
+    expect(searches()).toHaveLength(1);
+    // The found clip takes the list's place until the listener asks for it.
+    expect(findButton(rendered, "Show search results")).toBeDefined();
+    expect(
+      rendered.root.findAllByProps({ "aria-label": "Use video: Diner scene" })
+    ).toHaveLength(0);
+
+    act(() => findButton(rendered, "Done").props.onClick());
+    enterQuote(rendered, "Don't let yourself get attached", "Heat");
+    await act(async () => {
+      findButton(rendered, "Use Quote Finder").props.onClick();
+    });
+    expect(searchBox().props.value).toBe(
+      "Heat Don't let yourself get attached"
+    );
+    expect(renderedText(rendered)).not.toContain("Heard in");
+    expect(renderedText(rendered)).not.toContain("Show search results");
+    expect(findButton(rendered, "Find it for me")).toBeDefined();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("a suggestion in the listener's own video waits for Load it, then reloads the player at its range", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/quote-finder/locate" && !init?.method)
+          return new Response(JSON.stringify({ available: true }));
+        if (url.startsWith("/api/youtube/search"))
+          return new Response(
+            JSON.stringify({
+              videos: [
+                { id: "lmnopqrstuv", title: "Diner scene", channel: "Movies" },
+              ],
+              nextPageToken: null,
+            })
+          );
+        return new Response(
+          JSON.stringify({
+            status: "found",
+            video: { id: "lmnopqrstuv", title: "Diner scene" },
+            start: 64.7,
+            end: 67.75,
+            spokenText: "I do what I do best",
+            match: "likely",
+            remaining: [],
+          })
+        );
+      })
+    );
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "I do what I do best", "Heat");
+    await act(async () => {
+      findButton(rendered, "Use Quote Finder").props.onClick();
+    });
+    await act(async () => {
+      findButton(rendered, "Search").props.onClick();
+    });
+    act(() =>
+      rendered.root
+        .findByProps({ "aria-label": "Use video: Diner scene" })
+        .props.onClick()
+    );
+    const mounts = mocks.editorMounts;
+    await act(async () => {
+      findButton(rendered, "Find it for me").props.onClick();
+    });
+    // The listener picked this video, so nothing changes until they say so.
+    expect(mocks.editorMounts).toBe(mounts);
+    expect(mocks.editor).toMatchObject({ start: 0, end: null });
+    await act(async () => {
+      findButton(rendered, "Load it").props.onClick();
+    });
+    expect(mocks.editorMounts).toBe(mounts + 1);
+    expect(mocks.editor).toMatchObject({
+      videoId: "lmnopqrstuv",
+      start: 64.7,
+      end: 67.75,
+    });
+  });
+
+  describe("the assistant across openings of the finder", () => {
+    const DINER = "lmnopqrstuv";
+    const TRAILER = "abcdefghijk";
+    let posts: Array<() => Response>;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/quote-finder/locate" && !init?.method)
+        return new Response(JSON.stringify({ available: true }));
+      if (url.startsWith("/api/youtube/search"))
+        return new Response(
+          JSON.stringify({
+            videos: [
+              { id: DINER, title: "Diner scene", channel: "Movies" },
+              { id: TRAILER, title: "Trailer", channel: "Studio" },
+            ],
+            nextPageToken: null,
+          })
+        );
+      const reply = posts.shift();
+      if (!reply) throw new Error("Unexpected locate request");
+      return reply();
+    });
+    const found = (id: string, remaining: string[]) => () =>
+      new Response(
+        JSON.stringify({
+          status: "found",
+          video: { id, title: `Scene ${id}` },
+          start: 64.7,
+          end: 67.75,
+          spokenText: "I do what I do best",
+          match: "likely",
+          remaining,
+        })
+      );
+    const gets = () =>
+      fetchMock.mock.calls.filter(
+        ([url, init]) => url === "/api/quote-finder/locate" && !init?.method
+      );
+    const bodies = () =>
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === "POST")
+        .map(([, init]) => JSON.parse(String(init?.body)).videoIds);
+    const reopen = async (rendered: ReactTestRenderer) => {
+      act(() => findButton(rendered, "Done").props.onClick());
+      await act(async () => {
+        findButton(rendered, "Use Quote Finder").props.onClick();
+      });
+    };
+
+    beforeEach(() => {
+      posts = [];
+      fetchMock.mockClear();
+      vi.stubGlobal("fetch", fetchMock);
+    });
+
+    test("videos already checked stay checked, and the suggestion stays the assistant's own", async () => {
+      const rendered = await renderSubmission();
+      enterQuote(rendered, "I do what I do best", "Heat");
+      await act(async () => {
+        findButton(rendered, "Use Quote Finder").props.onClick();
+      });
+      posts.push(found(DINER, [TRAILER]));
+      await act(async () => {
+        findButton(rendered, "Find it for me").props.onClick();
+      });
+      await reopen(rendered);
+      posts.push(found(TRAILER, []));
+      await act(async () => {
+        findButton(rendered, "Find it for me").props.onClick();
+      });
+      expect(bodies()).toEqual([[DINER, TRAILER], [TRAILER]]);
+      // The form holds the assistant's earlier suggestion, so no Load it.
+      expect(
+        rendered.root.findByProps({ id: "convex-quotabunga-clip" }).props.value
+      ).toBe(`https://www.youtube.com/watch?v=${TRAILER}`);
+      expect(gets()).toHaveLength(1);
+    });
+
+    test("a spent budget stays refused after the finder closes", async () => {
+      const rendered = await renderSubmission();
+      enterQuote(rendered, "I do what I do best", "Heat");
+      await act(async () => {
+        findButton(rendered, "Use Quote Finder").props.onClick();
+      });
+      const reason =
+        "You've used your assistant runs for now. Try again in 12 hours, or search and pick a clip yourself.";
+      posts.push(
+        () =>
+          new Response(JSON.stringify({ error: reason, disabled: true }), {
+            status: 429,
+            headers: { "Retry-After": "43200" },
+          })
+      );
+      await act(async () => {
+        findButton(rendered, "Find it for me").props.onClick();
+      });
+      await reopen(rendered);
+      expect(renderedText(rendered)).toContain(reason);
+      expect(() => findButton(rendered, "Find it for me")).toThrow();
+      expect(gets()).toHaveLength(1);
+    });
+
+    test("Show player scrolls to the quote player and focuses it, without motion when asked", async () => {
+      const scrollIntoView = vi.fn();
+      const focus = vi.fn();
+      vi.stubGlobal("matchMedia", () => ({ matches: true }));
+      const rendered = await renderSubmission("next", (node) =>
+        node.props.role === "region" ? { scrollIntoView, focus } : null
+      );
+      enterQuote(rendered, "I do what I do best", "Heat");
+      await act(async () => {
+        findButton(rendered, "Use Quote Finder").props.onClick();
+      });
+      posts.push(found(DINER, []));
+      await act(async () => {
+        findButton(rendered, "Find it for me").props.onClick();
+      });
+      act(() => findButton(rendered, "Show player").props.onClick());
+      expect(scrollIntoView).toHaveBeenCalledWith({
+        behavior: "auto",
+        block: "start",
+      });
+      expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    });
   });
 
   test("submits a fractional range from the Quote Finder and refuses ranges that are reversed, past the video or missing a link", async () => {

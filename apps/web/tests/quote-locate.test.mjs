@@ -13,6 +13,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  assistantCandidates,
   buildLocateRequest,
   fetchVideoDetails,
   LocateRequestError,
@@ -133,6 +134,7 @@ test("requests send the bare watch URL and the quote as data", () => {
   assert.ok(prompt.includes("3:12 long"));
   assert.equal(body.generationConfig.mediaResolution, "MEDIA_RESOLUTION_LOW");
   assert.equal(body.generationConfig.responseMimeType, "application/json");
+  assert.equal(body.generationConfig.maxOutputTokens, 4096);
   assert.equal("thinkingConfig" in body.generationConfig, false);
   assert.deepEqual(
     buildLocateRequest({ ...input, thinkingLevel: "low" }).generationConfig
@@ -467,6 +469,52 @@ test("videos Gemini can't read, or that run too long, are skipped", () => {
     videoSkipReason({ ...row, truthStart: 200 }, video, 600),
     "saved start outside video"
   );
+});
+
+test("the assistant checks unique short public videos in search order", () => {
+  /** @type {import("../src/server/quoteLocate.mjs").VideoDetails} */
+  const video = {
+    title: "Scene",
+    durationSeconds: 180,
+    isPublic: true,
+    embeddable: true,
+    ageRestricted: false,
+  };
+  const details = new Map([
+    ["exact", video],
+    ["short", { ...video, title: "Short", durationSeconds: 20 }],
+    ["long", { ...video, durationSeconds: 180.5 }],
+    ["live", { ...video, durationSeconds: null }],
+    ["private", { ...video, isPublic: false }],
+    ["noEmbed", { ...video, embeddable: false }],
+    ["adult", { ...video, ageRestricted: true }],
+  ]);
+  assert.deepEqual(
+    assistantCandidates(
+      [
+        "long",
+        "short",
+        "live",
+        "missing",
+        "private",
+        "exact",
+        "noEmbed",
+        "adult",
+        "short",
+      ],
+      details,
+      180
+    ),
+    [
+      { id: "short", title: "Short", durationSeconds: 20 },
+      { id: "exact", title: "Scene", durationSeconds: 180 },
+    ]
+  );
+  assert.deepEqual(
+    assistantCandidates(["exact", "short"], details, 60).map(({ id }) => id),
+    ["short"]
+  );
+  assert.deepEqual(assistantCandidates([], details, 180), []);
 });
 
 test("exports and results must stay outside the repository", () => {

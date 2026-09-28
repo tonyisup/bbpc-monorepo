@@ -60,3 +60,4 @@ Feature design records:
 
 - [Movie-search release-year hints](docs/designs/movie-search-year-hint.md)
 - [Quotabunga quote player and Quote Finder](docs/designs/quotabunga-quote-player.md)
+- [Quote Finder assistant](docs/designs/quote-finder-assistant.md)

@@ -133,6 +133,15 @@ export function QuoteClipEditor(props: Props) {
                       from < limit
                     )
                       saved.onRangeChange(from, Math.min(limit, from + 10));
+                    // A range set in this finder session (the assistant's
+                    // comes from YouTube's listed length) must fit the player.
+                    else if (
+                      saved.seedDefaultRange &&
+                      saved.end !== null &&
+                      saved.end > limit &&
+                      from < limit
+                    )
+                      saved.onRangeChange(from, limit);
                     setWindowStart(
                       Math.min(Math.max(0, from - 5), Math.max(0, limit - 1))
                     );
