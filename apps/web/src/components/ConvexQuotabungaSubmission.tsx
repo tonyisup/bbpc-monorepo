@@ -28,6 +28,7 @@ import {
   formatClipTime,
   MAX_CLIP_SECONDS,
   MAX_QUOTE_TEXT_LENGTH,
+  MAX_SOURCE_TITLE_LENGTH,
   parseYouTubeUrl,
   validClipRange,
   youtubeWatchUrl,
@@ -656,7 +657,7 @@ export function ConvexQuotabungaSubmission({
                   <Input
                     id="convex-quotabunga-source"
                     required
-                    maxLength={500}
+                    maxLength={MAX_SOURCE_TITLE_LENGTH}
                     value={sourceTitle}
                     onChange={(event) => setSourceTitle(event.target.value)}
                     placeholder="Heat"
@@ -722,7 +723,9 @@ export function ConvexQuotabungaSubmission({
                 clipUrl={clipUrl}
                 start={clipStartSeconds}
                 end={clipEndSeconds}
-                suggestedQuery={[sourceTitle, quoteText].filter(Boolean).join(" ")}
+                quoteText={quoteText}
+                sourceTitle={sourceTitle}
+                sourceType={sourceType}
                 onClipUrlChange={changeClipUrl}
                 onStartChange={setClipStartSeconds}
                 onEndChange={setClipEndSeconds}

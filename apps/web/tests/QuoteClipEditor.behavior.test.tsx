@@ -330,8 +330,42 @@ describe("quote player interactions", () => {
     expect(end).toBeCloseTo(50, 3);
   });
 
+  test("brings a suggested end inside the player's length, but only for a video just picked", async () => {
+    // YouTube listed 1:41 for a video the player measures at 100 s.
+    await mount(<RangeHarness initialStart={0} start={95} end={100.6} />);
+    act(() => events.onReady());
+    expect(handle("start").props["aria-valuenow"]).toBe(95);
+    expect(handle("end").props["aria-valuenow"]).toBe(100);
+    act(() => view.unmount());
+    // However far past, a range set in this session fits the player.
+    await mount(<RangeHarness initialStart={0} start={95} end={150} />);
+    act(() => events.onReady());
+    expect(handle("end").props["aria-valuenow"]).toBe(100);
+    act(() => view.unmount());
+    await mount(
+      <RangeHarness
+        initialStart={0}
+        start={95}
+        end={100.6}
+        seedDefaultRange={false}
+      />
+    );
+    act(() => events.onReady());
+    expect(alertText()).toContain(
+      "The end must be after the start and within this video."
+    );
+  });
+
   test("flags a range past the video and refuses subtitles beyond it or oversized, unreadable and superseded files", async () => {
-    await mount(<RangeHarness initialStart={0} start={2} end={150} />);
+    // A saved clip keeps its times until the listener fixes them.
+    await mount(
+      <RangeHarness
+        initialStart={0}
+        start={2}
+        end={150}
+        seedDefaultRange={false}
+      />
+    );
     act(() => events.onReady());
     expect(alertText()).toContain(
       "The end must be after the start and within this video."

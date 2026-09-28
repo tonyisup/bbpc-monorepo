@@ -4,117 +4,56 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { YouTubeSearch } from "@/hooks/useYouTubeSearch";
 import {
   MAX_VIDEO_RESULTS,
   MAX_VIDEO_SEARCH_LENGTH,
-  MIN_VIDEO_SEARCH_LENGTH,
-  normalizeVideoQuery,
-  youtubeSearchErrorSchema,
-  youtubeSearchResponseSchema,
-  type YouTubeSearchVideo,
 } from "@/lib/youtubeSearch";
 import { youtubeWatchUrl } from "@/lib/quoteClip";
 
-const UNAVAILABLE =
-  "Video search is unavailable right now. Try again or paste a clip link below.";
-
-/** A message that is safe and specific enough to show the listener. */
-class SearchError extends Error {}
-
-type SearchState = {
-  query: string;
-  videos: YouTubeSearchVideo[];
-  nextPageToken: string | null;
-  loading: boolean;
-  error: string | null;
-};
-
 export function YouTubeVideoSearch({
-  suggestedQuery = "",
+  search,
   selectedVideoId,
   onSelect,
 }: {
-  suggestedQuery?: string;
+  search: YouTubeSearch;
   selectedVideoId?: string;
   onSelect: (url: string) => void;
 }) {
-  const [input, setInput] = useState<string | null>(null);
-  const query = input ?? suggestedQuery.slice(0, MAX_VIDEO_SEARCH_LENGTH);
-  const normalized = normalizeVideoQuery(query);
-  const [resultsOpen, setResultsOpen] = useState(true);
+  const {
+    query,
+    valid,
+    results: visible,
+    resultsOpen,
+    setResultsOpen,
+  } = search;
   const [selectionNotice, setSelectionNotice] = useState("");
+  // The notice names one video; it's stale once another one is loaded.
+  const [noticeVideoId, setNoticeVideoId] = useState<string | null>(null);
+  // Counts picks, so picking the same video again still moves focus.
+  const [picks, setPicks] = useState(0);
   const selectionRef = useRef<HTMLParagraphElement>(null);
-  const [state, setState] = useState<SearchState | null>(null);
-  const request = useRef<AbortController | null>(null);
-  const visible = state?.query === normalized ? state : null;
-  const valid =
-    normalized.length >= MIN_VIDEO_SEARCH_LENGTH &&
-    normalized.length <= MAX_VIDEO_SEARCH_LENGTH;
+  const listRef = useRef<HTMLUListElement>(null);
+  const focusList = useRef(false);
 
   useEffect(() => {
-    if (selectionNotice) selectionRef.current?.focus();
-  }, [selectionNotice]);
+    if (picks > 0) selectionRef.current?.focus();
+  }, [picks]);
+
+  // "Show search results" disappears when pressed; the list takes focus.
+  useEffect(() => {
+    if (!resultsOpen || !focusList.current) return;
+    focusList.current = false;
+    listRef.current?.focus();
+  }, [resultsOpen]);
 
   useEffect(() => {
-    request.current?.abort();
-    setState(null);
     setSelectionNotice("");
-    return () => request.current?.abort();
-  }, [normalized]);
+  }, [search.normalized]);
 
-  async function search(more = false) {
-    if (!valid || visible?.loading) return;
-    setResultsOpen(true);
+  function runSearch(more = false) {
     setSelectionNotice("");
-    request.current?.abort();
-    const controller = new AbortController();
-    request.current = controller;
-    const prior = more ? visible?.videos ?? [] : [];
-    const pageToken = more ? visible?.nextPageToken ?? null : null;
-    setState({
-      query: normalized,
-      videos: prior,
-      nextPageToken: pageToken,
-      loading: true,
-      error: null,
-    });
-    try {
-      const params = new URLSearchParams({ q: normalized });
-      if (pageToken) params.set("pageToken", pageToken);
-      const response = await fetch(`/api/youtube/search?${params}`, {
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        if (response.status === 401)
-          throw new SearchError("Sign in to search for videos.");
-        // The route explains its own refusals, such as a missing API key.
-        const body = youtubeSearchErrorSchema.safeParse(
-          await response.json().catch(() => null)
-        );
-        throw new SearchError(body.success ? body.data.error : UNAVAILABLE);
-      }
-      const result = youtubeSearchResponseSchema.parse(await response.json());
-      if (controller.signal.aborted) return;
-      const unique = new Map(
-        [...prior, ...result.videos].map((video) => [video.id, video])
-      );
-      setState({
-        query: normalized,
-        videos: [...unique.values()].slice(0, MAX_VIDEO_RESULTS),
-        nextPageToken: result.nextPageToken,
-        loading: false,
-        error: null,
-      });
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      setState({
-        query: normalized,
-        videos: prior,
-        nextPageToken: pageToken,
-        loading: false,
-        error: error instanceof SearchError ? error.message : UNAVAILABLE,
-      });
-    }
+    void search.search(more);
   }
 
   return (
@@ -140,12 +79,12 @@ export function YouTubeVideoSearch({
           maxLength={MAX_VIDEO_SEARCH_LENGTH}
           value={query}
           placeholder="Movie, scene, or a line you remember…"
-          onChange={(event) => setInput(event.target.value)}
+          onChange={(event) => search.setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
               event.stopPropagation();
-              void search();
+              runSearch();
             }
           }}
         />
@@ -153,7 +92,7 @@ export function YouTubeVideoSearch({
           type="button"
           variant="secondary"
           disabled={!valid || visible?.loading}
-          onClick={() => void search()}
+          onClick={() => runSearch()}
         >
           Search
         </Button>
@@ -176,7 +115,7 @@ export function YouTubeVideoSearch({
             No videos found. Try the movie title or a shorter part of the quote.
           </p>
         )}
-      {selectionNotice && (
+      {selectionNotice && noticeVideoId === selectedVideoId && (
         <p
           ref={selectionRef}
           role="status"
@@ -191,7 +130,10 @@ export function YouTubeVideoSearch({
           type="button"
           size="sm"
           variant="outline"
-          onClick={() => setResultsOpen(true)}
+          onClick={() => {
+            focusList.current = true;
+            setResultsOpen(true);
+          }}
         >
           Show search results
         </Button>
@@ -204,7 +146,12 @@ export function YouTubeVideoSearch({
           <p className="text-xs text-muted-foreground">
             Choose a video to load it into the quote player below.
           </p>
-          <ul className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">
+          <ul
+            ref={listRef}
+            tabIndex={-1}
+            aria-label="Search results"
+            className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          >
             {visible.videos.map((video) => (
               <li
                 key={video.id}
@@ -243,6 +190,8 @@ export function YouTubeVideoSearch({
                   onClick={() => {
                     onSelect(youtubeWatchUrl(video.id));
                     setResultsOpen(false);
+                    setNoticeVideoId(video.id);
+                    setPicks((count) => count + 1);
                     setSelectionNotice(
                       `Loaded into the quote player: ${video.title}`
                     );
@@ -260,7 +209,7 @@ export function YouTubeVideoSearch({
                 variant="outline"
                 size="sm"
                 disabled={visible.loading}
-                onClick={() => void search(true)}
+                onClick={() => runSearch(true)}
               >
                 More results
               </Button>
