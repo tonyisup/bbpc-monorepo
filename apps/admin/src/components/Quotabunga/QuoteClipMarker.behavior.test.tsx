@@ -348,6 +348,20 @@ describe("quote clip marker", () => {
     expect(field("clip-marker-start").props.value).toBe("1:03.6");
   });
 
+  test("a replaced seek landing late doesn't count as the new one landing", async () => {
+    await mount();
+    media.seekTo.mockImplementation(() => undefined);
+    media.getCurrentTime.mockReturnValue(10);
+    press("ArrowRight", null, { shiftKey: true });
+    press("ArrowRight", null, { shiftKey: true });
+    press("ArrowLeft", null, { shiftKey: true });
+    expect(media.seekTo).toHaveBeenLastCalledWith(15, true);
+    // The seek to 20 lands after it was replaced by the step back to 15.
+    settle(20);
+    press("s");
+    expect(field("clip-marker-start").props.value).toBe("0:15.0");
+  });
+
   test("the seek slider keeps the shortcuts, and a held Enter in a field doesn't resubmit", async () => {
     await mount();
     media.getCurrentTime.mockReturnValue(50);

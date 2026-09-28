@@ -547,9 +547,10 @@ describe("Quotabunga prep page", () => {
     mocks.markerRenders = [];
 
     mocks.router.query = { episodeId: "episode-2" };
-    await act(async () => view.update(<ConvexQuotabungaPage />));
-    await flush();
+    act(() => view.update(<ConvexQuotabungaPage />));
+    // It closes with the address, before the new round has loaded.
     expect(markerOpen()).toHaveLength(0);
+    await flush();
     expect(mocks.markerRenders.some((props) => props.showListener)).toBe(false);
     // The new round is awarded, so its own names show.
     expect(text()).toContain("Listener Z");
@@ -619,5 +620,64 @@ describe("Quotabunga prep page", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "Quotabunga changes are paused in this environment."
     );
+  });
+  test("a closed marker's failed save is reported even after another opens", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+    let fail: (error: unknown) => void = () => undefined;
+    mocks.update.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      })
+    );
+    const pending = onSave(entry, { start: 42.3, end: null });
+    await flush();
+    closeMarker();
+    click("Clip");
+    expect(markerOpen()).toHaveLength(1);
+    await act(async () => {
+      fail(new ConvexError({ code: "WRITE_DISABLED", message: "Paused" }));
+      await pending.catch(() => undefined);
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "Quotabunga changes are paused in this environment."
+    );
+  });
+
+  test("a requested episode that isn't listed yet is picked up once it is", async () => {
+    mocks.router.query = { episodeId: "episode-3" };
+    const entry = submission("a");
+    await render([entry]);
+    expect(episodeSelect()?.props.value).toBe("episode-1");
+
+    mocks.loadEpisodes.mockResolvedValue([
+      {
+        id: "episode-1",
+        number: 1,
+        title: "Pilot",
+        status: "next",
+        submissionCount: 1,
+      },
+      {
+        id: "episode-3",
+        number: 3,
+        title: "Finale",
+        status: null,
+        submissionCount: 0,
+      },
+    ]);
+    click("Clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+    mocks.update.mockResolvedValueOnce({ ...entry, clipStartSeconds: 42 });
+    await act(async () => {
+      await onSave(entry, { start: 42, end: null });
+    });
+    closeMarker();
+    await flush();
+    expect(episodeSelect()?.props.value).toBe("episode-3");
   });
 });

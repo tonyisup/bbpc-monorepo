@@ -375,31 +375,65 @@ describe("quote clip player", () => {
     expect(alertText()).toContain("YouTube is taking too long to respond.");
   });
 
-  test("an open clip whose range changes on a refresh plays the new range", async () => {
-    const refresh = async (entry: ConvexAdminQuoteSubmission) =>
-      act(async () => {
+  test("an open clip whose range changes on a refresh is cued in place, playing only if it was", async () => {
+    const refresh = (entry: ConvexAdminQuoteSubmission) =>
+      act(() =>
         view.update(
           <InlineQuoteClip onOpenChange={vi.fn()} open submission={entry} />
-        );
-        for (let i = 0; i < 5; i += 1) await Promise.resolve();
-      });
+        )
+      );
     await mount(
       <InlineQuoteClip onOpenChange={vi.fn()} open submission={submission()} />
     );
     ready();
     expect(media.seekTo).toHaveBeenLastCalledWith(40, true);
+    tick(40.1, PLAYING);
+    tick(42, PLAYING);
+    click("Pause");
+    tick(42, PAUSED);
 
-    // A refresh with the same range keeps the player as it is.
-    await refresh(submission());
+    // A refresh with the same range leaves the player alone.
+    refresh(submission());
+    expect(media.seekTo).toHaveBeenCalledOnce();
+
+    // Paused, the new range is cued without playing.
+    refresh(submission({ clipStartSeconds: 60, clipEndSeconds: 62 }));
+    expect(media.seekTo).toHaveBeenLastCalledWith(60, true);
+    expect(media.playVideo).toHaveBeenCalledOnce();
     expect(media.destroy).not.toHaveBeenCalled();
 
-    await refresh(submission({ clipStartSeconds: 60, clipEndSeconds: 62 }));
-    expect(media.destroy).toHaveBeenCalledOnce();
+    // Playing, the new range plays from its start to its end.
+    tick(60, PLAYING);
+    refresh(submission({ clipStartSeconds: 70, clipEndSeconds: 72 }));
+    expect(media.seekTo).toHaveBeenLastCalledWith(70, true);
+    expect(media.playVideo).toHaveBeenCalledTimes(2);
+    tick(70.1, PLAYING);
+    tick(72, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledTimes(2);
+  });
+
+  test("the clip's end holds when YouTube's own controls play it", async () => {
+    await mount(
+      <QuoteClipPlayer
+        end={44.1}
+        onClose={vi.fn()}
+        start={40}
+        videoId="abcdefghijk"
+      />
+    );
     ready();
-    expect(media.seekTo).toHaveBeenLastCalledWith(60, true);
-    tick(60.1, PLAYING);
-    tick(62, PLAYING);
-    expect(media.pauseVideo).toHaveBeenCalledOnce();
+    tick(40.1, PLAYING);
+    tick(42, PLAYING);
+    click("Pause");
+    tick(42, PAUSED);
+    // Resumed from the video's own play button.
+    tick(43, PLAYING);
+    tick(44.1, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledTimes(2);
+    // And played on once the clip has finished.
+    tick(44.1, PAUSED);
+    tick(44.3, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledTimes(3);
   });
 });
 

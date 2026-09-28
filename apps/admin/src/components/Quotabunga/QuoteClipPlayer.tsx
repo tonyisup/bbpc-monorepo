@@ -33,17 +33,23 @@ export function QuoteClipPlayer({
   end,
   onClose,
 }: QuoteClipPlayerProps) {
-  const player = useYouTubePlayer(videoId, start);
+  const player = useYouTubePlayer(videoId, start, end);
   const { ready, error, currentTime, duration, playing, autoplayBlocked } =
     player.state;
-  const { playUntil, togglePlay } = player;
-  const started = useRef(false);
+  const { playUntil, seek, togglePlay } = player;
+  // The range the player last started or cued; null until it first plays.
+  const cued = useRef<{ start: number; end: number | null } | null>(null);
 
   useEffect(() => {
-    if (!ready || started.current) return;
-    started.current = true;
-    playUntil(start, end);
-  }, [end, playUntil, ready, start]);
+    if (!ready) return;
+    const last = cued.current;
+    if (last !== null && last.start === start && last.end === end) return;
+    cued.current = { start, end };
+    // It plays once opened. A refresh that changes the clip cues the new one,
+    // playing it only if the old one was playing.
+    if (last === null || playing) playUntil(start, end);
+    else seek(start);
+  }, [end, playUntil, playing, ready, seek, start]);
 
   // A video that has itself ended counts as a finished clip, even when the
   // clip has no end or runs past the video.
@@ -167,8 +173,6 @@ export function InlineQuoteClip({
   return (
     <div className="order-last w-full basis-full">
       <QuoteClipPlayer
-        // A refresh that changed the clip starts the new one over.
-        key={`${video.id}:${String(start)}:${String(end)}`}
         end={end}
         onClose={() => onOpenChange(false)}
         start={start}

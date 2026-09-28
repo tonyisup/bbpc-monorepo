@@ -189,23 +189,29 @@ export function ConvexQuotabungaPage() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [marker, setMarker] = useState<{
     episodeId: string;
+    episodeQuery: string;
     queue: ConvexAdminQuoteSubmission[];
     initialId: string;
   } | null>(null);
   const [markerDirty, setMarkerDirty] = useState(false);
   const [discardPending, setDiscardPending] = useState(false);
   const reloadOnClose = useRef(false);
-  const markerOpen = useRef(false);
+  // Each opening of the marker is a new session, so a save can tell whether
+  // the dialog that started it is still there to show a failure.
+  const markerSessions = useRef(0);
+  const openMarkerSession = useRef<number | null>(null);
+  const pageMounted = useRef(false);
+  useEffect(() => {
+    pageMounted.current = true;
+    return () => {
+      pageMounted.current = false;
+    };
+  }, []);
   useUnsavedChangesPrompt(marker !== null && markerDirty, DISCARD_MARKS);
-  // Once the page is gone, a save still in flight reports a failure as a toast.
-  useEffect(
-    () => () => {
-      markerOpen.current = false;
-    },
-    []
-  );
   const [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0);
+  const episodeQuery =
+    typeof router.query.episodeId === "string" ? router.query.episodeId : "";
   // The URL's episode is applied when it changes, not on every reload, so a
   // reload keeps the round the admin picked since.
   const appliedEpisodeQuery = useRef<string | null>(null);
@@ -224,18 +230,17 @@ export function ConvexQuotabungaPage() {
         setEpisodes(loadedEpisodes);
         setUsers(userPage.users);
         setUserCatalogComplete(userPage.isDone);
-        const requested =
-          typeof router.query.episodeId === "string"
-            ? router.query.episodeId
-            : "";
+        const requested = episodeQuery;
+        const found = loadedEpisodes.some(
+          (episode) => episode.id === requested
+        );
         const newRequest = requested !== appliedEpisodeQuery.current;
-        appliedEpisodeQuery.current = requested;
+        // A requested episode that isn't listed yet is tried again next time.
+        if (found || requested.length === 0) {
+          appliedEpisodeQuery.current = requested;
+        }
         setEpisodeId((current) => {
-          if (
-            newRequest &&
-            requested.length > 0 &&
-            loadedEpisodes.some((episode) => episode.id === requested)
-          ) {
+          if (newRequest && found) {
             return requested;
           }
           if (
@@ -263,7 +268,7 @@ export function ConvexQuotabungaPage() {
     return () => {
       active = false;
     };
-  }, [convex, revision, router.query.episodeId]);
+  }, [convex, episodeQuery, revision]);
 
   useEffect(() => {
     if (episodeId.length === 0) {
@@ -308,17 +313,23 @@ export function ConvexQuotabungaPage() {
   const names = useListenerNames(submissions ?? [], episodeId);
   const { setPeeking } = names;
 
-  // Back or Forward can change the round under the open marker. It closes
-  // rather than show that round's entries under this one's name visibility;
-  // the new round loads anyway.
+  // Back or Forward can change the round under the open marker. It closes as
+  // soon as the address changes, before the new round loads, rather than take
+  // marks meant for the old round or show its entries under the new round's
+  // name visibility.
   useEffect(() => {
-    if (marker === null || marker.episodeId === episodeId) return;
-    markerOpen.current = false;
+    if (
+      marker === null ||
+      (marker.episodeId === episodeId && marker.episodeQuery === episodeQuery)
+    ) {
+      return;
+    }
+    openMarkerSession.current = null;
     reloadOnClose.current = false;
     setMarker(null);
     setMarkerDirty(false);
     setDiscardPending(false);
-  }, [episodeId, marker]);
+  }, [episodeId, episodeQuery, marker]);
 
   const refresh = () => {
     setSubmissions(null);
@@ -493,14 +504,15 @@ export function ConvexQuotabungaPage() {
   };
 
   const openMarker = (initialId: string) => {
-    markerOpen.current = true;
+    markerSessions.current += 1;
+    openMarkerSession.current = markerSessions.current;
     reloadOnClose.current = false;
     setMarkerDirty(false);
-    setMarker({ episodeId, queue: markerQueue, initialId });
+    setMarker({ episodeId, episodeQuery, queue: markerQueue, initialId });
   };
 
   const finishClosingMarker = () => {
-    markerOpen.current = false;
+    openMarkerSession.current = null;
     setMarker(null);
     setMarkerDirty(false);
     setDiscardPending(false);
@@ -520,7 +532,7 @@ export function ConvexQuotabungaPage() {
   // The round behind the dialog is out of date: reload it now if the dialog
   // has closed, or when it does.
   const roundChanged = () => {
-    if (markerOpen.current) reloadOnClose.current = true;
+    if (openMarkerSession.current !== null) reloadOnClose.current = true;
     else refresh();
   };
 
@@ -528,9 +540,13 @@ export function ConvexQuotabungaPage() {
     submission: ConvexAdminQuoteSubmission,
     times: ClipTimes
   ) => {
-    // A failure after the dialog closed has no marker left to show it.
+    // The marker that saved shows a failure itself; once it has closed
+    // (another may have opened since) or the page is gone, a toast does.
+    const session = openMarkerSession.current;
     const report = <T extends Error>(error: T) => {
-      if (!markerOpen.current) toast.error(error.message);
+      if (!pageMounted.current || openMarkerSession.current !== session) {
+        toast.error(error.message);
+      }
       return error;
     };
     // The update sends the whole entry back, so it is re-read first: a
@@ -560,8 +576,9 @@ export function ConvexQuotabungaPage() {
       roundChanged();
       return updated;
     } catch (error) {
-      // The write may have landed even though its answer didn't arrive.
-      roundChanged();
+      // A refusal wrote nothing; any other failure may have landed the write
+      // without its answer arriving.
+      if (getConvexDomainErrorCode(error) === null) roundChanged();
       throw report(new Error(writeFailureMessage(error)));
     }
   };

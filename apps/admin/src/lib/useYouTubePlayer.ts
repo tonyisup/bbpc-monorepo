@@ -8,16 +8,54 @@ const BUFFERING = 3;
 const CUED = 5;
 const READY_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 100;
-// A seek settles asynchronously: until then the player may still report the
-// time, or ENDED, from before it. It counts as landed once the reported time is
-// within this of the target, or at least halfway there from where it was (a
-// seek into unbuffered video lands on the keyframe before the target).
-// Playback can carry the time past the target before the next poll, which
-// counts too unless the seek went backward, where the old time lies that way.
+// A seek settles asynchronously: until then the player may still report ENDED,
+// the time from before it, or the target of a seek it replaced. A reported time
+// counts as landed unless it lies at least halfway back toward one of those, and
+// anything within this of the target counts. So a seek into unbuffered video
+// can land on the keyframe before its target, and playback that carries the
+// time past the target before the next poll still counts.
 const SEEK_NEAR_SECONDS = 0.15;
 // A seek that never lands is given up after this many polls, not counting
 // polls spent buffering.
 const SEEK_SETTLE_POLLS = 20;
+
+interface PendingSeek {
+  target: number;
+  /** The span of stale times the player may report until the seek lands. */
+  below: number;
+  above: number;
+  polls: number;
+}
+
+function pendingSeekTo(
+  target: number,
+  reported: number,
+  replaced: PendingSeek | null
+): PendingSeek {
+  const earlier = replaced?.target ?? reported;
+  return {
+    target,
+    below: Math.min(reported, earlier),
+    above: Math.max(reported, earlier),
+    polls: 0,
+  };
+}
+
+// How far past the target, on a side where a stale time lies `gap` away, a
+// reported time can still count as landed.
+function landingReach(gap: number): number {
+  return gap >= SEEK_NEAR_SECONDS
+    ? Math.max(SEEK_NEAR_SECONDS, gap / 2)
+    : Number.POSITIVE_INFINITY;
+}
+
+function seekLanded(seek: PendingSeek, time: number): boolean {
+  const offset = time - seek.target;
+  return (
+    offset > -landingReach(seek.target - seek.below) &&
+    offset < landingReach(seek.above - seek.target)
+  );
+}
 
 export interface YouTubePlayerState {
   ready: boolean;
@@ -48,20 +86,23 @@ function playerErrorMessage(code: number): string {
 /**
  * One YouTube player in `container`, reloaded when the video changes. The
  * time is polled every POLL_INTERVAL_MS, and `playUntil` pauses at a chosen
- * second.
+ * second. With `clipEnd`, playback also pauses there however it was started,
+ * YouTube's own controls included.
  */
-export function useYouTubePlayer(videoId: string, startAt: number) {
+export function useYouTubePlayer(
+  videoId: string,
+  startAt: number,
+  clipEnd: number | null = null
+) {
   const container = useRef<HTMLDivElement>(null);
   const player = useRef<YouTubePlayer | null>(null);
   const stopAt = useRef<number | null>(null);
-  const pendingSeek = useRef<{
-    target: number;
-    from: number;
-    polls: number;
-  } | null>(null);
+  const pendingSeek = useRef<PendingSeek | null>(null);
   const blocked = useRef(false);
   const startRef = useRef(startAt);
   startRef.current = startAt;
+  const clipEndRef = useRef(clipEnd);
+  clipEndRef.current = clipEnd;
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState<YouTubePlayerState>({
     ready: false,
@@ -134,17 +175,8 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 const seeking = pendingSeek.current;
                 if (seeking !== null) {
                   if (status !== BUFFERING) seeking.polls += 1;
-                  const landedWithin = Math.max(
-                    SEEK_NEAR_SECONDS,
-                    Math.abs(seeking.from - seeking.target) / 2
-                  );
-                  const offset = time - seeking.target;
-                  const backward =
-                    seeking.from - seeking.target >= landedWithin;
                   if (
-                    (status !== ENDED &&
-                      offset > -landedWithin &&
-                      (!backward || offset < landedWithin)) ||
+                    (status !== ENDED && seekLanded(seeking, time)) ||
                     seeking.polls >= SEEK_SETTLE_POLLS
                   ) {
                     pendingSeek.current = null;
@@ -152,10 +184,13 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 }
                 // The stop waits for the seek, or a replay from past the end
                 // would be paused by the time it is leaving.
+                const until =
+                  stopAt.current ??
+                  (status === PLAYING ? clipEndRef.current : null);
                 if (
                   pendingSeek.current === null &&
-                  stopAt.current !== null &&
-                  (time >= stopAt.current || status === ENDED)
+                  until !== null &&
+                  (time >= until || status === ENDED)
                 ) {
                   stopAt.current = null;
                   instance.pauseVideo();
@@ -210,11 +245,11 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     const limit = Number.isFinite(length) && length > 0 ? length : seconds;
     const time = Math.min(Math.max(0, seconds), limit);
     stopAt.current = null;
-    pendingSeek.current = {
-      target: time,
-      from: current.getCurrentTime(),
-      polls: 0,
-    };
+    pendingSeek.current = pendingSeekTo(
+      time,
+      current.getCurrentTime(),
+      pendingSeek.current
+    );
     const status = current.getPlayerState();
     current.seekTo(time, true);
     // seekTo starts a cued, unstarted or finished video; a seek alone must
@@ -238,11 +273,11 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     const current = player.current;
     if (!current) return;
     const target = Math.max(0, from);
-    pendingSeek.current = {
+    pendingSeek.current = pendingSeekTo(
       target,
-      from: current.getCurrentTime(),
-      polls: 0,
-    };
+      current.getCurrentTime(),
+      pendingSeek.current
+    );
     current.seekTo(target, true);
     stopAt.current = until;
     current.playVideo();
