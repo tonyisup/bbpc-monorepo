@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quote labels</title>
+<style nonce="{{nonce}}">
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f5f2;
+    --panel: #ffffff;
+    --text: #1d1c1a;
+    --muted: #6b6862;
+    --line: #e2dfd8;
+    --accent: #2f5bd3;
+    --accent-text: #ffffff;
+    --good: #1f7a4a;
+    --good-bg: #e3f3ea;
+    --warn: #8a5a00;
+    --warn-bg: #fbf0d9;
+    --quiet-bg: #eeece7;
+    --danger: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514;
+      --panel: #1e1e1c;
+      --text: #ecebe7;
+      --muted: #a09d96;
+      --line: #33322f;
+      --accent: #7ea0ff;
+      --accent-text: #0e1320;
+      --good: #6fd19a;
+      --good-bg: #173324;
+      --warn: #f0c060;
+      --warn-bg: #3a2c10;
+      --quiet-bg: #2a2927;
+      --danger: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  h1 { font-size: 16px; margin: 0; }
+  #progress { color: var(--muted); font-variant-numeric: tabular-nums; }
+  header label { margin-left: auto; color: var(--muted); font-size: 14px; }
+  main {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    height: calc(100vh - 45px);
+  }
+  nav {
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .item {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: start;
+    width: 100%;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .item:hover { background: var(--quiet-bg); }
+  .item[aria-current="true"] { background: var(--quiet-bg); box-shadow: inset 3px 0 var(--accent); }
+  .num { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .title { display: block; font-weight: 600; font-size: 13px; }
+  .snippet {
+    display: block;
+    color: var(--muted);
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .badge {
+    font-size: 12px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .badge.labeled { color: var(--good); background: var(--good-bg); }
+  .badge.draft { color: var(--warn); background: var(--warn-bg); }
+  .badge.absent { color: var(--muted); background: var(--quiet-bg); }
+  #detail { overflow-y: auto; padding: 20px 24px 40px; }
+  .inner { max-width: 880px; margin: 0 auto; }
+  #meta { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+  blockquote {
+    margin: 0 0 10px;
+    font-size: 22px;
+    line-height: 1.35;
+    font-weight: 600;
+  }
+  #saved { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+  .player {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .player iframe, #player { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--warn-bg);
+    color: var(--warn);
+    font-size: 14px;
+  }
+  .note a { color: inherit; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  button.control, button.action {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    font-size: 14px;
+    padding: 6px 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+  }
+  button.control:hover, button.action:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #play { min-width: 76px; }
+  #clock { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+  #scrub { width: 100%; margin-top: 12px; accent-color: var(--accent); }
+  .marks {
+    display: grid;
+    grid-template-columns: auto 110px auto;
+    gap: 8px 10px;
+    align-items: center;
+    margin-top: 16px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    width: fit-content;
+  }
+  .marks label { font-weight: 600; }
+  .marks input {
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    width: 100%;
+  }
+  .marks input[aria-invalid="true"] { border-color: var(--danger); }
+  #status { font-size: 14px; color: var(--muted); }
+  #status.error { color: var(--danger); }
+  details { margin-top: 20px; color: var(--muted); font-size: 14px; }
+  kbd {
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 1px 5px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--panel);
+  }
+  button.primary kbd { background: transparent; border-color: currentColor; color: inherit; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 0; }
+  dd { margin: 0; }
+  @media (max-width: 800px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    nav { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); }
+    #detail { padding: 16px; }
+    blockquote { font-size: 19px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Quote labels</h1>
+  <span id="progress"></span>
+  <label><input type="checkbox" id="hide-labeled"> Hide done</label>
+</header>
+<main>
+  <nav id="list" aria-label="Entries"></nav>
+  <section id="detail">
+    <div class="inner">
+      <p id="meta"></p>
+      <blockquote id="quote"></blockquote>
+      <p id="saved"></p>
+      <div class="player"><div id="player"></div></div>
+      <p class="note" id="player-note" hidden></p>
+      <div class="row">
+        <button class="control" id="back5" title="Back 5 s (Shift+Left)">−5</button>
+        <button class="control" id="back1" title="Back 1 s (Left)">−1</button>
+        <button class="control" id="back02" title="Back 0.2 s (,)">−0.2</button>
+        <button class="control primary" id="play" title="Play or pause (Space)">Play</button>
+        <button class="control" id="fwd02" title="Forward 0.2 s (.)">+0.2</button>
+        <button class="control" id="fwd1" title="Forward 1 s (Right)">+1</button>
+        <button class="control" id="fwd5" title="Forward 5 s (Shift+Right)">+5</button>
+        <button class="control" id="speed" title="Playback speed">1×</button>
+        <span id="clock">0:00.0</span>
+      </div>
+      <input type="range" id="scrub" min="0" max="0" step="0.1" value="0" aria-label="Position">
+      <div class="marks">
+        <label for="start">Start</label>
+        <input id="start" inputmode="decimal" placeholder="M:SS.s" autocomplete="off">
+        <button class="action" id="mark-start">Mark start <kbd>S</kbd></button>
+        <label for="end">End</label>
+        <input id="end" inputmode="decimal" placeholder="optional" autocomplete="off">
+        <button class="action" id="mark-end">Mark end <kbd>E</kbd></button>
+      </div>
+      <div class="row">
+        <button class="action" id="preview">Play the marked line <kbd>P</kbd></button>
+        <button class="action primary" id="save">Save and next <kbd>Enter</kbd></button>
+        <button class="action" id="not-spoken">Not in this clip <kbd>N</kbd></button>
+        <button class="action" id="clear">Clear label</button>
+        <span id="status" role="status"></span>
+      </div>
+      <details>
+        <summary>Keyboard and tips</summary>
+        <dl>
+          <dt><kbd>Space</kbd></dt><dd>Play or pause</dd>
+          <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Back or forward 1 s; with <kbd>Shift</kbd>, 5 s</dd>
+          <dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>Back or forward 0.2 s</dd>
+          <dt><kbd>S</kbd> <kbd>E</kbd></dt><dd>Mark the start or end at the current time</dd>
+          <dt><kbd>P</kbd></dt><dd>Play from the marked start to the end</dd>
+          <dt><kbd>Enter</kbd> <kbd>N</kbd></dt><dd>Save and go to the next entry, or mark it as not in the clip</dd>
+          <dt><kbd>J</kbd> <kbd>K</kbd></dt><dd>Next or previous entry</dd>
+          <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>In a time field, nudge by 0.1 s</dd>
+        </dl>
+        <p>Mark when the first word of the line begins, not where the scene starts. Marks land a little late when set while playing; slow the video down, then nudge with <kbd>,</kbd> and check with <kbd>P</kbd>.</p>
+        <p id="labels-file"></p>
+      </details>
+    </div>
+  </section>
+</main>
+<script nonce="{{nonce}}">
+"use strict";
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const SPEEDS = [1, 0.75, 0.5];
+  const PLAYER_ERRORS = {
+    2: "YouTube rejected this video ID.",
+    5: "The browser can't play this video.",
+    100: "This video is private or was removed.",
+    101: "The owner doesn't allow this video to play embedded.",
+    150: "The owner doesn't allow this video to play embedded.",
+    153: "YouTube didn't receive this page's address, so it won't play.",
+  };
+  const state = {
+    clips: [],
+    labels: {},
+    drafts: {},
+    index: -1,
+    player: null,
+    ready: false,
+    stopAt: null,
+    speed: 0,
+    scrubbing: false,
+  };
+
+  const round1 = (value) => Math.round(value * 10) / 10;
+  const clockTime = (value) => {
+    if (value === null || !Number.isFinite(value)) return "";
+    const tenths = Math.round(value * 10);
+    const minutes = Math.floor(tenths / 600);
+    const seconds = ((tenths - minutes * 600) / 10).toFixed(1).padStart(4, "0");
+    return `${minutes}:${seconds}`;
+  };
+  const readTime = (text) => {
+    const value = text.trim();
+    if (!value) return null;
+    const parts = value.split(":");
+    if (parts.length > 3 || parts.some((part) => !/^\d+(\.\d+)?$/.test(part)))
+      return Number.NaN;
+    return round1(parts.reduce((sum, part) => sum * 60 + Number(part), 0));
+  };
+
+  const current = () => state.clips[state.index];
+  const draftFor = (clip) => {
+    if (!state.drafts[clip.id]) {
+      const label = state.labels[clip.id];
+      state.drafts[clip.id] =
+        label && "start" in label
+          ? { start: label.start, end: label.end }
+          : { start: null, end: null };
+    }
+    return state.drafts[clip.id];
+  };
+  const isDirty = (clip) => {
+    const draft = state.drafts[clip.id];
+    if (!draft) return false;
+    const label = state.labels[clip.id];
+    if (label && "start" in label)
+      return draft.start !== label.start || draft.end !== label.end;
+    return draft.start !== null || draft.end !== null;
+  };
+
+  const setStatus = (text, isError = false) => {
+    $("status").textContent = text;
+    $("status").className = isError ? "error" : "";
+  };
+
+  const badgeFor = (clip) => {
+    const label = state.labels[clip.id];
+    if (isDirty(clip)) return ["draft", "draft"];
+    if (!label) return null;
+    if ("notSpoken" in label) return ["absent", "not in clip"];
+    return ["labeled", clockTime(label.start)];
+  };
+
+  const renderList = () => {
+    const list = $("list");
+    const hideDone = $("hide-labeled").checked;
+    list.replaceChildren();
+    state.clips.forEach((clip, index) => {
+      if (hideDone && state.labels[clip.id] && index !== state.index) return;
+      const item = document.createElement("button");
+      item.className = "item";
+      item.type = "button";
+      if (index === state.index) item.setAttribute("aria-current", "true");
+      const number = document.createElement("span");
+      number.className = "num";
+      number.textContent = String(index + 1);
+      const text = document.createElement("span");
+      const title = document.createElement("span");
+      title.className = "title";
+      title.textContent = clip.sourceTitle || "Untitled";
+      const snippet = document.createElement("span");
+      snippet.className = "snippet";
+      snippet.textContent = clip.quoteText;
+      text.append(title, snippet);
+      item.append(number, text);
+      const badge = badgeFor(clip);
+      if (badge) {
+        const chip = document.createElement("span");
+        chip.className = `badge ${badge[0]}`;
+        chip.textContent = badge[1];
+        item.append(chip);
+      }
+      item.addEventListener("click", () => select(index));
+      list.append(item);
+    });
+    const done = state.clips.filter((clip) => state.labels[clip.id]).length;
+    $("progress").textContent = `${done} of ${state.clips.length} done`;
+    list.querySelector('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+  };
+
+  const renderMarks = () => {
+    const clip = current();
+    if (!clip) return;
+    const draft = draftFor(clip);
+    for (const field of ["start", "end"]) {
+      const input = $(field);
+      if (document.activeElement !== input) input.value = clockTime(draft[field]);
+      input.removeAttribute("aria-invalid");
+    }
+  };
+
+  const renderDetail = () => {
+    const clip = current();
+    if (!clip) return;
+    const kind = { MOVIE: "movie", TV: "TV show" }[clip.sourceType] ?? "title";
+    $("meta").textContent = `Entry ${state.index + 1} of ${state.clips.length} · ${clip.sourceTitle || "Untitled"} (${kind})`;
+    $("quote").textContent = clip.quoteText;
+    const saved = $("saved");
+    saved.replaceChildren();
+    if (clip.savedStart === null) {
+      saved.textContent = "The listener saved no start time.";
+    } else {
+      saved.append(
+        `The listener's clip starts at ${clockTime(clip.savedStart)}` +
+          (clip.savedEnd === null ? ". " : ` and ends at ${clockTime(clip.savedEnd)}. `)
+      );
+      const go = document.createElement("button");
+      go.className = "control";
+      go.type = "button";
+      go.textContent = "Go there";
+      go.addEventListener("click", () => seekTo(clip.savedStart));
+      saved.append(go);
+    }
+    renderMarks();
+    setStatus("");
+  };
+
+  const hideNote = () => {
+    $("player-note").hidden = true;
+  };
+  const showNote = (message, withLink) => {
+    const note = $("player-note");
+    note.replaceChildren(message);
+    const clip = current();
+    if (withLink && clip) {
+      const link = document.createElement("a");
+      link.href = `https://www.youtube.com/watch?v=${encodeURIComponent(clip.videoId)}`;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open it on YouTube";
+      note.append(" ", link, " and type the times in.");
+    }
+    note.hidden = false;
+  };
+
+  const loadVideo = () => {
+    const clip = current();
+    if (!clip || !state.ready) return;
+    hideNote();
+    state.stopAt = null;
+    const label = state.labels[clip.id];
+    const from =
+      label && "start" in label ? Math.max(0, label.start - 1) : clip.savedStart ?? 0;
+    state.player.cueVideoById({ videoId: clip.videoId, startSeconds: from });
+    state.player.setPlaybackRate(SPEEDS[state.speed]);
+  };
+
+  const select = (index) => {
+    if (index < 0 || index >= state.clips.length) return;
+    state.index = index;
+    renderList();
+    renderDetail();
+    loadVideo();
+  };
+
+  const nextOpen = () => {
+    const count = state.clips.length;
+    for (let step = 1; step <= count; step += 1) {
+      const index = (state.index + step) % count;
+      if (!state.labels[state.clips[index].id]) return index;
+    }
+    return -1;
+  };
+
+  const now = () => (state.ready ? state.player.getCurrentTime() : 0);
+  const duration = () => (state.ready ? state.player.getDuration() : 0);
+  const seekTo = (seconds) => {
+    if (!state.ready) return;
+    const limit = duration() || seconds;
+    state.player.seekTo(Math.min(Math.max(0, seconds), limit), true);
+  };
+  const seekBy = (delta) => seekTo(now() + delta);
+  const togglePlay = () => {
+    if (!state.ready) return;
+    if (state.player.getPlayerState() === 1) state.player.pauseVideo();
+    else {
+      state.stopAt = null;
+      state.player.playVideo();
+    }
+  };
+
+  const mark = (field) => {
+    const clip = current();
+    if (!clip || !state.ready) return;
+    const draft = draftFor(clip);
+    const time = round1(now());
+    draft[field] = time;
+    if (field === "start" && draft.end !== null && draft.end <= time) draft.end = null;
+    renderMarks();
+    renderList();
+    setStatus(`${field === "start" ? "Start" : "End"} marked at ${clockTime(time)}.`);
+  };
+
+  const commitField = (field) => {
+    const clip = current();
+    if (!clip) return true;
+    const input = $(field);
+    const value = readTime(input.value);
+    if (Number.isNaN(value)) {
+      input.setAttribute("aria-invalid", "true");
+      setStatus("Times look like 1:05.2 or 65.2.", true);
+      return false;
+    }
+    input.removeAttribute("aria-invalid");
+    draftFor(clip)[field] = value;
+    return true;
+  };
+
+  const preview = () => {
+    const clip = current();
+    if (!clip || !commitField("start") || !commitField("end")) return;
+    const draft = draftFor(clip);
+    if (draft.start === null) return setStatus("Mark a start first.", true);
+    seekTo(draft.start);
+    state.stopAt = (draft.end ?? draft.start + 4) + 0.3;
+    state.player.playVideo();
+  };
+
+  const send = async (method, body) => {
+    const clip = current();
+    const response = await fetch(`/api/labels/${encodeURIComponent(clip.id)}`, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "The label was not saved.");
+    state.labels = result.labels;
+  };
+
+  const advance = () => {
+    const next = nextOpen();
+    if (next === -1) {
+      renderList();
+      renderDetail();
+      setStatus("Every entry is done.");
+    } else select(next);
+  };
+
+  const save = async () => {
+    const clip = current();
+    if (!clip || !commitField("start") || !commitField("end")) return;
+    const draft = draftFor(clip);
+    if (draft.start === null) return setStatus("Mark a start first.", true);
+    if (draft.end !== null && draft.end <= draft.start)
+      return setStatus("The end must be after the start.", true);
+    try {
+      await send("PUT", { start: draft.start, end: draft.end });
+      delete state.drafts[clip.id];
+      advance();
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  };
+
+  const markNotSpoken = async () => {
+    const clip = current();
+    if (!clip) return;
+    try {
+      await send("PUT", { notSpoken: true });
+      delete state.drafts[clip.id];
+      advance();
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  };
+
+  const clearLabel = async () => {
+    const clip = current();
+    if (!clip) return;
+    try {
+      await send("DELETE");
+      delete state.drafts[clip.id];
+      renderList();
+      renderDetail();
+      setStatus("Label cleared.");
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  };
+
+  const tick = () => {
+    if (!state.ready) return;
+    const time = now();
+    const total = duration();
+    $("clock").textContent = clockTime(time);
+    const scrub = $("scrub");
+    if (total > 0 && Number(scrub.max) !== total) scrub.max = String(total);
+    if (!state.scrubbing) scrub.value = String(time);
+    const playing = state.player.getPlayerState() === 1;
+    $("play").textContent = playing ? "Pause" : "Play";
+    if (state.stopAt !== null && playing && time >= state.stopAt) {
+      state.player.pauseVideo();
+      state.stopAt = null;
+    }
+  };
+
+  const bind = (id, handler) => $(id).addEventListener("click", handler);
+  bind("back5", () => seekBy(-5));
+  bind("back1", () => seekBy(-1));
+  bind("back02", () => seekBy(-0.2));
+  bind("fwd02", () => seekBy(0.2));
+  bind("fwd1", () => seekBy(1));
+  bind("fwd5", () => seekBy(5));
+  bind("play", togglePlay);
+  bind("speed", () => {
+    state.speed = (state.speed + 1) % SPEEDS.length;
+    $("speed").textContent = `${SPEEDS[state.speed]}×`;
+    if (state.ready) state.player.setPlaybackRate(SPEEDS[state.speed]);
+  });
+  bind("mark-start", () => mark("start"));
+  bind("mark-end", () => mark("end"));
+  bind("preview", preview);
+  bind("save", save);
+  bind("not-spoken", markNotSpoken);
+  bind("clear", clearLabel);
+  $("hide-labeled").addEventListener("change", renderList);
+  $("scrub").addEventListener("input", () => {
+    state.scrubbing = true;
+    seekTo(Number($("scrub").value));
+  });
+  $("scrub").addEventListener("change", () => {
+    state.scrubbing = false;
+  });
+  for (const field of ["start", "end"]) {
+    const input = $(field);
+    input.addEventListener("change", () => {
+      if (commitField(field)) {
+        renderMarks();
+        renderList();
+      }
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      const value = readTime(input.value);
+      const base = value === null || Number.isNaN(value) ? round1(now()) : value;
+      const step = (event.shiftKey ? 1 : 0.1) * (event.key === "ArrowUp" ? 1 : -1);
+      input.value = clockTime(Math.max(0, round1(base + step)));
+      commitField(field);
+      renderList();
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target;
+    const typing = target instanceof HTMLInputElement && target.type !== "checkbox" && target.type !== "range";
+    if (typing) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        save();
+      } else if (event.key === "Escape") target.blur();
+      return;
+    }
+    if (target instanceof HTMLButtonElement && (event.key === " " || event.key === "Enter")) return;
+    const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    const actions = {
+      " ": togglePlay,
+      ArrowLeft: () => seekBy(event.shiftKey ? -5 : -1),
+      ArrowRight: () => seekBy(event.shiftKey ? 5 : 1),
+      ",": () => seekBy(-0.2),
+      ".": () => seekBy(0.2),
+      s: () => mark("start"),
+      e: () => mark("end"),
+      p: preview,
+      n: markNotSpoken,
+      Enter: save,
+      j: () => select(state.index + 1),
+      k: () => select(state.index - 1),
+    };
+    const action = actions[key];
+    if (!action) return;
+    event.preventDefault();
+    action();
+  });
+
+  // A clicked button gives focus back, so Space and Enter stay shortcuts; a
+  // button reached with Tab keeps focus and its own Space and Enter.
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("button") : null;
+    if (button && event.detail > 0) button.blur();
+  });
+
+  window.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (document.activeElement instanceof HTMLIFrameElement)
+        setStatus("Shortcuts pause while the video has focus. Click outside it to use them.");
+    }, 0);
+  });
+
+  window.onYouTubeIframeAPIReady = () => {
+    state.player = new YT.Player("player", {
+      host: "https://www.youtube.com",
+      playerVars: { playsinline: 1, rel: 0, origin: window.location.origin },
+      events: {
+        onReady: () => {
+          state.ready = true;
+          loadVideo();
+          setInterval(tick, 100);
+        },
+        onError: (event) => {
+          showNote(PLAYER_ERRORS[event.data] ?? "The video didn't load.", true);
+        },
+      },
+    });
+  };
+
+  fetch("/api/queue")
+    .then((response) => {
+      if (!response.ok) throw new Error("The entries didn't load.");
+      return response.json();
+    })
+    .then((queue) => {
+      state.clips = queue.clips;
+      state.labels = queue.labels;
+      $("labels-file").textContent = `Labels save to ${queue.labelsFile}`;
+      if (state.clips.length === 0) {
+        $("quote").textContent = "No entries with a YouTube link in this export.";
+        return;
+      }
+      state.index = -1;
+      const first = nextOpen();
+      select(first === -1 ? 0 : first);
+    })
+    .catch((error) => setStatus(error.message, true));
+})();
+</script>
+<script nonce="{{nonce}}" src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>
