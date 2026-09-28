@@ -1,12 +1,13 @@
 # Quote locate spike
 
-Measures whether Gemini can find a Quotabunga quote in its YouTube clip, before the
-Quote Finder assistant is built (see `docs/designs/quote-finder-assistant.md`). For
-each past entry with a YouTube link and a saved start time, it asks Gemini where the
-quote is spoken in the listener's own clip. It then compares the answer with the start
-and end the listener saved. The prompt, request, and answer checks live in
-`src/server/quoteLocate.mjs`, which the assistant's route will use, so the spike
-measures what would ship.
+Measures whether Gemini can find a Quotabunga quote in its YouTube clip. It was the
+go/no-go check before the Quote Finder assistant was built (see
+`docs/designs/quote-finder-assistant.md`). For each past entry with a YouTube link and
+a saved start time, it asks Gemini where the quote is spoken in the listener's own
+clip. It then compares the answer with the start and end the listener saved. The
+prompt, request, and answer checks live in `src/server/quoteLocate.mjs`, which the
+assistant's route (`/api/quote-finder/locate`) also uses, so the spike measures what
+ships.
 
 The video is always sent as a bare watch link. Saved clip links carry the listener's
 `t=` start, which would give the answer away.

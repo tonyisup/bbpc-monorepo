@@ -120,10 +120,10 @@ would halve the wait on misses but double the spend on every hit.
     Site-wide: 30 burst plus 2 a day, at most 90 runs in 30 days. That is about $4.95
     if every run hit both limits and about $1.10 at the spike's lengths. (The first
     draft allowed 4 a day, 150 runs, which assumed $0.03 a run; review showed the
-    output cap could push a bad month to about $8.25.) Per listener: 5 burst plus 2 a day, which allows one 5-run session
-    and then a run every 12 hours, so no single player can use up the month. The
-    first draft allowed a burst of 10; at 5 it takes at least three accounts to
-    keep the site bucket empty.
+    output cap could push a bad month to about $8.25.) Per listener: 5 burst plus 2 a
+    day, which allows one 5-run session and then a run every 12 hours, so no single
+    player can use up the month. The first draft allowed a burst of 10; at 5 it takes
+    at least three accounts to keep the site bucket empty.
 
   Each assistant session also spends normal video searches. The existing buckets
   still cap those, and they cost YouTube quota, not money.
@@ -154,7 +154,7 @@ to ship: at least 70% found, with the start within 2 s. Those entries are
 production-derived, so the evaluation set stays out of the repository.
 
 The spike is `apps/web/local-tools/quote-locate` (see its README). It uses the same
-prompt, request and answer checks as the future route, from
+prompt, request and answer checks as the route, from
 `apps/web/src/server/quoteLocate.mjs`, with `gemini-3.8-flash` as the default model.
 
 ### Spike results (2026-09-28)
@@ -203,9 +203,9 @@ and default thinking were tried.
   `Retry-After` if it has one. The route only accepts JSON posts, so another
   site's form can't spend a listener's runs.
 - The page remembers the videos the assistant has checked or that can't be
-  checked, across openings of the finder, so no later run pays for them again, and **Not it** moves on through the route's
-  leftovers and then any listed results not yet checked, including a newer
-  search's. Every run looks for the wording the listener had when they pressed
+  checked, across openings of the finder, so no later run pays for them again, and
+  **Not it** moves on through the route's leftovers and then any listed results not
+  yet checked, including a newer search's. Every run looks for the wording the listener had when they pressed
   **Find it for me**; **Restore my wording** brings it back after they use a heard
   line. Cancel returns to what the panel showed before.
 - When the form already holds a clip the listener chose, a suggestion waits for

@@ -42,7 +42,9 @@ project prepaid with auto-reload off: an empty balance makes Gemini answer HTTP 
 and the route then reports the assistant as out of budget. See
 `docs/designs/quote-finder-assistant.md` for the budget. Deploy the backend with
 `reserveQuoteLocate` before setting the key; until then, the assistant fails closed
-as unavailable.
+as unavailable. Set the key for Production only: each Convex deployment keeps its own
+assistant budget, so a key shared with Preview would let both draw on the one prepaid
+balance.
 
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can
