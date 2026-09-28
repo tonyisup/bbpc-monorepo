@@ -786,12 +786,7 @@ export function QuotabungaRecordingRound({
     () => recordingOrder(submissions, episodeId),
     [episodeId, submissions]
   );
-  const names = useListenerNames(submissions);
-  const { setPeeking } = names;
-  // Names shown on purpose for one round stay hidden for the next.
-  useEffect(() => {
-    setPeeking(false);
-  }, [episodeId, setPeeking]);
+  const names = useListenerNames(submissions, episodeId);
   const [placements, setPlacements] = useState<
     Record<string, ConvexQuotePlacement | null>
   >({});

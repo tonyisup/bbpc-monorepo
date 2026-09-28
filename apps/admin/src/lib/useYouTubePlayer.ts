@@ -1,13 +1,17 @@
 import { loadYouTubeAPI, type YouTubePlayer } from "@bbpc/youtube";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const PLAYING = 1;
+const UNSTARTED = -1;
 const ENDED = 0;
+const PLAYING = 1;
+const CUED = 5;
 const READY_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 100;
-// A seek settles asynchronously. Until the player reports a time this close to
-// the target, it may still report the old time, or ENDED, from before it.
-const SEEK_SETTLE_SECONDS = 0.75;
+// A seek settles asynchronously: until then the player may still report the
+// time, or ENDED, from before it. It counts as landed once the reported time is
+// within this of the target, or at least halfway there from where it was (a
+// seek into unbuffered video lands on the keyframe before the target).
+const SEEK_NEAR_SECONDS = 0.15;
 // A seek that never lands is given up after this many polls.
 const SEEK_SETTLE_POLLS = 20;
 
@@ -46,7 +50,11 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
   const container = useRef<HTMLDivElement>(null);
   const player = useRef<YouTubePlayer | null>(null);
   const stopAt = useRef<number | null>(null);
-  const pendingSeek = useRef<{ target: number; polls: number } | null>(null);
+  const pendingSeek = useRef<{
+    target: number;
+    from: number;
+    polls: number;
+  } | null>(null);
   const blocked = useRef(false);
   const startRef = useRef(startAt);
   startRef.current = startAt;
@@ -75,6 +83,7 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
       timer = undefined;
       player.current = null;
       stopAt.current = null;
+      pendingSeek.current = null;
       setState((current) => ({ ...current, ready: false, error }));
     };
     stopAt.current = null;
@@ -119,9 +128,13 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 const seeking = pendingSeek.current;
                 if (seeking !== null) {
                   seeking.polls += 1;
+                  const landedWithin = Math.max(
+                    SEEK_NEAR_SECONDS,
+                    Math.abs(seeking.from - seeking.target) / 2
+                  );
                   if (
                     (status !== ENDED &&
-                      Math.abs(time - seeking.target) <= SEEK_SETTLE_SECONDS) ||
+                      Math.abs(time - seeking.target) < landedWithin) ||
                     seeking.polls >= SEEK_SETTLE_POLLS
                   ) {
                     pendingSeek.current = null;
@@ -184,8 +197,18 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     const limit = Number.isFinite(length) && length > 0 ? length : seconds;
     const time = Math.min(Math.max(0, seconds), limit);
     stopAt.current = null;
-    pendingSeek.current = { target: time, polls: 0 };
+    pendingSeek.current = {
+      target: time,
+      from: current.getCurrentTime(),
+      polls: 0,
+    };
+    const status = current.getPlayerState();
     current.seekTo(time, true);
+    // seekTo starts a cued, unstarted or finished video; a seek alone must
+    // not, or opening an entry would start it playing.
+    if (status === UNSTARTED || status === CUED || status === ENDED) {
+      current.pauseVideo();
+    }
     setState((state) => ({ ...state, currentTime: time }));
   }, []);
 
@@ -202,7 +225,11 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     const current = player.current;
     if (!current) return;
     const target = Math.max(0, from);
-    pendingSeek.current = { target, polls: 0 };
+    pendingSeek.current = {
+      target,
+      from: current.getCurrentTime(),
+      polls: 0,
+    };
     current.seekTo(target, true);
     stopAt.current = until;
     current.playVideo();

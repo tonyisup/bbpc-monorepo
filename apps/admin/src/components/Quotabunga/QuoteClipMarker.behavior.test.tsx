@@ -306,6 +306,88 @@ describe("quote clip marker", () => {
     expect(media.seekTo).toHaveBeenLastCalledWith(74, true);
   });
 
+  test("cueing a player that hasn't started doesn't start it", async () => {
+    media.getPlayerState.mockReturnValue(5);
+    await mount();
+    // The cue after ready seeks, then pauses, since seekTo plays a cued video.
+    expect(media.seekTo).toHaveBeenCalledWith(39, true);
+    expect(media.pauseVideo).toHaveBeenCalled();
+    expect(media.playVideo).not.toHaveBeenCalled();
+  });
+
+  test("steps add up while the player still reports the old time, and a keyframe landing reads true", async () => {
+    await mount();
+    // A player that keeps reporting 60 until the seek lands.
+    media.seekTo.mockImplementation(() => undefined);
+    media.getCurrentTime.mockReturnValue(60);
+    press("ArrowLeft");
+    press("ArrowRight", null, { shiftKey: true });
+    expect(media.seekTo).toHaveBeenLastCalledWith(64, true);
+    press("e");
+    expect(field("clip-marker-end").props.value).toBe("1:04.0");
+    // A poll that still reports the old spot doesn't count as landing.
+    settle(60);
+    press(".");
+    expect(media.seekTo).toHaveBeenLastCalledWith(expect.closeTo(64.2), true);
+    // It lands on the keyframe before the target; marks read where it is.
+    settle(63.6);
+    press("s");
+    expect(field("clip-marker-start").props.value).toBe("1:03.6");
+  });
+
+  test("the seek slider keeps the shortcuts, and a held Enter in a field doesn't resubmit", async () => {
+    await mount();
+    media.getCurrentTime.mockReturnValue(50);
+    const slider = {
+      closest: (selector: string) =>
+        selector.includes("input:not([type='range'])")
+          ? null
+          : selector.includes("input")
+          ? {}
+          : null,
+    };
+    press("s", slider);
+    expect(field("clip-marker-start").props.value).toBe("0:50.0");
+
+    const form = view.root.findByType("form");
+    const held = { key: "Enter", repeat: true, preventDefault: vi.fn() };
+    act(() => form.props.onKeyDown(held));
+    expect(held.preventDefault).toHaveBeenCalledOnce();
+    const single = { key: "Enter", repeat: false, preventDefault: vi.fn() };
+    act(() => form.props.onKeyDown(single));
+    expect(single.preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("a clip never marked asks for a start on Save, and says it was skipped on Enter", async () => {
+    await mount(vi.fn(), vi.fn(), "c", [third, first]);
+    act(() => buttonNamed("Save").props.onClick());
+    expect(messageText("alert")).toBe("Set a start first.");
+    press("Enter");
+    expect(text()).toContain("Clip 2 of 2");
+    expect(messageText("status")).toContain(
+      "Skipped clip 1: it has no start yet."
+    );
+    press("Enter");
+    expect(messageText("status")).toContain(
+      "No changes to save. That was the last clip in this view."
+    );
+  });
+
+  test("an entry scored meanwhile leaves the queue", async () => {
+    const onSave = vi.fn(async () => {
+      throw new EntryChangedError({ ...first, scored: true, updatedAt: 2 });
+    });
+    await mount(onSave);
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    await act(async () => {
+      press("Enter");
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Clip 1 of 2");
+    expect(messageText("alert")).toContain("has been scored");
+  });
+
   test("marks typed while a save is in flight stay unsaved", async () => {
     let finish: (entry: ConvexAdminQuoteSubmission) => void = () => undefined;
     const onSave = vi.fn(

@@ -34,9 +34,10 @@ const SPEEDS = [1, 0.75, 0.5] as const;
 // "Play the marked line" runs a little past the end so the last word lands.
 const PREVIEW_TAIL_SECONDS = 0.3;
 const PREVIEW_WITHOUT_END_SECONDS = 4;
-const REPEATABLE_KEYS = new Set(["ArrowLeft", "ArrowRight", ",", "."]);
 // Each clip is cued this far before its start, so the lead-in is audible.
 const CUE_LEAD_SECONDS = 1;
+// Seek keys may auto-repeat when held; every other shortcut acts once.
+const REPEATABLE_KEYS = new Set(["ArrowLeft", "ArrowRight", ",", "."]);
 // Seek steps, shared by the transport buttons and the keyboard shortcuts.
 const FINE_STEP = 0.2;
 const STEP = 1;
@@ -56,7 +57,9 @@ const FORWARD_STEPS = [
  * What onSave throws when the entry changed since the marker loaded it (its
  * listener can edit it while the round is open, and other admin actions change
  * it too), carrying the latest version, or null once it has been deleted. The
- * marker shows that version in place.
+ * marker shows a same-video change in place with the marks kept, clears the
+ * marks when the entry moved to another video, and drops an entry that was
+ * deleted, scored, or no longer links to YouTube.
  */
 export class EntryChangedError extends Error {
   readonly latest: ConvexAdminQuoteSubmission | null;
@@ -237,12 +240,12 @@ export function QuoteClipMarker({
     if (ready) setRate(rate);
   }, [ready, rate, setRate]);
 
-  // Two entries can share a video, which then doesn't reload, so a change of
-  // entry cues the playhead itself.
+  // Cues the playhead when the entry changes (entries sharing a video don't
+  // reload the player) and once a player is ready, since a seek does nothing
+  // while it loads.
   const entryId = entry?.id;
   const startAtRef = useRef(startAt);
   startAtRef.current = startAt;
-  // Readiness counts too: a cue set while the player was loading is dropped.
   const seek = player.seek;
   useEffect(() => {
     if (ready) seek(startAtRef.current);
@@ -324,14 +327,25 @@ export function QuoteClipMarker({
     // link, so moving on from one saves nothing.
     const saved = savedDraft(entry);
     if (draft.start === saved.start && draft.end === saved.end) {
+      // A clip that was never marked still needs a start; say so.
+      const unmarked = saved.start === "";
       if (advance && index < entries.length - 1) {
         setIndex(index + 1);
         setMessage({
-          text: `No changes to clip ${String(index + 1)}.`,
+          text: unmarked
+            ? `Skipped clip ${String(index + 1)}: it has no start yet.`
+            : `No changes to clip ${String(index + 1)}.`,
           error: false,
         });
+      } else if (unmarked && !advance) {
+        setMessage({ text: "Set a start first.", error: true });
       } else {
-        setMessage({ text: "No changes to save.", error: false });
+        setMessage({
+          text: advance
+            ? "No changes to save. That was the last clip in this view."
+            : "No changes to save.",
+          error: false,
+        });
       }
       return;
     }
@@ -668,6 +682,10 @@ export function QuoteClipMarker({
 
       <form
         className="space-y-4"
+        // A held Enter in a time field would submit on every repeat.
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && event.repeat) event.preventDefault();
+        }}
         onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault();
           void save(true);

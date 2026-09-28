@@ -291,12 +291,8 @@ export function ConvexQuotabungaPage() {
     }
   }, [episodeId, episodes]);
 
-  const names = useListenerNames(submissions ?? []);
+  const names = useListenerNames(submissions ?? [], episodeId);
   const { setPeeking } = names;
-  // A name shown on purpose for one episode stays hidden for the next.
-  useEffect(() => {
-    setPeeking(false);
-  }, [episodeId, setPeeking]);
 
   const refresh = () => {
     setSubmissions(null);
@@ -527,10 +523,9 @@ export function ConvexQuotabungaPage() {
       roundChanged();
       throw report(new EntryChangedError(current));
     }
+    // sameEntry kept the marker's YouTube link, so this only narrows the type.
     const video = parseYouTubeUrl(current.clipUrl ?? "");
-    if (video === null) {
-      throw report(new Error("This entry no longer has a YouTube link."));
-    }
+    if (video === null) throw report(new EntryChangedError(current));
     try {
       const updated = await updateConvexAdminQuoteContent(
         convex,

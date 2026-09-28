@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import type { ConvexAdminQuoteSubmission } from "@/convex/quotabunga";
 
@@ -20,13 +20,21 @@ export function roundAwarded(
 
 /**
  * Listener names stay hidden until the round's points are awarded, so entries
- * are judged blind. An admin can still show them on purpose.
+ * are judged blind. An admin can still show them on purpose, for that round
+ * only: the choice is kept with the round it was made for, so another round is
+ * hidden from its first render.
  */
 export function useListenerNames(
-  submissions: readonly ConvexAdminQuoteSubmission[]
+  submissions: readonly ConvexAdminQuoteSubmission[],
+  roundId: string
 ) {
   const awarded = roundAwarded(submissions);
-  const [peeking, setPeeking] = useState(false);
+  const [peekedRound, setPeekedRound] = useState<string | null>(null);
+  const peeking = peekedRound === roundId;
+  const setPeeking = useCallback(
+    (on: boolean) => setPeekedRound(on ? roundId : null),
+    [roundId]
+  );
   return { awarded, peeking, setPeeking, shown: awarded || peeking };
 }
 
