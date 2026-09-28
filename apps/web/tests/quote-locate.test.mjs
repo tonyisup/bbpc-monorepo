@@ -7,6 +7,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -25,12 +26,14 @@ import {
 import {
   assertOutsideRepository,
   main,
+  parseLabels,
   readRows,
   selectEvalRows,
   summarize,
   videoSkipReason,
   youtubeVideoId,
 } from "../local-tools/quote-locate/spike.mjs";
+import { startLabelServer } from "../local-tools/quote-locate/label.mjs";
 
 const VIDEO_ID = "dQw4w9WgXcQ";
 const LONG_VIDEO_ID = "aaaaaaaaaaa";
@@ -643,4 +646,237 @@ test("a run writes private results next to the input and skips long videos", asy
     main(["--input", input, "--output", output], env),
     /EEXIST/
   );
+});
+
+test("labels replace saved times and cover entries with no saved start", () => {
+  const clipUrl = `https://youtu.be/${VIDEO_ID}`;
+  const rows = [
+    {
+      _id: "saved",
+      quoteText: "A",
+      sourceTitle: "Heat",
+      clipUrl,
+      clipStartSeconds: 0,
+    },
+    { _id: "unsaved", quoteText: "B", sourceTitle: "Heat", clipUrl },
+    { _id: "absent", quoteText: "C", sourceTitle: "Heat", clipUrl },
+    {
+      _id: "open",
+      quoteText: "D",
+      sourceTitle: "Heat",
+      clipUrl,
+      clipStartSeconds: 9,
+    },
+    {
+      _id: "vimeo",
+      quoteText: "E",
+      sourceTitle: "Heat",
+      clipUrl: "https://vimeo.com/1",
+    },
+  ];
+  const { eligible, skipped } = selectEvalRows(rows, {
+    saved: { start: 61.2, end: 63 },
+    unsaved: { start: 12.5, end: null },
+    absent: { notSpoken: true },
+  });
+  assert.deepEqual(
+    eligible.map(({ id, truthStart, truthEnd }) => ({
+      id,
+      truthStart,
+      truthEnd,
+    })),
+    [
+      { id: "saved", truthStart: 61.2, truthEnd: 63 },
+      { id: "unsaved", truthStart: 12.5, truthEnd: null },
+    ]
+  );
+  assert.deepEqual(skipped, {
+    "no YouTube link": 1,
+    "labeled not spoken": 1,
+    "not labeled": 1,
+  });
+  // Without labels the saved start still decides, and 0 s counts as saved.
+  assert.deepEqual(
+    selectEvalRows(rows).eligible.map((row) => row.id),
+    ["saved", "open"]
+  );
+});
+
+test("label files must hold timed lines or not-spoken marks", () => {
+  assert.deepEqual(parseLabels('{"a":{"start":1.5,"end":null}}'), {
+    a: { start: 1.5, end: null },
+  });
+  for (const bad of [
+    '{"a":{"start":5,"end":4}}',
+    '{"a":{"start":-1,"end":null}}',
+    '{"a":{"start":1}}',
+    '{"a":{"notSpoken":false}}',
+    '{"a":{"start":1,"end":null,"extra":true}}',
+  ])
+    assert.throws(() => parseLabels(bad), /not valid/, bad);
+});
+
+/**
+ * @param {string} url
+ * @param {{ method?: string; headers?: Record<string, string>; body?: string }} [options]
+ * @returns {Promise<{ status: number; body: any }>}
+ */
+const call = (url, options = {}) =>
+  new Promise((resolve, reject) => {
+    const request = httpRequest(
+      url,
+      { method: options.method ?? "GET", headers: options.headers ?? {} },
+      (response) => {
+        let text = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => (text += chunk));
+        response.on("end", () => {
+          /** @type {unknown} */
+          let body = text;
+          try {
+            body = JSON.parse(text);
+          } catch {
+            // Not JSON; keep the text.
+          }
+          resolve({ status: response.statusCode ?? 0, body });
+        });
+      }
+    );
+    request.on("error", reject);
+    request.end(options.body);
+  });
+
+test("the label server saves private labels for this machine's page only", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "quote-label-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const input = path.join(directory, "quotes.jsonl");
+  const labels = path.join(directory, "quotes.labels.json");
+  await writeFile(
+    input,
+    [
+      {
+        _id: "one",
+        quoteText: "Line",
+        sourceTitle: "Heat",
+        clipUrl: `https://youtu.be/${VIDEO_ID}`,
+      },
+      {
+        _id: "two",
+        quoteText: "Other",
+        sourceTitle: "Heat",
+        clipUrl: "https://vimeo.com/1",
+      },
+    ]
+      .map((row) => JSON.stringify(row))
+      .join("\n")
+  );
+  const server = await startLabelServer({ input, labels, port: 0 });
+  t.after(() => server.close());
+  const json = { "Content-Type": "application/json" };
+
+  const queue = await call(`${server.url}api/queue`);
+  assert.equal(queue.status, 200);
+  assert.deepEqual(
+    queue.body.clips.map((/** @type {{ id: string }} */ clip) => clip.id),
+    ["one"]
+  );
+  assert.deepEqual(queue.body.labels, {});
+
+  const page = await call(server.url);
+  assert.equal(page.status, 200);
+  assert.ok(!String(page.body).includes("{{nonce}}"));
+
+  const saved = await call(`${server.url}api/labels/one`, {
+    method: "PUT",
+    headers: json,
+    body: JSON.stringify({ start: 3.2, end: 4 }),
+  });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(JSON.parse(await readFile(labels, "utf8")), {
+    one: { start: 3.2, end: 4 },
+  });
+  assert.equal((await stat(labels)).mode & 0o777, 0o600);
+
+  const rejected = [
+    await call(`${server.url}api/labels/one`, {
+      method: "PUT",
+      headers: json,
+      body: JSON.stringify({ start: 4, end: 3 }),
+    }),
+    await call(`${server.url}api/labels/two`, {
+      method: "PUT",
+      headers: json,
+      body: JSON.stringify({ notSpoken: true }),
+    }),
+    await call(`${server.url}api/labels/one`, {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ notSpoken: true }),
+    }),
+    await call(`${server.url}api/labels/one`, {
+      method: "PUT",
+      headers: { ...json, Origin: "https://example.com" },
+      body: JSON.stringify({ notSpoken: true }),
+    }),
+    await call(`${server.url}api/queue`, {
+      headers: { Host: "rebound.example.com" },
+    }),
+  ];
+  assert.deepEqual(
+    rejected.map((response) => response.status),
+    [400, 404, 415, 403, 421]
+  );
+
+  const cleared = await call(`${server.url}api/labels/one`, {
+    method: "DELETE",
+  });
+  assert.equal(cleared.status, 200);
+  assert.deepEqual(JSON.parse(await readFile(labels, "utf8")), {});
+});
+
+test("a labeled dry run skips unlabeled and not-spoken entries", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "quote-locate-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const input = path.join(directory, "quotes.jsonl");
+  const labels = path.join(directory, "quotes.labels.json");
+  const clipUrl = `https://youtu.be/${VIDEO_ID}`;
+  await writeFile(
+    input,
+    ["a", "b", "c"]
+      .map((id) =>
+        JSON.stringify({
+          _id: id,
+          quoteText: "Line",
+          sourceTitle: "Heat",
+          clipUrl,
+        })
+      )
+      .join("\n")
+  );
+  await writeFile(
+    labels,
+    JSON.stringify({ a: { start: 5, end: null }, b: { notSpoken: true } })
+  );
+  t.mock.method(globalThis, "fetch", async () =>
+    jsonResponse({
+      items: [
+        {
+          id: VIDEO_ID,
+          contentDetails: { duration: "PT3M12S" },
+          status: { privacyStatus: "public" },
+        },
+      ],
+    })
+  );
+  /** @type {string[]} */
+  const logged = [];
+  t.mock.method(console, "log", (/** @type {unknown} */ line) => {
+    logged.push(String(line));
+  });
+  await main(["--input", input, "--labels", labels, "--dry-run"], {
+    YOUTUBE_API_KEY: "yt-key",
+  });
+  assert.match(logged[0] ?? "", /^Selected 1 of 1 runnable rows/);
+  assert.match(logged[0] ?? "", /not labeled 1/);
+  assert.match(logged[0] ?? "", /labeled not spoken 1/);
 });

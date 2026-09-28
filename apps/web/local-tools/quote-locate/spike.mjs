@@ -27,9 +27,19 @@ import {
  *   sourceTitle: string;
  *   sourceType: string;
  *   videoId: string;
+ *   savedStart: number | null;
+ *   savedEnd: number | null;
+ * }} ClipRow
+ * @typedef {{
+ *   id: string;
+ *   quoteText: string;
+ *   sourceTitle: string;
+ *   sourceType: string;
+ *   videoId: string;
  *   truthStart: number;
  *   truthEnd: number | null;
  * }} EvalRow
+ * @typedef {z.infer<typeof labelSchema>} QuoteLabel
  * @typedef {{
  *   id: string;
  *   videoId: string;
@@ -68,15 +78,18 @@ const MAX_LIMIT = 200;
 const DEFAULT_MAX_VIDEO_SECONDS = 600;
 const DEFAULT_TIMEOUT_SECONDS = 120;
 const VIDEO_DETAILS_TIMEOUT_MS = 30_000;
+const MAX_LABEL_SECONDS = 86_400;
 // A planning figure for --dry-run at low media resolution; real runs report usage.
 const LOW_RESOLUTION_TOKENS_PER_SECOND = 100;
 
 const USAGE = `Usage: node apps/web/local-tools/quote-locate/spike.mjs --input <quoteSubmissions export> [options]
 
 Asks Gemini where each saved Quotabunga quote is spoken in its own YouTube clip,
-and compares the answer with the listener's saved start and end.
+and compares the answer with the listener's saved start and end, or with the
+times marked in label.mjs.
 
   --input <file>              JSON array or JSON Lines from \`convex data quoteSubmissions\`
+  --labels <file>             Score against labeled times; unlabeled rows are skipped
   --output <file>             New JSON Lines results file (default: next to the input)
   --limit <n>                 Rows to run (default ${String(
     DEFAULT_LIMIT
@@ -99,7 +112,7 @@ and compares the answer with the listener's saved start and end.
   --dry-run                   Select rows and check videos without calling Gemini
 
 Needs YOUTUBE_API_KEY (video lengths) and, unless --dry-run, GEMINI_API_KEY.
-Input and output must be outside the repository: they hold production quotes.`;
+Input, labels and output must be outside the repository: they hold production quotes.`;
 
 const exportedRowSchema = z.object({
   _id: z.string().optional(),
@@ -110,6 +123,33 @@ const exportedRowSchema = z.object({
   clipStartSeconds: z.number().nullish(),
   clipEndSeconds: z.number().nullish(),
 });
+
+const labelSeconds = z.number().min(0).max(MAX_LABEL_SECONDS);
+
+/** Where the line is spoken, marked by hand, or that it isn't in the clip. */
+export const labelSchema = z.union([
+  z.object({ notSpoken: z.literal(true) }).strict(),
+  z
+    .object({ start: labelSeconds, end: labelSeconds.nullable() })
+    .strict()
+    .refine((label) => label.end === null || label.end > label.start, {
+      message: "The end must be after the start.",
+    }),
+]);
+
+const labelFileSchema = z.record(z.string(), labelSchema);
+
+/**
+ * Read a labels file written by label.mjs, keyed by entry ID.
+ *
+ * @param {string} text
+ * @returns {Record<string, QuoteLabel>}
+ */
+export function parseLabels(text) {
+  const parsed = labelFileSchema.safeParse(JSON.parse(text));
+  if (!parsed.success) throw new Error("The labels file is not valid.");
+  return parsed.data;
+}
 
 /**
  * Refuse paths inside the repository, so exported rows and results can't be
@@ -187,20 +227,23 @@ export function readRows(text) {
     });
 }
 
+/** @param {Record<string, number>} counts */
+const counter = (counts) => (/** @type {string} */ reason) => {
+  counts[reason] = (counts[reason] ?? 0) + 1;
+};
+
 /**
- * Keep entries with a YouTube clip and a saved start; count the rest by reason.
+ * Keep entries with quote text and a YouTube clip, with the listener's saved
+ * times when they set them; count the rest by reason.
  *
  * @param {unknown[]} rows
  */
-export function selectEvalRows(rows) {
-  /** @type {EvalRow[]} */
-  const eligible = [];
+export function selectClipRows(rows) {
+  /** @type {ClipRow[]} */
+  const clips = [];
   /** @type {Record<string, number>} */
   const skipped = {};
-  /** @param {string} reason */
-  const skip = (reason) => {
-    skipped[reason] = (skipped[reason] ?? 0) + 1;
-  };
+  const skip = counter(skipped);
   rows.forEach((raw, index) => {
     const parsed = exportedRowSchema.safeParse(raw);
     if (!parsed.success) return skip("unreadable row");
@@ -209,22 +252,58 @@ export function selectEvalRows(rows) {
     const videoId = row.clipUrl ? youtubeVideoId(row.clipUrl) : null;
     if (!videoId) return skip("no YouTube link");
     const start = row.clipStartSeconds;
-    if (typeof start !== "number" || !Number.isFinite(start) || start < 0)
-      return skip("no start time");
+    const savedStart =
+      typeof start === "number" && Number.isFinite(start) && start >= 0
+        ? start
+        : null;
     const end = row.clipEndSeconds;
-    eligible.push({
+    clips.push({
       id: row._id ?? `row-${String(index + 1)}`,
       quoteText: row.quoteText.trim(),
       sourceTitle: row.sourceTitle.trim(),
       sourceType: row.sourceType ?? "OTHER",
       videoId,
-      truthStart: start,
-      truthEnd:
-        typeof end === "number" && Number.isFinite(end) && end > start
+      savedStart,
+      savedEnd:
+        savedStart !== null &&
+        typeof end === "number" &&
+        Number.isFinite(end) &&
+        end > savedStart
           ? end
           : null,
     });
   });
+  return { clips, skipped };
+}
+
+/**
+ * Clips to score, each with the times to score against: the labeled ones when
+ * labels are given, otherwise the listener's saved start and end.
+ *
+ * @param {unknown[]} rows
+ * @param {Record<string, QuoteLabel>} [labels]
+ */
+export function selectEvalRows(rows, labels) {
+  const { clips, skipped } = selectClipRows(rows);
+  const skip = counter(skipped);
+  /** @type {EvalRow[]} */
+  const eligible = [];
+  for (const { savedStart, savedEnd, ...clip } of clips) {
+    if (labels) {
+      const label = Object.hasOwn(labels, clip.id)
+        ? labels[clip.id]
+        : undefined;
+      if (!label) skip("not labeled");
+      else if ("notSpoken" in label) skip("labeled not spoken");
+      else
+        eligible.push({
+          ...clip,
+          truthStart: label.start,
+          truthEnd: label.end,
+        });
+    } else if (savedStart === null) skip("no start time");
+    else eligible.push({ ...clip, truthStart: savedStart, truthEnd: savedEnd });
+  }
   return { eligible, skipped };
 }
 
@@ -457,10 +536,11 @@ const listCounts = (counts) =>
 
 /**
  * @param {ReturnType<typeof summarize>} summary
- * @param {{ model: string; mediaResolution: string; skipped: Record<string, number>; notRun: number }} context
+ * @param {{ model: string; mediaResolution: string; skipped: Record<string, number>; notRun: number; labeled?: boolean }} context
  */
 export function formatSummary(summary, context) {
   const statuses = summary.statuses;
+  const truth = context.labeled ? "labeled" : "saved";
   const lines = [
     `Model ${context.model}${
       summary.modelVersions.length > 0
@@ -492,10 +572,10 @@ export function formatSummary(summary, context) {
       summary.startError.p90
     )}, median signed ${signed(
       summary.startError.bias
-    )} (negative = before the saved start)`,
+    )} (negative = before the ${truth} start)`,
     `End error (${String(
       summary.endError.count
-    )} with a saved end): median ${secs(
+    )} with a ${truth} end): median ${secs(
       summary.endError.median
     )}, median signed ${signed(summary.endError.bias)}`,
     `Quote match (median): ${
@@ -627,6 +707,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     args: argv,
     options: {
       input: { type: "string" },
+      labels: { type: "string" },
       output: { type: "string" },
       limit: { type: "string" },
       model: { type: "string" },
@@ -704,6 +785,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       )
   );
   assertOutsideRepository(output);
+  const labelsFile =
+    values.labels === undefined ? undefined : path.resolve(values.labels);
+  if (labelsFile) assertOutsideRepository(labelsFile);
+  const labels = labelsFile
+    ? parseLabels(await readFile(labelsFile, "utf8"))
+    : undefined;
   const youtubeKey = env.YOUTUBE_API_KEY;
   if (!youtubeKey)
     throw new Error("Set YOUTUBE_API_KEY to read video lengths.");
@@ -712,7 +799,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     throw new Error("Set GEMINI_API_KEY, or use --dry-run.");
 
   const { eligible, skipped } = selectEvalRows(
-    readRows(await readFile(input, "utf8"))
+    readRows(await readFile(input, "utf8")),
+    labels
   );
   const videos = await fetchVideoDetails(
     eligible.map((row) => row.videoId),
@@ -816,7 +904,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     ...(outputPrice === undefined ? {} : { outputPrice }),
   });
   console.log(
-    `\n${formatSummary(summary, { model, mediaResolution, skipped, notRun })}`
+    `\n${formatSummary(summary, {
+      model,
+      mediaResolution,
+      skipped,
+      notRun,
+      labeled: labels !== undefined,
+    })}`
   );
   console.log(`\nPer-row results: ${output}`);
   return summary;

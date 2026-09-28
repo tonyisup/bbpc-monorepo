@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "quote-locate:spike": "node local-tools/quote-locate/spike.mjs",
+    "quote-locate:label": "node local-tools/quote-locate/label.mjs",
     "start": "next start"
   },
   "dependencies": {

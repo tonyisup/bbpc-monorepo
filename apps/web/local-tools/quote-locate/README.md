@@ -13,9 +13,9 @@ The video is always sent as a bare watch link. Saved clip links carry the listen
 
 ## Keep the data out of the repository
 
-Exports and results contain listeners' production entries. Keep both outside the
-repository. The script refuses input or output paths inside it, writes results readable
-only by you, and never overwrites an earlier run.
+Exports, labels and results contain listeners' production entries. Keep them outside
+the repository. The scripts refuse paths inside it, write labels and results readable
+only by you, and never overwrite an earlier run.
 
 ## Export past entries
 
@@ -41,6 +41,27 @@ This needs only `YOUTUBE_API_KEY` (one quota unit per 50 videos). It prints how 
 rows would run, why the others are skipped (unavailable, private, over 10 minutes,
 live), and a rough input-token count. It makes no Gemini requests.
 
+## Label where each line is spoken
+
+A saved start is where the listener chose to begin their clip. Many are 0 s or the
+start of the scene, not the line. To score against where the line is actually spoken,
+label the entries by hand:
+
+```sh
+node apps/web/local-tools/quote-locate/label.mjs --input ~/bbpc-quote-spike/quotes.jsonl
+```
+
+Open http://127.0.0.1:4317/. The page lists every entry with a YouTube link, including
+those with no saved start. Play the clip, press S when the first word begins and E when
+the last word ends, check the line with P, and press Enter to save and move to the next
+entry. Press N when the line isn't in the clip. The expanded "Keyboard and tips" section
+lists the rest.
+
+Each label saves as soon as you press Enter or N, to `quotes.labels.json` next to the
+export, so you can stop with Ctrl+C and pick up later. Some owners block embedded
+playback; the page then links to the video on YouTube so you can type the times in.
+The server listens on 127.0.0.1 only and needs no API keys.
+
 ## Run
 
 Add a paid-tier `GEMINI_API_KEY` to `apps/web/.env.local`, which is gitignored. Then:
@@ -55,6 +76,10 @@ per row. Take prices per 1M tokens from Google's pricing page for the model; wit
 them, the summary reports tokens only. Thinking tokens are billed as output. Audio
 input can be priced differently from video and text, and the summary splits input
 tokens by type so you can adjust.
+
+To score against your labels instead of the saved starts, add
+`--labels ~/bbpc-quote-spike/quotes.labels.json`. Entries you haven't labeled, and those
+marked as not in the clip, are skipped and counted in the summary.
 
 `--help` lists the options: `--limit`, `--model` (default `gemini-3.8-flash`),
 `--media-resolution`, `--thinking`, `--max-video-seconds`, `--timeout-seconds`, and
