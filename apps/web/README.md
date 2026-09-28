@@ -30,6 +30,20 @@ this feature. It is optional, so environments without video search still start.
 Deploy the backend with `reserveVideoSearch` first; until then, search fails closed
 as unavailable.
 
+The Quote Finder's optional **Find it for me** assistant also needs a paid-tier
+`GEMINI_API_KEY`, server-only like the YouTube key. Without either key the finder
+looks and works as before. The assistant reuses the finder's search results (or runs
+the search), then posts the quote, source and up to six video IDs to
+`/api/quote-finder/locate`. Each call spends one run from the listener's assistant
+budget in Convex (`games.quotes.reserveQuoteLocate`), checks one public, embeddable
+video of at most three minutes with Gemini, and returns a padded range and the heard
+line for the listener to preview. Nothing is submitted for them. Keep the Google
+project prepaid with auto-reload off: an empty balance makes Gemini answer HTTP 402,
+and the route then reports the assistant as out of budget. See
+`docs/designs/quote-finder-assistant.md` for the budget. Deploy the backend with
+`reserveQuoteLocate` before setting the key; until then, the assistant fails closed
+as unavailable.
+
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can
 therefore be tested atomically from the repository root with `pnpm run check`.
