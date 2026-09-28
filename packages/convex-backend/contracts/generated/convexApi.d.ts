@@ -7958,6 +7958,15 @@ export type PublicApiType = {
             }, {
                 id: Id<"quoteSubmissions">;
             }>;
+            reserveQuoteLocate: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+            }, {
+                ok: true;
+            } | {
+                ok: false;
+                retryAt: number;
+                scope: "user" | "site";
+            }>;
             reserveVideoSearch: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
             }, {

@@ -30,6 +30,8 @@ import {
 } from "./games/quoteSimilarity.js";
 import {
   MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_ADMIN,
+  QUOTE_LOCATE_SITE_BURST,
+  QUOTE_LOCATE_USER_BURST,
   VIDEO_SEARCH_SITE_BURST,
   VIDEO_SEARCH_USER_BURST,
 } from "./games/limits.js";
@@ -2462,6 +2464,149 @@ describe("Quote Finder search quota", () => {
     const { t } = await setup();
     await expectDomainError(
       t.mutation(api.games.quotes.reserveVideoSearch, {
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+      "AUTHENTICATION_REQUIRED",
+    );
+  });
+});
+
+describe("Quote Finder assistant budget", () => {
+  const NOW = Date.UTC(2026, 8, 28, 20);
+
+  async function setup() {
+    const t = createTestBackend();
+    const actors = await seedActors(t);
+    await advanceToS3(t);
+    const reserve = (identity: TestIdentity) =>
+      t.withIdentity(identity).mutation(api.games.quotes.reserveQuoteLocate, {
+        clientApiVersion: BBPC_API_VERSION,
+      });
+    return { t, actors, reserve };
+  }
+
+  test("gives each listener one session, then about a run every half day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, reserve } = await setup();
+      for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+      }
+      const refused = await reserve(MEMBER_IDENTITY);
+      if (refused.ok) throw new Error("Expected the session to be spent.");
+      expect(refused.scope).toBe("user");
+      expect(refused.retryAt).toBeGreaterThan(NOW);
+      await expect(reserve(OTHER_IDENTITY)).resolves.toEqual({ ok: true });
+      // Assistant runs and video searches are separate budgets.
+      await expect(
+        t.withIdentity(MEMBER_IDENTITY).mutation(
+          api.games.quotes.reserveVideoSearch,
+          { clientApiVersion: BBPC_API_VERSION },
+        ),
+      ).resolves.toEqual({ ok: true });
+      // Two a day is one every 12 hours.
+      vi.setSystemTime(NOW + 6 * 60 * 60 * 1000);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+        ok: false,
+      });
+      vi.setSystemTime(NOW + 12 * 60 * 60 * 1000 + 1000);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("caps runs across the whole site without charging refused listeners", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, actors, reserve } = await setup();
+      const identities = Array.from(
+        {
+          length:
+            Math.ceil(QUOTE_LOCATE_SITE_BURST / QUOTE_LOCATE_USER_BURST) + 1,
+        },
+        (_, index) => ({
+          tokenIdentifier: `https://issuer.example.test|locator-${String(index)}`,
+          issuer: "https://issuer.example.test",
+          subject: `locator-${String(index)}`,
+        }),
+      );
+      for (const [index, identity] of identities.entries()) {
+        await seedUser(t, { identity, name: `Locator ${String(index)}` });
+      }
+      let granted = 0;
+      for (const identity of identities) {
+        for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+          if ((await reserve(identity)).ok) granted += 1;
+        }
+      }
+      expect(granted).toBe(QUOTE_LOCATE_SITE_BURST);
+      await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+        ok: false,
+        scope: "site",
+      });
+      const memberBuckets = await t.run(async (ctx) =>
+        ctx.db
+          .query("rateLimits")
+          .withIndex("name", (q) =>
+            q.eq("name", "quoteLocatePerUser").eq("key", actors.memberId),
+          )
+          .take(1),
+      );
+      expect(memberBuckets).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("a listener refused at their own limit leaves the site budget alone", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const { t, reserve } = await setup();
+      for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
+      }
+      for (let i = 0; i < QUOTE_LOCATE_SITE_BURST; i += 1) {
+        await expect(reserve(MEMBER_IDENTITY)).resolves.toMatchObject({
+          ok: false,
+          scope: "user",
+        });
+      }
+      const others = Array.from(
+        {
+          length: Math.ceil(
+            (QUOTE_LOCATE_SITE_BURST - QUOTE_LOCATE_USER_BURST) /
+              QUOTE_LOCATE_USER_BURST,
+          ),
+        },
+        (_, index) => ({
+          tokenIdentifier: `https://issuer.example.test|other-locator-${String(index)}`,
+          issuer: "https://issuer.example.test",
+          subject: `other-locator-${String(index)}`,
+        }),
+      );
+      for (const [index, identity] of others.entries()) {
+        await seedUser(t, { identity, name: `Other locator ${String(index)}` });
+      }
+      let granted = 0;
+      for (const identity of others) {
+        for (let i = 0; i < QUOTE_LOCATE_USER_BURST; i += 1) {
+          if ((await reserve(identity)).ok) granted += 1;
+        }
+      }
+      expect(granted).toBe(QUOTE_LOCATE_SITE_BURST - QUOTE_LOCATE_USER_BURST);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("requires a signed-in listener", async () => {
+    const { t } = await setup();
+    await expectDomainError(
+      t.mutation(api.games.quotes.reserveQuoteLocate, {
         clientApiVersion: BBPC_API_VERSION,
       }),
       "AUTHENTICATION_REQUIRED",

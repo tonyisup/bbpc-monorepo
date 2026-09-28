@@ -597,6 +597,14 @@ burst plus its daily rate in any 24 hours, so the site stays under the API key's
 default quota of 100 searches a day. Both buckets are checked before either is spent,
 so a refusal costs nothing. The limits live in `convex/games/limits.ts`.
 
+The Quote Finder assistant spends from its own budget. Before each Gemini request, the
+web app calls authenticated `games.quotes.reserveQuoteLocate`, which takes and returns
+the same shapes as `reserveVideoSearch`. Its token buckets allow a burst of 5, then 2
+runs a day per member, and a burst of 30, then 2 a day across the site. That is at most
+90 runs in 30 days, which keeps the assistant under its $5 monthly limit even when every
+run uses a full 3-minute video and the whole output cap. Search
+and assistant budgets are separate, and a refusal from either bucket spends nothing.
+
 `games.quotes.getAdminReuseReport` estimates how likely a submission's quote was
 already used, for administrators. It compares the quote with similar submissions and
 with all transcript passages from episodes numbered before the submission's own

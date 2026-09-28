@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { defineRateLimits } from "convex-helpers/server/rateLimit";
 
 import type { Doc, Id } from "../_generated/dataModel.js";
+import type { MutationCtx } from "../_generated/server.js";
 import {
   adminMutation,
   adminQuery,
@@ -15,6 +16,10 @@ import {
   MAX_QUOTE_EPISODE_SELECTOR_SIZE,
   MAX_QUOTE_RANDOM_SEED_LENGTH,
   MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR,
+  QUOTE_LOCATE_SITE_BURST,
+  QUOTE_LOCATE_USER_BURST,
+  QUOTE_LOCATES_PER_USER_PER_DAY,
+  QUOTE_LOCATES_SITE_PER_DAY,
   VIDEO_SEARCH_SITE_BURST,
   VIDEO_SEARCH_USER_BURST,
   VIDEO_SEARCHES_PER_USER_PER_DAY,
@@ -394,35 +399,74 @@ const { checkRateLimit, rateLimit } = defineRateLimits({
     period: DAY_MS,
     capacity: VIDEO_SEARCH_SITE_BURST,
   },
+  // One 5-run session, then a run every 12 hours.
+  quoteLocatePerUser: {
+    kind: "token bucket",
+    rate: QUOTE_LOCATES_PER_USER_PER_DAY,
+    period: DAY_MS,
+    capacity: QUOTE_LOCATE_USER_BURST,
+  },
+  // Keeps the Gemini spend under its monthly limit.
+  quoteLocateSiteWide: {
+    kind: "token bucket",
+    rate: QUOTE_LOCATES_SITE_PER_DAY,
+    period: DAY_MS,
+    capacity: QUOTE_LOCATE_SITE_BURST,
+  },
 });
 
-function refusedVideoSearch(scope: "user" | "site", retryAt?: number) {
+const reservationValidator = v.union(
+  v.object({ ok: v.literal(true) }),
+  v.object({
+    ok: v.literal(false),
+    scope: v.union(v.literal("user"), v.literal("site")),
+    retryAt: v.number(),
+  }),
+);
+
+function refusedReservation(scope: "user" | "site", retryAt?: number) {
   // No retry time means the request can never fit; say try again tomorrow.
   return { ok: false as const, scope, retryAt: retryAt ?? Date.now() + DAY_MS };
+}
+
+/** Spends one token from both buckets, or neither when either is empty. */
+async function reserveFromBuckets(
+  ctx: MutationCtx,
+  key: string,
+  buckets:
+    | { user: "videoSearchPerUser"; site: "videoSearchSiteWide" }
+    | { user: "quoteLocatePerUser"; site: "quoteLocateSiteWide" },
+) {
+  // Check both before spending either, so a refusal costs nothing.
+  const mine = await checkRateLimit(ctx, { name: buckets.user, key });
+  if (!mine.ok) return refusedReservation("user", mine.retryAt);
+  const site = await checkRateLimit(ctx, { name: buckets.site });
+  if (!site.ok) return refusedReservation("site", site.retryAt);
+  await rateLimit(ctx, { name: buckets.user, key });
+  await rateLimit(ctx, { name: buckets.site });
+  return { ok: true as const };
 }
 
 /** Spends one Quote Finder search for the caller, or says when to retry. */
 export const reserveVideoSearch = authenticatedMutation({
   args: {},
-  returns: v.union(
-    v.object({ ok: v.literal(true) }),
-    v.object({
-      ok: v.literal(false),
-      scope: v.union(v.literal("user"), v.literal("site")),
-      retryAt: v.number(),
+  returns: reservationValidator,
+  handler: async (ctx) =>
+    reserveFromBuckets(ctx, ctx.actor.user._id, {
+      user: "videoSearchPerUser",
+      site: "videoSearchSiteWide",
     }),
-  ),
-  handler: async (ctx) => {
-    const key = ctx.actor.user._id;
-    // Check both before spending either, so a refusal costs nothing.
-    const mine = await checkRateLimit(ctx, { name: "videoSearchPerUser", key });
-    if (!mine.ok) return refusedVideoSearch("user", mine.retryAt);
-    const site = await checkRateLimit(ctx, { name: "videoSearchSiteWide" });
-    if (!site.ok) return refusedVideoSearch("site", site.retryAt);
-    await rateLimit(ctx, { name: "videoSearchPerUser", key });
-    await rateLimit(ctx, { name: "videoSearchSiteWide" });
-    return { ok: true as const };
-  },
+});
+
+/** Spends one Quote Finder assistant run for the caller, or says when to retry. */
+export const reserveQuoteLocate = authenticatedMutation({
+  args: {},
+  returns: reservationValidator,
+  handler: async (ctx) =>
+    reserveFromBuckets(ctx, ctx.actor.user._id, {
+      user: "quoteLocatePerUser",
+      site: "quoteLocateSiteWide",
+    }),
 });
 
 export const submitMine = authenticatedMutation({
