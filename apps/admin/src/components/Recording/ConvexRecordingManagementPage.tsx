@@ -85,6 +85,14 @@ import {
 import { clipSeconds } from "../../lib/clipTimes";
 import { cn } from "../../lib/utils";
 
+import {
+  HIDDEN_NAME,
+  listenerName,
+  ListenerNamesToggle,
+  useListenerNames,
+} from "../Quotabunga/ListenerNames";
+import { InlineQuoteClip } from "../Quotabunga/QuoteClipPlayer";
+import { recordingOrder } from "../Quotabunga/recordingOrder";
 import { QuoteReuseChance } from "../Quotabunga/QuoteReuseChance";
 import RatingIcon from "../Review/RatingIcon";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
@@ -774,21 +782,17 @@ export function QuotabungaRecordingRound({
 }) {
   const client = useConvex();
   const included = useMemo(
-    () =>
-      submissions
-        .filter((submission) => submission.status === "INCLUDED")
-        .sort(
-          (left, right) =>
-            (left.bracketOrder ?? Number.MAX_SAFE_INTEGER) -
-            (right.bracketOrder ?? Number.MAX_SAFE_INTEGER)
-        ),
-    [submissions]
+    () => recordingOrder(submissions, episodeId),
+    [episodeId, submissions]
   );
+  const names = useListenerNames(submissions);
   const [placements, setPlacements] = useState<
     Record<string, ConvexQuotePlacement | null>
   >({});
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
+  // One clip plays at a time, so the page holds at most one YouTube player.
+  const [openClipId, setOpenClipId] = useState<string | null>(null);
 
   useEffect(() => {
     setPlacements(
@@ -840,7 +844,12 @@ export function QuotabungaRecordingRound({
                 {included.length} included entries
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <ListenerNamesToggle
+                awarded={names.awarded}
+                onPeekingChange={names.setPeeking}
+                peeking={names.peeking}
+              />
               <Button asChild size="sm" variant="outline">
                 <Link href={getAdminQuotabungaEpisodePath(episodeId)}>
                   Manage round <ArrowUpRight className="ml-2 h-4 w-4" />
@@ -875,7 +884,9 @@ export function QuotabungaRecordingRound({
                 >
                   <div className="flex justify-between gap-3 text-xs font-bold uppercase text-muted-foreground">
                     <span>Matchup #{submission.bracketOrder ?? "—"}</span>
-                    <span>{submission.user.name ?? submission.user.email}</span>
+                    <span>
+                      {names.shown ? listenerName(submission) : HIDDEN_NAME}
+                    </span>
                   </div>
                   <blockquote className="text-lg font-medium">
                     &ldquo;{submission.quoteText}&rdquo;
@@ -883,10 +894,27 @@ export function QuotabungaRecordingRound({
                   <p className="text-sm text-muted-foreground">
                     {submission.sourceTitle} · {submission.sourceType}
                   </p>
+                  {submission.listenerNotes !== null && (
+                    <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
+                      Listener: {submission.listenerNotes}
+                    </p>
+                  )}
+                  {submission.adminNotes !== null && (
+                    <p className="whitespace-pre-wrap rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-600">
+                      Admin: {submission.adminNotes}
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-center gap-3">
                     <QuoteReuseChance
                       quoteText={submission.quoteText}
                       submissionId={submission.id}
+                    />
+                    <InlineQuoteClip
+                      onOpenChange={(open) =>
+                        setOpenClipId(open ? submission.id : null)
+                      }
+                      open={openClipId === submission.id}
+                      submission={submission}
                     />
                     {submission.clipUrl !== null && (
                       <a
@@ -908,7 +936,9 @@ export function QuotabungaRecordingRound({
                   </div>
                   <select
                     aria-label={`Placement for ${
-                      submission.user.name ?? submission.sourceTitle
+                      names.shown
+                        ? listenerName(submission)
+                        : `the ${submission.sourceTitle} entry`
                     }`}
                     className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
                     onChange={(event) => {
