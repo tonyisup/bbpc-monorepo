@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const UNSTARTED = -1;
 const ENDED = 0;
 const PLAYING = 1;
+const BUFFERING = 3;
 const CUED = 5;
 const READY_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 100;
@@ -11,8 +12,11 @@ const POLL_INTERVAL_MS = 100;
 // time, or ENDED, from before it. It counts as landed once the reported time is
 // within this of the target, or at least halfway there from where it was (a
 // seek into unbuffered video lands on the keyframe before the target).
+// Playback can carry the time past the target before the next poll, which
+// counts too unless the seek went backward, where the old time lies that way.
 const SEEK_NEAR_SECONDS = 0.15;
-// A seek that never lands is given up after this many polls.
+// A seek that never lands is given up after this many polls, not counting
+// polls spent buffering.
 const SEEK_SETTLE_POLLS = 20;
 
 export interface YouTubePlayerState {
@@ -73,6 +77,8 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     let timer: number | undefined;
     let readyTimeout: number | undefined;
     let instance: YouTubePlayer | null = null;
+    // A video YouTube refused stays refused, even if onReady follows onError.
+    let refused = false;
     const host = container.current;
     // An error can arrive after the player is ready (an embed refusal often
     // does), so polling stops too, or its next tick would clear the error.
@@ -117,7 +123,7 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
           },
           events: {
             onReady: () => {
-              if (disposed || !instance) return;
+              if (disposed || refused || !instance) return;
               window.clearTimeout(readyTimeout);
               player.current = instance;
               const poll = () => {
@@ -127,14 +133,18 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 const status = instance.getPlayerState();
                 const seeking = pendingSeek.current;
                 if (seeking !== null) {
-                  seeking.polls += 1;
+                  if (status !== BUFFERING) seeking.polls += 1;
                   const landedWithin = Math.max(
                     SEEK_NEAR_SECONDS,
                     Math.abs(seeking.from - seeking.target) / 2
                   );
+                  const offset = time - seeking.target;
+                  const backward =
+                    seeking.from - seeking.target >= landedWithin;
                   if (
                     (status !== ENDED &&
-                      Math.abs(time - seeking.target) < landedWithin) ||
+                      offset > -landedWithin &&
+                      (!backward || offset < landedWithin)) ||
                     seeking.polls >= SEEK_SETTLE_POLLS
                   ) {
                     pendingSeek.current = null;
@@ -170,7 +180,10 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
               poll();
               timer = window.setInterval(poll, POLL_INTERVAL_MS);
             },
-            onError: ({ data }) => fail(playerErrorMessage(data)),
+            onError: ({ data }) => {
+              refused = true;
+              fail(playerErrorMessage(data));
+            },
             onAutoplayBlocked: () => {
               blocked.current = true;
             },

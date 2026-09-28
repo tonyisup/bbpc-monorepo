@@ -32,13 +32,18 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   confirm: vi.fn(),
   marker: null as MarkerProps | null,
+  markerRenders: [] as MarkerProps[],
+  router: {
+    query: {} as Record<string, string>,
+    beforePopState: vi.fn(),
+  },
   dialogContents: [] as Array<{ onOpenAutoFocus?: (event: unknown) => void }>,
   prompts: new Map<string, PromptProps>(),
 }));
 vi.mock("convex/react", () => ({ useConvex: () => mocks.client }));
 vi.mock("next/head", () => ({ default: () => null }));
 vi.mock("next/router", () => ({
-  useRouter: () => ({ query: {}, beforePopState: vi.fn() }),
+  useRouter: () => mocks.router,
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/convex/quotabunga", async (importOriginal) => ({
@@ -86,6 +91,7 @@ vi.mock("./QuoteClipMarker", async (importOriginal) => ({
   ...(await importOriginal<typeof MarkerModule>()),
   QuoteClipMarker: (props: MarkerProps) => {
     mocks.marker = props;
+    mocks.markerRenders.push(props);
     return <div data-marker />;
   },
 }));
@@ -157,6 +163,14 @@ const search = () =>
 const typeSearch = (value: string) =>
   act(() => search()?.props.onChange({ target: { value } }));
 const markerOpen = () => view.root.findAllByProps({ "data-marker": true });
+const episodeSelect = () =>
+  view.root
+    .findAllByType("select")
+    .find((node) => node.props.id === "episode-filter");
+const pickEpisode = async (id: string) => {
+  act(() => episodeSelect()?.props.onChange({ target: { value: id } }));
+  await flush();
+};
 const closeMarker = () => {
   const dialog = view.root
     .findAllByType(Dialog)
@@ -185,6 +199,8 @@ describe("Quotabunga prep page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.marker = null;
+    mocks.markerRenders = [];
+    mocks.router.query = {};
     mocks.dialogContents = [];
     mocks.prompts.clear();
     mocks.confirm.mockReturnValue(true);
@@ -257,11 +273,7 @@ describe("Quotabunga prep page", () => {
     );
 
     // Names shown for one episode stay hidden for the next.
-    const episode = view.root
-      .findAllByType("select")
-      .find((node) => node.props.id === "episode-filter");
-    act(() => episode?.props.onChange({ target: { value: "episode-2" } }));
-    await flush();
+    await pickEpisode("episode-2");
     expect(buttons("Show names")).toHaveLength(1);
   });
 
@@ -517,5 +529,95 @@ describe("Quotabunga prep page", () => {
     closeMarker();
     expect(mocks.prompts.size).toBe(0);
     expect(markerOpen()).toHaveLength(0);
+  });
+  test("a Back or Forward to another round closes the marker instead of showing names", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    const awarded = submission("z", {
+      episodeId: "episode-2",
+      status: "INCLUDED",
+      placement: 1,
+      scored: true,
+    });
+    mocks.loadSubmissions.mockImplementation(
+      async (_client: unknown, episodeId: string) =>
+        episodeId === "episode-1" ? [entry] : [awarded]
+    );
+    click("Clip");
+    mocks.markerRenders = [];
+
+    mocks.router.query = { episodeId: "episode-2" };
+    await act(async () => view.update(<ConvexQuotabungaPage />));
+    await flush();
+    expect(markerOpen()).toHaveLength(0);
+    expect(mocks.markerRenders.some((props) => props.showListener)).toBe(false);
+    // The new round is awarded, so its own names show.
+    expect(text()).toContain("Listener Z");
+  });
+
+  test("a reload keeps the round picked since the URL named one", async () => {
+    mocks.router.query = { episodeId: "episode-1" };
+    const entry = submission("a");
+    const other = submission("b", { episodeId: "episode-2" });
+    await render([entry]);
+    latest.set("b", other);
+    mocks.loadSubmissions.mockImplementation(
+      async (_client: unknown, episodeId: string) =>
+        episodeId === "episode-1" ? [entry] : [other]
+    );
+    await pickEpisode("episode-2");
+    click("Clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+    mocks.update.mockResolvedValueOnce({ ...other, clipStartSeconds: 42 });
+    await act(async () => {
+      await onSave(other, { start: 42, end: null });
+    });
+
+    closeMarker();
+    await flush();
+    expect(episodeSelect()?.props.value).toBe("episode-2");
+    expect(mocks.loadSubmissions).toHaveBeenLastCalledWith(
+      mocks.client,
+      "episode-2"
+    );
+  });
+
+  test("a write whose answer is lost still reloads the round on close", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+    mocks.update.mockRejectedValueOnce(new Error("Connection lost"));
+    await expect(onSave(entry, { start: 42.3, end: null })).rejects.toThrow();
+
+    closeMarker();
+    await flush();
+    expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
+  });
+
+  test("a save that fails after the page is gone is still reported", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+    let fail: (error: unknown) => void = () => undefined;
+    mocks.update.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      })
+    );
+    const pending = onSave(entry, { start: 42.3, end: null });
+    await flush();
+    act(() => view.unmount());
+    await act(async () => {
+      fail(new ConvexError({ code: "WRITE_DISABLED", message: "Paused" }));
+      await pending.catch(() => undefined);
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "Quotabunga changes are paused in this environment."
+    );
   });
 });

@@ -167,6 +167,8 @@ export function InlineQuoteClip({
   return (
     <div className="order-last w-full basis-full">
       <QuoteClipPlayer
+        // A refresh that changed the clip starts the new one over.
+        key={`${video.id}:${String(start)}:${String(end)}`}
         end={end}
         onClose={() => onOpenChange(false)}
         start={start}

@@ -188,6 +188,7 @@ export function ConvexQuotabungaPage() {
     useState<PendingAwards | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [marker, setMarker] = useState<{
+    episodeId: string;
     queue: ConvexAdminQuoteSubmission[];
     initialId: string;
   } | null>(null);
@@ -196,8 +197,18 @@ export function ConvexQuotabungaPage() {
   const reloadOnClose = useRef(false);
   const markerOpen = useRef(false);
   useUnsavedChangesPrompt(marker !== null && markerDirty, DISCARD_MARKS);
+  // Once the page is gone, a save still in flight reports a failure as a toast.
+  useEffect(
+    () => () => {
+      markerOpen.current = false;
+    },
+    []
+  );
   const [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0);
+  // The URL's episode is applied when it changes, not on every reload, so a
+  // reload keeps the round the admin picked since.
+  const appliedEpisodeQuery = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -213,12 +224,15 @@ export function ConvexQuotabungaPage() {
         setEpisodes(loadedEpisodes);
         setUsers(userPage.users);
         setUserCatalogComplete(userPage.isDone);
+        const requested =
+          typeof router.query.episodeId === "string"
+            ? router.query.episodeId
+            : "";
+        const newRequest = requested !== appliedEpisodeQuery.current;
+        appliedEpisodeQuery.current = requested;
         setEpisodeId((current) => {
-          const requested =
-            typeof router.query.episodeId === "string"
-              ? router.query.episodeId
-              : "";
           if (
+            newRequest &&
             requested.length > 0 &&
             loadedEpisodes.some((episode) => episode.id === requested)
           ) {
@@ -293,6 +307,18 @@ export function ConvexQuotabungaPage() {
 
   const names = useListenerNames(submissions ?? [], episodeId);
   const { setPeeking } = names;
+
+  // Back or Forward can change the round under the open marker. It closes
+  // rather than show that round's entries under this one's name visibility;
+  // the new round loads anyway.
+  useEffect(() => {
+    if (marker === null || marker.episodeId === episodeId) return;
+    markerOpen.current = false;
+    reloadOnClose.current = false;
+    setMarker(null);
+    setMarkerDirty(false);
+    setDiscardPending(false);
+  }, [episodeId, marker]);
 
   const refresh = () => {
     setSubmissions(null);
@@ -470,7 +496,7 @@ export function ConvexQuotabungaPage() {
     markerOpen.current = true;
     reloadOnClose.current = false;
     setMarkerDirty(false);
-    setMarker({ queue: markerQueue, initialId });
+    setMarker({ episodeId, queue: markerQueue, initialId });
   };
 
   const finishClosingMarker = () => {
@@ -534,6 +560,8 @@ export function ConvexQuotabungaPage() {
       roundChanged();
       return updated;
     } catch (error) {
+      // The write may have landed even though its answer didn't arrive.
+      roundChanged();
       throw report(new Error(writeFailureMessage(error)));
     }
   };
@@ -1298,7 +1326,7 @@ export function ConvexQuotabungaPage() {
               onDirtyChange={setMarkerDirty}
               onDone={closeMarker}
               paused={discardPending}
-              showListener={names.shown}
+              showListener={names.shown && marker.episodeId === episodeId}
               onSave={saveClipTimes}
               queue={marker.queue}
             />

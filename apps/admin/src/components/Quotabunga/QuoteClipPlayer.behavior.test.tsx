@@ -21,6 +21,7 @@ import { InlineQuoteClip, QuoteClipPlayer } from "./QuoteClipPlayer";
 
 const PLAYING = 1;
 const PAUSED = 2;
+const BUFFERING = 3;
 const media = {
   destroy: vi.fn(),
   playVideo: vi.fn(),
@@ -205,6 +206,59 @@ describe("quote clip player", () => {
     expect(media.pauseVideo).toHaveBeenCalledTimes(2);
   });
 
+  test("a short clip starting where the player is still stops at its end when the first poll is late", async () => {
+    await mount(
+      <QuoteClipPlayer
+        end={40.5}
+        onClose={vi.fn()}
+        start={40}
+        videoId="abcdefghijk"
+      />
+    );
+    ready();
+    // Playback has already carried the time past the start.
+    tick(40.2, PLAYING);
+    tick(40.5, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledOnce();
+  });
+
+  test("a seek still buffering keeps the clip's end until it lands", async () => {
+    media.getCurrentTime.mockReturnValue(80);
+    await mount(
+      <QuoteClipPlayer
+        end={44}
+        onClose={vi.fn()}
+        start={40}
+        videoId="abcdefghijk"
+      />
+    );
+    ready();
+    for (let poll = 0; poll < 30; poll += 1) tick(80, BUFFERING);
+    expect(media.pauseVideo).not.toHaveBeenCalled();
+    tick(40.1, PLAYING);
+    tick(44, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledOnce();
+  });
+
+  test("a video refused before the player is ready stays refused", async () => {
+    await mount(
+      <QuoteClipPlayer
+        end={44.1}
+        onClose={vi.fn()}
+        start={40}
+        videoId="abcdefghijk"
+      />
+    );
+    act(() => events.onError({ data: 150 }));
+    ready();
+    tick(40, PAUSED);
+    expect(media.seekTo).not.toHaveBeenCalled();
+    expect(textOf(view.root.findByProps({ role: "alert" }))).toContain(
+      "The owner doesn't allow this video to play here."
+    );
+    expect(button("Play clip").props.disabled).toBe(true);
+  });
+
   test("a clip without an end plays on until paused", async () => {
     await mount(
       <QuoteClipPlayer
@@ -319,6 +373,33 @@ describe("quote clip player", () => {
       vi.advanceTimersByTime(1);
     });
     expect(alertText()).toContain("YouTube is taking too long to respond.");
+  });
+
+  test("an open clip whose range changes on a refresh plays the new range", async () => {
+    const refresh = async (entry: ConvexAdminQuoteSubmission) =>
+      act(async () => {
+        view.update(
+          <InlineQuoteClip onOpenChange={vi.fn()} open submission={entry} />
+        );
+        for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      });
+    await mount(
+      <InlineQuoteClip onOpenChange={vi.fn()} open submission={submission()} />
+    );
+    ready();
+    expect(media.seekTo).toHaveBeenLastCalledWith(40, true);
+
+    // A refresh with the same range keeps the player as it is.
+    await refresh(submission());
+    expect(media.destroy).not.toHaveBeenCalled();
+
+    await refresh(submission({ clipStartSeconds: 60, clipEndSeconds: 62 }));
+    expect(media.destroy).toHaveBeenCalledOnce();
+    ready();
+    expect(media.seekTo).toHaveBeenLastCalledWith(60, true);
+    tick(60.1, PLAYING);
+    tick(62, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledOnce();
   });
 });
 
