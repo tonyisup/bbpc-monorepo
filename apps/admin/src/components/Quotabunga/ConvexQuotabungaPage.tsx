@@ -1,6 +1,8 @@
+import { parseYouTubeUrl } from "@bbpc/youtube";
 import { useConvex } from "convex/react";
 import {
   Check,
+  Crosshair,
   ExternalLink,
   Loader2,
   Pencil,
@@ -17,6 +19,7 @@ import { useRouter } from "next/router";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -61,6 +64,17 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import {
+  HIDDEN_NAME,
+  listenerName,
+  ListenerNamesToggle,
+  useListenerNames,
+} from "./ListenerNames";
+import {
+  clipTimesUpdate,
+  QuoteClipMarker,
+  type ClipTimes,
+} from "./QuoteClipMarker";
 
 interface QuoteFormState {
   userId: string;
@@ -122,11 +136,9 @@ function writeFailureMessage(error: unknown): string {
   }
 }
 
-function submissionLabel(submission: ConvexAdminQuoteSubmission): string {
+function hasYouTubeClip(submission: ConvexAdminQuoteSubmission): boolean {
   return (
-    submission.user.name ??
-    submission.user.email ??
-    "Unknown listener"
+    submission.clipUrl !== null && parseYouTubeUrl(submission.clipUrl) !== null
   );
 }
 
@@ -169,6 +181,12 @@ export function ConvexQuotabungaPage() {
   const [pendingAwards, setPendingAwards] =
     useState<PendingAwards | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [marker, setMarker] = useState<{
+    queue: ConvexAdminQuoteSubmission[];
+    initialId: string;
+  } | null>(null);
+  const [markerDirty, setMarkerDirty] = useState(false);
+  const markerSaved = useRef(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0);
 
@@ -264,6 +282,13 @@ export function ConvexQuotabungaPage() {
     }
   }, [episodeId, episodes]);
 
+  const names = useListenerNames(submissions ?? []);
+  const { setPeeking } = names;
+  // A name shown on purpose for one episode stays hidden for the next.
+  useEffect(() => {
+    setPeeking(false);
+  }, [episodeId, setPeeking]);
+
   const refresh = () => {
     setSubmissions(null);
     setRevision((value) => value + 1);
@@ -281,14 +306,14 @@ export function ConvexQuotabungaPage() {
       if (needle.length === 0) {
         return true;
       }
+      // Hidden names can't be searched, or a match would give them away.
       return [
         submission.quoteText,
         submission.sourceTitle,
-        submission.user.name,
-        submission.user.email,
+        ...(names.shown ? [submission.user.name, submission.user.email] : []),
       ].some((value) => value?.toLocaleLowerCase().includes(needle));
     });
-  }, [search, statusFilter, submissions]);
+  }, [names.shown, search, statusFilter, submissions]);
 
   const counts = useMemo(
     () => ({
@@ -307,6 +332,15 @@ export function ConvexQuotabungaPage() {
         ).length ?? 0,
     }),
     [submissions]
+  );
+
+  // Scored entries can't be edited, so the marker skips them.
+  const markerQueue = useMemo(
+    () =>
+      visibleSubmissions.filter(
+        (submission) => !submission.scored && hasYouTubeClip(submission)
+      ),
+    [visibleSubmissions]
   );
 
   const availableUsers = useMemo(() => {
@@ -427,6 +461,47 @@ export function ConvexQuotabungaPage() {
       .finally(() => setBusyAction(null));
   };
 
+  const openMarker = (initialId: string) => {
+    markerSaved.current = false;
+    setMarkerDirty(false);
+    setMarker({ queue: markerQueue, initialId });
+  };
+
+  const closeMarker = () => {
+    if (
+      markerDirty &&
+      !window.confirm("Discard the clip times you haven't saved?")
+    ) {
+      return;
+    }
+    setMarker(null);
+    setMarkerDirty(false);
+    if (markerSaved.current) {
+      markerSaved.current = false;
+      refresh();
+    }
+  };
+
+  const saveClipTimes = async (
+    submission: ConvexAdminQuoteSubmission,
+    times: ClipTimes
+  ) => {
+    const video = parseYouTubeUrl(submission.clipUrl ?? "");
+    if (video === null) {
+      throw new Error("This entry no longer has a YouTube link.");
+    }
+    try {
+      const updated = await updateConvexAdminQuoteContent(
+        convex,
+        clipTimesUpdate(submission, video.id, times)
+      );
+      markerSaved.current = true;
+      return updated;
+    } catch (error) {
+      throw new Error(writeFailureMessage(error));
+    }
+  };
+
   const changePlacement = (
     submissionId: string,
     placement: ConvexQuotePlacement | null
@@ -534,16 +609,29 @@ export function ConvexQuotabungaPage() {
               owned result points.
             </p>
           </div>
-          <Button
-            disabled={
-              episodeId.length === 0 ||
-              users === null ||
-              busyAction !== null
-            }
-            onClick={openCreate}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Add for listener
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={markerQueue.length === 0 || busyAction !== null}
+              onClick={() => {
+                const first = markerQueue[0];
+                if (first !== undefined) openMarker(first.id);
+              }}
+              title="Step through this view's YouTube clips and mark where each line is spoken"
+              variant="outline"
+            >
+              <Crosshair className="mr-2 h-4 w-4" /> Mark clips
+            </Button>
+            <Button
+              disabled={
+                episodeId.length === 0 ||
+                users === null ||
+                busyAction !== null
+              }
+              onClick={openCreate}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Add for listener
+            </Button>
+          </div>
         </div>
 
         {loadFailed ? (
@@ -590,7 +678,11 @@ export function ConvexQuotabungaPage() {
                 <Input
                   id="quote-search"
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Listener, source, or quote..."
+                  placeholder={
+                    names.shown
+                      ? "Listener, source, or quote..."
+                      : "Source or quote..."
+                  }
                   value={search}
                 />
               </div>
@@ -671,6 +763,13 @@ export function ConvexQuotabungaPage() {
                   {label}
                 </Button>
               ))}
+              <div className="ml-auto">
+                <ListenerNamesToggle
+                  awarded={names.awarded}
+                  onPeekingChange={setPeeking}
+                  peeking={names.peeking}
+                />
+              </div>
             </div>
 
             {submissions === null ? (
@@ -708,8 +807,16 @@ export function ConvexQuotabungaPage() {
                               {submission.point?.adjustment ?? 0} points
                             </Badge>
                           )}
-                          <span className="text-sm font-semibold">
-                            {submissionLabel(submission)}
+                          <span
+                            className={
+                              names.shown
+                                ? "text-sm font-semibold"
+                                : "text-sm font-semibold text-muted-foreground"
+                            }
+                          >
+                            {names.shown
+                              ? listenerName(submission)
+                              : HIDDEN_NAME}
                           </span>
                         </div>
                         <blockquote className="whitespace-pre-wrap text-lg font-medium">
@@ -856,6 +963,19 @@ export function ConvexQuotabungaPage() {
                           >
                             <Pencil className="mr-1 h-4 w-4" /> Edit
                           </Button>
+                          {hasYouTubeClip(submission) && (
+                            <Button
+                              disabled={
+                                submission.scored || busyAction !== null
+                              }
+                              onClick={() => openMarker(submission.id)}
+                              size="sm"
+                              variant="outline"
+                            >
+                              <Crosshair className="mr-1 h-4 w-4" /> Mark
+                              clip
+                            </Button>
+                          )}
                           <Button
                             disabled={busyAction !== null}
                             onClick={() => setPendingDelete(submission)}
@@ -1113,6 +1233,32 @@ export function ConvexQuotabungaPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) closeMarker();
+        }}
+        open={marker !== null}
+      >
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Mark clip times</DialogTitle>
+            <DialogDescription>
+              Play each clip and set where the line starts and ends. Saving
+              updates the entry&rsquo;s clip link and times.
+            </DialogDescription>
+          </DialogHeader>
+          {marker !== null && (
+            <QuoteClipMarker
+              initialId={marker.initialId}
+              onDirtyChange={setMarkerDirty}
+              showListener={names.shown}
+              onSave={saveClipTimes}
+              queue={marker.queue}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <ConfirmModal
         confirmText="Save awards"
         description={
@@ -1140,7 +1286,9 @@ export function ConvexQuotabungaPage() {
         description={
           pendingDelete === null
             ? ""
-            : `Delete ${submissionLabel(pendingDelete)}’s submission${
+            : `Delete ${
+                names.shown ? `${listenerName(pendingDelete)}’s` : "this"
+              } submission${
                 pendingDelete.point === null
                   ? ""
                   : " and its owned award point"
