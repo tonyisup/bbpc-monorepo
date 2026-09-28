@@ -1,8 +1,9 @@
 # Quote Finder assistant
 
 Date: 2026-09-26
-Status: Proposal. Gemini approved as the provider (2026-09-26). Spike written, not yet
-run; the other decisions at the end are still open.
+Status: Proposal. Gemini approved as the provider (2026-09-26). The spike passed on
+2026-09-28 (88% of starts within 2 s; see "Spike results"). The other decisions at the
+end are still open.
 
 Listeners already type the quote and the movie or show before opening the Quote
 Finder. Today they then search YouTube, pick a video, scrub to the line, and drag the
@@ -77,8 +78,10 @@ would halve the wait on misses but double the spend on every hit.
 - Timestamps are approximate: frames are sampled at 1 fps and the model estimates
   the times. The quote player already treats YouTube boundaries as approximate. The
   padding, preview/repeat, and handles cover the gap.
-- The model can claim a line that isn't there. The spoken-text check, the confidence
-  label, and the listener's own preview catch this before anything is saved.
+- The model can claim a line that isn't there, or place it several seconds off. In
+  the spike, neither the confidence label nor the spoken-text match separated these
+  misses from hits, so the listener's own preview is the check that matters. Present
+  every range as a suggestion to play before submitting.
 - Trailers, reaction videos, and fan edits are the likely wrong picks. The duration
   filter helps, and **Not it** moves on.
 - Paraphrased or misremembered quotes are the common case. The spoken text shows
@@ -92,18 +95,23 @@ would halve the wait on misses but double the spend on every hit.
 
 ## Cost, budget, and latency
 
-- Video input costs about 100 tokens per second at low media resolution (66 per
-  frame plus 32 per second of audio). A 3-minute scene clip is about 18k input
-  tokens. On a Flash-tier model that is a small cost per run; confirm current
-  prices at spike time.
+- Video input costs about 90 tokens per second of clip at low media resolution,
+  audio included (the API reports it all as video). The spike's clips averaged about
+  a minute: 5,600 input and 440 output and thinking tokens, or $0.006 per run at
+  `gemini-3.8-flash`'s introductory $0.75 / $3.75 per 1M tokens. Prices double on
+  2027-01-01, to about $0.012 per run.
 - Budget: new token buckets in `convex/games/limits.ts` (starting point: 3 burst,
   6/day per listener, 60/day site-wide), plus a spend alert on the Google project.
   Each assistant session also spends normal video searches, which stay capped by
   the existing buckets.
 - Use a paid key. The free tier caps YouTube input at 8 hours a day, and free-tier
-  prompts may be used to improve Google's products.
-- Expect roughly 10–30 s per run. Show progress, let the listener cancel (abort the
-  request, as search does), and set the route's `maxDuration` to cover it.
+  prompts may be used to improve Google's products. The project uses prepaid
+  billing: when the balance runs out, every request fails with HTTP 402 until it is
+  topped up, so the spend alert should fire well before that.
+- The spike measured a median of 3.5 s per run and a 90th percentile of 10 s, but
+  one of 34 requests took 40 s and one timed out at 120 s. Show progress, let the
+  listener cancel (abort the request, as search does), cap the request well below
+  the route's `maxDuration`, and treat a timeout as "not found, try again".
 - Optional: cache results in Convex by video ID and normalized quote, so reopening
   the finder or a repeat quote doesn't pay twice.
 
@@ -119,15 +127,40 @@ would halve the wait on misses but double the spend on every hit.
 
 ## Spike before building the UI
 
-Write a local script that runs the locate step on about 25 past Quotabunga entries
-that have a YouTube link and a start time, plus an end where one was set. Measure the
-found rate, start and end error, latency, and cost. A reasonable bar to ship: at
-least 70% found, with the start within 2 s. Those entries are production-derived, so
-the evaluation set stays out of the repository.
+A local script runs the locate step on past Quotabunga entries that have a YouTube
+link, and measures the found rate, start and end error, latency, and cost. The bar
+to ship: at least 70% found, with the start within 2 s. Those entries are
+production-derived, so the evaluation set stays out of the repository.
 
 The spike is `apps/web/local-tools/quote-locate` (see its README). It uses the same
 prompt, request and answer checks as the future route, from
 `apps/web/src/server/quoteLocate.mjs`, with `gemini-3.8-flash` as the default model.
+
+### Spike results (2026-09-28)
+
+Listeners' saved starts turned out not to mark the line. Of the 17 entries with one,
+10 were at 0–2 s: the listener kept the video's start or the start of the scene.
+Scored against saved starts, the model hit only 24%, mostly because of those. So the
+start and end of all 34 entries with a YouTube link were labeled by hand, where the
+first and last words are spoken, with the spike's local labeling page (`label.mjs`).
+That includes the 17 entries that had no saved start.
+
+Against those labels, `gemini-3.8-flash` at low media resolution and default thinking:
+
+- found the line in 32 of 33 answered runs (one request timed out and is not scored);
+- put the start within 2 s in 29 of 33 (88%, roughly 73–95% at 95% confidence), and
+  within 5 s in 30;
+- was off at the start by 0.4 s at the median and 1.4 s at the 90th percentile,
+  0.3 s late on balance, and off at the end by 0.4 s at the median, 0.3 s early on
+  balance. The current padding (-0.5 s / +0.75 s) covers that bias;
+- missed the same four entries in two separate runs (one not found, and starts off
+  by -3.4 s, +5.6 s and +12.4 s), so retrying a miss is unlikely to fix it;
+- answered "high" confidence every time, and its spoken text matched the listener's
+  quote just as closely on misses as on hits;
+- was never blocked for recitation, so the heard line can be shown.
+
+Limits: one person labeled one export of 34 entries, and only low media resolution
+and default thinking were tried.
 
 ## Smaller wins that need no model
 
