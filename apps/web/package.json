@@ -13,6 +13,7 @@
   "dependencies": {
     "@bbpc/episode-search": "workspace:*",
     "@bbpc/movie-search-hints": "workspace:*",
+    "@bbpc/youtube": "workspace:*",
     "@clerk/nextjs": "6.39.6",
     "@ducanh2912/next-pwa": "10.2.9",
     "@headlessui/react": "^1.7.7",

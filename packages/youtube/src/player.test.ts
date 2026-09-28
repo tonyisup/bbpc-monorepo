@@ -26,7 +26,7 @@ let win: { YT?: unknown } & Record<string, unknown>;
 
 async function freshLoader() {
   vi.resetModules();
-  return (await import("@/lib/youtubePlayer")).loadYouTubeAPI;
+  return (await import("./player")).loadYouTubeAPI;
 }
 
 describe("YouTube iframe API loader", () => {

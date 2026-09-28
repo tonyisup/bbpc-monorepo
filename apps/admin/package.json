@@ -13,6 +13,7 @@
   "dependencies": {
     "@bbpc/episode-search": "workspace:*",
     "@bbpc/movie-search-hints": "workspace:*",
+    "@bbpc/youtube": "workspace:*",
     "@tonyisup/bbpc-convex-api": "workspace:0.1.0",
     "@clerk/nextjs": "6.39.6",
     "@hookform/resolvers": "^5.2.2",
