@@ -14,6 +14,14 @@ import type { ConvexAdminQuoteSubmission } from "@/convex/quotabunga";
 import type * as MarkerModule from "./QuoteClipMarker";
 
 type MarkerProps = Parameters<typeof MarkerModule.QuoteClipMarker>[0];
+interface PromptProps {
+  isOpen: boolean;
+  title: string;
+  description: string;
+  cancelText?: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}
 
 const mocks = vi.hoisted(() => ({
   client: {},
@@ -24,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   confirm: vi.fn(),
   marker: null as MarkerProps | null,
+  dialogContents: [] as Array<{ onOpenAutoFocus?: (event: unknown) => void }>,
+  prompts: new Map<string, PromptProps>(),
 }));
 vi.mock("convex/react", () => ({ useConvex: () => mocks.client }));
 vi.mock("next/head", () => ({ default: () => null }));
@@ -53,7 +63,13 @@ vi.mock("../ui/dialog", () => {
       open: boolean;
       onOpenChange: (open: boolean) => void;
     }) => (open ? <>{children}</> : null),
-    DialogContent: Pass,
+    DialogContent: (props: {
+      children?: ReactNode;
+      onOpenAutoFocus?: (event: unknown) => void;
+    }) => {
+      mocks.dialogContents.push(props);
+      return <>{props.children}</>;
+    },
     DialogDescription: Pass,
     DialogFooter: Pass,
     DialogHeader: Pass,
@@ -61,13 +77,10 @@ vi.mock("../ui/dialog", () => {
   };
 });
 vi.mock("../ui/confirm-modal", () => ({
-  ConfirmModal: ({
-    isOpen,
-    description,
-  }: {
-    isOpen: boolean;
-    description: string;
-  }) => (isOpen ? <aside>{description}</aside> : null),
+  ConfirmModal: (props: PromptProps) => {
+    if (props.isOpen) mocks.prompts.set(props.title, props);
+    return props.isOpen ? <aside>{props.description}</aside> : null;
+  },
 }));
 vi.mock("./QuoteClipMarker", async (importOriginal) => ({
   ...(await importOriginal<typeof MarkerModule>()),
@@ -77,9 +90,11 @@ vi.mock("./QuoteClipMarker", async (importOriginal) => ({
   },
 }));
 
+import { toast } from "sonner";
+
 import { Dialog } from "../ui/dialog";
 import { ConvexQuotabungaPage } from "./ConvexQuotabungaPage";
-import { clipTimesUpdate } from "./QuoteClipMarker";
+import { clipTimesUpdate, EntryChangedError } from "./QuoteClipMarker";
 
 let view: ReactTestRenderer;
 // The entries as the server has them now, for saves that re-read one.
@@ -170,6 +185,8 @@ describe("Quotabunga prep page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.marker = null;
+    mocks.dialogContents = [];
+    mocks.prompts.clear();
     mocks.confirm.mockReturnValue(true);
     // Saves re-read the entry; by default nobody has changed it meanwhile.
     mocks.loadSubmission.mockImplementation(
@@ -220,8 +237,9 @@ describe("Quotabunga prep page", () => {
     typeSearch("");
 
     click("Delete");
+    // With names hidden, the entry is named by its source and quote.
     expect(view.root.findByType("aside").children.join("")).toContain(
-      "Delete this submission"
+      "Delete the Source a entry “Line a”?"
     );
 
     click("Show names");
@@ -263,7 +281,7 @@ describe("Quotabunga prep page", () => {
       submission("d", { clipUrl: null, clipStartSeconds: null }),
       submission("e", { status: "REJECTED" }),
     ]);
-    const markClip = buttons("Mark clip");
+    const markClip = buttons("Clip");
     expect(markClip).toHaveLength(3);
     expect(markClip.map((node) => node.props.disabled)).toEqual([
       false,
@@ -280,7 +298,7 @@ describe("Quotabunga prep page", () => {
     expect(mocks.confirm).not.toHaveBeenCalled();
 
     click("Rejected 1");
-    click("Mark clip");
+    click("Clip");
     expect(mocks.marker?.initialId).toBe("e");
     expect(mocks.marker?.queue.map((entry) => entry.id)).toEqual(["e"]);
     closeMarker();
@@ -293,7 +311,7 @@ describe("Quotabunga prep page", () => {
   test("saves marked times as a content update, explains failures, and reloads the round on close", async () => {
     const entry = submission("a", { listenerNotes: "Diner scene" });
     await render([entry]);
-    click("Mark clip");
+    click("Clip");
     const onSave = mocks.marker?.onSave;
     if (onSave === undefined) throw new Error("The marker didn't open");
     expect(mocks.marker?.showListener).toBe(false);
@@ -326,35 +344,113 @@ describe("Quotabunga prep page", () => {
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
 
     // Closing without a save leaves the round as loaded.
-    click("Mark clip");
+    click("Clip");
     closeMarker();
     await flush();
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
   });
 
-  test("refuses to save over an entry that changed since the marker opened", async () => {
+  test("refuses to save over a changed entry, hands the marker the latest copy, and reloads on close", async () => {
     const entry = submission("a");
     await render([entry]);
-    click("Mark clip");
+    click("Clip");
     const onSave = mocks.marker?.onSave;
     if (onSave === undefined) throw new Error("The marker didn't open");
 
     // The listener edited their quote after the marker loaded it.
-    latest.set("a", { ...entry, quoteText: "Newer line", updatedAt: 2 });
-    await expect(onSave(entry, { start: 42.3, end: null })).rejects.toThrow(
-      "This entry changed since the marker opened."
+    const newer = { ...entry, quoteText: "Newer line", updatedAt: 2 };
+    latest.set("a", newer);
+    const changed = await onSave(entry, { start: 42.3, end: null }).catch(
+      (error: unknown) => error
     );
+    expect(changed).toBeInstanceOf(EntryChangedError);
+    expect((changed as EntryChangedError).latest).toEqual(newer);
+
     latest.delete("a");
-    await expect(onSave(entry, { start: 42.3, end: null })).rejects.toThrow(
-      "This entry was deleted."
+    const deleted = await onSave(entry, { start: 42.3, end: null }).catch(
+      (error: unknown) => error
     );
+    expect((deleted as EntryChangedError).latest).toBeNull();
     expect(mocks.update).not.toHaveBeenCalled();
+
+    // Closing reloads the round, so a reopened marker gets the new copy.
+    expect(mocks.loadSubmissions).toHaveBeenCalledTimes(1);
+    closeMarker();
+    await flush();
+    expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
+  });
+
+  test("a failed re-read explains itself and sends no update", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Clip");
+    mocks.loadSubmission.mockRejectedValueOnce(
+      new ConvexError({ code: "WRITE_DISABLED", message: "Paused" })
+    );
+    await expect(
+      mocks.marker?.onSave(entry, { start: 1, end: null })
+    ).rejects.toThrow("Quotabunga changes are paused in this environment.");
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  test("a save that fails after the dialog closed is reported", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+    let fail: (error: unknown) => void = () => undefined;
+    mocks.update.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      })
+    );
+    const pending = onSave(entry, { start: 42.3, end: null });
+    await flush();
+    closeMarker();
+    await act(async () => {
+      fail(new ConvexError({ code: "WRITE_DISABLED", message: "Paused" }));
+      await pending.catch(() => undefined);
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "Quotabunga changes are paused in this environment."
+    );
+  });
+
+  test("the marker dialog focuses itself, not its first button", async () => {
+    await render([submission("a")]);
+    click("Clip");
+    const handler = mocks.dialogContents
+      .map((props) => props.onOpenAutoFocus)
+      .find((onOpenAutoFocus) => onOpenAutoFocus !== undefined);
+    const focus = vi.fn();
+    const preventDefault = vi.fn();
+    handler?.({ preventDefault, currentTarget: { focus } });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
+  test("unsaved marks arm the leave-page prompt", async () => {
+    await render([submission("a")]);
+    click("Clip");
+    const addEventListener = window.addEventListener as ReturnType<
+      typeof vi.fn
+    >;
+    expect(addEventListener).not.toHaveBeenCalledWith(
+      "beforeunload",
+      expect.anything()
+    );
+    act(() => mocks.marker?.onDirtyChange?.(true));
+    expect(addEventListener).toHaveBeenCalledWith(
+      "beforeunload",
+      expect.any(Function)
+    );
   });
 
   test("a save that lands after the dialog closed still reloads the round", async () => {
     const entry = submission("a");
     await render([entry]);
-    click("Mark clip");
+    click("Clip");
     const onSave = mocks.marker?.onSave;
     if (onSave === undefined) throw new Error("The marker didn't open");
 
@@ -377,25 +473,30 @@ describe("Quotabunga prep page", () => {
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
   });
 
-  test("asks before closing over unsaved marks", async () => {
+  test("asks before closing over unsaved marks, with Keep marking as the safe choice", async () => {
     await render([submission("a")]);
-    click("Mark clip");
+    click("Clip");
     act(() => mocks.marker?.onDirtyChange?.(true));
 
-    mocks.confirm.mockReturnValueOnce(false);
     closeMarker();
-    expect(mocks.confirm).toHaveBeenCalledWith(
-      "Discard the clip times you haven't saved?"
-    );
+    const prompt = () => mocks.prompts.get("Discard unsaved clip times?");
+    expect(prompt()?.cancelText).toBe("Keep marking");
+    // The marker's shortcuts wait while the prompt is open.
+    expect(mocks.marker?.paused).toBe(true);
+    act(() => prompt()?.onClose());
     expect(markerOpen()).toHaveLength(1);
+    expect(mocks.marker?.paused).toBe(false);
 
-    closeMarker();
+    // The marker's Done button closes the same way.
+    act(() => mocks.marker?.onDone?.());
+    act(() => prompt()?.onConfirm());
     expect(markerOpen()).toHaveLength(0);
 
-    // A reopened marker starts clean.
-    click("Mark clip");
+    // A reopened marker starts clean and closes without asking.
+    mocks.prompts.clear();
+    click("Clip");
     closeMarker();
-    expect(mocks.confirm).toHaveBeenCalledTimes(2);
+    expect(mocks.prompts.size).toBe(0);
     expect(markerOpen()).toHaveLength(0);
   });
 });

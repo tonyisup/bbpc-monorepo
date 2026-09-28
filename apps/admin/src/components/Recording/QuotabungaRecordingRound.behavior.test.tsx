@@ -123,6 +123,7 @@ describe("Quotabunga recording round", () => {
     act(() => toggle?.props.onClick());
     expect(text()).toContain("Listener a");
     expect(text()).toContain("Hide names");
+    expect(reuse.blind.at(-1)).toBe(false);
   });
 
   test("shows names once any entry is scored, with no toggle", async () => {
@@ -207,8 +208,15 @@ describe("Quotabunga recording round", () => {
       "Play clip 0:40.0–0:44.0",
       "Play clip from 0:10.0",
     ]);
-    // The Vimeo entry keeps its link but gets no player.
-    expect(text()).toContain("Open clip");
+    // The Vimeo entry keeps its link but gets no player. YouTube entries'
+    // links don't repeat the range their Play clip button already shows.
+    const links = view.root
+      .findAllByType("a")
+      .map((node) => textOf(node).trim());
+    expect(links).toContain("Open clip");
+    expect(links.filter((label) => label === "Open on YouTube")).toHaveLength(
+      2
+    );
 
     act(() => clipButtons()[0]?.props.onClick());
     expect(players()).toEqual(["abcdefghijk"]);

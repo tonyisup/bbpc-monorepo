@@ -33,6 +33,8 @@ vi.mock("@/convex/quotabunga", async (importOriginal) => ({
   loadConvexAdminQuoteReuseReport: mocks.load,
 }));
 
+import { getAdminQuoteReusePath, isBlindReuseQuery } from "@/lib/routes";
+
 import { ConvexQuoteReusePage } from "./ConvexQuoteReusePage";
 import { QuoteReuseChance } from "./QuoteReuseChance";
 
@@ -185,6 +187,18 @@ describe("QuoteReuseChance", () => {
   });
 });
 
+describe("blind reuse links", () => {
+  test("the page recognizes the blind option the link builder sets", () => {
+    const path = getAdminQuoteReusePath("quote/1", { blind: true });
+    const query = Object.fromEntries(
+      new URL(path, "http://admin.test").searchParams
+    );
+    expect(isBlindReuseQuery(query)).toBe(true);
+    expect(isBlindReuseQuery({})).toBe(false);
+    expect(getAdminQuoteReusePath("quote/1")).toBe("/quotabunga/reuse/quote%2F1");
+  });
+});
+
 describe("ConvexQuoteReusePage", () => {
   test("shows the overall chance and each earlier episode's evidence", async () => {
     mocks.load.mockResolvedValueOnce(report);
@@ -217,8 +231,8 @@ describe("ConvexQuoteReusePage", () => {
     await render(<ConvexQuoteReusePage />);
     expect(text()).toContain("Name hidden");
     expect(text()).not.toContain("from Listener");
-    // Earlier episodes' rounds were awarded, so their listeners still show.
-    expect(text()).toContain("Earlier listener");
+    // An earlier entry could be the same listener's, so those names hide too.
+    expect(text()).not.toContain("Earlier listener");
   });
 
   test("explains when no earlier use was found", async () => {

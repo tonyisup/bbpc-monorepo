@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const PLAYING = 1;
 const ENDED = 0;
 const READY_TIMEOUT_MS = 20_000;
+const POLL_INTERVAL_MS = 100;
 
 export interface YouTubePlayerState {
   ready: boolean;
@@ -16,13 +17,8 @@ export interface YouTubePlayerState {
 }
 
 function sameState(left: YouTubePlayerState, right: YouTubePlayerState) {
-  return (
-    left.ready === right.ready &&
-    left.error === right.error &&
-    left.currentTime === right.currentTime &&
-    left.duration === right.duration &&
-    left.playing === right.playing &&
-    left.autoplayBlocked === right.autoplayBlocked
+  return (Object.keys(left) as (keyof YouTubePlayerState)[]).every(
+    (key) => left[key] === right[key]
   );
 }
 
@@ -38,7 +34,8 @@ function playerErrorMessage(code: number): string {
 
 /**
  * One YouTube player in `container`, reloaded when the video changes. The
- * time is polled every 100 ms, and `playUntil` pauses at a chosen second.
+ * time is polled every POLL_INTERVAL_MS, and `playUntil` pauses at a chosen
+ * second.
  */
 export function useYouTubePlayer(videoId: string, startAt: number) {
   const container = useRef<HTMLDivElement>(null);
@@ -135,7 +132,7 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 );
               };
               poll();
-              timer = window.setInterval(poll, 100);
+              timer = window.setInterval(poll, POLL_INTERVAL_MS);
             },
             onError: ({ data }) => fail(playerErrorMessage(data)),
             onAutoplayBlocked: () => {

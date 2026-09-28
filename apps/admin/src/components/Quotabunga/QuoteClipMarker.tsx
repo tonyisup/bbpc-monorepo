@@ -51,6 +51,25 @@ const FORWARD_STEPS = [
   [COARSE_STEP, "Shift+Right"],
 ] as const;
 
+/**
+ * What onSave throws when the entry changed since the marker loaded it (a
+ * listener can edit it while the round is open), carrying the latest version,
+ * or null once it has been deleted. The marker shows that version in place.
+ */
+export class EntryChangedError extends Error {
+  readonly latest: ConvexAdminQuoteSubmission | null;
+
+  constructor(latest: ConvexAdminQuoteSubmission | null) {
+    super(
+      latest === null
+        ? "This entry was deleted, so its clip times weren't saved."
+        : "A listener changed this entry after the marker loaded it. Their latest version is shown now; check the clip and save again."
+    );
+    this.name = "EntryChangedError";
+    this.latest = latest;
+  }
+}
+
 export interface ClipTimes {
   start: number;
   end: number | null;
@@ -71,6 +90,10 @@ interface QuoteClipMarkerProps {
     times: ClipTimes
   ) => Promise<ConvexAdminQuoteSubmission>;
   onDirtyChange?: (dirty: boolean) => void;
+  /** Closes the marker; shown as a Done button. */
+  onDone?: () => void;
+  /** True while another prompt is open over the marker; shortcuts wait. */
+  paused?: boolean;
   /** False while listener names are hidden for blind judging. */
   showListener?: boolean;
 }
@@ -140,6 +163,8 @@ export function QuoteClipMarker({
   initialId,
   onSave,
   onDirtyChange,
+  onDone,
+  paused = false,
   showListener = true,
 }: QuoteClipMarkerProps) {
   const [entries, setEntries] = useState(queue);
@@ -231,7 +256,9 @@ export function QuoteClipMarker({
       return "Times look like 1:05.2 or 65.2.";
     }
     if (start > MAX_CLIP_SECONDS || (end !== null && end > MAX_CLIP_SECONDS)) {
-      return "Clip times must be within 24 hours.";
+      return `Clip times must be within ${String(
+        MAX_CLIP_SECONDS / 3600
+      )} hours.`;
     }
     if (end !== null && end <= start) {
       return "The end must be after the start.";
@@ -261,6 +288,10 @@ export function QuoteClipMarker({
     setIndex(next);
     setMessage(null);
   };
+
+  // A finished save checks whether the admin moved on while it was in flight.
+  const indexRef = useRef(index);
+  indexRef.current = index;
 
   const save = async (advance: boolean) => {
     if (entry === undefined || saving) return;
@@ -314,11 +345,43 @@ export function QuoteClipMarker({
         });
       }
     } catch (failure) {
+      if (failure instanceof EntryChangedError) {
+        const latest = failure.latest;
+        if (latest === null) {
+          const removed = entries.findIndex(
+            (submission) => submission.id === entry.id
+          );
+          setEntries((current) =>
+            current.filter((submission) => submission.id !== entry.id)
+          );
+          // Stay on the same clip; entries after the removed one move up.
+          setIndex((current) =>
+            Math.max(
+              0,
+              Math.min(
+                current > removed ? current - 1 : current,
+                entries.length - 2
+              )
+            )
+          );
+        } else {
+          // The admin's marks stay as drafts against the latest version.
+          setEntries((current) =>
+            current.map((submission) =>
+              submission.id === latest.id ? latest : submission
+            )
+          );
+        }
+      }
+      const reason =
+        failure instanceof Error
+          ? failure.message
+          : "The clip times weren't saved.";
       setMessage({
         text:
-          failure instanceof Error
-            ? failure.message
-            : "The clip times weren't saved.",
+          indexRef.current === savedIndex
+            ? reason
+            : `Clip ${String(savedIndex + 1)} wasn't saved: ${reason}`,
         error: true,
       });
     } finally {
@@ -326,10 +389,11 @@ export function QuoteClipMarker({
     }
   };
 
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   // Shortcuts read the latest render's actions through this ref.
-  const indexRef = useRef(index);
-  indexRef.current = index;
   const shortcuts = useRef<Record<string, (event: KeyboardEvent) => void>>({});
+
   shortcuts.current = {
     " ": () => player.togglePlay(),
     ArrowLeft: (event) =>
@@ -347,6 +411,7 @@ export function QuoteClipMarker({
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (pausedRef.current) return;
       if (event.defaultPrevented || event.metaKey || event.ctrlKey) return;
       if (event.altKey) return;
       const target = event.target as Element | null;
@@ -614,6 +679,11 @@ export function QuoteClipMarker({
             Open on YouTube <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <div className="ml-auto flex gap-2">
+            {onDone !== undefined && (
+              <Button onClick={onDone} size="sm" type="button" variant="ghost">
+                Done
+              </Button>
+            )}
             <Button
               disabled={saving}
               onClick={() => void save(false)}
@@ -662,6 +732,8 @@ export function QuoteClipMarker({
           <dd>Save and go to the next clip</dd>
           <dt>J K</dt>
           <dd>Next or previous clip</dd>
+          <dt>Esc</dt>
+          <dd>Close the marker</dd>
         </dl>
         <p className="mt-2">
           Set the start where the first word begins, not where the scene starts.

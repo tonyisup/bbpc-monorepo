@@ -74,6 +74,7 @@ import {
 } from "./ListenerNames";
 import {
   clipTimesUpdate,
+  EntryChangedError,
   QuoteClipMarker,
   type ClipTimes,
 } from "./QuoteClipMarker";
@@ -190,7 +191,8 @@ export function ConvexQuotabungaPage() {
     initialId: string;
   } | null>(null);
   const [markerDirty, setMarkerDirty] = useState(false);
-  const markerSaved = useRef(false);
+  const [discardPending, setDiscardPending] = useState(false);
+  const reloadOnClose = useRef(false);
   const markerOpen = useRef(false);
   useUnsavedChangesPrompt(marker !== null && markerDirty, DISCARD_MARKS);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -469,60 +471,74 @@ export function ConvexQuotabungaPage() {
 
   const openMarker = (initialId: string) => {
     markerOpen.current = true;
-    markerSaved.current = false;
+    reloadOnClose.current = false;
     setMarkerDirty(false);
     setMarker({ queue: markerQueue, initialId });
   };
 
-  const closeMarker = () => {
-    if (markerDirty && !window.confirm(DISCARD_MARKS)) {
-      return;
-    }
+  const finishClosingMarker = () => {
     markerOpen.current = false;
     setMarker(null);
     setMarkerDirty(false);
-    if (markerSaved.current) {
-      markerSaved.current = false;
+    setDiscardPending(false);
+    if (reloadOnClose.current) {
+      reloadOnClose.current = false;
       refresh();
     }
+  };
+
+  // Unsaved marks go through a prompt focused on keeping them, since Enter
+  // saves in the marker and must not discard here.
+  const closeMarker = () => {
+    if (markerDirty) setDiscardPending(true);
+    else finishClosingMarker();
+  };
+
+  // The round behind the dialog is out of date: reload it now if the dialog
+  // has closed, or when it does.
+  const roundChanged = () => {
+    if (markerOpen.current) reloadOnClose.current = true;
+    else refresh();
   };
 
   const saveClipTimes = async (
     submission: ConvexAdminQuoteSubmission,
     times: ClipTimes
   ) => {
+    // A failure after the dialog closed has no marker left to show it.
+    const report = <T extends Error>(error: T) => {
+      if (!markerOpen.current) toast.error(error.message);
+      return error;
+    };
     // The update sends the whole entry back, so it is re-read first: a
     // listener can still edit it while the round is open, and saving the
-    // marker's copy would put their old text and link back.
+    // marker's copy would put their old text and link back. That costs one
+    // more round trip per save, and a listener edit landing between the read
+    // and the write is still overwritten; closing that gap needs an
+    // expected-version check in the backend mutation.
     let current: ConvexAdminQuoteSubmission | null;
     try {
       current = await loadConvexAdminQuoteSubmission(convex, submission.id);
     } catch (error) {
-      throw new Error(writeFailureMessage(error));
+      throw report(new Error(writeFailureMessage(error)));
     }
-    if (current === null) {
-      throw new Error("This entry was deleted. Close the marker to reload.");
-    }
-    if (current.updatedAt !== submission.updatedAt) {
-      throw new Error(
-        "This entry changed since the marker opened. Close and reopen the marker to load it."
-      );
+    if (current === null || current.updatedAt !== submission.updatedAt) {
+      roundChanged();
+      throw report(new EntryChangedError(current));
     }
     const video = parseYouTubeUrl(current.clipUrl ?? "");
     if (video === null) {
-      throw new Error("This entry no longer has a YouTube link.");
+      throw report(new Error("This entry no longer has a YouTube link."));
     }
     try {
       const updated = await updateConvexAdminQuoteContent(
         convex,
         clipTimesUpdate(current, video.id, times)
       );
-      // A save that lands after the dialog closed reloads the list itself.
-      if (markerOpen.current) markerSaved.current = true;
-      else refresh();
+      roundChanged();
       return updated;
     } catch (error) {
-      throw new Error(writeFailureMessage(error));
+      throw report(new Error(writeFailureMessage(error)));
     }
   };
 
@@ -992,12 +1008,13 @@ export function ConvexQuotabungaPage() {
                               disabled={
                                 submission.scored || busyAction !== null
                               }
+                              aria-label="Mark clip times"
                               onClick={() => openMarker(submission.id)}
                               size="sm"
+                              title="Mark clip times"
                               variant="outline"
                             >
-                              <Crosshair className="mr-1 h-4 w-4" /> Mark
-                              clip
+                              <Crosshair className="mr-1 h-4 w-4" /> Clip
                             </Button>
                           )}
                           <Button
@@ -1283,6 +1300,8 @@ export function ConvexQuotabungaPage() {
             <QuoteClipMarker
               initialId={marker.initialId}
               onDirtyChange={setMarkerDirty}
+              onDone={closeMarker}
+              paused={discardPending}
               showListener={names.shown}
               onSave={saveClipTimes}
               queue={marker.queue}
@@ -1290,6 +1309,16 @@ export function ConvexQuotabungaPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmModal
+        cancelText="Keep marking"
+        confirmText="Discard marks"
+        description="The clip times you set but haven't saved will be lost."
+        isOpen={discardPending}
+        onClose={() => setDiscardPending(false)}
+        onConfirm={finishClosingMarker}
+        title="Discard unsaved clip times?"
+      />
 
       <ConfirmModal
         confirmText="Save awards"
@@ -1319,8 +1348,14 @@ export function ConvexQuotabungaPage() {
           pendingDelete === null
             ? ""
             : `Delete ${
-                names.shown ? `${listenerName(pendingDelete)}’s` : "this"
-              } submission${
+                names.shown
+                  ? `${listenerName(pendingDelete)}’s submission`
+                  : `the ${pendingDelete.sourceTitle} entry “${
+                      pendingDelete.quoteText.length > 60
+                        ? `${pendingDelete.quoteText.slice(0, 60)}…`
+                        : pendingDelete.quoteText
+                    }”`
+              }${
                 pendingDelete.point === null
                   ? ""
                   : " and its owned award point"

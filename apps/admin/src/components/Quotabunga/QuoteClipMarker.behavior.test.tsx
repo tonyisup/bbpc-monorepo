@@ -16,7 +16,11 @@ vi.mock("@bbpc/youtube", async (importOriginal) => ({
   loadYouTubeAPI: mocks.load,
 }));
 
-import { clipTimesUpdate, QuoteClipMarker } from "./QuoteClipMarker";
+import {
+  clipTimesUpdate,
+  EntryChangedError,
+  QuoteClipMarker,
+} from "./QuoteClipMarker";
 
 const media = {
   destroy: vi.fn(),
@@ -84,7 +88,8 @@ async function mount(
   onDirtyChange = vi.fn(),
   initialId = "a",
   entries = queue,
-  showListener = true
+  showListener = true,
+  extra: Partial<Parameters<typeof QuoteClipMarker>[0]> = {}
 ) {
   await act(async () => {
     view = create(
@@ -94,6 +99,7 @@ async function mount(
         onSave={onSave}
         queue={entries}
         showListener={showListener}
+        {...extra}
       />,
       {
         createNodeMock: (node) =>
@@ -217,6 +223,84 @@ describe("quote clip marker", () => {
     act(() => view?.unmount());
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  test("marks typed while a save is in flight stay unsaved", async () => {
+    let finish: (entry: ConvexAdminQuoteSubmission) => void = () => undefined;
+    const onSave = vi.fn(
+      () =>
+        new Promise<ConvexAdminQuoteSubmission>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const { onDirtyChange } = await mount(onSave);
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    act(() => buttonNamed("Save").props.onClick());
+    media.getCurrentTime.mockReturnValue(46);
+    press("e");
+    await act(async () => {
+      finish({ ...first, clipEndSeconds: 44 });
+      await Promise.resolve();
+    });
+    expect(field("clip-marker-end").props.value).toBe("0:46.0");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  test("a save that fails after moving on says which clip failed", async () => {
+    let fail: (error: unknown) => void = () => undefined;
+    const onSave = vi.fn(
+      () =>
+        new Promise<ConvexAdminQuoteSubmission>((_resolve, reject) => {
+          fail = reject;
+        })
+    );
+    await mount(onSave);
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    press("Enter");
+    press("j");
+    await act(async () => {
+      fail(new Error("Paused"));
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Clip 2 of 3");
+    expect(messageText("alert")).toBe("Clip 1 wasn't saved: Paused");
+  });
+
+  test("a changed entry is shown in its latest version, keeping the marks", async () => {
+    const newer = { ...first, quoteText: "Line a, as edited", updatedAt: 2 };
+    const onSave = vi.fn(async () => {
+      throw new EntryChangedError(newer);
+    });
+    await mount(onSave);
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    await act(async () => {
+      press("Enter");
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Line a, as edited");
+    expect(text()).toContain("Clip 1 of 3");
+    expect(field("clip-marker-end").props.value).toBe("0:44.0");
+    expect(messageText("alert")).toContain("check the clip and save again");
+  });
+
+  test("a deleted entry leaves the queue and the view stays on its clip", async () => {
+    const onSave = vi.fn(async () => {
+      throw new EntryChangedError(null);
+    });
+    await mount(onSave, vi.fn(), "b");
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    await act(async () => {
+      press("Enter");
+      await Promise.resolve();
+    });
+    // Clip b is gone; c moved up into its place.
+    expect(text()).toContain("Clip 2 of 2");
+    expect(text()).toContain("Line c");
+    expect(messageText("alert")).toContain("This entry was deleted");
   });
 
   test("moving on while a save is in flight doesn't pull the view back", async () => {
@@ -363,6 +447,18 @@ describe("quote clip marker", () => {
     expect(text()).toContain("Clip 1 of 2");
     expect(media.seekTo).toHaveBeenLastCalledWith(39, true);
     expect(mocks.load).toHaveBeenCalledOnce();
+  });
+
+  test("Done closes the marker, and shortcuts wait while another prompt is open", async () => {
+    const onDone = vi.fn();
+    await mount(vi.fn(), vi.fn(), "a", queue, true, { onDone, paused: true });
+    act(() => buttonNamed("Done").props.onClick());
+    expect(onDone).toHaveBeenCalledOnce();
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    press("j");
+    expect(field("clip-marker-end").props.value).toBe("");
+    expect(text()).toContain("Clip 1 of 3");
   });
 
   test("leaves the listener's name out while names are hidden", async () => {
