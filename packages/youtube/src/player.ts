@@ -6,6 +6,7 @@ export interface YouTubePlayer {
   getCurrentTime(): number;
   getDuration(): number;
   getPlayerState(): number;
+  setPlaybackRate(rate: number): void;
 }
 
 export interface YouTubeAPI {
@@ -27,7 +28,7 @@ export interface YouTubeAPI {
 
 declare global {
   interface Window {
-    YT?: YouTubeAPI;
+    YT?: YouTubeAPI | undefined;
   }
 }
 

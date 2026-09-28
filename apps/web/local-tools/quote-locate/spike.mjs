@@ -171,7 +171,7 @@ export function assertOutsideRepository(file, root = REPOSITORY_ROOT) {
 
 /**
  * The YouTube video ID in a saved clip link. Mirrors parseYouTubeUrl in
- * src/lib/quoteClip.ts, which is TypeScript this Node tool can't import.
+ * packages/youtube/src/url.ts, which is TypeScript this Node tool can't import.
  *
  * @param {string} value
  * @returns {string | null}

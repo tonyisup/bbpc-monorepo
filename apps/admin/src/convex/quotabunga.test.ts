@@ -9,6 +9,7 @@ import {
   formatQuoteReuseLikelihood,
   loadConvexAdminQuoteEpisodes,
   loadConvexAdminQuoteReuseReport,
+  loadConvexAdminQuoteSubmission,
   loadConvexAdminQuoteSubmissions,
   quoteReuseTone,
   randomizeConvexAdminQuotes,
@@ -312,5 +313,27 @@ describe("Convex Quotabunga admin adapter", () => {
     expect(quoteReuseTone(0.6)).toContain("text-destructive");
     expect(quoteReuseTone(0.25)).toContain("text-amber-700");
     expect(quoteReuseTone(0.24)).toBe("text-muted-foreground");
+  });
+
+  test("re-reads one entry, or null once it has been deleted", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce(submission)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...submission, updatedAt: "later" });
+    const client = { query } as unknown as ConvexReactClient;
+
+    await expect(
+      loadConvexAdminQuoteSubmission(client, submission.id)
+    ).resolves.toEqual(submission);
+    expect(query).toHaveBeenCalledWith(expect.anything(), {
+      id: submission.id,
+    });
+    await expect(
+      loadConvexAdminQuoteSubmission(client, submission.id)
+    ).resolves.toBeNull();
+    await expect(
+      loadConvexAdminQuoteSubmission(client, submission.id)
+    ).rejects.toThrow();
   });
 });

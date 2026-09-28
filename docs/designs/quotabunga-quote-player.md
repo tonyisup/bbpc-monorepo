@@ -30,7 +30,9 @@ typing or editing a link, other hosts, and returning to the same video keep what
 listener entered. A first link with its own `t=` fills the start; a bare first link
 keeps a start typed beforehand. Submitted YouTube clips are stored as
 `watch?v=ID&t=<start>s`, so hosts land on the quote from admin, recording and the
-listener view; the end is shown as text, since a watch link cannot stop at it.
+listener view. A watch link cannot stop at the end, so the end is shown as text
+beside the link; the recording panel also plays the marked range in place (see
+"Admin clip marker and recording playback").
 
 ## Find a video
 
@@ -97,6 +99,40 @@ admin clients omit the argument when there is no end to set or clear, so they ke
 writing through a backend that predates clip ranges. Host/admin screens display
 (rounded to 0.1 s) and allow editing the saved end. Contract declarations were updated
 locally and rebuilt without contacting a Convex deployment.
+
+## Admin clip marker and recording playback
+
+Before a recording, admins clean up clip times on the Quotabunga page. **Mark clips**
+steps through the unscored YouTube entries in the current view, and an entry's
+**Clip** button opens just that one. In the marker, S and E set the start and end at
+the playhead, P plays the marked range, Enter saves and moves on, and J and K move
+between clips. The arrow keys step 1 s (5 s with Shift), and comma and period step
+0.2 s. Times can also be typed to the tenth of a second. The marker's Keyboard and
+tips panel lists every shortcut.
+
+A save sends the entry's other fields back unchanged through the administrator
+`updateContent`, and rewrites the link to `watch?v=ID&t=<start>s` as the listener
+form does. A clip the admin didn't touch is not saved. The marker re-reads the entry
+first (`getAdminById`) and refuses if it changed since the marker opened, then shows
+the latest version, keeping the admin's marks unless the entry moved to another
+video. Closing, reloading, or going Back with unsaved marks asks first.
+
+On `/record`, **Play clip** opens a player inside the entry that starts at the marked
+start and pauses at the marked end however playback starts; **Replay** starts it
+over. Only one clip is open at a time, so the page holds a single YouTube player.
+Entries without a saved start open where their link does, and entries without an end
+play on. Randomized entries keep their bracket order; the rest follow in an order
+seeded by the episode, stable across refreshes, never submission order.
+
+Listener names stay hidden on both pages until the round's points are awarded: on
+entry cards, in the marker, in delete prompts, in the reuse breakdown, and in search,
+which stops matching names. **Show names** reveals them for the round on screen only.
+
+The IFrame API loader and link helpers (`parseYouTubeUrl`, `youtubeWatchUrl`,
+`MAX_CLIP_SECONDS`) live in the shared `@bbpc/youtube` package, used by both the web
+Quote Finder and the admin app. The admin player hook is
+`apps/admin/src/lib/useYouTubePlayer.ts`. None of this needs a backend change beyond
+the clip-range deploy described below.
 
 ## Verification and rollout
 
