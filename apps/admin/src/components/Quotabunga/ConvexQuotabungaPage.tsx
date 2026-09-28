@@ -1,6 +1,8 @@
+import { parseYouTubeUrl } from "@bbpc/youtube";
 import { useConvex } from "convex/react";
 import {
   Check,
+  Crosshair,
   ExternalLink,
   Loader2,
   Pencil,
@@ -17,6 +19,7 @@ import { useRouter } from "next/router";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
@@ -28,6 +31,7 @@ import {
   createConvexAdminQuoteForUser,
   deleteConvexAdminQuote,
   loadConvexAdminQuoteEpisodes,
+  loadConvexAdminQuoteSubmission,
   loadConvexAdminQuoteSubmissions,
   randomizeConvexAdminQuotes,
   setConvexAdminQuoteStatus,
@@ -46,6 +50,7 @@ import {
   type ConvexAdminUser,
 } from "@/convex/users";
 import { clipSeconds, MAX_CLIP_SECONDS } from "@/lib/clipTimes";
+import { useUnsavedChangesPrompt } from "@/lib/useUnsavedChangesPrompt";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -61,6 +66,19 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import {
+  HIDDEN_NAME,
+  listenerName,
+  ListenerNamesToggle,
+  useListenerNames,
+} from "./ListenerNames";
+import {
+  clipTimesUpdate,
+  EntryChangedError,
+  QuoteClipMarker,
+  sameEntry,
+  type ClipTimes,
+} from "./QuoteClipMarker";
 
 interface QuoteFormState {
   userId: string;
@@ -122,11 +140,11 @@ function writeFailureMessage(error: unknown): string {
   }
 }
 
-function submissionLabel(submission: ConvexAdminQuoteSubmission): string {
+const DISCARD_MARKS = "Discard the clip times you haven't saved?";
+
+function hasYouTubeClip(submission: ConvexAdminQuoteSubmission): boolean {
   return (
-    submission.user.name ??
-    submission.user.email ??
-    "Unknown listener"
+    submission.clipUrl !== null && parseYouTubeUrl(submission.clipUrl) !== null
   );
 }
 
@@ -169,8 +187,34 @@ export function ConvexQuotabungaPage() {
   const [pendingAwards, setPendingAwards] =
     useState<PendingAwards | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [marker, setMarker] = useState<{
+    episodeId: string;
+    episodeQuery: string;
+    queue: ConvexAdminQuoteSubmission[];
+    initialId: string;
+  } | null>(null);
+  const [markerDirty, setMarkerDirty] = useState(false);
+  const [discardPending, setDiscardPending] = useState(false);
+  const reloadOnClose = useRef(false);
+  // Each opening of the marker is a new session, so a save can tell whether
+  // the dialog that started it is still there to show a failure.
+  const markerSessions = useRef(0);
+  const openMarkerSession = useRef<number | null>(null);
+  const pageMounted = useRef(false);
+  useEffect(() => {
+    pageMounted.current = true;
+    return () => {
+      pageMounted.current = false;
+    };
+  }, []);
+  useUnsavedChangesPrompt(marker !== null && markerDirty, DISCARD_MARKS);
   const [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0);
+  const episodeQuery =
+    typeof router.query.episodeId === "string" ? router.query.episodeId : "";
+  // The URL's episode is applied when it changes, not on every reload, so a
+  // reload keeps the round the admin picked since.
+  const appliedEpisodeQuery = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -186,15 +230,17 @@ export function ConvexQuotabungaPage() {
         setEpisodes(loadedEpisodes);
         setUsers(userPage.users);
         setUserCatalogComplete(userPage.isDone);
+        const requested = episodeQuery;
+        const found = loadedEpisodes.some(
+          (episode) => episode.id === requested
+        );
+        const newRequest = requested !== appliedEpisodeQuery.current;
+        // A requested episode that isn't listed yet is tried again next time.
+        if (found || requested.length === 0) {
+          appliedEpisodeQuery.current = requested;
+        }
         setEpisodeId((current) => {
-          const requested =
-            typeof router.query.episodeId === "string"
-              ? router.query.episodeId
-              : "";
-          if (
-            requested.length > 0 &&
-            loadedEpisodes.some((episode) => episode.id === requested)
-          ) {
+          if (newRequest && found) {
             return requested;
           }
           if (
@@ -222,7 +268,7 @@ export function ConvexQuotabungaPage() {
     return () => {
       active = false;
     };
-  }, [convex, revision, router.query.episodeId]);
+  }, [convex, episodeQuery, revision]);
 
   useEffect(() => {
     if (episodeId.length === 0) {
@@ -264,6 +310,27 @@ export function ConvexQuotabungaPage() {
     }
   }, [episodeId, episodes]);
 
+  const names = useListenerNames(submissions ?? [], episodeId);
+  const { setPeeking } = names;
+
+  // Back or Forward can change the round under the open marker. It closes as
+  // soon as the address changes, before the new round loads, rather than take
+  // marks meant for the old round or show its entries under the new round's
+  // name visibility.
+  useEffect(() => {
+    if (
+      marker === null ||
+      (marker.episodeId === episodeId && marker.episodeQuery === episodeQuery)
+    ) {
+      return;
+    }
+    openMarkerSession.current = null;
+    reloadOnClose.current = false;
+    setMarker(null);
+    setMarkerDirty(false);
+    setDiscardPending(false);
+  }, [episodeId, episodeQuery, marker]);
+
   const refresh = () => {
     setSubmissions(null);
     setRevision((value) => value + 1);
@@ -281,14 +348,14 @@ export function ConvexQuotabungaPage() {
       if (needle.length === 0) {
         return true;
       }
+      // Hidden names can't be searched, or a match would give them away.
       return [
         submission.quoteText,
         submission.sourceTitle,
-        submission.user.name,
-        submission.user.email,
+        ...(names.shown ? [submission.user.name, submission.user.email] : []),
       ].some((value) => value?.toLocaleLowerCase().includes(needle));
     });
-  }, [search, statusFilter, submissions]);
+  }, [names.shown, search, statusFilter, submissions]);
 
   const counts = useMemo(
     () => ({
@@ -307,6 +374,15 @@ export function ConvexQuotabungaPage() {
         ).length ?? 0,
     }),
     [submissions]
+  );
+
+  // Scored entries can't be edited, so the marker skips them.
+  const markerQueue = useMemo(
+    () =>
+      visibleSubmissions.filter(
+        (submission) => !submission.scored && hasYouTubeClip(submission)
+      ),
+    [visibleSubmissions]
   );
 
   const availableUsers = useMemo(() => {
@@ -427,6 +503,86 @@ export function ConvexQuotabungaPage() {
       .finally(() => setBusyAction(null));
   };
 
+  const openMarker = (initialId: string) => {
+    markerSessions.current += 1;
+    openMarkerSession.current = markerSessions.current;
+    reloadOnClose.current = false;
+    setMarkerDirty(false);
+    setMarker({ episodeId, episodeQuery, queue: markerQueue, initialId });
+  };
+
+  const finishClosingMarker = () => {
+    openMarkerSession.current = null;
+    setMarker(null);
+    setMarkerDirty(false);
+    setDiscardPending(false);
+    if (reloadOnClose.current) {
+      reloadOnClose.current = false;
+      refresh();
+    }
+  };
+
+  // Unsaved marks go through a prompt focused on keeping them, since Enter
+  // saves in the marker and must not discard here.
+  const closeMarker = () => {
+    if (markerDirty) setDiscardPending(true);
+    else finishClosingMarker();
+  };
+
+  // The round behind the dialog is out of date: reload it now if the dialog
+  // has closed, or when it does.
+  const roundChanged = () => {
+    if (openMarkerSession.current !== null) reloadOnClose.current = true;
+    else refresh();
+  };
+
+  const saveClipTimes = async (
+    submission: ConvexAdminQuoteSubmission,
+    times: ClipTimes
+  ) => {
+    // The marker that saved shows a failure itself; once it has closed
+    // (another may have opened since) or the page is gone, a toast does.
+    const session = openMarkerSession.current;
+    const report = <T extends Error>(error: T) => {
+      if (!pageMounted.current || openMarkerSession.current !== session) {
+        toast.error(error.message);
+      }
+      return error;
+    };
+    // The update sends the whole entry back, so it is re-read first: a
+    // listener can still edit it while the round is open, and saving the
+    // marker's copy would put their old text and link back. That costs one
+    // more round trip per save, and a listener edit landing between the read
+    // and the write is still overwritten; closing that gap needs an
+    // expected-version check in the backend mutation.
+    let current: ConvexAdminQuoteSubmission | null;
+    try {
+      current = await loadConvexAdminQuoteSubmission(convex, submission.id);
+    } catch (error) {
+      throw report(new Error(writeFailureMessage(error)));
+    }
+    if (current === null || !sameEntry(submission, current)) {
+      roundChanged();
+      throw report(new EntryChangedError(current));
+    }
+    // sameEntry kept the marker's YouTube link, so this only narrows the type.
+    const video = parseYouTubeUrl(current.clipUrl ?? "");
+    if (video === null) throw report(new EntryChangedError(current));
+    try {
+      const updated = await updateConvexAdminQuoteContent(
+        convex,
+        clipTimesUpdate(current, video.id, times)
+      );
+      roundChanged();
+      return updated;
+    } catch (error) {
+      // A refusal wrote nothing; any other failure may have landed the write
+      // without its answer arriving.
+      if (getConvexDomainErrorCode(error) === null) roundChanged();
+      throw report(new Error(writeFailureMessage(error)));
+    }
+  };
+
   const changePlacement = (
     submissionId: string,
     placement: ConvexQuotePlacement | null
@@ -534,16 +690,29 @@ export function ConvexQuotabungaPage() {
               owned result points.
             </p>
           </div>
-          <Button
-            disabled={
-              episodeId.length === 0 ||
-              users === null ||
-              busyAction !== null
-            }
-            onClick={openCreate}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Add for listener
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={markerQueue.length === 0 || busyAction !== null}
+              onClick={() => {
+                const first = markerQueue[0];
+                if (first !== undefined) openMarker(first.id);
+              }}
+              title="Step through this view's YouTube clips and mark where each line is spoken"
+              variant="outline"
+            >
+              <Crosshair className="mr-2 h-4 w-4" /> Mark clips
+            </Button>
+            <Button
+              disabled={
+                episodeId.length === 0 ||
+                users === null ||
+                busyAction !== null
+              }
+              onClick={openCreate}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Add for listener
+            </Button>
+          </div>
         </div>
 
         {loadFailed ? (
@@ -590,7 +759,11 @@ export function ConvexQuotabungaPage() {
                 <Input
                   id="quote-search"
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Listener, source, or quote..."
+                  placeholder={
+                    names.shown
+                      ? "Listener, source, or quote..."
+                      : "Source or quote..."
+                  }
                   value={search}
                 />
               </div>
@@ -671,6 +844,13 @@ export function ConvexQuotabungaPage() {
                   {label}
                 </Button>
               ))}
+              <div className="ml-auto">
+                <ListenerNamesToggle
+                  awarded={names.awarded}
+                  onPeekingChange={setPeeking}
+                  peeking={names.peeking}
+                />
+              </div>
             </div>
 
             {submissions === null ? (
@@ -708,8 +888,16 @@ export function ConvexQuotabungaPage() {
                               {submission.point?.adjustment ?? 0} points
                             </Badge>
                           )}
-                          <span className="text-sm font-semibold">
-                            {submissionLabel(submission)}
+                          <span
+                            className={
+                              names.shown
+                                ? "text-sm font-semibold"
+                                : "text-sm font-semibold text-muted-foreground"
+                            }
+                          >
+                            {names.shown
+                              ? listenerName(submission)
+                              : HIDDEN_NAME}
                           </span>
                         </div>
                         <blockquote className="whitespace-pre-wrap text-lg font-medium">
@@ -856,6 +1044,20 @@ export function ConvexQuotabungaPage() {
                           >
                             <Pencil className="mr-1 h-4 w-4" /> Edit
                           </Button>
+                          {hasYouTubeClip(submission) && (
+                            <Button
+                              disabled={
+                                submission.scored || busyAction !== null
+                              }
+                              aria-label="Mark clip times"
+                              onClick={() => openMarker(submission.id)}
+                              size="sm"
+                              title="Mark clip times"
+                              variant="outline"
+                            >
+                              <Crosshair className="mr-1 h-4 w-4" /> Clip
+                            </Button>
+                          )}
                           <Button
                             disabled={busyAction !== null}
                             onClick={() => setPendingDelete(submission)}
@@ -1113,6 +1315,52 @@ export function ConvexQuotabungaPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) closeMarker();
+        }}
+        open={marker !== null}
+      >
+        <DialogContent
+          className="max-h-[92vh] overflow-y-auto sm:max-w-4xl"
+          // Focus the dialog, not its first button, so the first Space plays
+          // the clip and Enter saves instead of pressing Next.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            (event.currentTarget as HTMLElement | null)?.focus();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Mark clip times</DialogTitle>
+            <DialogDescription>
+              Play each clip and set where the line starts and ends. Saving
+              updates the entry&rsquo;s clip link and times.
+            </DialogDescription>
+          </DialogHeader>
+          {marker !== null && (
+            <QuoteClipMarker
+              initialId={marker.initialId}
+              onDirtyChange={setMarkerDirty}
+              onDone={closeMarker}
+              paused={discardPending}
+              showListener={names.shown && marker.episodeId === episodeId}
+              onSave={saveClipTimes}
+              queue={marker.queue}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmModal
+        cancelText="Keep marking"
+        confirmText="Discard marks"
+        description="The clip times you set but haven't saved will be lost."
+        isOpen={discardPending}
+        onClose={() => setDiscardPending(false)}
+        onConfirm={finishClosingMarker}
+        title="Discard unsaved clip times?"
+      />
+
       <ConfirmModal
         confirmText="Save awards"
         description={
@@ -1140,7 +1388,15 @@ export function ConvexQuotabungaPage() {
         description={
           pendingDelete === null
             ? ""
-            : `Delete ${submissionLabel(pendingDelete)}’s submission${
+            : `Delete ${
+                names.shown
+                  ? `${listenerName(pendingDelete)}’s submission`
+                  : `the ${pendingDelete.sourceTitle} entry “${
+                      pendingDelete.quoteText.length > 60
+                        ? `${pendingDelete.quoteText.slice(0, 60)}…`
+                        : pendingDelete.quoteText
+                    }”`
+              }${
                 pendingDelete.point === null
                   ? ""
                   : " and its owned award point"

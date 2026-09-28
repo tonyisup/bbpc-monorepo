@@ -16,7 +16,7 @@ import {
   youtubeWatchUrl,
   type TranscriptCue,
 } from "@/lib/quoteClip";
-import { loadYouTubeAPI, type YouTubePlayer } from "@/lib/youtubePlayer";
+import { loadYouTubeAPI, type YouTubePlayer } from "@bbpc/youtube";
 
 type Props = {
   videoId: string;

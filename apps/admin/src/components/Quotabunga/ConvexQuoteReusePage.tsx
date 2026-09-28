@@ -25,6 +25,7 @@ import {
 import {
   getAdminEpisodePath,
   getAdminQuotabungaEpisodePath,
+  isBlindReuseQuery,
 } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,8 @@ import {
   CardHeader,
   CardTitle,
 } from "../ui/card";
+
+import { HIDDEN_NAME } from "./ListenerNames";
 
 const STATUS_LABELS: Record<ConvexQuoteStatus, string> = {
   SUBMITTED: "Submitted",
@@ -66,7 +69,13 @@ function userLabel(user: { name: string | null; email: string | null }) {
   return user.name ?? user.email ?? "Unknown listener";
 }
 
-function EpisodeEvidence({ evidence }: { evidence: ConvexQuoteReuseEpisode }) {
+function EpisodeEvidence({
+  evidence,
+  blind,
+}: {
+  evidence: ConvexQuoteReuseEpisode;
+  blind: boolean;
+}) {
   const { episode, submissions, transcriptPassages } = evidence;
   const title = `Episode ${String(episode.number)} · ${episode.title}`;
   const counts = [
@@ -123,8 +132,8 @@ function EpisodeEvidence({ evidence }: { evidence: ConvexQuoteReuseEpisode }) {
                   &ldquo;{submission.quoteText}&rdquo;
                 </blockquote>
                 <p className="text-sm text-muted-foreground">
-                  {submission.sourceTitle} · {submission.sourceType} · from{" "}
-                  {userLabel(submission.user)}
+                  {submission.sourceTitle} · {submission.sourceType} ·{" "}
+                  {blind ? HIDDEN_NAME : `from ${userLabel(submission.user)}`}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="secondary">
@@ -183,6 +192,9 @@ export function ConvexQuoteReusePage() {
   const router = useRouter();
   const idParam = router.query.id;
   const submissionId = Array.isArray(idParam) ? idParam[0] : idParam;
+  // Opened from a round still judged blind. Every listener stays hidden: an
+  // earlier entry by the same listener would otherwise name them.
+  const blind = isBlindReuseQuery(router.query);
   const [report, setReport] = useState<ConvexQuoteReuseReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -314,8 +326,8 @@ export function ConvexQuoteReusePage() {
                 &ldquo;{submission.quoteText}&rdquo;
               </blockquote>
               <p className="text-sm text-muted-foreground">
-                {submission.sourceTitle} · {submission.sourceType} · from{" "}
-                {userLabel(submission.user)}
+                {submission.sourceTitle} · {submission.sourceType} ·{" "}
+                {blind ? HIDDEN_NAME : `from ${userLabel(submission.user)}`}
               </p>
             </div>
             <div className="md:text-right">
@@ -363,7 +375,11 @@ export function ConvexQuoteReusePage() {
           </Card>
         ) : (
           report.episodes.map((evidence) => (
-            <EpisodeEvidence evidence={evidence} key={evidence.episode.id} />
+            <EpisodeEvidence
+              blind={blind}
+              evidence={evidence}
+              key={evidence.episode.id}
+            />
           ))
         )}
       </main>
