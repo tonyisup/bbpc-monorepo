@@ -126,6 +126,29 @@ describe("Quotabunga recording round", () => {
     expect(reuse.blind.at(-1)).toBe(false);
   });
 
+  test("names shown for one round are hidden again for the next", async () => {
+    const entries = [submission("a", { bracketOrder: 1 })];
+    await render(entries);
+    act(() =>
+      view.root
+        .findAllByType("button")
+        .find((node) => textOf(node).includes("Show names"))
+        ?.props.onClick()
+    );
+    expect(text()).toContain("Listener a");
+    await act(async () => {
+      view.update(
+        <QuotabungaRecordingRound
+          episodeId="episode-2"
+          onRefresh={vi.fn()}
+          submissions={entries}
+        />
+      );
+    });
+    expect(text()).not.toContain("Listener a");
+    expect(text()).toContain("Name hidden");
+  });
+
   test("shows names once any entry is scored, with no toggle", async () => {
     await render([
       submission("a", {

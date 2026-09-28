@@ -111,6 +111,10 @@ async function mount(
     for (let i = 0; i < 5; i += 1) await Promise.resolve();
   });
   act(() => events.onReady());
+  // The cue seek lands on the next poll, as a real player's would.
+  act(() => {
+    vi.advanceTimersByTime(100);
+  });
   return { onSave, onDirtyChange };
 }
 
@@ -145,7 +149,12 @@ function press(
   change: Partial<
     Pick<
       KeyboardEvent,
-      "shiftKey" | "metaKey" | "ctrlKey" | "altKey" | "defaultPrevented"
+      | "shiftKey"
+      | "metaKey"
+      | "ctrlKey"
+      | "altKey"
+      | "defaultPrevented"
+      | "repeat"
     >
   > = {}
 ) {
@@ -168,6 +177,13 @@ const textOf = (node: ReactTestInstance | string): string =>
   typeof node === "string" ? node : node.children.map(textOf).join("");
 const text = () => textOf(view.root);
 const field = (id: string) => view.root.findByProps({ id });
+// The player reports `time` on the next poll, which lets a pending seek land.
+const settle = (time: number) => {
+  media.getCurrentTime.mockReturnValue(time);
+  act(() => {
+    vi.advanceTimersByTime(100);
+  });
+};
 const messageText = (role: "status" | "alert") =>
   view.root
     .findAllByProps({ role })
@@ -205,6 +221,9 @@ describe("quote clip marker", () => {
         keyListeners = keyListeners.filter((item) => item !== listener);
       },
     });
+    media.seekTo.mockImplementation((seconds: number) => {
+      media.getCurrentTime.mockReturnValue(seconds);
+    });
     mocks.load.mockResolvedValue({
       Player: class {
         constructor(
@@ -223,6 +242,68 @@ describe("quote clip marker", () => {
     act(() => view?.unmount());
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  test("moving on from an untouched clip saves nothing, and a held Enter doesn't repeat", async () => {
+    const onSave = vi.fn();
+    await mount(onSave);
+    press("Enter");
+    expect(onSave).not.toHaveBeenCalled();
+    expect(text()).toContain("Clip 2 of 3");
+    expect(messageText("status")).toContain("No changes to clip 1.");
+    press("Enter", null, { repeat: true });
+    expect(text()).toContain("Clip 2 of 3");
+  });
+
+  test("an entry switched to another video drops the marks; one that lost its YouTube link leaves", async () => {
+    const onSave = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new EntryChangedError({
+          ...first,
+          clipUrl: "https://youtu.be/ccccccccccc",
+          updatedAt: 2,
+        })
+      )
+      .mockRejectedValueOnce(
+        new EntryChangedError({
+          ...first,
+          clipUrl: "https://vimeo.com/1",
+          updatedAt: 3,
+        })
+      );
+    await mount(onSave);
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    await act(async () => {
+      press("Enter");
+      await Promise.resolve();
+    });
+    expect(field("clip-marker-end").props.value).toBe("");
+    expect(messageText("alert")).toContain("different video");
+
+    // The new video's player loads and cues before marking again.
+    await flush();
+    act(() => events.onReady());
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    await act(async () => {
+      press("Enter");
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Clip 1 of 2");
+    expect(messageText("alert")).toContain("no longer links to a YouTube clip");
+  });
+
+  test("a cue set while the player is loading is applied once it is ready", async () => {
+    await mountUnready([first, third], "a");
+    press("j");
+    act(() => events.onReady());
+    // The second entry's start (link t=75), a second early.
+    expect(media.seekTo).toHaveBeenLastCalledWith(74, true);
   });
 
   test("marks typed while a save is in flight stay unsaved", async () => {
@@ -401,7 +482,7 @@ describe("quote clip marker", () => {
     expect(onSave).not.toHaveBeenCalled();
 
     act(() =>
-      field("clip-marker-end").props.onChange({ target: { value: "" } })
+      field("clip-marker-end").props.onChange({ target: { value: "0:45.0" } })
     );
     await act(async () => {
       press("Enter");
@@ -423,6 +504,7 @@ describe("quote clip marker", () => {
     expect(media.playVideo).toHaveBeenCalledOnce();
 
     media.getPlayerState.mockReturnValue(1);
+    settle(40.1);
     media.getCurrentTime.mockReturnValue(50.2);
     act(() => {
       vi.advanceTimersByTime(100);
@@ -493,8 +575,17 @@ describe("quote clip marker", () => {
 
   test("asks for a start, and refuses times past 24 hours or past the video's end", async () => {
     const { onSave } = await mount(vi.fn(), vi.fn(), "c");
+    // Untouched, the last clip has nothing to save.
+    press("Enter");
+    expect(messageText("status")).toContain("No changes to save.");
+    act(() =>
+      field("clip-marker-end").props.onChange({ target: { value: "0:10" } })
+    );
     press("Enter");
     expect(messageText("alert")).toBe("Set a start first.");
+    act(() =>
+      field("clip-marker-end").props.onChange({ target: { value: "" } })
+    );
 
     const typeStart = (value: string) =>
       act(() =>
@@ -539,6 +630,8 @@ describe("quote clip marker", () => {
     expect(buttonNamed("Save").props.disabled).toBe(false);
 
     onSave.mockRejectedValueOnce("offline");
+    media.getCurrentTime.mockReturnValue(46);
+    press("e");
     await act(async () => {
       buttonNamed("Save").props.onClick();
       await Promise.resolve();
@@ -551,6 +644,7 @@ describe("quote clip marker", () => {
     press("p");
     expect(media.seekTo).toHaveBeenLastCalledWith(40, true);
     media.getPlayerState.mockReturnValue(1);
+    settle(40.1);
     media.getCurrentTime.mockReturnValue(44.2);
     act(() => {
       vi.advanceTimersByTime(100);
@@ -576,19 +670,23 @@ describe("quote clip marker", () => {
     media.getCurrentTime.mockReturnValue(60);
     press("ArrowLeft");
     expect(media.seekTo).toHaveBeenLastCalledWith(59, true);
+    // Steps pressed before a seek lands add up from its target.
     press("ArrowRight", null, { shiftKey: true });
-    expect(media.seekTo).toHaveBeenLastCalledWith(65, true);
+    expect(media.seekTo).toHaveBeenLastCalledWith(64, true);
     press(",");
-    expect(media.seekTo).toHaveBeenLastCalledWith(expect.closeTo(59.8), true);
+    expect(media.seekTo).toHaveBeenLastCalledWith(expect.closeTo(63.8), true);
     press(".");
-    expect(media.seekTo).toHaveBeenLastCalledWith(expect.closeTo(60.2), true);
+    expect(media.seekTo).toHaveBeenLastCalledWith(expect.closeTo(64), true);
 
+    settle(64);
     media.getCurrentTime.mockReturnValue(118);
     press("ArrowRight", null, { shiftKey: true });
     expect(media.seekTo).toHaveBeenLastCalledWith(120, true);
+    settle(120);
     media.getCurrentTime.mockReturnValue(2);
     press("ArrowLeft", null, { shiftKey: true });
     expect(media.seekTo).toHaveBeenLastCalledWith(0, true);
+    settle(0);
 
     media.seekTo.mockClear();
     media.getCurrentTime.mockReturnValue(60);
@@ -661,8 +759,9 @@ describe("quote clip marker", () => {
     expect(messageText("status")).toBe("Loading the YouTube player…");
     act(() => events.onReady());
     expect(messageText("alert")).toBe("");
+    // Once ready, the player is cued a second before the saved start.
     press("s");
-    expect(messageText("status")).toBe("Start set to 0:00.0.");
+    expect(messageText("status")).toBe("Start set to 0:39.0.");
   });
 
   test("moving to an entry with another video replaces the player", async () => {

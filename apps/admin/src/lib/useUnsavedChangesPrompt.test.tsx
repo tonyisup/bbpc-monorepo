@@ -28,17 +28,21 @@ describe("unsaved changes prompt", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listeners = new Map();
+    vi.useFakeTimers();
     vi.stubGlobal("window", {
       addEventListener: (type: string, listener: () => void) =>
         listeners.set(type, listener),
       removeEventListener: (type: string) => listeners.delete(type),
       confirm,
       history: { go },
+      setTimeout,
+      clearTimeout,
     });
   });
 
   afterEach(() => {
     act(() => view?.unmount());
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -78,6 +82,39 @@ describe("unsaved changes prompt", () => {
     expect(go).toHaveBeenCalledWith(1);
     // The pop from stepping forward again is ignored without asking.
     expect(popGuard()()).toBe(false);
+    expect(confirm).toHaveBeenCalledTimes(2);
+  });
+
+  test("a refused Forward, or a longer jump, returns by the distance it moved", () => {
+    const navigation = { currentEntry: { index: 3 } };
+    (window as unknown as { navigation: typeof navigation }).navigation =
+      navigation;
+    act(() => {
+      view = create(<Harness dirty />);
+    });
+    confirm.mockReturnValue(false);
+
+    navigation.currentEntry = { index: 4 };
+    expect(popGuard()()).toBe(false);
+    expect(go).toHaveBeenLastCalledWith(-1);
+    expect(popGuard()()).toBe(false);
+
+    navigation.currentEntry = { index: 1 };
+    expect(popGuard()()).toBe(false);
+    expect(go).toHaveBeenLastCalledWith(2);
+  });
+
+  test("an undo whose pop never arrives doesn't swallow the next Back", () => {
+    act(() => {
+      view = create(<Harness dirty />);
+    });
+    confirm.mockReturnValueOnce(false);
+    expect(popGuard()()).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    confirm.mockReturnValueOnce(true);
+    expect(popGuard()()).toBe(true);
     expect(confirm).toHaveBeenCalledTimes(2);
   });
 });

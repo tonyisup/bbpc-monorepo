@@ -143,6 +143,8 @@ describe("quote clip player", () => {
     expect(media.seekTo).toHaveBeenCalledWith(40, true);
     expect(media.playVideo).toHaveBeenCalledOnce();
 
+    // The seek lands, then playback runs to the end.
+    tick(40.1, PLAYING);
     tick(44, PLAYING);
     expect(media.pauseVideo).not.toHaveBeenCalled();
     tick(44.1, PLAYING);
@@ -160,6 +162,7 @@ describe("quote clip player", () => {
       />
     );
     ready();
+    tick(40.1, PLAYING);
     tick(42, PLAYING);
     click("Pause");
     expect(media.pauseVideo).toHaveBeenCalledOnce();
@@ -168,6 +171,7 @@ describe("quote clip player", () => {
     click("Play clip");
     expect(media.seekTo).toHaveBeenLastCalledWith(42, true);
 
+    tick(42.1, PLAYING);
     tick(44.2, PAUSED);
     click("Play clip");
     expect(media.seekTo).toHaveBeenLastCalledWith(40, true);
@@ -175,6 +179,30 @@ describe("quote clip player", () => {
     tick(41, PAUSED);
     click("Replay");
     expect(media.seekTo).toHaveBeenLastCalledWith(40, true);
+  });
+
+  test("a replay from past the end waits for its seek before stopping", async () => {
+    await mount(
+      <QuoteClipPlayer
+        end={44.1}
+        onClose={vi.fn()}
+        start={40}
+        videoId="abcdefghijk"
+      />
+    );
+    ready();
+    tick(40.1, PLAYING);
+    tick(44.2, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledOnce();
+
+    click("Replay");
+    // YouTube still reports the old spot (or ENDED) until the seek lands.
+    tick(44.2, PLAYING);
+    tick(44.3, 0);
+    expect(media.pauseVideo).toHaveBeenCalledOnce();
+    tick(40.1, PLAYING);
+    tick(44.1, PLAYING);
+    expect(media.pauseVideo).toHaveBeenCalledTimes(2);
   });
 
   test("a clip without an end plays on until paused", async () => {
@@ -244,6 +272,7 @@ describe("quote clip player", () => {
       />
     );
     ready();
+    tick(40.1, PLAYING);
     tick(119, PLAYING);
     expect(media.pauseVideo).not.toHaveBeenCalled();
     tick(120, 0);

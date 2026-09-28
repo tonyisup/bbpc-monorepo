@@ -76,6 +76,7 @@ import {
   clipTimesUpdate,
   EntryChangedError,
   QuoteClipMarker,
+  sameEntry,
   type ClipTimes,
 } from "./QuoteClipMarker";
 
@@ -522,7 +523,7 @@ export function ConvexQuotabungaPage() {
     } catch (error) {
       throw report(new Error(writeFailureMessage(error)));
     }
-    if (current === null || current.updatedAt !== submission.updatedAt) {
+    if (current === null || !sameEntry(submission, current)) {
       roundChanged();
       throw report(new EntryChangedError(current));
     }

@@ -5,6 +5,11 @@ const PLAYING = 1;
 const ENDED = 0;
 const READY_TIMEOUT_MS = 20_000;
 const POLL_INTERVAL_MS = 100;
+// A seek settles asynchronously. Until the player reports a time this close to
+// the target, it may still report the old time, or ENDED, from before it.
+const SEEK_SETTLE_SECONDS = 0.75;
+// A seek that never lands is given up after this many polls.
+const SEEK_SETTLE_POLLS = 20;
 
 export interface YouTubePlayerState {
   ready: boolean;
@@ -41,6 +46,7 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
   const container = useRef<HTMLDivElement>(null);
   const player = useRef<YouTubePlayer | null>(null);
   const stopAt = useRef<number | null>(null);
+  const pendingSeek = useRef<{ target: number; polls: number } | null>(null);
   const blocked = useRef(false);
   const startRef = useRef(startAt);
   startRef.current = startAt;
@@ -72,6 +78,7 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
       setState((current) => ({ ...current, ready: false, error }));
     };
     stopAt.current = null;
+    pendingSeek.current = null;
     blocked.current = false;
     setState({
       ready: false,
@@ -109,7 +116,21 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 const time = instance.getCurrentTime();
                 const length = instance.getDuration();
                 const status = instance.getPlayerState();
+                const seeking = pendingSeek.current;
+                if (seeking !== null) {
+                  seeking.polls += 1;
+                  if (
+                    (status !== ENDED &&
+                      Math.abs(time - seeking.target) <= SEEK_SETTLE_SECONDS) ||
+                    seeking.polls >= SEEK_SETTLE_POLLS
+                  ) {
+                    pendingSeek.current = null;
+                  }
+                }
+                // The stop waits for the seek, or a replay from past the end
+                // would be paused by the time it is leaving.
                 if (
+                  pendingSeek.current === null &&
                   stopAt.current !== null &&
                   (time >= stopAt.current || status === ENDED)
                 ) {
@@ -120,7 +141,9 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                 const next = {
                   ready: true,
                   error: "",
-                  currentTime: Number.isFinite(time) ? time : 0,
+                  currentTime:
+                    pendingSeek.current?.target ??
+                    (Number.isFinite(time) ? time : 0),
                   duration: Number.isFinite(length) ? length : 0,
                   playing: status === PLAYING,
                   autoplayBlocked: blocked.current,
@@ -161,6 +184,7 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     const limit = Number.isFinite(length) && length > 0 ? length : seconds;
     const time = Math.min(Math.max(0, seconds), limit);
     stopAt.current = null;
+    pendingSeek.current = { target: time, polls: 0 };
     current.seekTo(time, true);
     setState((state) => ({ ...state, currentTime: time }));
   }, []);
@@ -177,7 +201,9 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
   const playUntil = useCallback((from: number, until: number | null) => {
     const current = player.current;
     if (!current) return;
-    current.seekTo(Math.max(0, from), true);
+    const target = Math.max(0, from);
+    pendingSeek.current = { target, polls: 0 };
+    current.seekTo(target, true);
     stopAt.current = until;
     current.playVideo();
   }, []);
@@ -186,8 +212,13 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     player.current?.setPlaybackRate(rate);
   }, []);
 
+  // Mid-seek the player may still report where it was, so steps taken in a
+  // row, and marks set right after one, count from the target instead.
   const currentTime = useCallback(
-    () => player.current?.getCurrentTime() ?? state.currentTime,
+    () =>
+      pendingSeek.current?.target ??
+      player.current?.getCurrentTime() ??
+      state.currentTime,
     [state.currentTime]
   );
 

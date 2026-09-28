@@ -196,6 +196,8 @@ describe("Quotabunga prep page", () => {
       confirm: mocks.confirm,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
+      setTimeout,
+      clearTimeout,
     });
     mocks.loadEpisodes.mockResolvedValue([
       {
@@ -332,11 +334,16 @@ describe("Quotabunga prep page", () => {
     await expect(onSave(entry, { start: 1, end: null })).rejects.toThrow(
       "Quotabunga changes are paused in this environment."
     );
-    // The save uses the entry as re-read, not the marker's copy.
+    // A link changed to another site is a change too; the marker gets the
+    // latest version and drops the entry.
     latest.set("a", { ...entry, clipUrl: "https://vimeo.com/1" });
-    await expect(onSave(entry, { start: 1, end: null })).rejects.toThrow(
-      "This entry no longer has a YouTube link."
+    const moved = await onSave(entry, { start: 1, end: null }).catch(
+      (error: unknown) => error
     );
+    expect((moved as EntryChangedError).latest?.clipUrl).toBe(
+      "https://vimeo.com/1"
+    );
+    latest.set("a", entry);
 
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(1);
     closeMarker();
@@ -378,6 +385,18 @@ describe("Quotabunga prep page", () => {
     closeMarker();
     await flush();
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
+  });
+
+  test("a changed entry is caught even when its edit kept the old timestamp", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Clip");
+    latest.set("a", { ...entry, clipUrl: "https://youtu.be/bbbbbbbbbbb" });
+    const refused = await mocks.marker
+      ?.onSave(entry, { start: 42.3, end: null })
+      .catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(EntryChangedError);
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   test("a failed re-read explains itself and sends no update", async () => {

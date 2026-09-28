@@ -34,6 +34,7 @@ const SPEEDS = [1, 0.75, 0.5] as const;
 // "Play the marked line" runs a little past the end so the last word lands.
 const PREVIEW_TAIL_SECONDS = 0.3;
 const PREVIEW_WITHOUT_END_SECONDS = 4;
+const REPEATABLE_KEYS = new Set(["ArrowLeft", "ArrowRight", ",", "."]);
 // Each clip is cued this far before its start, so the lead-in is audible.
 const CUE_LEAD_SECONDS = 1;
 // Seek steps, shared by the transport buttons and the keyboard shortcuts.
@@ -52,9 +53,10 @@ const FORWARD_STEPS = [
 ] as const;
 
 /**
- * What onSave throws when the entry changed since the marker loaded it (a
- * listener can edit it while the round is open), carrying the latest version,
- * or null once it has been deleted. The marker shows that version in place.
+ * What onSave throws when the entry changed since the marker loaded it (its
+ * listener can edit it while the round is open, and other admin actions change
+ * it too), carrying the latest version, or null once it has been deleted. The
+ * marker shows that version in place.
  */
 export class EntryChangedError extends Error {
   readonly latest: ConvexAdminQuoteSubmission | null;
@@ -63,7 +65,7 @@ export class EntryChangedError extends Error {
     super(
       latest === null
         ? "This entry was deleted, so its clip times weren't saved."
-        : "A listener changed this entry after the marker loaded it. Their latest version is shown now; check the clip and save again."
+        : "This entry changed after the marker loaded it. Its latest version is shown now; check the clip and save again."
     );
     this.name = "EntryChangedError";
     this.latest = latest;
@@ -123,6 +125,28 @@ export function clipTimesUpdate(
     listenerNotes: submission.listenerNotes,
     adminNotes: submission.adminNotes,
   };
+}
+
+/**
+ * Whether `current` is the entry `snapshot` was read as. updatedAt alone
+ * isn't enough: a listener's own edit can carry an old timestamp.
+ */
+export function sameEntry(
+  snapshot: ConvexAdminQuoteSubmission,
+  current: ConvexAdminQuoteSubmission
+): boolean {
+  return (
+    snapshot.updatedAt === current.updatedAt &&
+    snapshot.quoteText === current.quoteText &&
+    snapshot.sourceTitle === current.sourceTitle &&
+    snapshot.sourceType === current.sourceType &&
+    snapshot.clipUrl === current.clipUrl &&
+    snapshot.clipStartSeconds === current.clipStartSeconds &&
+    snapshot.clipEndSeconds === current.clipEndSeconds &&
+    snapshot.listenerNotes === current.listenerNotes &&
+    snapshot.adminNotes === current.adminNotes &&
+    snapshot.scored === current.scored
+  );
 }
 
 function savedDraft(submission: ConvexAdminQuoteSubmission): Draft {
@@ -218,10 +242,11 @@ export function QuoteClipMarker({
   const entryId = entry?.id;
   const startAtRef = useRef(startAt);
   startAtRef.current = startAt;
+  // Readiness counts too: a cue set while the player was loading is dropped.
   const seek = player.seek;
   useEffect(() => {
-    seek(startAtRef.current);
-  }, [entryId, seek]);
+    if (ready) seek(startAtRef.current);
+  }, [entryId, ready, seek]);
 
   const updateDraft = (change: Partial<Draft>) => {
     if (entry === undefined) return;
@@ -295,6 +320,21 @@ export function QuoteClipMarker({
 
   const save = async (advance: boolean) => {
     if (entry === undefined || saving) return;
+    // Saving an untouched clip would still round its times and rewrite its
+    // link, so moving on from one saves nothing.
+    const saved = savedDraft(entry);
+    if (draft.start === saved.start && draft.end === saved.end) {
+      if (advance && index < entries.length - 1) {
+        setIndex(index + 1);
+        setMessage({
+          text: `No changes to clip ${String(index + 1)}.`,
+          error: false,
+        });
+      } else {
+        setMessage({ text: "No changes to save.", error: false });
+      }
+      return;
+    }
     const times = readTimes();
     if (typeof times === "string") {
       setMessage({ text: times, error: true });
@@ -345,9 +385,21 @@ export function QuoteClipMarker({
         });
       }
     } catch (failure) {
+      let reason =
+        failure instanceof Error
+          ? failure.message
+          : "The clip times weren't saved.";
       if (failure instanceof EntryChangedError) {
         const latest = failure.latest;
-        if (latest === null) {
+        const latestVideo =
+          latest === null ? null : parseYouTubeUrl(latest.clipUrl ?? "");
+        if (latest === null || latestVideo === null || latest.scored) {
+          // Gone, or no longer something the marker can edit: drop it.
+          if (latest !== null) {
+            reason = latest.scored
+              ? "This entry has been scored, so its clip times can't change."
+              : "This entry no longer links to a YouTube clip, so its clip times weren't saved.";
+          }
           const removed = entries.findIndex(
             (submission) => submission.id === entry.id
           );
@@ -365,18 +417,23 @@ export function QuoteClipMarker({
             )
           );
         } else {
-          // The admin's marks stay as drafts against the latest version.
           setEntries((current) =>
             current.map((submission) =>
               submission.id === latest.id ? latest : submission
             )
           );
+          // Marks set against another video mean nothing on the new one.
+          if (latestVideo.id !== parseYouTubeUrl(entry.clipUrl ?? "")?.id) {
+            setDrafts((current) => {
+              const next = { ...current };
+              delete next[latest.id];
+              return next;
+            });
+            reason =
+              "This entry now links to a different video, so your marks were cleared. Mark it again.";
+          }
         }
       }
-      const reason =
-        failure instanceof Error
-          ? failure.message
-          : "The clip times weren't saved.";
       setMessage({
         text:
           indexRef.current === savedIndex
@@ -419,7 +476,13 @@ export function QuoteClipMarker({
         typeof target?.closest === "function" &&
         target.closest(selector) !== null;
       // Typing stays typing, and a control reached with Tab keeps its keys.
-      if (inside("input, textarea, select, [contenteditable='true']")) return;
+      if (
+        inside(
+          "input:not([type='range']), textarea, select, [contenteditable='true']"
+        )
+      ) {
+        return;
+      }
       if (
         (event.key === " " || event.key === "Enter") &&
         inside("button, a, summary")
@@ -430,6 +493,8 @@ export function QuoteClipMarker({
       const action = shortcuts.current[key];
       if (action === undefined) return;
       event.preventDefault();
+      // A held Enter must not save its way down the queue; seeking may repeat.
+      if (event.repeat && !REPEATABLE_KEYS.has(key)) return;
       action(event);
     };
     document.addEventListener("keydown", onKeyDown);
