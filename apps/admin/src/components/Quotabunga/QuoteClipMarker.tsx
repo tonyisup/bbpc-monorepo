@@ -34,6 +34,22 @@ const SPEEDS = [1, 0.75, 0.5] as const;
 // "Play the marked line" runs a little past the end so the last word lands.
 const PREVIEW_TAIL_SECONDS = 0.3;
 const PREVIEW_WITHOUT_END_SECONDS = 4;
+// Each clip is cued this far before its start, so the lead-in is audible.
+const CUE_LEAD_SECONDS = 1;
+// Seek steps, shared by the transport buttons and the keyboard shortcuts.
+const FINE_STEP = 0.2;
+const STEP = 1;
+const COARSE_STEP = 5;
+const BACK_STEPS = [
+  [-COARSE_STEP, "Shift+Left"],
+  [-STEP, "Left"],
+  [-FINE_STEP, ","],
+] as const;
+const FORWARD_STEPS = [
+  [FINE_STEP, "."],
+  [STEP, "Right"],
+  [COARSE_STEP, "Shift+Right"],
+] as const;
 
 export interface ClipTimes {
   start: number;
@@ -144,10 +160,10 @@ export function QuoteClipMarker({
   const entry = entries[index];
   const video = parseYouTubeUrl(entry?.clipUrl ?? "");
   const videoId = video?.id ?? "";
-  // A clip saved without a start cues where its link does, as on /record.
+  // A clip saved without a start cues from its link's own start instead.
   const startAt = Math.max(
     0,
-    (entry?.clipStartSeconds ?? video?.start ?? 0) - 1
+    (entry?.clipStartSeconds ?? video?.start ?? 0) - CUE_LEAD_SECONDS
   );
   const player = useYouTubePlayer(videoId, startAt);
   const { ready, error, currentTime, duration, playing } = player.state;
@@ -253,6 +269,8 @@ export function QuoteClipMarker({
       setMessage({ text: times, error: true });
       return;
     }
+    const savedIndex = index;
+    const savedMarks = draft;
     setSaving(true);
     try {
       const updated = await onSave(entry, times);
@@ -261,14 +279,28 @@ export function QuoteClipMarker({
           submission.id === updated.id ? updated : submission
         )
       );
+      // Marks typed while the save was in flight are kept.
       setDrafts((current) => {
+        const pending = current[updated.id];
+        if (
+          pending !== undefined &&
+          (pending.start !== savedMarks.start || pending.end !== savedMarks.end)
+        ) {
+          return current;
+        }
         const next = { ...current };
         delete next[updated.id];
         return next;
       });
       const range = savedRange(updated);
-      if (advance && index < entries.length - 1) {
-        setIndex(index + 1);
+      // An admin who moved on during the save stays where they went.
+      if (indexRef.current !== savedIndex) {
+        setMessage({
+          text: `Saved clip ${String(savedIndex + 1)}: ${range}.`,
+          error: false,
+        });
+      } else if (advance && savedIndex < entries.length - 1) {
+        setIndex(savedIndex + 1);
         setMessage({
           text: `Saved the previous clip: ${range}.`,
           error: false,
@@ -295,15 +327,17 @@ export function QuoteClipMarker({
   };
 
   // Shortcuts read the latest render's actions through this ref.
+  const indexRef = useRef(index);
+  indexRef.current = index;
   const shortcuts = useRef<Record<string, (event: KeyboardEvent) => void>>({});
   shortcuts.current = {
     " ": () => player.togglePlay(),
     ArrowLeft: (event) =>
-      player.seek(player.currentTime() - (event.shiftKey ? 5 : 1)),
+      player.seek(player.currentTime() - (event.shiftKey ? COARSE_STEP : STEP)),
     ArrowRight: (event) =>
-      player.seek(player.currentTime() + (event.shiftKey ? 5 : 1)),
-    ",": () => player.seek(player.currentTime() - 0.2),
-    ".": () => player.seek(player.currentTime() + 0.2),
+      player.seek(player.currentTime() + (event.shiftKey ? COARSE_STEP : STEP)),
+    ",": () => player.seek(player.currentTime() - FINE_STEP),
+    ".": () => player.seek(player.currentTime() + FINE_STEP),
     s: () => mark("start"),
     e: () => mark("end"),
     p: preview,
@@ -319,9 +353,12 @@ export function QuoteClipMarker({
       const inside = (selector: string) =>
         typeof target?.closest === "function" &&
         target.closest(selector) !== null;
-      // Typing stays typing, and a button reached with Tab keeps its keys.
+      // Typing stays typing, and a control reached with Tab keeps its keys.
       if (inside("input, textarea, select, [contenteditable='true']")) return;
-      if ((event.key === " " || event.key === "Enter") && inside("button, a")) {
+      if (
+        (event.key === " " || event.key === "Enter") &&
+        inside("button, a, summary")
+      ) {
         return;
       }
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
@@ -334,11 +371,33 @@ export function QuoteClipMarker({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // A clicked button lets go of focus so Space and Enter stay shortcuts.
+  // A clicked control lets go of focus so Space and Enter stay shortcuts.
   const releaseClickedButton = (event: MouseEvent<HTMLDivElement>) => {
     if (event.detail === 0) return;
-    const button = (event.target as Element).closest?.("button");
-    (button as HTMLButtonElement | null | undefined)?.blur();
+    const control = (event.target as Element).closest?.("button, a, summary");
+    (control as HTMLElement | null | undefined)?.blur();
+  };
+
+  const stepButton = ([step, key]: readonly [number, string]) => {
+    const size = Math.abs(step);
+    const title = `${step < 0 ? "Back" : "Forward"} ${String(size)} second${
+      size === 1 ? "" : "s"
+    } (${key})`;
+    const label = `${step < 0 ? "−" : "+"}${String(size)}`;
+    return (
+      <Button
+        aria-label={title}
+        disabled={!ready}
+        key={label}
+        onClick={() => player.seek(player.currentTime() + step)}
+        size="sm"
+        title={title}
+        type="button"
+        variant="outline"
+      >
+        {label}
+      </Button>
+    );
   };
 
   if (entry === undefined) {
@@ -362,7 +421,9 @@ export function QuoteClipMarker({
           Clip {index + 1} of {entries.length}
           {showListener && ` · ${listenerName(entry)}`}
           {dirtyCount > 0 && (
-            <span className="ml-2 text-amber-600">{dirtyCount} unsaved</span>
+            <span className="ml-2 text-amber-700 dark:text-amber-300">
+              {dirtyCount} unsaved
+            </span>
           )}
         </p>
         <div className="flex gap-2">
@@ -428,26 +489,7 @@ export function QuoteClipMarker({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {(
-          [
-            ["−5", -5, "Back 5 seconds (Shift+Left)"],
-            ["−1", -1, "Back 1 second (Left)"],
-            ["−0.2", -0.2, "Back 0.2 seconds (,)"],
-          ] as const
-        ).map(([label, step, title]) => (
-          <Button
-            aria-label={title}
-            disabled={!ready}
-            key={label}
-            onClick={() => player.seek(player.currentTime() + step)}
-            size="sm"
-            title={title}
-            type="button"
-            variant="outline"
-          >
-            {label}
-          </Button>
-        ))}
+        {BACK_STEPS.map(stepButton)}
         <Button
           className="min-w-24"
           disabled={!ready}
@@ -463,26 +505,7 @@ export function QuoteClipMarker({
           )}
           {playing ? "Pause" : "Play"}
         </Button>
-        {(
-          [
-            ["+0.2", 0.2, "Forward 0.2 seconds (.)"],
-            ["+1", 1, "Forward 1 second (Right)"],
-            ["+5", 5, "Forward 5 seconds (Shift+Right)"],
-          ] as const
-        ).map(([label, step, title]) => (
-          <Button
-            aria-label={title}
-            disabled={!ready}
-            key={label}
-            onClick={() => player.seek(player.currentTime() + step)}
-            size="sm"
-            title={title}
-            type="button"
-            variant="outline"
-          >
-            {label}
-          </Button>
-        ))}
+        {FORWARD_STEPS.map(stepButton)}
         <Button
           aria-label={`Playback speed ${String(rate)}×`}
           onClick={() => setSpeed((value) => (value + 1) % SPEEDS.length)}
@@ -626,9 +649,11 @@ export function QuoteClipMarker({
           <dt>Space</dt>
           <dd>Play or pause</dd>
           <dt>← →</dt>
-          <dd>Back or forward 1 second; with Shift, 5 seconds</dd>
+          <dd>
+            Back or forward {STEP} second; with Shift, {COARSE_STEP} seconds
+          </dd>
           <dt>, .</dt>
-          <dd>Back or forward 0.2 seconds</dd>
+          <dd>Back or forward {FINE_STEP} seconds</dd>
           <dt>S E</dt>
           <dd>Set the start or end at the current time</dd>
           <dt>P</dt>

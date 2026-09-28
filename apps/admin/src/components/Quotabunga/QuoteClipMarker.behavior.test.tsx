@@ -219,6 +219,29 @@ describe("quote clip marker", () => {
     vi.unstubAllGlobals();
   });
 
+  test("moving on while a save is in flight doesn't pull the view back", async () => {
+    let finish: (entry: ConvexAdminQuoteSubmission) => void = () => undefined;
+    const onSave = vi.fn(
+      () =>
+        new Promise<ConvexAdminQuoteSubmission>((resolve) => {
+          finish = resolve;
+        })
+    );
+    await mount(onSave);
+    media.getCurrentTime.mockReturnValue(44);
+    press("e");
+    press("Enter");
+    press("j");
+    press("j");
+    expect(text()).toContain("Clip 3 of 3");
+    await act(async () => {
+      finish({ ...first, clipEndSeconds: 44 });
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Clip 3 of 3");
+    expect(text()).toContain("Saved clip 1: 0:40.0 to 0:44.0.");
+  });
+
   test("marks the line with S and E, then saves and moves to the next clip on Enter", async () => {
     const onSave = vi.fn(
       async (
@@ -485,11 +508,17 @@ describe("quote clip marker", () => {
     expect(press("x").preventDefault).not.toHaveBeenCalled();
     expect(media.seekTo).not.toHaveBeenCalled();
 
-    const focusedButton = {
-      closest: (selector: string) => (selector === "button, a" ? {} : null),
-    };
+    // A fake element that matches selector lists naming its own tag.
+    const focused = (tag: string) => ({
+      closest: (selector: string) =>
+        selector.split(", ").includes(tag) ? {} : null,
+    });
+    const focusedButton = focused("button");
     press(" ", focusedButton);
     press("Enter", focusedButton);
+    // The keyboard tips' <summary> opens with Enter; it must not save.
+    press("Enter", focused("summary"));
+    press(" ", focused("summary"));
     expect(media.playVideo).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
 

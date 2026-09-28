@@ -17,8 +17,12 @@ vi.mock("next/link", () => ({
     <a href={href}>{children}</a>
   ),
 }));
+const reuse = vi.hoisted(() => ({ blind: [] as boolean[] }));
 vi.mock("../Quotabunga/QuoteReuseChance", () => ({
-  QuoteReuseChance: () => null,
+  QuoteReuseChance: ({ blind }: { blind?: boolean }) => {
+    reuse.blind.push(blind === true);
+    return null;
+  },
 }));
 // An opened clip's player stays loading; these tests only check which opens.
 vi.mock("@bbpc/youtube", async (importOriginal) => ({
@@ -106,6 +110,8 @@ describe("Quotabunga recording round", () => {
     ]);
     expect(text()).not.toContain("Listener a");
     expect(text()).toContain("Name hidden");
+    // The reuse link opens its breakdown blind too.
+    expect(reuse.blind.at(-1)).toBe(true);
     const select = view.root.findAllByType("select")[0];
     expect(select?.props["aria-label"]).toBe(
       "Placement for the Source a entry"

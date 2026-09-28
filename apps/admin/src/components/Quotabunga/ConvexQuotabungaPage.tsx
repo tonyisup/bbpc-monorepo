@@ -31,6 +31,7 @@ import {
   createConvexAdminQuoteForUser,
   deleteConvexAdminQuote,
   loadConvexAdminQuoteEpisodes,
+  loadConvexAdminQuoteSubmission,
   loadConvexAdminQuoteSubmissions,
   randomizeConvexAdminQuotes,
   setConvexAdminQuoteStatus,
@@ -49,6 +50,7 @@ import {
   type ConvexAdminUser,
 } from "@/convex/users";
 import { clipSeconds, MAX_CLIP_SECONDS } from "@/lib/clipTimes";
+import { useUnsavedChangesPrompt } from "@/lib/useUnsavedChangesPrompt";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -136,6 +138,8 @@ function writeFailureMessage(error: unknown): string {
   }
 }
 
+const DISCARD_MARKS = "Discard the clip times you haven't saved?";
+
 function hasYouTubeClip(submission: ConvexAdminQuoteSubmission): boolean {
   return (
     submission.clipUrl !== null && parseYouTubeUrl(submission.clipUrl) !== null
@@ -187,6 +191,8 @@ export function ConvexQuotabungaPage() {
   } | null>(null);
   const [markerDirty, setMarkerDirty] = useState(false);
   const markerSaved = useRef(false);
+  const markerOpen = useRef(false);
+  useUnsavedChangesPrompt(marker !== null && markerDirty, DISCARD_MARKS);
   const [loadFailed, setLoadFailed] = useState(false);
   const [revision, setRevision] = useState(0);
 
@@ -462,18 +468,17 @@ export function ConvexQuotabungaPage() {
   };
 
   const openMarker = (initialId: string) => {
+    markerOpen.current = true;
     markerSaved.current = false;
     setMarkerDirty(false);
     setMarker({ queue: markerQueue, initialId });
   };
 
   const closeMarker = () => {
-    if (
-      markerDirty &&
-      !window.confirm("Discard the clip times you haven't saved?")
-    ) {
+    if (markerDirty && !window.confirm(DISCARD_MARKS)) {
       return;
     }
+    markerOpen.current = false;
     setMarker(null);
     setMarkerDirty(false);
     if (markerSaved.current) {
@@ -486,16 +491,35 @@ export function ConvexQuotabungaPage() {
     submission: ConvexAdminQuoteSubmission,
     times: ClipTimes
   ) => {
-    const video = parseYouTubeUrl(submission.clipUrl ?? "");
+    // The update sends the whole entry back, so it is re-read first: a
+    // listener can still edit it while the round is open, and saving the
+    // marker's copy would put their old text and link back.
+    let current: ConvexAdminQuoteSubmission | null;
+    try {
+      current = await loadConvexAdminQuoteSubmission(convex, submission.id);
+    } catch (error) {
+      throw new Error(writeFailureMessage(error));
+    }
+    if (current === null) {
+      throw new Error("This entry was deleted. Close the marker to reload.");
+    }
+    if (current.updatedAt !== submission.updatedAt) {
+      throw new Error(
+        "This entry changed since the marker opened. Close and reopen the marker to load it."
+      );
+    }
+    const video = parseYouTubeUrl(current.clipUrl ?? "");
     if (video === null) {
       throw new Error("This entry no longer has a YouTube link.");
     }
     try {
       const updated = await updateConvexAdminQuoteContent(
         convex,
-        clipTimesUpdate(submission, video.id, times)
+        clipTimesUpdate(current, video.id, times)
       );
-      markerSaved.current = true;
+      // A save that lands after the dialog closed reloads the list itself.
+      if (markerOpen.current) markerSaved.current = true;
+      else refresh();
       return updated;
     } catch (error) {
       throw new Error(writeFailureMessage(error));
@@ -1239,7 +1263,15 @@ export function ConvexQuotabungaPage() {
         }}
         open={marker !== null}
       >
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
+        <DialogContent
+          className="max-h-[92vh] overflow-y-auto sm:max-w-4xl"
+          // Focus the dialog, not its first button, so the first Space plays
+          // the clip and Enter saves instead of pressing Next.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            (event.currentTarget as HTMLElement | null)?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Mark clip times</DialogTitle>
             <DialogDescription>

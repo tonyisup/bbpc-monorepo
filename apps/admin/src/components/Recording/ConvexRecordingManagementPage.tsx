@@ -1,3 +1,4 @@
+import { parseYouTubeUrl } from "@bbpc/youtube";
 import { documentId } from "@tonyisup/bbpc-convex-api/contracts";
 import { api } from "@tonyisup/bbpc-convex-api";
 import type { ConvexReactClient } from "convex/react";
@@ -906,6 +907,7 @@ export function QuotabungaRecordingRound({
                   )}
                   <div className="flex flex-wrap items-center gap-3">
                     <QuoteReuseChance
+                      blind={!names.shown}
                       quoteText={submission.quoteText}
                       submissionId={submission.id}
                     />
@@ -923,13 +925,20 @@ export function QuotabungaRecordingRound({
                         rel="noreferrer noopener"
                         target="_blank"
                       >
-                        Open clip
-                        {submission.clipStartSeconds !== null
-                          ? ` at ${clipSeconds(submission.clipStartSeconds)}`
-                          : ""}
-                        {submission.clipEndSeconds !== null
-                          ? ` to ${clipSeconds(submission.clipEndSeconds)}`
-                          : ""}
+                        {parseYouTubeUrl(submission.clipUrl) === null ? (
+                          <>
+                            Open clip
+                            {submission.clipStartSeconds !== null
+                              ? ` at ${clipSeconds(submission.clipStartSeconds)}`
+                              : ""}
+                            {submission.clipEndSeconds !== null
+                              ? ` to ${clipSeconds(submission.clipEndSeconds)}`
+                              : ""}
+                          </>
+                        ) : (
+                          // Play clip beside it already shows the marked range.
+                          "Open on YouTube"
+                        )}
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     )}

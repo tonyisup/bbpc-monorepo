@@ -1,4 +1,4 @@
-export const MAX_CLIP_SECONDS = 86_400;
+export { MAX_CLIP_SECONDS } from "@bbpc/youtube";
 
 /** Editor-picked times carry milliseconds; a tenth is enough to cue a clip. */
 export function clipSeconds(value: number): string {

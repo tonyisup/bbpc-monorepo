@@ -15,6 +15,17 @@ export interface YouTubePlayerState {
   autoplayBlocked: boolean;
 }
 
+function sameState(left: YouTubePlayerState, right: YouTubePlayerState) {
+  return (
+    left.ready === right.ready &&
+    left.error === right.error &&
+    left.currentTime === right.currentTime &&
+    left.duration === right.duration &&
+    left.playing === right.playing &&
+    left.autoplayBlocked === right.autoplayBlocked
+  );
+}
+
 function playerErrorMessage(code: number): string {
   if (code === 101 || code === 150) {
     return "The owner doesn't allow this video to play here.";
@@ -52,9 +63,14 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
     let readyTimeout: number | undefined;
     let instance: YouTubePlayer | null = null;
     const host = container.current;
+    // An error can arrive after the player is ready (an embed refusal often
+    // does), so polling stops too, or its next tick would clear the error.
     const fail = (error: string) => {
       if (disposed) return;
       window.clearTimeout(readyTimeout);
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
+      player.current = null;
       stopAt.current = null;
       setState((current) => ({ ...current, ready: false, error }));
     };
@@ -104,14 +120,19 @@ export function useYouTubePlayer(videoId: string, startAt: number) {
                   instance.pauseVideo();
                 }
                 if (status === PLAYING) blocked.current = false;
-                setState({
+                const next = {
                   ready: true,
                   error: "",
                   currentTime: Number.isFinite(time) ? time : 0,
                   duration: Number.isFinite(length) ? length : 0,
                   playing: status === PLAYING,
                   autoplayBlocked: blocked.current,
-                });
+                };
+                // A paused player reports the same state every tick; keeping
+                // the old object skips the re-render.
+                setState((current) =>
+                  sameState(current, next) ? current : next
+                );
               };
               poll();
               timer = window.setInterval(poll, 100);

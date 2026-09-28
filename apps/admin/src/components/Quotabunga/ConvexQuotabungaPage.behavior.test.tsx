@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   client: {},
   loadEpisodes: vi.fn(),
   loadSubmissions: vi.fn(),
+  loadSubmission: vi.fn(),
   loadUsers: vi.fn(),
   update: vi.fn(),
   confirm: vi.fn(),
@@ -26,12 +27,15 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("convex/react", () => ({ useConvex: () => mocks.client }));
 vi.mock("next/head", () => ({ default: () => null }));
-vi.mock("next/router", () => ({ useRouter: () => ({ query: {} }) }));
+vi.mock("next/router", () => ({
+  useRouter: () => ({ query: {}, beforePopState: vi.fn() }),
+}));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/convex/quotabunga", async (importOriginal) => ({
   ...(await importOriginal<typeof QuotabungaAdapter>()),
   loadConvexAdminQuoteEpisodes: mocks.loadEpisodes,
   loadConvexAdminQuoteSubmissions: mocks.loadSubmissions,
+  loadConvexAdminQuoteSubmission: mocks.loadSubmission,
   updateConvexAdminQuoteContent: mocks.update,
 }));
 vi.mock("@/convex/users", () => ({
@@ -78,6 +82,8 @@ import { ConvexQuotabungaPage } from "./ConvexQuotabungaPage";
 import { clipTimesUpdate } from "./QuoteClipMarker";
 
 let view: ReactTestRenderer;
+// The entries as the server has them now, for saves that re-read one.
+const latest = new Map<string, ConvexAdminQuoteSubmission>();
 
 function submission(
   id: string,
@@ -148,6 +154,8 @@ const flush = () =>
   });
 
 async function render(entries: ConvexAdminQuoteSubmission[]) {
+  latest.clear();
+  entries.forEach((entry) => latest.set(entry.id, entry));
   mocks.loadSubmissions.mockImplementation(
     async (_client: unknown, episodeId: string) =>
       episodeId === "episode-1" ? entries : []
@@ -163,7 +171,15 @@ describe("Quotabunga prep page", () => {
     vi.clearAllMocks();
     mocks.marker = null;
     mocks.confirm.mockReturnValue(true);
-    vi.stubGlobal("window", { confirm: mocks.confirm });
+    // Saves re-read the entry; by default nobody has changed it meanwhile.
+    mocks.loadSubmission.mockImplementation(
+      async (_client: unknown, id: string) => latest.get(id) ?? null
+    );
+    vi.stubGlobal("window", {
+      confirm: mocks.confirm,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
     mocks.loadEpisodes.mockResolvedValue([
       {
         id: "episode-1",
@@ -298,15 +314,11 @@ describe("Quotabunga prep page", () => {
     await expect(onSave(entry, { start: 1, end: null })).rejects.toThrow(
       "Quotabunga changes are paused in this environment."
     );
-    await expect(
-      onSave(
-        { ...entry, clipUrl: "https://vimeo.com/1" },
-        {
-          start: 1,
-          end: null,
-        }
-      )
-    ).rejects.toThrow("This entry no longer has a YouTube link.");
+    // The save uses the entry as re-read, not the marker's copy.
+    latest.set("a", { ...entry, clipUrl: "https://vimeo.com/1" });
+    await expect(onSave(entry, { start: 1, end: null })).rejects.toThrow(
+      "This entry no longer has a YouTube link."
+    );
 
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(1);
     closeMarker();
@@ -316,6 +328,51 @@ describe("Quotabunga prep page", () => {
     // Closing without a save leaves the round as loaded.
     click("Mark clip");
     closeMarker();
+    await flush();
+    expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
+  });
+
+  test("refuses to save over an entry that changed since the marker opened", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Mark clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+
+    // The listener edited their quote after the marker loaded it.
+    latest.set("a", { ...entry, quoteText: "Newer line", updatedAt: 2 });
+    await expect(onSave(entry, { start: 42.3, end: null })).rejects.toThrow(
+      "This entry changed since the marker opened."
+    );
+    latest.delete("a");
+    await expect(onSave(entry, { start: 42.3, end: null })).rejects.toThrow(
+      "This entry was deleted."
+    );
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  test("a save that lands after the dialog closed still reloads the round", async () => {
+    const entry = submission("a");
+    await render([entry]);
+    click("Mark clip");
+    const onSave = mocks.marker?.onSave;
+    if (onSave === undefined) throw new Error("The marker didn't open");
+
+    let finish: (value: ConvexAdminQuoteSubmission) => void = () => undefined;
+    mocks.update.mockReturnValueOnce(
+      new Promise<ConvexAdminQuoteSubmission>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const pending = onSave(entry, { start: 42.3, end: null });
+    closeMarker();
+    await flush();
+    expect(mocks.loadSubmissions).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finish({ ...entry, clipStartSeconds: 42.3 });
+      await pending;
+    });
     await flush();
     expect(mocks.loadSubmissions).toHaveBeenCalledTimes(2);
   });

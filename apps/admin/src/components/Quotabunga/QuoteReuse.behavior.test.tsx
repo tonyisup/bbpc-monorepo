@@ -128,6 +128,16 @@ describe("QuoteReuseChance", () => {
     expect(mocks.load).toHaveBeenCalledWith(mocks.client, "quote-1");
   });
 
+  test("opens the breakdown blind while names are hidden", async () => {
+    mocks.load.mockResolvedValueOnce(report);
+    const rendered = await render(
+      <QuoteReuseChance blind quoteText="Make him an offer" submissionId="quote-1" />
+    );
+    expect(rendered.root.findByType("a").props.href).toBe(
+      "/quotabunga/reuse/quote-1?blind=1"
+    );
+  });
+
   test("marks a failed check and shows a dash for a missing entry", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.load.mockRejectedValueOnce(new Error("offline"));
@@ -194,6 +204,21 @@ describe("ConvexQuoteReusePage", () => {
       .map((link) => link.props.href as string);
     expect(hrefs).toContain("/episode/before");
     expect(hrefs).toContain("/quotabunga?episodeId=episode-11");
+  });
+
+  test("keeps the entry's listener hidden when opened from blind judging", async () => {
+    mocks.load.mockResolvedValueOnce(report);
+    await render(<ConvexQuoteReusePage />);
+    expect(text()).toContain("from Listener");
+
+    mocks.query = { id: "quote-1", blind: "1" };
+    mocks.load.mockResolvedValueOnce(report);
+    act(() => renderer?.unmount());
+    await render(<ConvexQuoteReusePage />);
+    expect(text()).toContain("Name hidden");
+    expect(text()).not.toContain("from Listener");
+    // Earlier episodes' rounds were awarded, so their listeners still show.
+    expect(text()).toContain("Earlier listener");
   });
 
   test("explains when no earlier use was found", async () => {

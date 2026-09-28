@@ -192,6 +192,26 @@ describe("quote clip player", () => {
     expect(text()).toContain("clip from 0:40.0");
   });
 
+  test("an error after the player is ready stays on screen", async () => {
+    await mount(
+      <QuoteClipPlayer
+        end={44.1}
+        onClose={vi.fn()}
+        start={40}
+        videoId="abcdefghijk"
+      />
+    );
+    ready();
+    // Embed refusals usually arrive once playback starts, after onReady.
+    act(() => events.onError({ data: 150 }));
+    tick(40, PAUSED);
+    tick(40, PAUSED);
+    expect(textOf(view.root.findByProps({ role: "alert" }))).toContain(
+      "The owner doesn't allow this video to play here."
+    );
+    expect(button("Play clip").props.disabled).toBe(true);
+  });
+
   test("says when autoplay was blocked and links to YouTube when the video can't play", async () => {
     await mount(
       <QuoteClipPlayer

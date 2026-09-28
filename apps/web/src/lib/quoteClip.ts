@@ -1,8 +1,13 @@
-export { parseYouTubeUrl, youtubeWatchUrl } from "@bbpc/youtube";
+import { MAX_CLIP_SECONDS } from "@bbpc/youtube";
+
+export {
+  MAX_CLIP_SECONDS,
+  parseYouTubeUrl,
+  youtubeWatchUrl,
+} from "@bbpc/youtube";
 
 export type TranscriptCue = { start: number; end: number; text: string };
 
-export const MAX_CLIP_SECONDS = 86_400;
 export const MAX_CAPTION_BYTES = 500_000;
 export const MAX_QUOTE_TEXT_LENGTH = 2000;
 

@@ -155,6 +155,8 @@ const listAdminEpisodesReference = api.games.quotes.listAdminEpisodes;
 
 const listAdminForEpisodeReference = api.games.quotes.listAdminForEpisode;
 
+const getAdminByIdReference = api.games.quotes.getAdminById;
+
 const getAdminReuseReportReference = api.games.quotes.getAdminReuseReport;
 
 const createForUserReference = api.games.quotes.createForUser;
@@ -215,6 +217,18 @@ export async function loadConvexAdminQuoteSubmissions(
         episodeId: documentId("episodes", episodeId),
       })
     );
+}
+
+/** One entry as it is now, or null once it has been deleted. */
+export async function loadConvexAdminQuoteSubmission(
+  client: ConvexReactClient,
+  id: string
+): Promise<ConvexAdminQuoteSubmission | null> {
+  return quoteAdminSubmissionSchema.nullable().parse(
+    await client.query(getAdminByIdReference, {
+      id: documentId("quoteSubmissions", id),
+    })
+  );
 }
 
 export async function loadConvexAdminQuoteReuseReport(

@@ -39,6 +39,8 @@ import {
   CardTitle,
 } from "../ui/card";
 
+import { HIDDEN_NAME } from "./ListenerNames";
+
 const STATUS_LABELS: Record<ConvexQuoteStatus, string> = {
   SUBMITTED: "Submitted",
   INCLUDED: "Included",
@@ -183,6 +185,8 @@ export function ConvexQuoteReusePage() {
   const router = useRouter();
   const idParam = router.query.id;
   const submissionId = Array.isArray(idParam) ? idParam[0] : idParam;
+  // Opened from a round still judged blind: keep this entry's listener hidden.
+  const blind = router.query.blind === "1";
   const [report, setReport] = useState<ConvexQuoteReuseReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -314,8 +318,8 @@ export function ConvexQuoteReusePage() {
                 &ldquo;{submission.quoteText}&rdquo;
               </blockquote>
               <p className="text-sm text-muted-foreground">
-                {submission.sourceTitle} · {submission.sourceType} · from{" "}
-                {userLabel(submission.user)}
+                {submission.sourceTitle} · {submission.sourceType} ·{" "}
+                {blind ? HIDDEN_NAME : `from ${userLabel(submission.user)}`}
               </p>
             </div>
             <div className="md:text-right">

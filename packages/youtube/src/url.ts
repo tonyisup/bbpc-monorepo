@@ -1,5 +1,5 @@
-// Clip times are capped at a day, like the quote clip fields that store them.
-const MAX_START_SECONDS = 86_400;
+/** Quote clip times are capped at a day, as the stored clip fields are. */
+export const MAX_CLIP_SECONDS = 86_400;
 
 /** A plain watch link; with a start, it opens at that second. */
 export function youtubeWatchUrl(id: string, start: number | null = null) {
@@ -41,7 +41,7 @@ export function parseYouTubeUrl(value: string) {
         Number(units[2] ?? 0) * 60 +
         Number(units[3] ?? 0)
       : 0;
-    return { id, start: Math.min(MAX_START_SECONDS, seconds) };
+    return { id, start: Math.min(MAX_CLIP_SECONDS, seconds) };
   } catch {
     return null;
   }
