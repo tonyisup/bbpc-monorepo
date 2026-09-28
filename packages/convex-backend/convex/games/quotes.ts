@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { defineRateLimits } from "convex-helpers/server/rateLimit";
 
 import type { Doc, Id } from "../_generated/dataModel.js";
-import type { MutationCtx } from "../_generated/server.js";
+import { env, type MutationCtx } from "../_generated/server.js";
 import {
   adminMutation,
   adminQuery,
@@ -458,15 +458,35 @@ export const reserveVideoSearch = authenticatedMutation({
     }),
 });
 
-/** Spends one Quote Finder assistant run for the caller, or says when to retry. */
+/** Compares without stopping at the first difference. */
+function sameSecret(given: string, expected: string) {
+  let difference = given.length ^ expected.length;
+  for (let index = 0; index < expected.length; index += 1)
+    difference |= (given.charCodeAt(index) || 0) ^ expected.charCodeAt(index);
+  return difference === 0;
+}
+
+/**
+ * Spends one Quote Finder assistant run for the caller, or says when to retry.
+ * Only the web server's locate route holds `serverKey`, so a run is spent
+ * only by a locate request, never by a client calling this directly.
+ */
 export const reserveQuoteLocate = authenticatedMutation({
-  args: {},
+  args: { serverKey: v.string() },
   returns: reservationValidator,
-  handler: async (ctx) =>
-    reserveFromBuckets(ctx, ctx.actor.user._id, {
+  handler: async (ctx, { serverKey }) => {
+    const expected = env.QUOTE_LOCATE_SERVER_KEY?.trim();
+    if (!expected || !sameSecret(serverKey, expected)) {
+      domainError(
+        "FORBIDDEN",
+        "Quote Finder assistant runs are reserved by the web server.",
+      );
+    }
+    return reserveFromBuckets(ctx, ctx.actor.user._id, {
       user: "quoteLocatePerUser",
       site: "quoteLocateSiteWide",
-    }),
+    });
+  },
 });
 
 export const submitMine = authenticatedMutation({

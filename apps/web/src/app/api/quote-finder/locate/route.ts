@@ -62,12 +62,17 @@ function failsEveryRun(error: LocateRequestError) {
   );
 }
 
-// An older backend has no reservation function; retrying won't help until
-// it is deployed. Other reservation errors may pass.
-function backendLacksBudget(error: unknown) {
+// An older backend has no reservation function, and a server key the backend
+// doesn't share is refused; retrying won't help until someone fixes the
+// deployment. Other reservation errors may pass.
+function reservationMisconfigured(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const { data } = error as Error & { data?: unknown };
   return (
-    error instanceof Error &&
-    /Could not find public function/i.test(error.message)
+    /Could not find public function/i.test(error.message) ||
+    (typeof data === "object" &&
+      data !== null &&
+      (data as { code?: unknown }).code === "FORBIDDEN")
   );
 }
 
@@ -96,7 +101,13 @@ export async function GET() {
     if (!userId)
       return NextResponse.json({ available: false }, { status: 401, headers });
     return NextResponse.json(
-      { available: Boolean(env.GEMINI_API_KEY && env.YOUTUBE_API_KEY) },
+      {
+        available: Boolean(
+          env.GEMINI_API_KEY &&
+            env.YOUTUBE_API_KEY &&
+            env.QUOTE_LOCATE_SERVER_KEY
+        ),
+      },
       { headers }
     );
   } catch {
@@ -125,16 +136,18 @@ export async function POST(request: NextRequest) {
       return refused("Add a quote, its movie or show, and a video.", 400);
     const geminiKey = env.GEMINI_API_KEY;
     const youtubeKey = env.YOUTUBE_API_KEY;
-    if (!geminiKey || !youtubeKey) return refused(UNAVAILABLE, 503, true);
+    const serverKey = env.QUOTE_LOCATE_SERVER_KEY;
+    if (!geminiKey || !youtubeKey || !serverKey)
+      return refused(UNAVAILABLE, 503, true);
 
     // Every run costs money, so each listener and the site have a budget.
     // Failing to reserve fails closed.
     let reservation: Awaited<ReturnType<typeof reserveQuoteLocate>>;
     try {
-      reservation = await reserveQuoteLocate();
+      reservation = await reserveQuoteLocate(serverKey);
     } catch (error) {
       logFailure("reserve", error);
-      return refused(UNAVAILABLE, 503, backendLacksBudget(error));
+      return refused(UNAVAILABLE, 503, reservationMisconfigured(error));
     }
     if (reservation === null) return refused(SIGN_IN, 401);
     if (!reservation.ok) {

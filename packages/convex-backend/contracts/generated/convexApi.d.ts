@@ -7960,6 +7960,7 @@ export type PublicApiType = {
             }>;
             reserveQuoteLocate: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
+                serverKey: string;
             }, {
                 ok: true;
             } | {

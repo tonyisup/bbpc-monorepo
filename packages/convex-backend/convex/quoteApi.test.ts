@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -2473,14 +2473,23 @@ describe("Quote Finder search quota", () => {
 
 describe("Quote Finder assistant budget", () => {
   const NOW = Date.UTC(2026, 8, 28, 20);
+  const SERVER_KEY = "test-quote-locate-server-key";
+
+  beforeEach(() => {
+    vi.stubEnv("QUOTE_LOCATE_SERVER_KEY", SERVER_KEY);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   async function setup() {
     const t = createTestBackend();
     const actors = await seedActors(t);
     await advanceToS3(t);
-    const reserve = (identity: TestIdentity) =>
+    const reserve = (identity: TestIdentity, serverKey = SERVER_KEY) =>
       t.withIdentity(identity).mutation(api.games.quotes.reserveQuoteLocate, {
         clientApiVersion: BBPC_API_VERSION,
+        serverKey,
       });
     return { t, actors, reserve };
   }
@@ -2608,8 +2617,29 @@ describe("Quote Finder assistant budget", () => {
     await expectDomainError(
       t.mutation(api.games.quotes.reserveQuoteLocate, {
         clientApiVersion: BBPC_API_VERSION,
+        serverKey: SERVER_KEY,
       }),
       "AUTHENTICATION_REQUIRED",
     );
+  });
+
+  test("only the web server's key can spend a run, and a refusal spends nothing", async () => {
+    const { t, reserve } = await setup();
+    // A signed-in listener calling the mutation directly has no server key.
+    for (const guess of ["", "wrong", `${SERVER_KEY}x`, SERVER_KEY.slice(1)]) {
+      await expectDomainError(reserve(MEMBER_IDENTITY, guess), "FORBIDDEN");
+    }
+    // A backend without the key configured refuses every caller.
+    vi.stubEnv("QUOTE_LOCATE_SERVER_KEY", "");
+    await expectDomainError(reserve(MEMBER_IDENTITY), "FORBIDDEN");
+    const buckets = await t.run(async (ctx) =>
+      ctx.db
+        .query("rateLimits")
+        .withIndex("name", (q) => q.eq("name", "quoteLocateSiteWide"))
+        .take(1),
+    );
+    expect(buckets).toEqual([]);
+    vi.stubEnv("QUOTE_LOCATE_SERVER_KEY", SERVER_KEY);
+    await expect(reserve(MEMBER_IDENTITY)).resolves.toEqual({ ok: true });
   });
 });

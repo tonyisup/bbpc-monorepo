@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   env: {
     YOUTUBE_API_KEY: undefined as string | undefined,
     GEMINI_API_KEY: undefined as string | undefined,
+    QUOTE_LOCATE_SERVER_KEY: undefined as string | undefined,
   },
   reserve: vi.fn(),
 }));
@@ -107,12 +108,13 @@ beforeEach(() => {
   mocks.auth.mockResolvedValue({ userId: "signed-in-listener" });
   mocks.env.YOUTUBE_API_KEY = "test-youtube-key";
   mocks.env.GEMINI_API_KEY = "test-gemini-key";
+  mocks.env.QUOTE_LOCATE_SERVER_KEY = "test-server-key";
   mocks.reserve.mockReset();
   mocks.reserve.mockResolvedValue({ ok: true });
 });
 afterEach(() => vi.unstubAllGlobals());
 
-test("offers the assistant only to signed-in listeners when both keys are set", async () => {
+test("offers the assistant only to signed-in listeners when every key is set", async () => {
   expect(await (await GET()).json()).toEqual({ available: true });
   mocks.env.GEMINI_API_KEY = undefined;
   expect(await (await GET()).json()).toEqual({ available: false });
@@ -120,6 +122,9 @@ test("offers the assistant only to signed-in listeners when both keys are set", 
   mocks.env.YOUTUBE_API_KEY = undefined;
   expect(await (await GET()).json()).toEqual({ available: false });
   mocks.env.YOUTUBE_API_KEY = "test-youtube-key";
+  mocks.env.QUOTE_LOCATE_SERVER_KEY = undefined;
+  expect(await (await GET()).json()).toEqual({ available: false });
+  mocks.env.QUOTE_LOCATE_SERVER_KEY = "test-server-key";
   // Only a signed-in answer is definite; the finder asks again otherwise.
   mocks.auth.mockResolvedValueOnce({ userId: null });
   const signedOut = await GET();
@@ -181,8 +186,32 @@ test("requires sign-in, valid input and both keys before spending a run", async 
   const unconfigured = await POST(request(input));
   expect(unconfigured.status).toBe(503);
   expect(await unconfigured.json()).toMatchObject({ disabled: true });
+  mocks.env.GEMINI_API_KEY = "test-gemini-key";
+  mocks.env.QUOTE_LOCATE_SERVER_KEY = undefined;
+  const keyless = await POST(request(input));
+  expect(keyless.status).toBe(503);
+  expect(await keyless.json()).toMatchObject({ disabled: true });
   expect(mocks.reserve).not.toHaveBeenCalled();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("reserves the run with the server key, and a key the backend refuses disables the assistant", async () => {
+  provider(() => answer(heard));
+  await POST(request(input));
+  expect(mocks.reserve).toHaveBeenCalledWith("test-server-key");
+  // The backend's key differs (or is unset): no retry will fix that.
+  mocks.reserve.mockRejectedValueOnce(
+    Object.assign(new Error("Server Error"), {
+      data: {
+        code: "FORBIDDEN",
+        message: "Quote Finder assistant runs are reserved by the web server.",
+        retryable: false,
+      },
+    })
+  );
+  const refused = await POST(request(input));
+  expect(refused.status).toBe(503);
+  expect(await refused.json()).toMatchObject({ disabled: true });
 });
 
 test("refuses once a budget is spent and fails closed when it can't be checked", async () => {

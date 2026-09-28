@@ -26,11 +26,16 @@ export async function reserveVideoSearch(): Promise<BudgetReservation | null> {
   return result === null ? null : reservationSchema.parse(result);
 }
 
-/** Spends one Quote Finder assistant run for the listener; null when signed out. */
-export async function reserveQuoteLocate(): Promise<BudgetReservation | null> {
+/**
+ * Spends one Quote Finder assistant run for the listener; null when signed
+ * out. The server key proves the locate route asked, not a browser.
+ */
+export async function reserveQuoteLocate(
+  serverKey: string
+): Promise<BudgetReservation | null> {
   const result = await fetchMutationForSignedInUser(
     api.games.quotes.reserveQuoteLocate,
-    { clientApiVersion: BBPC_API_VERSION }
+    { clientApiVersion: BBPC_API_VERSION, serverKey }
   );
   return result === null ? null : reservationSchema.parse(result);
 }

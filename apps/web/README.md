@@ -35,7 +35,8 @@ The Quote Finder's optional **Find it for me** assistant also needs a paid-tier
 looks and works as before. The assistant reuses the finder's search results (or runs
 the search), then posts the quote, source and up to six video IDs to
 `/api/quote-finder/locate`. Each call spends one run from the listener's assistant
-budget in Convex (`games.quotes.reserveQuoteLocate`), checks one public, embeddable
+budget in Convex (`games.quotes.reserveQuoteLocate`, which only accepts a reservation
+carrying `QUOTE_LOCATE_SERVER_KEY`), checks one public, embeddable
 video of at most three minutes with Gemini, and returns a padded range and the heard
 line for the listener to preview. Nothing is submitted for them. Keep the Google
 project prepaid with auto-reload off: an empty balance makes Gemini answer HTTP 402,
@@ -44,7 +45,9 @@ and the route then reports the assistant as out of budget. See
 `reserveQuoteLocate` before setting the key; until then, the assistant fails closed
 as unavailable. Set the key for Production only: each Convex deployment keeps its own
 assistant budget, so a key shared with Preview would let both draw on the one prepaid
-balance.
+balance. `QUOTE_LOCATE_SERVER_KEY` is a random secret set to the same value here and in
+the Convex deployment's environment (`npx convex env set QUOTE_LOCATE_SERVER_KEY ...`);
+without it the assistant stays hidden.
 
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can

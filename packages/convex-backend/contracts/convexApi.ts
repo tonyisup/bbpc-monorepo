@@ -8340,7 +8340,7 @@ export type PublicApiType = {
       reserveQuoteLocate: FunctionReference<
         "mutation",
         "public",
-        { clientApiVersion: string },
+        { clientApiVersion: string; serverKey: string },
         | { ok: true }
         | { ok: false; retryAt: number; scope: "user" | "site" }
       >;

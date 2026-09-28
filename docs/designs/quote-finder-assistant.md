@@ -213,12 +213,17 @@ and default thinking were tried.
   listener loads another video.
 
 Accepted risks (2026-09-28): a few accounts working together can keep the site
-bucket empty, which turns the assistant off for everyone until it refills at 2
-runs a day; the spend limit still holds. A run is spent when it is reserved, so a
+bucket empty through the locate route, which turns the assistant off for everyone
+until it refills at 2 runs a day; the spend limit still holds. Calling the
+reservation mutation directly doesn't work: it requires a server key that only the
+web server holds (`QUOTE_LOCATE_SERVER_KEY`, added after review), so every spent run
+is a locate request that at least looked the videos up. A run is spent when it is reserved, so a
 failure after that (a Gemini outage, a slow video lookup, a closed finder) is not
 refunded, and **Try again** spends another.
 
-Before rollout: set `GEMINI_API_KEY` for Production only. Each Convex deployment
+Before rollout: set one random `QUOTE_LOCATE_SERVER_KEY` in the production Convex
+deployment's environment and in Vercel Production. Set `GEMINI_API_KEY` for
+Production only. Each Convex deployment
 has its own buckets, so a key shared with Preview would let each draw on the one
 $5 balance. Confirm with a real request that an empty balance answers HTTP 402 (the
 spike saw it once) and how Gemini answers for one unreadable video (400, 403 or

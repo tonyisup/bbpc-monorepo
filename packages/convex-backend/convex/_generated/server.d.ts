@@ -29,6 +29,7 @@ type Env = {
   readonly BBPC_ENVIRONMENT: "development" | "staging" | "production";
   readonly CLERK_JWT_ISSUER_DOMAIN: string;
   readonly CLERK_M2M_AUDIENCE: string;
+  readonly QUOTE_LOCATE_SERVER_KEY: string | undefined;
   readonly TMDB_API_KEY: string | undefined;
   readonly UPLOADTHING_TOKEN: string | undefined;
 };

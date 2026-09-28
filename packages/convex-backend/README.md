@@ -599,8 +599,12 @@ so a refusal costs nothing. The limits live in `convex/games/limits.ts`.
 
 The Quote Finder assistant spends from its own budget. At the start of each assistant
 run, before it looks up the candidate videos or calls Gemini, the web app calls
-authenticated `games.quotes.reserveQuoteLocate`, which takes and returns the same
-shapes as `reserveVideoSearch`. Its token buckets allow a burst of 5, then 2 runs a day
+authenticated `games.quotes.reserveQuoteLocate`. It returns the same shapes as
+`reserveVideoSearch` and also takes `serverKey`, which must match the deployment's
+optional `QUOTE_LOCATE_SERVER_KEY` environment variable. Only the web server holds that
+value, so a signed-in listener calling the mutation directly can't spend runs. Without the
+variable, or with a key that doesn't match, it refuses with `FORBIDDEN` and spends
+nothing. Its token buckets allow a burst of 5, then 2 runs a day
 per member, and a burst of 30, then 2 a day across the site. That is at most 90 runs in
 30 days, which keeps the assistant under its $5 monthly limit even when every run uses
 a full 3-minute video and the whole output cap. Search and assistant budgets are

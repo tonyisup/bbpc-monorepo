@@ -13,5 +13,8 @@ export default defineApp({
     BBPC_API_VERSION: v.string(),
     TMDB_API_KEY: v.optional(v.string()),
     UPLOADTHING_TOKEN: v.optional(v.string()),
+    // Shared with the web server only, so that nothing but its locate route
+    // can spend a Quote Finder assistant run.
+    QUOTE_LOCATE_SERVER_KEY: v.optional(v.string()),
   },
 });

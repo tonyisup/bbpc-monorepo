@@ -33,10 +33,15 @@ afterEach(() => vi.useRealTimers());
 
 test("each Quote Finder budget spends from its own mutation", async () => {
   mocks.fetchMutation.mockResolvedValue({ ok: true });
-  await expect(reserveQuoteLocate()).resolves.toEqual({ ok: true });
+  await expect(reserveQuoteLocate("test-server-key")).resolves.toEqual({
+    ok: true,
+  });
   await expect(reserveVideoSearch()).resolves.toEqual({ ok: true });
   expect(mocks.fetchMutation.mock.calls).toEqual([
-    ["reserveQuoteLocate", { clientApiVersion: BBPC_API_VERSION }],
+    [
+      "reserveQuoteLocate",
+      { clientApiVersion: BBPC_API_VERSION, serverKey: "test-server-key" },
+    ],
     ["reserveVideoSearch", { clientApiVersion: BBPC_API_VERSION }],
   ]);
 });
@@ -44,16 +49,16 @@ test("each Quote Finder budget spends from its own mutation", async () => {
 test("passes refusals through, reads signed-out as null and rejects unexpected replies", async () => {
   const refusal = { ok: false, scope: "site", retryAt: NOW };
   mocks.fetchMutation.mockResolvedValueOnce(refusal);
-  await expect(reserveQuoteLocate()).resolves.toEqual(refusal);
+  await expect(reserveQuoteLocate("test-server-key")).resolves.toEqual(refusal);
   mocks.fetchMutation.mockResolvedValueOnce(null);
-  await expect(reserveQuoteLocate()).resolves.toBeNull();
+  await expect(reserveQuoteLocate("test-server-key")).resolves.toBeNull();
   // A reply the web app doesn't understand must never read as permission.
   mocks.fetchMutation.mockResolvedValueOnce({
     ok: false,
     scope: "everyone",
     retryAt: NOW,
   });
-  await expect(reserveQuoteLocate()).rejects.toThrow();
+  await expect(reserveQuoteLocate("test-server-key")).rejects.toThrow();
   mocks.fetchMutation.mockResolvedValueOnce({ ok: "yes" });
   await expect(reserveVideoSearch()).rejects.toThrow();
 });
