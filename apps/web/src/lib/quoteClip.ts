@@ -3,6 +3,7 @@ export type TranscriptCue = { start: number; end: number; text: string };
 export const MAX_CLIP_SECONDS = 86_400;
 export const MAX_CAPTION_BYTES = 500_000;
 export const MAX_QUOTE_TEXT_LENGTH = 2000;
+export const MAX_SOURCE_TITLE_LENGTH = 500;
 
 /** A plain watch link; with a start, it opens at that second. */
 export function youtubeWatchUrl(id: string, start: number | null = null) {

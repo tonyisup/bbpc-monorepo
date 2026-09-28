@@ -7,16 +7,9 @@ import {
   MIN_VIDEO_SEARCH_LENGTH,
   normalizeVideoQuery,
 } from "@/lib/youtubeSearch";
+import { retryAfterSeconds, retryWait } from "@/server/budget";
 import { reserveVideoSearch } from "@/server/convex/quotes";
 import { searchYouTubeVideos } from "@/server/youtubeSearch";
-
-function retryWait(retryAt: number) {
-  const minutes = Math.max(1, Math.ceil((retryAt - Date.now()) / 60_000));
-  if (minutes < 60)
-    return `${String(minutes)} minute${minutes === 1 ? "" : "s"}`;
-  const hours = Math.round(minutes / 60);
-  return `${String(hours)} hour${hours === 1 ? "" : "s"}`;
-}
 
 export async function GET(request: NextRequest) {
   const headers = { "Cache-Control": "private, no-store" };
@@ -76,9 +69,7 @@ export async function GET(request: NextRequest) {
           status: 429,
           headers: {
             ...headers,
-            "Retry-After": String(
-              Math.max(1, Math.ceil((reservation.retryAt - Date.now()) / 1000))
-            ),
+            "Retry-After": retryAfterSeconds(reservation.retryAt),
           },
         }
       );

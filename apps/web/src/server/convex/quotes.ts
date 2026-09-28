@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { fetchMutationForSignedInUser } from "@/server/convex/client";
 
-const videoSearchReservationSchema = z.discriminatedUnion("ok", [
+const reservationSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true) }),
   z.object({
     ok: z.literal(false),
@@ -15,15 +15,22 @@ const videoSearchReservationSchema = z.discriminatedUnion("ok", [
   }),
 ]);
 
-export type VideoSearchReservation = z.infer<
-  typeof videoSearchReservationSchema
->;
+export type BudgetReservation = z.infer<typeof reservationSchema>;
 
 /** Spends one Quote Finder search for the listener; null when signed out. */
-export async function reserveVideoSearch(): Promise<VideoSearchReservation | null> {
+export async function reserveVideoSearch(): Promise<BudgetReservation | null> {
   const result = await fetchMutationForSignedInUser(
     api.games.quotes.reserveVideoSearch,
     { clientApiVersion: BBPC_API_VERSION }
   );
-  return result === null ? null : videoSearchReservationSchema.parse(result);
+  return result === null ? null : reservationSchema.parse(result);
+}
+
+/** Spends one Quote Finder assistant run for the listener; null when signed out. */
+export async function reserveQuoteLocate(): Promise<BudgetReservation | null> {
+  const result = await fetchMutationForSignedInUser(
+    api.games.quotes.reserveQuoteLocate,
+    { clientApiVersion: BBPC_API_VERSION }
+  );
+  return result === null ? null : reservationSchema.parse(result);
 }

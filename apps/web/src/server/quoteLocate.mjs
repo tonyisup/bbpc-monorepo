@@ -7,6 +7,9 @@ export const DEFAULT_LOCATE_MODEL = "gemini-3.8-flash";
 export const MAX_LOCATED_SPAN_SECONDS = 60;
 export const LOCATE_PAD_BEFORE_SECONDS = 0.5;
 export const LOCATE_PAD_AFTER_SECONDS = 0.75;
+// Thinking and the answer bill as output. Answers averaged about 440 tokens in
+// the spike; the cap bounds what a crafted quote can make one run cost.
+export const MAX_LOCATE_OUTPUT_TOKENS = 4096;
 /** @type {Readonly<Record<string, string>>} */
 export const MEDIA_RESOLUTIONS = Object.freeze({
   low: "MEDIA_RESOLUTION_LOW",
@@ -113,7 +116,13 @@ const geminiResponseSchema = z.object({
 });
 
 const geminiErrorSchema = z.object({
-  error: z.object({ message: z.string() }),
+  error: z.object({
+    message: z.string(),
+    status: z.string().optional(),
+    details: z
+      .array(z.object({ reason: z.string().optional() }).passthrough())
+      .optional(),
+  }),
 });
 
 const videoListSchema = z.object({
@@ -179,11 +188,16 @@ export class LocateRequestError extends Error {
   /**
    * @param {number} status
    * @param {string} message
+   * @param {{ providerStatus?: string; reason?: string }} [detail]
+   *   Google's error status (e.g. INVALID_ARGUMENT) and first detail reason
+   *   (e.g. API_KEY_INVALID); neither contains request data.
    */
-  constructor(status, message) {
+  constructor(status, message, detail = {}) {
     super(message);
     this.name = "LocateRequestError";
     this.status = status;
+    this.providerStatus = detail.providerStatus;
+    this.reason = detail.reason;
   }
 }
 
@@ -356,6 +370,7 @@ export function buildLocateRequest(input) {
       responseMimeType: "application/json",
       responseJsonSchema: ANSWER_JSON_SCHEMA,
       mediaResolution,
+      maxOutputTokens: MAX_LOCATE_OUTPUT_TOKENS,
       ...(input.thinkingLevel
         ? {
             thinkingConfig: {
@@ -476,9 +491,17 @@ function summarizeUsage(usage) {
 /** @param {Response} response */
 async function providerError(response) {
   let message = response.statusText || "Request failed";
+  /** @type {{ providerStatus?: string; reason?: string }} */
+  let detail = {};
   try {
     const parsed = geminiErrorSchema.safeParse(await response.json());
-    if (parsed.success) message = parsed.data.error.message;
+    if (parsed.success) {
+      message = parsed.data.error.message;
+      detail = {
+        providerStatus: parsed.data.error.status,
+        reason: parsed.data.error.details?.find((item) => item.reason)?.reason,
+      };
+    }
   } catch {
     // Keep the status text.
   }
@@ -487,7 +510,8 @@ async function providerError(response) {
     `HTTP ${String(response.status)}: ${message.slice(
       0,
       MAX_ERROR_MESSAGE_LENGTH
-    )}`
+    )}`,
+    detail
   );
 }
 
@@ -523,6 +547,31 @@ export async function locateQuote(input) {
     usage: summarizeUsage(parsed.usageMetadata),
     modelVersion: parsed.modelVersion ?? model,
   };
+}
+
+/**
+ * The videos the assistant may check, in the order given (search rank). It
+ * skips videos Gemini can't read or the listener can't preview, and those too
+ * long for the budget.
+ *
+ * @param {string[]} ids
+ * @param {Map<string, VideoDetails>} details
+ * @param {number} maxSeconds
+ * @returns {{ id: string; title: string; durationSeconds: number }[]}
+ */
+export function assistantCandidates(ids, details, maxSeconds) {
+  return [...new Set(ids)].flatMap((id) => {
+    const video = details.get(id);
+    if (
+      !video?.isPublic ||
+      !video.embeddable ||
+      video.ageRestricted ||
+      video.durationSeconds === null ||
+      video.durationSeconds > maxSeconds
+    )
+      return [];
+    return [{ id, title: video.title, durationSeconds: video.durationSeconds }];
+  });
 }
 
 /**
