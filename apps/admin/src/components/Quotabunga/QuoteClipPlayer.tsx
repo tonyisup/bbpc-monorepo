@@ -34,7 +34,8 @@ export function QuoteClipPlayer({
   onClose,
 }: QuoteClipPlayerProps) {
   const player = useYouTubePlayer(videoId, start);
-  const { ready, error, currentTime, playing, autoplayBlocked } = player.state;
+  const { ready, error, currentTime, duration, playing, autoplayBlocked } =
+    player.state;
   const { playUntil, togglePlay } = player;
   const started = useRef(false);
 
@@ -44,8 +45,11 @@ export function QuoteClipPlayer({
     playUntil(start, end);
   }, [end, playUntil, ready, start]);
 
+  // A video that has itself ended counts as a finished clip, even when the
+  // clip has no end or runs past the video.
+  const videoEnded = duration > 0 && currentTime >= duration - 0.25;
   const insideClip =
-    currentTime >= start && (end === null || currentTime < end);
+    !videoEnded && currentTime >= start && (end === null || currentTime < end);
   const playOrPause = () => {
     if (playing) togglePlay();
     // A paused clip resumes where it stopped; a finished one starts again.

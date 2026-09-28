@@ -147,6 +147,17 @@ describe("Quotabunga recording round", () => {
     });
     expect(text()).not.toContain("Listener a");
     expect(text()).toContain("Name hidden");
+    // Coming back to the first round starts hidden again too.
+    await act(async () => {
+      view.update(
+        <QuotabungaRecordingRound
+          episodeId="episode-1"
+          onRefresh={vi.fn()}
+          submissions={entries}
+        />
+      );
+    });
+    expect(text()).not.toContain("Listener a");
   });
 
   test("shows names once any entry is scored, with no toggle", async () => {

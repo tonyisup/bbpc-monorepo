@@ -277,7 +277,11 @@ describe("quote clip player", () => {
     expect(media.pauseVideo).not.toHaveBeenCalled();
     tick(120, 0);
     expect(media.pauseVideo).toHaveBeenCalledOnce();
+    // The video itself ended, so Play clip starts the clip over.
+    click("Play clip");
+    expect(media.seekTo).toHaveBeenLastCalledWith(40, true);
 
+    tick(40.1, PAUSED);
     tick(Number.NaN, PAUSED);
     expect(text()).toContain("0:00.0 · clip 0:40.0–3:20.0");
   });

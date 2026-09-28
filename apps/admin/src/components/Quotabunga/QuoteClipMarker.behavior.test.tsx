@@ -315,6 +315,19 @@ describe("quote clip marker", () => {
     expect(media.playVideo).not.toHaveBeenCalled();
   });
 
+  test("a step keeps a playing clip playing, and leaves a finished one paused", async () => {
+    await mount();
+    media.pauseVideo.mockClear();
+    media.getPlayerState.mockReturnValue(1);
+    press("ArrowLeft");
+    expect(media.pauseVideo).not.toHaveBeenCalled();
+    settle(38);
+    // seekTo would start an ended video playing; the step pauses it.
+    media.getPlayerState.mockReturnValue(0);
+    press("ArrowLeft");
+    expect(media.pauseVideo).toHaveBeenCalledOnce();
+  });
+
   test("steps add up while the player still reports the old time, and a keyframe landing reads true", async () => {
     await mount();
     // A player that keeps reporting 60 until the seek lands.

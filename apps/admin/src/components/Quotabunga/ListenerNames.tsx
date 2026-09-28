@@ -20,9 +20,10 @@ export function roundAwarded(
 
 /**
  * Listener names stay hidden until the round's points are awarded, so entries
- * are judged blind. An admin can still show them on purpose, for that round
- * only: the choice is kept with the round it was made for, so another round is
- * hidden from its first render.
+ * are judged blind. An admin can still show them on purpose, for the round on
+ * screen only: the choice names its round, so another round is hidden from its
+ * first render, and it is dropped once the round changes, so coming back to a
+ * round starts hidden again.
  */
 export function useListenerNames(
   submissions: readonly ConvexAdminQuoteSubmission[],
@@ -30,6 +31,7 @@ export function useListenerNames(
 ) {
   const awarded = roundAwarded(submissions);
   const [peekedRound, setPeekedRound] = useState<string | null>(null);
+  if (peekedRound !== null && peekedRound !== roundId) setPeekedRound(null);
   const peeking = peekedRound === roundId;
   const setPeeking = useCallback(
     (on: boolean) => setPeekedRound(on ? roundId : null),
