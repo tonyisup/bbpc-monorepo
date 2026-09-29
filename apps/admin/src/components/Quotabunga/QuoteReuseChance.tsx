@@ -1,7 +1,7 @@
 import { useConvex } from "convex/react";
 import { History, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import {
   formatQuoteReuseLikelihood,
@@ -17,6 +17,23 @@ type ReuseState =
   | { status: "missing" }
   | { status: "failed" };
 
+type SettledReuseState = Exclude<ReuseState, { status: "loading" | "failed" }>;
+
+/**
+ * Finished checks, by submission and text, that a screen can share among its
+ * cards. The recording panel remounts an entry's card at every cut round and
+ * matchup, and the check is a full-text search, so it provides these to run
+ * each entry's check once while it's on screen. Elsewhere every card checks
+ * for itself. A failed check isn't kept, so the next card tries again.
+ */
+export type QuoteReuseCheckCache = Map<string, SettledReuseState>;
+export const createQuoteReuseChecks = (): QuoteReuseCheckCache => new Map();
+export const QuoteReuseChecks = createContext<QuoteReuseCheckCache | null>(
+  null
+);
+const reuseCheckKey = (submissionId: string, quoteText: string) =>
+  `${submissionId}\n${quoteText}`;
+
 /** Link to a submission's reuse breakdown, labeled with its estimated reuse chance. */
 export function QuoteReuseChance({
   submissionId,
@@ -29,21 +46,29 @@ export function QuoteReuseChance({
   blind?: boolean;
 }) {
   const client = useConvex();
-  const [state, setState] = useState<ReuseState>({ status: "loading" });
+  const settledChecks = useContext(QuoteReuseChecks);
+  const key = reuseCheckKey(submissionId, quoteText);
+  const [state, setState] = useState<ReuseState>(
+    () => settledChecks?.get(key) ?? { status: "loading" }
+  );
 
-  // quoteText is a dependency so an edited entry is scored again.
+  // quoteText is part of the key so an edited entry is scored again.
   useEffect(() => {
+    const settled = settledChecks?.get(key);
+    if (settled !== undefined) {
+      setState(settled);
+      return undefined;
+    }
     let cancelled = false;
     setState({ status: "loading" });
     loadConvexAdminQuoteReuseReport(client, submissionId)
       .then((report) => {
-        if (!cancelled) {
-          setState(
-            report === null
-              ? { status: "missing" }
-              : { status: "ready", likelihood: report.likelihood }
-          );
-        }
+        const result: SettledReuseState =
+          report === null
+            ? { status: "missing" }
+            : { status: "ready", likelihood: report.likelihood };
+        settledChecks?.set(key, result);
+        if (!cancelled) setState(result);
       })
       .catch((error: unknown) => {
         // Includes a backend deployed before this query existed; keep it visible.
@@ -55,7 +80,7 @@ export function QuoteReuseChance({
     return () => {
       cancelled = true;
     };
-  }, [client, submissionId, quoteText]);
+  }, [client, key, settledChecks, submissionId]);
 
   const value =
     state.status === "ready"
