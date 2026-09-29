@@ -193,6 +193,25 @@ would gain an optional description.
 **Priority:** P2
 **Depends on:** Nothing
 
+### Lock the Quotabunga bracket's saves across tabs
+
+**What:** Run the read, conflict check and save in `useQuotabungaBracket`'s `update` under
+an episode-scoped Web Lock (`navigator.locks.request`), keeping today's path where the
+API is missing.
+
+**Why:** Two taps in two tabs within the same few milliseconds can both pass the
+conflict check, and the later save drops the other tab's vote without a warning.
+
+**Context:** Raised by the last Codex review of the /record cut-round bracket. Taps in
+two tabs in sequence are already caught: the later tab shows the newer bracket and
+asks for the tap again. Only two people voting at once can hit this, and today one
+person runs the bracket, so it was deferred. The lock is asynchronous, so saving a vote
+stops being immediate; tests need two hook instances competing for the lock.
+
+**Effort:** S
+**Priority:** P4
+**Depends on:** A second person running the bracket alongside the admin
+
 ## Completed
 
 ### Consolidate BBPC into a monorepo after Convex migration stability

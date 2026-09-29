@@ -36,7 +36,11 @@ vi.mock("@/convex/quotabunga", async (importOriginal) => ({
 import { getAdminQuoteReusePath, isBlindReuseQuery } from "@/lib/routes";
 
 import { ConvexQuoteReusePage } from "./ConvexQuoteReusePage";
-import { QuoteReuseChance } from "./QuoteReuseChance";
+import {
+  QuoteReuseChance,
+  QuoteReuseChecks,
+  createQuoteReuseChecks,
+} from "./QuoteReuseChance";
 
 const user = { id: "user-1", name: "Listener", email: null, image: null };
 const report: ConvexQuoteReuseReport = {
@@ -128,6 +132,33 @@ describe("QuoteReuseChance", () => {
     expect(link.props.href).toBe("/quotabunga/reuse/quote-1");
     expect(link.props.className).toContain("text-destructive");
     expect(mocks.load).toHaveBeenCalledWith(mocks.client, "quote-1");
+  });
+
+  test("checks an entry once while a screen shares its checks", async () => {
+    mocks.load.mockResolvedValue(report);
+    const checks = createQuoteReuseChecks();
+    const card = (
+      <QuoteReuseChecks.Provider value={checks}>
+        <QuoteReuseChance quoteText="Make him an offer" submissionId="quote-1" />
+      </QuoteReuseChecks.Provider>
+    );
+    const first = await render(card);
+    act(() => first.unmount());
+    const second = await render(card);
+    expect(mocks.load).toHaveBeenCalledTimes(1);
+    // A remounted card shows the result at once, without a loading state.
+    expect(JSON.stringify(second.toJSON())).not.toContain("…");
+    act(() => second.unmount());
+
+    // Without shared checks, as on the prep page, every card checks again.
+    const plain = await render(
+      <QuoteReuseChance quoteText="Make him an offer" submissionId="quote-1" />
+    );
+    act(() => plain.unmount());
+    await render(
+      <QuoteReuseChance quoteText="Make him an offer" submissionId="quote-1" />
+    );
+    expect(mocks.load).toHaveBeenCalledTimes(3);
   });
 
   test("opens the breakdown blind while names are hidden", async () => {

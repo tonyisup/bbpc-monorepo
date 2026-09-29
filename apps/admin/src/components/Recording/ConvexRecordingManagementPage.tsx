@@ -21,7 +21,13 @@ import {
 } from "lucide-react";
 import Head from "next/head";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -94,7 +100,11 @@ import {
 } from "../Quotabunga/ListenerNames";
 import { InlineQuoteClip } from "../Quotabunga/QuoteClipPlayer";
 import { recordingOrder } from "../Quotabunga/recordingOrder";
-import { QuoteReuseChance } from "../Quotabunga/QuoteReuseChance";
+import {
+  QuoteReuseChance,
+  QuoteReuseChecks,
+  createQuoteReuseChecks,
+} from "../Quotabunga/QuoteReuseChance";
 import RatingIcon from "../Review/RatingIcon";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Badge } from "../ui/badge";
@@ -122,7 +132,10 @@ import {
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
 } from "./recordingManagementModel";
+import { QuotabungaBracket } from "./QuotabungaBracket";
+import { bracketJudgeNames } from "./quotabungaBracketModel";
 import { SeasonPositionBadges } from "./SeasonPositionBadges";
+import { useQuotabungaBracket } from "./useQuotabungaBracket";
 
 const listGuessesForAssignmentReference = api.games.guesses.listForAssignment;
 
@@ -774,10 +787,12 @@ function PointBreakdown({
 
 export function QuotabungaRecordingRound({
   episodeId,
+  judges = bracketJudgeNames([]),
   onRefresh,
   submissions,
 }: {
   episodeId: string;
+  judges?: string[];
   onRefresh: () => void;
   submissions: ConvexAdminQuoteSubmission[];
 }) {
@@ -786,6 +801,22 @@ export function QuotabungaRecordingRound({
     () => recordingOrder(submissions, episodeId),
     [episodeId, submissions]
   );
+  const includedIds = useMemo(() => included.map(({ id }) => id), [included]);
+  const entries = useMemo(
+    () => new Map(included.map((submission) => [submission.id, submission])),
+    [included]
+  );
+  const bracket = useQuotabungaBracket(episodeId, includedIds);
+  const bracketRunning =
+    bracket.view !== null && !bracket.stale && bracket.view.placements === null;
+  // Entries keep the numbers they had when the bracket started.
+  const entryOrder =
+    bracket.view !== null && !bracket.stale
+      ? bracket.view.entryIds
+      : includedIds;
+  // Reuse checks are kept while this round is on screen, since its cards
+  // remount at every stage; leaving the page starts fresh.
+  const [reuseChecks] = useState(createQuoteReuseChecks);
   const names = useListenerNames(submissions, episodeId);
   const [placements, setPlacements] = useState<
     Record<string, ConvexQuotePlacement | null>
@@ -794,23 +825,101 @@ export function QuotabungaRecordingRound({
   const [saving, setSaving] = useState(false);
   // One clip plays at a time, so the page holds at most one YouTube player.
   const [openClipId, setOpenClipId] = useState<string | null>(null);
+  // Moving the bracket on remounts the entry cards, and a player that mounts
+  // plays at once, so an open clip closes when the stage changes.
+  const view = bracket.view;
+  const clipStage =
+    view === null || bracket.stale
+      ? "placements"
+      : view.cut !== null
+        ? `cut:${view.cut.label}`
+        : (view.current?.id ?? "results");
+  const [openClipStage, setOpenClipStage] = useState(clipStage);
+  if (openClipStage !== clipStage) {
+    setOpenClipStage(clipStage);
+    setOpenClipId(null);
+  }
 
-  useEffect(() => {
-    setPlacements(
+  const savedPlacements = useMemo(
+    () =>
       Object.fromEntries(
         included.map((submission) => [submission.id, submission.placement])
-      )
+      ),
+    [included]
+  );
+  useEffect(() => setPlacements(savedPlacements), [savedPlacements]);
+
+  // The finished bracket's 1st, 2nd and 3rd, as each entry's placement.
+  const resultKey = bracket.stale
+    ? null
+    : (bracket.view?.placements?.join("\n") ?? null);
+  const bracketPlacements = useMemo(() => {
+    if (resultKey === null) return null;
+    const ranked = resultKey.split("\n");
+    return Object.fromEntries(
+      included.map((submission) => {
+        const rank = ranked.indexOf(submission.id);
+        return [
+          submission.id,
+          rank === -1 ? null : ((rank + 1) as ConvexQuotePlacement),
+        ];
+      })
     );
-  }, [included]);
+  }, [included, resultKey]);
+  const resultsApplied =
+    bracketPlacements !== null &&
+    included.every(
+      ({ id }) => (placements[id] ?? null) === bracketPlacements[id]
+    );
+  // A bracket finished on this page fills in the placements, and one that's
+  // undone or reset brings the saved placements back. A result restored by a
+  // reload, or still there after a refresh, never replaces what's saved; the
+  // results offer to fill them in instead. Awarding still asks first.
+  const [seenResult, setSeenResult] = useState<{
+    episodeId: string;
+    key: string | null;
+  } | null>(null);
+  // While the entries differ from the bracket's, its result is set aside, so
+  // one that comes back with them isn't news either.
+  if (
+    bracket.loaded &&
+    !bracket.stale &&
+    (seenResult?.episodeId !== episodeId || seenResult.key !== resultKey)
+  ) {
+    setSeenResult({ episodeId, key: resultKey });
+    if (seenResult?.episodeId === episodeId) {
+      setPlacements(bracketPlacements ?? savedPlacements);
+    }
+  }
+
+  const renderEntry = (
+    submission: ConvexAdminQuoteSubmission,
+    label: string,
+    controls: ReactNode
+  ) => (
+    <QuotabungaEntryCard
+      clipOpen={openClipId === submission.id}
+      controls={controls}
+      label={label}
+      namesShown={names.shown}
+      onClipOpenChange={(open) => setOpenClipId(open ? submission.id : null)}
+      submission={submission}
+    />
+  );
 
   const save = () => {
     setConfirming(false);
+    // The placements are hidden while the bracket runs, so they can't be saved.
+    if (bracketRunning) {
+      toast.error("Finish or reset the bracket before awarding points.");
+      return;
+    }
     setSaving(true);
-    const includedIds = new Set(included.map(({ id }) => id));
+    const includedSet = new Set(includedIds);
     const nextPlacements = Object.entries(placements)
       .filter(
         (entry): entry is [string, ConvexQuotePlacement] =>
-          entry[1] !== null && includedIds.has(entry[0])
+          entry[1] !== null && includedSet.has(entry[0])
       )
       .map(([submissionId, placement]) => ({ submissionId, placement }));
     void awardConvexAdminQuotePlacements(
@@ -857,9 +966,14 @@ export function QuotabungaRecordingRound({
                 </Link>
               </Button>
               <Button
-                disabled={included.length === 0 || saving}
+                disabled={included.length === 0 || saving || bracketRunning}
                 onClick={() => setConfirming(true)}
                 size="sm"
+                title={
+                  bracketRunning
+                    ? "Finish or reset the bracket to award points."
+                    : undefined
+                }
               >
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -872,119 +986,91 @@ export function QuotabungaRecordingRound({
           </div>
         </CardHeader>
         <CardContent>
-          {included.length === 0 ? (
-            <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-              No entries have been included for this round yet.
-            </p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {included.map((submission) => (
-                <div
-                  className="space-y-3 rounded-xl border bg-muted/20 p-4"
-                  key={submission.id}
-                >
-                  <div className="flex justify-between gap-3 text-xs font-bold uppercase text-muted-foreground">
-                    <span>Matchup #{submission.bracketOrder ?? "—"}</span>
-                    <span>
-                      {names.shown ? listenerName(submission) : HIDDEN_NAME}
-                    </span>
-                  </div>
-                  <blockquote className="text-lg font-medium">
-                    &ldquo;{submission.quoteText}&rdquo;
-                  </blockquote>
-                  <p className="text-sm text-muted-foreground">
-                    {submission.sourceTitle} · {submission.sourceType}
-                  </p>
-                  {submission.listenerNotes !== null && (
-                    <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
-                      Listener: {submission.listenerNotes}
-                    </p>
-                  )}
-                  {submission.adminNotes !== null && (
-                    <p className="whitespace-pre-wrap rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-600">
-                      Admin: {submission.adminNotes}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <QuoteReuseChance
-                      blind={!names.shown}
-                      quoteText={submission.quoteText}
-                      submissionId={submission.id}
-                    />
-                    <InlineQuoteClip
-                      onOpenChange={(open) =>
-                        setOpenClipId(open ? submission.id : null)
-                      }
-                      open={openClipId === submission.id}
-                      submission={submission}
-                    />
-                    {submission.clipUrl !== null && (
-                      <a
-                        className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
-                        href={submission.clipUrl}
-                        rel="noreferrer noopener"
-                        target="_blank"
-                      >
-                        {parseYouTubeUrl(submission.clipUrl) === null ? (
-                          <>
-                            Open clip
-                            {submission.clipStartSeconds !== null
-                              ? ` at ${clipSeconds(submission.clipStartSeconds)}`
-                              : ""}
-                            {submission.clipEndSeconds !== null
-                              ? ` to ${clipSeconds(submission.clipEndSeconds)}`
-                              : ""}
-                          </>
-                        ) : (
-                          // Play clip beside it already shows the marked range.
-                          "Open on YouTube"
+          <QuoteReuseChecks.Provider value={reuseChecks}>
+            {included.length === 0 ? (
+              <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+                No entries have been included for this round yet.
+              </p>
+            ) : !bracket.loaded ? null : (
+              <div className="space-y-6">
+                <QuotabungaBracket
+                  entries={entries}
+                  entryIds={includedIds}
+                  judges={judges}
+                  onDispatch={bracket.dispatch}
+                  onReset={bracket.reset}
+                  onUndo={bracket.undo}
+                  onUseResults={() => {
+                    if (bracketPlacements !== null) {
+                      setPlacements(bracketPlacements);
+                    }
+                  }}
+                  conflict={bracket.conflict}
+                  onNextMatchup={() => setOpenClipId(null)}
+                  resultsApplied={resultsApplied}
+                  saveFailed={bracket.saveFailed}
+                  renderEntry={(entryId, label, controls) => {
+                    const submission = entries.get(entryId);
+                    return submission === undefined
+                      ? null
+                      : renderEntry(submission, label, controls);
+                  }}
+                  stale={bracket.stale}
+                  view={bracket.view}
+                />
+                {!bracketRunning && (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {included.map((submission) => (
+                      <div key={submission.id}>
+                        {renderEntry(
+                          submission,
+                          `Entry ${String(entryOrder.indexOf(submission.id) + 1)}`,
+                          <select
+                            aria-label={`Placement for ${
+                              names.shown
+                                ? listenerName(submission)
+                                : `the ${submission.sourceTitle} entry`
+                            }`}
+                            className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setPlacements((current) => {
+                                const next = { ...current };
+                                const placement =
+                                  value === ""
+                                    ? null
+                                    : (Number(value) as ConvexQuotePlacement);
+                                if (placement !== null) {
+                                  Object.entries(next).forEach(
+                                    ([id, currentPlacement]) => {
+                                      if (
+                                        id !== submission.id &&
+                                        currentPlacement === placement
+                                      ) {
+                                        next[id] = null;
+                                      }
+                                    }
+                                  );
+                                }
+                                next[submission.id] = placement;
+                                return next;
+                              });
+                            }}
+                            value={placements[submission.id] ?? ""}
+                          >
+                            <option value="">No placement</option>
+                            <option value="1">1st · 40 points</option>
+                            <option value="2">2nd · 20 points</option>
+                            <option value="3">3rd · 10 points</option>
+                          </select>
                         )}
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                    )}
+                      </div>
+                    ))}
                   </div>
-                  <select
-                    aria-label={`Placement for ${
-                      names.shown
-                        ? listenerName(submission)
-                        : `the ${submission.sourceTitle} entry`
-                    }`}
-                    className="flex h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setPlacements((current) => {
-                        const next = { ...current };
-                        const placement =
-                          value === ""
-                            ? null
-                            : (Number(value) as ConvexQuotePlacement);
-                        if (placement !== null) {
-                          Object.entries(next).forEach(
-                            ([id, currentPlacement]) => {
-                              if (
-                                id !== submission.id &&
-                                currentPlacement === placement
-                              ) {
-                                next[id] = null;
-                              }
-                            }
-                          );
-                        }
-                        next[submission.id] = placement;
-                        return next;
-                      });
-                    }}
-                    value={placements[submission.id] ?? ""}
-                  >
-                    <option value="">No placement</option>
-                    <option value="1">1st · 40 points</option>
-                    <option value="2">2nd · 20 points</option>
-                    <option value="3">3rd · 10 points</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </QuoteReuseChecks.Provider>
         </CardContent>
       </Card>
       <ConfirmModal
@@ -995,6 +1081,84 @@ export function QuotabungaRecordingRound({
         title="Replace Quotabunga awards?"
       />
     </>
+  );
+}
+
+function QuotabungaEntryCard({
+  clipOpen,
+  controls,
+  label,
+  namesShown,
+  onClipOpenChange,
+  submission,
+}: {
+  clipOpen: boolean;
+  controls: ReactNode;
+  label: string;
+  namesShown: boolean;
+  onClipOpenChange: (open: boolean) => void;
+  submission: ConvexAdminQuoteSubmission;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+      <div className="flex justify-between gap-3 text-xs font-bold uppercase text-muted-foreground">
+        <span>{label}</span>
+        <span>{namesShown ? listenerName(submission) : HIDDEN_NAME}</span>
+      </div>
+      <blockquote className="text-lg font-medium">
+        &ldquo;{submission.quoteText}&rdquo;
+      </blockquote>
+      <p className="text-sm text-muted-foreground">
+        {submission.sourceTitle} · {submission.sourceType}
+      </p>
+      {submission.listenerNotes !== null && (
+        <p className="whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
+          Listener: {submission.listenerNotes}
+        </p>
+      )}
+      {submission.adminNotes !== null && (
+        <p className="whitespace-pre-wrap rounded-md border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-600">
+          Admin: {submission.adminNotes}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <QuoteReuseChance
+          blind={!namesShown}
+          quoteText={submission.quoteText}
+          submissionId={submission.id}
+        />
+        <InlineQuoteClip
+          onOpenChange={onClipOpenChange}
+          open={clipOpen}
+          submission={submission}
+        />
+        {submission.clipUrl !== null && (
+          <a
+            className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
+            href={submission.clipUrl}
+            rel="noreferrer noopener"
+            target="_blank"
+          >
+            {parseYouTubeUrl(submission.clipUrl) === null ? (
+              <>
+                Open clip
+                {submission.clipStartSeconds !== null
+                  ? ` at ${clipSeconds(submission.clipStartSeconds)}`
+                  : ""}
+                {submission.clipEndSeconds !== null
+                  ? ` to ${clipSeconds(submission.clipEndSeconds)}`
+                  : ""}
+              </>
+            ) : (
+              // Play clip beside it already shows the marked range.
+              "Open on YouTube"
+            )}
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+      {controls}
+    </div>
   );
 }
 
@@ -1400,6 +1564,7 @@ export function ConvexRecordingManagementPage() {
   const recordingAppUrl = process.env.NEXT_PUBLIC_BBPC_RECORDING_URL;
 
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  const judges = useMemo(() => bracketJudgeNames(data?.users ?? []), [data]);
 
   useEffect(() => {
     let active = true;
@@ -1656,6 +1821,7 @@ export function ConvexRecordingManagementPage() {
 
             <QuotabungaRecordingRound
               episodeId={episode.id}
+              judges={judges}
               onRefresh={refresh}
               submissions={data.submissions}
             />
