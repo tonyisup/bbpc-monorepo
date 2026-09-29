@@ -40,6 +40,13 @@ const config = withPWA({
     defaultLocale: "en",
   },
   images: {
+    // Remote posters and thumbnails are already sized by TMDB and YouTube, and
+    // Vercel Hobby caps image transformations, so serve every image as-is.
+    // The settings below keep the variant count low if this is ever re-enabled.
+    unoptimized: true,
+    minimumCacheTTL: 60 * 60 * 24 * 7,
+    formats: ["image/webp"],
+    qualities: [75],
     remotePatterns: [
       {
         protocol: "https",
@@ -47,11 +54,18 @@ const config = withPWA({
         hostname: "i.ytimg.com",
         pathname: "/vi/**/*",
       },
+      // Catalog posters are stored at w342; older rows use w500.
       {
         protocol: "https",
         port: "",
         hostname: "image.tmdb.org",
-        pathname: "/t/p/**/*",
+        pathname: "/t/p/w342/**",
+      },
+      {
+        protocol: "https",
+        port: "",
+        hostname: "image.tmdb.org",
+        pathname: "/t/p/w500/**",
       },
       {
         protocol: "https",

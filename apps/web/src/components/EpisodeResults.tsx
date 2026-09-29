@@ -45,6 +45,7 @@ export default function EpisodeResults({ results }: EpisodeResultsProps) {
                         src={win.movie.poster}
                         alt={win.movie.title}
                         fill
+                        sizes="40px"
                         className="object-cover"
                       />
                     )}
@@ -94,6 +95,7 @@ export default function EpisodeResults({ results }: EpisodeResultsProps) {
                         src={guess.movie.poster}
                         alt={guess.movie.title}
                         fill
+                        sizes="40px"
                         className="object-cover opacity-40 grayscale-[0.5] transition-all group-hover:opacity-60 group-hover:grayscale-0"
                       />
                     )}

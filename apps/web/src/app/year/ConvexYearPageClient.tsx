@@ -125,6 +125,7 @@ function RankedItemRow({
             alt=""
             width={32}
             height={48}
+            sizes="32px"
             className="pointer-events-none h-12 w-8 rounded object-cover shadow"
           />
         )}
@@ -535,6 +536,7 @@ export function ConvexYearPageClient() {
                         alt={group.movie.title}
                         width={200}
                         height={300}
+                        sizes="(max-width: 400px) 100vw, 240px"
                         priority={index === 0}
                         className="aspect-[2/3] h-auto w-full object-cover"
                       />
@@ -722,6 +724,7 @@ export function ConvexYearPageClient() {
                             alt={group.movie.title}
                             width={96}
                             height={144}
+                            sizes="96px"
                             className="h-36 w-24 rounded object-cover shadow-lg"
                           />
                         ) : (
