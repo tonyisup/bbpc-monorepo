@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -34,6 +35,8 @@ type Missed = Extract<QuoteLocateResponse, { status: "not_found" }>;
 
 type Phase =
   | { kind: "idle"; note?: string }
+  // Find it was pressed before the quote and the source were filled in.
+  | { kind: "details" }
   | { kind: "searching" }
   | { kind: "listening" }
   // `loaded` is false while a suggestion waits to replace the listener's clip.
@@ -143,8 +146,11 @@ export type AssistantAccess = ReturnType<typeof useAssistantAccess>;
  * "Find it for me": searches (or reuses the search results), asks the locate
  * route to listen to one video at a time, and loads its suggestion into the
  * quote player. Nothing is submitted; the listener previews and decides.
+ *
+ * Returns the Find it button, which sits beside the search button, and the
+ * panel under the search box that reports each run and offers what's next.
  */
-export function QuoteFinderAssistant({
+export function useQuoteFinderAssistant({
   access,
   search,
   quoteText,
@@ -157,6 +163,7 @@ export function QuoteFinderAssistant({
   onFound,
   onUseWording,
   onShowPlayer,
+  onNeedDetails,
 }: {
   access: AssistantAccess;
   search: YouTubeSearch;
@@ -173,7 +180,9 @@ export function QuoteFinderAssistant({
   onFound: (videoId: string, start: number, end: number) => void;
   onUseWording: (text: string) => void;
   onShowPlayer?: () => void;
-}) {
+  /** Find it was pressed without a quote or a source to listen for. */
+  onNeedDetails?: () => void;
+}): { trigger: ReactNode; panel: ReactNode } {
   const { disabledReason } = access;
   const memory = access.memory.current;
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -184,6 +193,8 @@ export function QuoteFinderAssistant({
   // while the run goes on, and Cancel returns to it.
   const beforeRun = useRef<Phase>({ kind: "idle" });
   const section = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const hintId = useId();
   const statusRef = useRef<HTMLParagraphElement>(null);
   const moveFocus = useRef(false);
   // Read when an answer arrives, which can be long after the press.
@@ -216,7 +227,11 @@ export function QuoteFinderAssistant({
       !active ||
       active === document.body ||
       active.getAttribute("role") === "dialog";
-    if (!lost && !section.current?.contains(active)) {
+    if (
+      !lost &&
+      active !== triggerRef.current &&
+      !section.current?.contains(active)
+    ) {
       moveFocus.current = false;
       return;
     }
@@ -346,7 +361,7 @@ export function QuoteFinderAssistant({
         moveFocus.current = false;
         setPhase({
           kind: "idle",
-          note: "The search changed. Press Find it for me to check the new results.",
+          note: "The search changed. Press Find it to check the new results.",
         });
         return;
       }
@@ -354,8 +369,8 @@ export function QuoteFinderAssistant({
         setPhase({
           kind: "error",
           message: search.valid
-            ? "The video search didn't finish. See the note under Find a video."
-            : "Type a search under Find a video first.",
+            ? "The video search didn't finish. See the note below."
+            : "Type a search first.",
           retry: null,
         });
         return;
@@ -370,8 +385,8 @@ export function QuoteFinderAssistant({
         kind: "error",
         message:
           videos.length === 0
-            ? "The search found no videos. Try the movie title or a shorter part of the quote below."
-            : "Every video in this search has been checked. Try another search below.",
+            ? "The search found no videos. Search for the movie title or a shorter part of the quote."
+            : "Every video in this search has been checked. Try another search.",
         retry: null,
       });
       return;
@@ -405,7 +420,19 @@ export function QuoteFinderAssistant({
     setNotice("Your own wording is back in the form.");
   }
 
-  if (access.available !== true) return null;
+  function press() {
+    if (ready) {
+      start(findIt);
+      return;
+    }
+    // The listener fills in the fields this reveals; focus goes there.
+    moveFocus.current = false;
+    setNotice(null);
+    setPhase({ kind: "details" });
+    onNeedDetails?.();
+  }
+
+  if (access.available !== true) return { trigger: null, panel: null };
 
   // While a run goes on, the buttons of the panel before it stay in place.
   const view = busy ? beforeRun.current : phase;
@@ -458,7 +485,9 @@ export function QuoteFinderAssistant({
   let warn = false;
   if (!ready)
     status =
-      "Close the Quote Finder, add your quote and the movie or show to the form, then open it again.";
+      phase.kind === "details"
+        ? "Add your quote and the movie or show above, then press Find it."
+        : null;
   else if (phase.kind === "searching") status = "Finding videos to check…";
   else if (phase.kind === "listening")
     status = "Listening for the line… This usually takes a few seconds.";
@@ -504,22 +533,41 @@ export function QuoteFinderAssistant({
       </>
     );
 
-  return (
+  // Before a run there is nothing to report, only what Find it does.
+  const quiet = status === null && !restorable;
+
+  const trigger =
+    disabledReason !== null ? null : (
+      <Button
+        ref={triggerRef}
+        type="button"
+        variant="outline"
+        className="shrink-0 border-primary/40"
+        aria-describedby={quiet ? hintId : undefined}
+        // Wait for a search the listener started; its results are next.
+        disabled={busy || search.results?.loading === true}
+        onClick={press}
+      >
+        <Sparkles className="text-primary" aria-hidden="true" />
+        Find it
+      </Button>
+    );
+
+  const panel = (
     <section
       ref={section}
       aria-label="Quote Finder assistant"
-      className="space-y-3 rounded-lg border border-primary/40 bg-card p-4"
+      className={cn(
+        "space-y-3",
+        !quiet && "rounded-md border border-primary/40 p-3"
+      )}
     >
-      <div className="space-y-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-          Find it for me
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          Searches YouTube for your quote and listens for the line in one video
-          at a time. Play the suggestion before you submit.
+      {quiet && (
+        <p id={hintId} className="text-xs text-muted-foreground">
+          Find it listens to these videos for your quote, one at a time. Play
+          what it finds before you submit.
         </p>
-      </div>
+      )}
 
       <p
         ref={statusRef}
@@ -544,7 +592,7 @@ export function QuoteFinderAssistant({
       )}
 
       {ready && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 empty:hidden">
           {found && !found.loaded && disabledReason === null && (
             <Button
               type="button"
@@ -613,18 +661,7 @@ export function QuoteFinderAssistant({
             </>
           ) : view.kind === "error" && view.retry ? (
             checkButton(view.retry, "Try again")
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              // Wait for a search the listener started; its results are next.
-              disabled={busy || search.results?.loading === true}
-              onClick={() => start(findIt)}
-            >
-              <Sparkles aria-hidden="true" />
-              Find it for me
-            </Button>
-          )}
+          ) : null}
           {/* Last in the row, so a double press lands on the disabled button
               instead of cancelling the run it just paid for. */}
           {busy && (
@@ -640,10 +677,12 @@ export function QuoteFinderAssistant({
         next.length === 0 &&
         !timedOut && (
           <p className="text-xs text-muted-foreground">
-            No more videos to check from this search. Try another search below,
-            or pick a video yourself.
+            No more videos to check from this search. Try another search, or
+            pick a video yourself.
           </p>
         )}
     </section>
   );
+
+  return { trigger, panel };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { YouTubeSearch } from "@/hooks/useYouTubeSearch";
@@ -10,15 +10,22 @@ import {
   MAX_VIDEO_SEARCH_LENGTH,
 } from "@/lib/youtubeSearch";
 import { youtubeWatchUrl } from "@/lib/quoteClip";
+import { cn } from "@/lib/utils";
 
 export function YouTubeVideoSearch({
   search,
   selectedVideoId,
   onSelect,
+  action,
+  children,
 }: {
   search: YouTubeSearch;
   selectedVideoId?: string;
   onSelect: (url: string) => void;
+  /** Another button for the search row, after Search. */
+  action?: ReactNode;
+  /** Shown under the search row, above the results. */
+  children?: ReactNode;
 }) {
   const {
     query,
@@ -72,8 +79,15 @@ export function YouTubeVideoSearch({
           YouTube
         </a>
       </div>
-      <div className="flex gap-2">
+      {/* With a second button, a phone gives the search box its own row. */}
+      <div
+        className={cn(
+          "flex gap-2",
+          action != null && "max-sm:grid max-sm:grid-cols-2"
+        )}
+      >
         <Input
+          className="min-w-0 max-sm:col-span-2"
           aria-label="Search YouTube videos"
           type="search"
           maxLength={MAX_VIDEO_SEARCH_LENGTH}
@@ -96,7 +110,9 @@ export function YouTubeVideoSearch({
         >
           Search
         </Button>
+        {action}
       </div>
+      {children}
       {visible?.loading && (
         <p role="status" className="text-sm text-muted-foreground">
           Searching YouTube…

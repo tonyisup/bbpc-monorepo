@@ -730,6 +730,7 @@ export function ConvexQuotabungaSubmission({
                 onStartChange={setClipStartSeconds}
                 onEndChange={setClipEndSeconds}
                 onQuoteChange={setQuoteText}
+                onSourceTitleChange={setSourceTitle}
                 onDurationChange={setClipDuration}
               />
 
