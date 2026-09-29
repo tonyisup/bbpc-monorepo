@@ -1,18 +1,21 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FullScreenDialog } from "@/components/FullScreenDialog";
 import { QuoteClipEditor } from "@/components/QuoteClipEditor";
 import {
-  QuoteFinderAssistant,
   useAssistantAccess,
+  useQuoteFinderAssistant,
 } from "@/components/QuoteFinderAssistant";
 import { YouTubeVideoSearch } from "@/components/YouTubeVideoSearch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useYouTubeSearch } from "@/hooks/useYouTubeSearch";
 import {
   MAX_CLIP_SECONDS,
+  MAX_QUOTE_TEXT_LENGTH,
+  MAX_SOURCE_TITLE_LENGTH,
   parseYouTubeUrl,
   youtubeWatchUrl,
 } from "@/lib/quoteClip";
@@ -30,33 +33,36 @@ type Props = {
   onStartChange: (start: string) => void;
   onEndChange: (end: string) => void;
   onQuoteChange: (quote: string) => void;
+  onSourceTitleChange: (title: string) => void;
   onDurationChange?: (duration: number) => void;
 };
 
 /**
- * The finder's search tools. They mount with the dialog, so each opening
- * starts from the form's quote with no stale results.
+ * The finder's search tools, with Find it beside the search button. They
+ * mount with the dialog, so each opening starts from the form's quote with
+ * no stale results.
  */
 function FinderSearch({
   suggestedQuery,
   selectedVideoId,
   onSelect,
-  ...assistant
+  ...assistantProps
 }: {
   suggestedQuery: string;
   selectedVideoId?: string;
   onSelect: (url: string) => void;
-} & Omit<Parameters<typeof QuoteFinderAssistant>[0], "search">) {
+} & Omit<Parameters<typeof useQuoteFinderAssistant>[0], "search">) {
   const search = useYouTubeSearch(suggestedQuery);
+  const assistant = useQuoteFinderAssistant({ search, ...assistantProps });
   return (
-    <>
-      <QuoteFinderAssistant search={search} {...assistant} />
-      <YouTubeVideoSearch
-        search={search}
-        selectedVideoId={selectedVideoId}
-        onSelect={onSelect}
-      />
-    </>
+    <YouTubeVideoSearch
+      search={search}
+      selectedVideoId={selectedVideoId}
+      onSelect={onSelect}
+      action={assistant.trigger}
+    >
+      {assistant.panel}
+    </YouTubeVideoSearch>
   );
 }
 
@@ -72,6 +78,7 @@ export function QuotabungaClipFields({
   onStartChange,
   onEndChange,
   onQuoteChange,
+  onSourceTitleChange,
   onDurationChange,
 }: Props) {
   const [finderOpen, setFinderOpen] = useState(false);
@@ -82,6 +89,12 @@ export function QuotabungaClipFields({
   // Bumped per assistant suggestion so the player reloads at its range.
   const [suggestion, setSuggestion] = useState(0);
   const assistant = useAssistantAccess();
+  // Find it asks for the quote and the source here when the form lacks them.
+  const [detailsShown, setDetailsShown] = useState(false);
+  const [detailsAsked, setDetailsAsked] = useState(0);
+  const detailsFocus = useRef<"quote" | "source">("quote");
+  const quoteInput = useRef<HTMLTextAreaElement>(null);
+  const sourceInput = useRef<HTMLInputElement>(null);
   const player = useRef<HTMLDivElement>(null);
   const youtube = parseYouTubeUrl(clipUrl);
   // Once shown, keep End mounted so clearing it doesn't yank focus away.
@@ -89,8 +102,20 @@ export function QuotabungaClipFields({
   const [endShown, setEndShown] = useState(hasEnd);
   if (hasEnd && !endShown) setEndShown(true);
 
+  // Each press of Find it without them goes to the first one missing.
+  useEffect(() => {
+    if (detailsAsked === 0) return;
+    (detailsFocus.current === "quote"
+      ? quoteInput
+      : sourceInput
+    ).current?.focus();
+  }, [detailsAsked]);
+
+  const suggestQuery = (source: string, quote: string) =>
+    setFinderQuery([source, quote].filter(Boolean).join(" "));
   const openFinder = () => {
-    setFinderQuery([sourceTitle, quoteText].filter(Boolean).join(" "));
+    suggestQuery(sourceTitle, quoteText);
+    setDetailsShown(false);
     setPickedVideoId(null);
     assistant.check();
     setFinderOpen(true);
@@ -208,6 +233,50 @@ export function QuotabungaClipFields({
         description="Your quote and clip times stay in the form."
       >
         <section aria-label="Quote Finder" className="space-y-4">
+          {detailsShown && (
+            // The search box follows these until the listener types in it.
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label
+                  htmlFor="quote-finder-quote"
+                  className="text-sm font-semibold"
+                >
+                  Quote or scene
+                </label>
+                <Textarea
+                  ref={quoteInput}
+                  id="quote-finder-quote"
+                  maxLength={MAX_QUOTE_TEXT_LENGTH}
+                  value={quoteText}
+                  onChange={(event) => {
+                    onQuoteChange(event.target.value);
+                    suggestQuery(sourceTitle, event.target.value);
+                  }}
+                  placeholder="Type the exact quote..."
+                  className="min-h-20"
+                />
+              </div>
+              <div className="space-y-2">
+                <label
+                  htmlFor="quote-finder-source"
+                  className="text-sm font-semibold"
+                >
+                  Movie or show
+                </label>
+                <Input
+                  ref={sourceInput}
+                  id="quote-finder-source"
+                  maxLength={MAX_SOURCE_TITLE_LENGTH}
+                  value={sourceTitle}
+                  onChange={(event) => {
+                    onSourceTitleChange(event.target.value);
+                    suggestQuery(event.target.value, quoteText);
+                  }}
+                  placeholder="Heat"
+                />
+              </div>
+            </div>
+          )}
           <FinderSearch
             suggestedQuery={finderQuery}
             selectedVideoId={youtube?.id}
@@ -222,6 +291,12 @@ export function QuotabungaClipFields({
             clipEnd={end}
             onFound={loadSuggestion}
             onUseWording={onQuoteChange}
+            onNeedDetails={() => {
+              detailsFocus.current =
+                quoteText.trim() === "" ? "quote" : "source";
+              setDetailsShown(true);
+              setDetailsAsked((count) => count + 1);
+            }}
             onShowPlayer={() => {
               // An explicit smooth scroll would override reduced motion.
               const reduce = window.matchMedia?.(

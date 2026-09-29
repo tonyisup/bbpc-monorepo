@@ -6,8 +6,8 @@ import {
 } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import {
-  QuoteFinderAssistant,
   useAssistantAccess,
+  useQuoteFinderAssistant,
 } from "@/components/QuoteFinderAssistant";
 import { useYouTubeSearch, type YouTubeSearch } from "@/hooks/useYouTubeSearch";
 
@@ -40,6 +40,7 @@ const missed = (id: string, reason: string, remaining: string[]) =>
   json({ status: "not_found", video: video(id), reason, remaining });
 
 const onShowPlayer = vi.fn();
+const onNeedDetails = vi.fn();
 const focus = vi.fn();
 
 function Assistant({
@@ -63,21 +64,27 @@ function Assistant({
   search = useYouTubeSearch("Taxi Driver You talking to me");
   // The real page-wide access, with availability set by the test.
   const access = { ...useAssistantAccess(), available };
-  return (
-    <QuoteFinderAssistant
-      access={access}
-      search={search}
-      quoteText={quoteText}
-      sourceTitle={sourceTitle}
-      sourceType="MOVIE"
-      hasClip={hasClip}
-      loadedVideoId={loadedVideoId}
-      clipStart={clipStart}
-      clipEnd={clipEnd}
-      onFound={onFound}
-      onUseWording={onUseWording}
-      onShowPlayer={onShowPlayer}
-    />
+  const { trigger, panel } = useQuoteFinderAssistant({
+    access,
+    search,
+    quoteText,
+    sourceTitle,
+    sourceType: "MOVIE",
+    hasClip,
+    loadedVideoId,
+    clipStart,
+    clipEnd,
+    onFound,
+    onUseWording,
+    onShowPlayer,
+    onNeedDetails,
+  });
+  // Find it sits in the search row, the panel under it.
+  return trigger === null && panel === null ? null : (
+    <>
+      {trigger}
+      {panel}
+    </>
   );
 }
 
@@ -127,6 +134,7 @@ beforeEach(() => {
   onFound.mockReset();
   onUseWording.mockReset();
   onShowPlayer.mockReset();
+  onNeedDetails.mockReset();
   focus.mockReset();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     if (url === "/api/quote-finder/locate" && !init?.method)
@@ -203,9 +211,9 @@ test("a refusal holds across openings until its retry time", async () => {
           { status: 429, headers: { "Retry-After": "60" } }
         )
     );
-    await click("Find it for me");
+    await click("Find it");
     expect(text()).toContain("Try in a minute.");
-    expect(() => button("Find it for me")).toThrow();
+    expect(() => button("Find it")).toThrow();
     expect(() => button("Try again")).toThrow();
     vi.setSystemTime(Date.UTC(2026, 8, 28, 20, 1, 1));
     await act(async () => {
@@ -217,18 +225,30 @@ test("a refusal holds across openings until its retry time", async () => {
   }
 });
 
-test("asks for a quote and a source before offering to search", async () => {
+test("asks for a quote and a source when Find it is pressed without them", async () => {
   await mount(<Assistant quoteText="  " />);
+  expect(text()).toContain("Find it listens to these videos for your quote");
+  await click("Find it");
+  expect(onNeedDetails).toHaveBeenCalledTimes(1);
   expect(text()).toContain(
-    "add your quote and the movie or show to the form, then open it again"
+    "Add your quote and the movie or show above, then press Find it."
   );
-  expect(() => button("Find it for me")).toThrow();
+  // The fields it reveals take focus, not the status line.
+  expect(focus).not.toHaveBeenCalled();
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method)).toEqual([]);
+  expect(searches()).toHaveLength(0);
+  // Once filled in, the next press searches and checks.
+  locateReplies.push(() => found(FIRST, [SECOND, THIRD]));
+  act(() => view.update(<Assistant />));
+  expect(text()).not.toContain("Add your quote");
+  await click("Find it");
+  expect(onFound).toHaveBeenCalledWith(FIRST, 64.7, 67.75);
 });
 
 test("searches once, then checks the results and loads what it heard", async () => {
   await mount();
   locateReplies.push(() => found(SECOND, [THIRD]));
-  await click("Find it for me");
+  await click("Find it");
   expect(searches()).toHaveLength(1);
   expect(locateBodies()).toEqual([[FIRST, SECOND, THIRD]]);
   expect(onFound).toHaveBeenCalledWith(SECOND, 64.7, 67.75);
@@ -265,7 +285,7 @@ test("reuses results the listener already has instead of searching again", async
       remaining: [],
     })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(searches()).toHaveLength(1);
   expect(text()).toContain(`Might be in “Scene ${FIRST}”`);
   expect(text()).toContain("the words don’t quite match your quote");
@@ -274,7 +294,7 @@ test("reuses results the listener already has instead of searching again", async
 test("offers a retry after a slow check and after a failed one", async () => {
   await mount();
   locateReplies.push(() => missed(FIRST, "timeout", [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain(`“Scene ${FIRST}” took too long to check.`);
   locateReplies.push(() => json({ error: "Try later." }, 503));
   await click("Try again");
@@ -291,14 +311,14 @@ test("a spent budget disables the assistant with the route's reason", async () =
   const reason =
     "You've used your assistant runs for now. Try again in 12 hours, or search and pick a clip yourself.";
   locateReplies.push(() => json({ error: reason, disabled: true }, 429));
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain(reason);
-  expect(() => button("Find it for me")).toThrow();
+  expect(() => button("Find it")).toThrow();
   expect(() => button("Try again")).toThrow();
   // A new search doesn't bring the button back.
   act(() => search.setQuery("Taxi Driver mirror"));
   expect(text()).toContain(reason);
-  expect(() => button("Find it for me")).toThrow();
+  expect(() => button("Find it")).toThrow();
 });
 
 test("cancel stops waiting and ignores the late answer", async () => {
@@ -312,20 +332,20 @@ test("cancel stops waiting and ignores the late answer", async () => {
         answer = resolve;
       })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain("Listening for the line…");
   await click("Cancel");
   expect(signal?.aborted).toBe(true);
   await act(async () => answer(found(FIRST, [])));
   expect(onFound).not.toHaveBeenCalled();
   expect(text()).toContain("Stopped. Nothing new was loaded.");
-  expect(button("Find it for me")).toBeDefined();
+  expect(button("Find it")).toBeDefined();
 });
 
 test("cancelling Not it returns to the suggestion instead of starting over", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   // The form now holds the suggestion.
   await act(async () => {
     view.update(<Assistant hasClip loadedVideoId={FIRST} />);
@@ -343,7 +363,7 @@ test("cancelling Not it returns to the suggestion instead of starting over", asy
 test("cancel doesn't bring back a suggestion replaced during the run", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   await act(async () => {
     view.update(<Assistant hasClip loadedVideoId={FIRST} />);
   });
@@ -368,9 +388,9 @@ test("says why nothing was checked when no video qualifies", async () => {
       remaining: [],
     })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain("public videos up to 3 minutes long");
-  expect(text()).toContain("Try another search below");
+  expect(text()).toContain("Try another search");
 });
 
 test("explains a search that failed, found nothing or is too short to run", async () => {
@@ -378,21 +398,21 @@ test("explains a search that failed, found nothing or is too short to run", asyn
   fetchMock.mockImplementationOnce(
     async () => new Response("quota", { status: 503 })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain(
-    "The video search didn't finish. See the note under Find a video."
+    "The video search didn't finish. See the note below."
   );
   expect(search.results?.error).toContain("unavailable");
   // A failed search isn't reused; the next press searches again.
   fetchMock.mockImplementationOnce(async () =>
     json({ videos: [], nextPageToken: null })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(searches()).toHaveLength(2);
   expect(text()).toContain("The search found no videos.");
   act(() => search.setQuery("a"));
-  await click("Find it for me");
-  expect(text()).toContain("Type a search under Find a video first.");
+  await click("Find it");
+  expect(text()).toContain("Type a search first.");
   expect(searches()).toHaveLength(2);
   expect(locateBodies()).toEqual([]);
 });
@@ -403,7 +423,7 @@ test("a failed, garbled or unreachable check offers the same videos again", asyn
   locateReplies.push(
     () => new Response("<html>Bad gateway</html>", { status: 502 })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain(unavailable);
   locateReplies.push(() => json({ status: "found", video: video(FIRST) }));
   await click("Try again");
@@ -431,7 +451,7 @@ test("editing the search keeps a paid check running, and Not it moves into the n
         answer = resolve;
       })
   );
-  await click("Find it for me");
+  await click("Find it");
   act(() => search.setQuery("Taxi Driver mirror scene"));
   expect(signal?.aborted).toBe(false);
   expect(text()).toContain("Listening for the line…");
@@ -458,14 +478,14 @@ test("a search replaced while the assistant waits for it isn't an error", async 
         )
       )
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain("Finding videos to check…");
   focus.mockClear();
   await act(async () => {
     search.setQuery("Taxi Driver mirror scene");
   });
   expect(text()).toContain(
-    "The search changed. Press Find it for me to check the new results."
+    "The search changed. Press Find it to check the new results."
   );
   expect(text()).not.toContain("didn't finish");
   expect(focus).not.toHaveBeenCalled();
@@ -481,11 +501,11 @@ test("cancel while searching checks nothing and waits for the search to finish",
         finish = resolve;
       })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain("Finding videos to check…");
   await click("Cancel");
   // The listener's search is still running; its results come next.
-  expect(button("Find it for me").props.disabled).toBe(true);
+  expect(button("Find it").props.disabled).toBe(true);
   await act(async () =>
     finish(
       json({
@@ -496,7 +516,7 @@ test("cancel while searching checks nothing and waits for the search to finish",
   );
   expect(locateBodies()).toEqual([]);
   expect(search.results?.videos.map(({ id }) => id)).toEqual([FIRST]);
-  expect(button("Find it for me").props.disabled).toBe(false);
+  expect(button("Find it").props.disabled).toBe(false);
 });
 
 test("checks a page of results at a time, then moves on to later listed results", async () => {
@@ -521,7 +541,7 @@ test("checks a page of results at a time, then moves on to later listed results"
   expect(search.results?.videos).toHaveLength(9);
   const top = ids[0] ?? FIRST;
   locateReplies.push(() => missed(top, "unreadable", ids.slice(1, 6)));
-  await click("Find it for me");
+  await click("Find it");
   expect(locateBodies()).toEqual([ids.slice(0, 6)]);
   expect(text()).toContain(`Couldn't listen to “Scene ${top}”.`);
   // The route's five leftovers, topped up with the next listed video.
@@ -544,7 +564,7 @@ test("closing the finder stops a check in flight", async () => {
         signal = init.signal ?? undefined;
       })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(signal?.aborted).toBe(false);
   act(() => view.unmount());
   expect(signal?.aborted).toBe(true);
@@ -554,7 +574,7 @@ test("a double press spends one search and one check", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, []));
   await act(async () => {
-    const press = button("Find it for me").props.onClick;
+    const press = button("Find it").props.onClick;
     press();
     press();
   });
@@ -567,7 +587,7 @@ test("a double press spends one search and one check", async () => {
 test("later checks look for the listener's own line, which Restore brings back", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   act(() => button("Use exact wording").props.onClick());
   expect(onUseWording).toHaveBeenLastCalledWith("You talkin' to me?");
   // The form now holds the heard line.
@@ -589,7 +609,7 @@ test("later checks look for the listener's own line, which Restore brings back",
 test("says so when the heard line is already the listener's quote", async () => {
   await mount(<Assistant quoteText="You talkin' to me?" />);
   locateReplies.push(() => found(FIRST, []));
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain("It matches your quote.");
   expect(() => button("Use exact wording")).toThrow();
   expect(() => button("Restore my wording")).toThrow();
@@ -598,13 +618,13 @@ test("says so when the heard line is already the listener's quote", async () => 
 test("starting over skips videos this session already checked", async () => {
   await mount(<Assistant loadedVideoId={SECOND} />);
   locateReplies.push(() => found(FIRST, [SECOND, THIRD]));
-  await click("Find it for me");
+  await click("Find it");
   // Another video loaded by hand retires the suggestion.
   await act(async () => {
     view.update(<Assistant loadedVideoId={THIRD} />);
   });
   locateReplies.push(() => missed(SECOND, "not_heard", []));
-  await click("Find it for me");
+  await click("Find it");
   expect(locateBodies()[1]).toEqual([SECOND, THIRD]);
   // Every listed video is checked now; nothing is left to pay for.
   expect(() => button("Try the next video")).toThrow();
@@ -614,7 +634,7 @@ test("starting over skips videos this session already checked", async () => {
 test("a video loaded by hand retires the heard line", async () => {
   await mount(<Assistant loadedVideoId={SECOND} />);
   locateReplies.push(() => found(FIRST, [THIRD]));
-  await click("Find it for me");
+  await click("Find it");
   await act(async () => {
     view.update(<Assistant loadedVideoId={FIRST} />);
   });
@@ -624,13 +644,13 @@ test("a video loaded by hand retires the heard line", async () => {
   });
   expect(text()).not.toContain("Heard in");
   expect(() => button("Use exact wording")).toThrow();
-  expect(button("Find it for me")).toBeDefined();
+  expect(button("Find it")).toBeDefined();
 });
 
 test("a suggestion waits for Load it when the form holds the listener's own clip", async () => {
   await mount(<Assistant hasClip loadedVideoId="zzzzzzzzzzz" />);
   locateReplies.push(() => found(FIRST, []));
-  await click("Find it for me");
+  await click("Find it");
   expect(onFound).not.toHaveBeenCalled();
   expect(text()).toContain("Load it to replace the clip in your form.");
   expect(() => button("Use exact wording")).toThrow();
@@ -647,7 +667,7 @@ test("a suggestion waits for Load it when the form holds the listener's own clip
 test("the assistant's own suggestion is replaced without asking", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   await act(async () => {
     view.update(<Assistant hasClip loadedVideoId={FIRST} />);
   });
@@ -660,7 +680,7 @@ test("the assistant's own suggestion is replaced without asking", async () => {
 test("says when a miss leaves the earlier suggestion in the player", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   await act(async () => {
     view.update(<Assistant hasClip loadedVideoId={FIRST} />);
   });
@@ -674,12 +694,12 @@ test("says when a miss leaves the earlier suggestion in the player", async () =>
 test("moves focus to the status after each press", async () => {
   await mount();
   locateReplies.push(() => new Promise<Response>(() => undefined));
-  await click("Find it for me");
+  await click("Find it");
   expect(focus).toHaveBeenCalled();
   focus.mockClear();
   await click("Cancel");
   expect(focus).toHaveBeenCalledOnce();
-  expect(button("Find it for me")).toBeDefined();
+  expect(button("Find it")).toBeDefined();
 });
 
 test("focus stays where the listener went while a check ran", async () => {
@@ -694,7 +714,7 @@ test("focus stays where the listener went while a check ran", async () => {
         answer = resolve;
       })
   );
-  await click("Find it for me");
+  await click("Find it");
   const calls = focus.mock.calls.length;
   expect(calls).toBeGreaterThan(0);
   // The listener tabs to the search box while the check runs.
@@ -710,14 +730,14 @@ test("focus that fell to the dialog itself counts as lost", async () => {
   });
   await mount();
   locateReplies.push(() => found(FIRST, []));
-  await click("Find it for me");
+  await click("Find it");
   expect(focus).toHaveBeenCalled();
 });
 
 test("Try the next video skips a video that timed out", async () => {
   await mount();
   locateReplies.push(() => missed(FIRST, "timeout", [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   locateReplies.push(() => missed(SECOND, "not_heard", []));
   await click("Try the next video");
   expect(locateBodies()[1]).toEqual([SECOND]);
@@ -726,7 +746,7 @@ test("Try the next video skips a video that timed out", async () => {
 test("after the listener loads a video by hand, a new suggestion waits for Load it", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND, THIRD]));
-  await click("Find it for me");
+  await click("Find it");
   await act(async () => {
     view.update(<Assistant hasClip loadedVideoId={FIRST} />);
   });
@@ -735,7 +755,7 @@ test("after the listener loads a video by hand, a new suggestion waits for Load 
     view.update(<Assistant hasClip loadedVideoId={THIRD} />);
   });
   locateReplies.push(() => found(SECOND, []));
-  await click("Find it for me");
+  await click("Find it");
   expect(onFound).toHaveBeenCalledTimes(1);
   expect(button("Load it")).toBeDefined();
 });
@@ -744,7 +764,7 @@ test("Not it moves on to videos only a newer search listed", async () => {
   const FOURTH = "ddddddddddd";
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   act(() => search.setQuery("Taxi Driver mirror scene"));
   fetchMock.mockImplementationOnce(async () =>
     json({
@@ -766,7 +786,7 @@ test("Not it moves on to videos only a newer search listed", async () => {
 test("Restore from a later step says so and keeps focus on the panel", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   act(() => button("Use exact wording").props.onClick());
   await act(async () => {
     view.update(<Assistant quoteText="You talkin' to me?" />);
@@ -793,7 +813,7 @@ test("an unsure match whose words are the listener's own doesn't claim they diff
       remaining: [],
     })
   );
-  await click("Find it for me");
+  await click("Find it");
   expect(text()).toContain("the assistant isn’t sure it’s the line");
   expect(text()).not.toContain("don’t quite match");
   expect(text()).toContain("It matches your quote.");
@@ -802,16 +822,16 @@ test("an unsure match whose words are the listener's own doesn't claim they diff
 test("while a check runs the row keeps its place, with Cancel last", async () => {
   await mount();
   locateReplies.push(() => new Promise<Response>(() => undefined));
-  await click("Find it for me");
+  await click("Find it");
   const labels = view.root.findAllByType("button").map((item) => text(item));
-  expect(labels.slice(-2)).toEqual(["Find it for me", "Cancel"]);
-  expect(button("Find it for me").props.disabled).toBe(true);
+  expect(labels.slice(-2)).toEqual(["Find it", "Cancel"]);
+  expect(button("Find it").props.disabled).toBe(true);
 });
 
 test("a suggestion whose times the listener changed isn't replaced without asking", async () => {
   await mount();
   locateReplies.push(() => found(FIRST, [SECOND]));
-  await click("Find it for me");
+  await click("Find it");
   // The form holds the suggestion at its range.
   await act(async () => {
     view.update(

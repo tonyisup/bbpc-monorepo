@@ -193,7 +193,11 @@ and default thinking were tried.
   after 45 s, or no video qualified), with the remaining candidates in both cases.
 - `GET` on the same route tells the finder whether to show the assistant: only to
   signed-in listeners when both API keys are set. It spends nothing.
-- A **Find it for me** panel above the finder's search, which shares its results.
+- A **Find it** button beside the finder's Search button, which shares its results,
+  and a panel under the search box that reports each run. When the form lacks the
+  quote or the movie or show, pressing it shows those fields in the finder, so
+  the listener never has to close it; the search box follows them until the
+  listener types their own search.
 - "Likely" needs high confidence and at least half of the listener's wording in the
   heard line. The spike found neither signal separates hits from misses, so every
   result still says to play it before submitting.
@@ -206,7 +210,7 @@ and default thinking were tried.
   checked, across openings of the finder, so no later run pays for them again, and
   **Not it** moves on through the route's leftovers and then any listed results not
   yet checked, including a newer search's. Every run looks for the wording the listener had when they pressed
-  **Find it for me**; **Restore my wording** brings it back after they use a heard
+  **Find it**; **Restore my wording** brings it back after they use a heard
   line. Cancel returns to what the panel showed before.
 - When the form already holds a clip the listener chose, a suggestion waits for
   **Load it** instead of replacing it. A heard line is set aside when the

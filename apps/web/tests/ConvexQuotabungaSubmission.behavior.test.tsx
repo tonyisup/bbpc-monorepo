@@ -97,28 +97,52 @@ vi.mock("@/components/AdminCollapsibleHeader", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/button", () => ({
-  Button: ({
-    children,
-    variant: _variant,
-    size: _size,
-    ...props
-  }: ButtonHTMLAttributes<HTMLButtonElement> & {
-    children?: ReactNode;
-    size?: string;
-    variant?: string;
-  }) => <button {...props}>{children}</button>,
-}));
+// Like the real components, these pass refs on to their elements.
+vi.mock("@/components/ui/button", async () => {
+  const { forwardRef } = await import("react");
+  return {
+    Button: forwardRef<
+      HTMLButtonElement,
+      ButtonHTMLAttributes<HTMLButtonElement> & {
+        children?: ReactNode;
+        size?: string;
+        variant?: string;
+      }
+    >(function Button(
+      { children, variant: _variant, size: _size, ...props },
+      ref
+    ) {
+      return (
+        <button ref={ref} {...props}>
+          {children}
+        </button>
+      );
+    }),
+  };
+});
 
-vi.mock("@/components/ui/input", () => ({
-  Input: (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
-}));
+vi.mock("@/components/ui/input", async () => {
+  const { forwardRef } = await import("react");
+  return {
+    Input: forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
+      function Input(props, ref) {
+        return <input ref={ref} {...props} />;
+      }
+    ),
+  };
+});
 
-vi.mock("@/components/ui/textarea", () => ({
-  Textarea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-    <textarea {...props} />
-  ),
-}));
+vi.mock("@/components/ui/textarea", async () => {
+  const { forwardRef } = await import("react");
+  return {
+    Textarea: forwardRef<
+      HTMLTextAreaElement,
+      TextareaHTMLAttributes<HTMLTextAreaElement>
+    >(function Textarea(props, ref) {
+      return <textarea ref={ref} {...props} />;
+    }),
+  };
+});
 
 vi.mock("@/hooks/useAdminCollapse", () => ({
   useAdminCollapse: () => ({
@@ -789,7 +813,7 @@ describe("ConvexQuotabungaSubmission writes", () => {
       findButton(rendered, "Use Quote Finder").props.onClick();
     });
     await act(async () => {
-      findButton(rendered, "Find it for me").props.onClick();
+      findButton(rendered, "Find it").props.onClick();
     });
     const locate = fetchMock.mock.calls.find(
       ([, init]) => init?.method === "POST"
@@ -872,7 +896,7 @@ describe("ConvexQuotabungaSubmission writes", () => {
       findButton(rendered, "Search").props.onClick();
     });
     await act(async () => {
-      findButton(rendered, "Find it for me").props.onClick();
+      findButton(rendered, "Find it").props.onClick();
     });
     expect(searches()).toHaveLength(1);
     // The found clip takes the list's place until the listener asks for it.
@@ -891,7 +915,86 @@ describe("ConvexQuotabungaSubmission writes", () => {
     );
     expect(renderedText(rendered)).not.toContain("Heard in");
     expect(renderedText(rendered)).not.toContain("Show search results");
-    expect(findButton(rendered, "Find it for me")).toBeDefined();
+    expect(findButton(rendered, "Find it")).toBeDefined();
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("Find it asks for a missing source inside the finder, which the form and the search box follow", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/quote-finder/locate" && !init?.method)
+        return new Response(JSON.stringify({ available: true }));
+      if (url.startsWith("/api/youtube/search"))
+        return new Response(
+          JSON.stringify({
+            videos: [
+              { id: "lmnopqrstuv", title: "Diner scene", channel: "Movies" },
+            ],
+            nextPageToken: null,
+          })
+        );
+      return new Response(
+        JSON.stringify({
+          status: "not_found",
+          video: { id: "lmnopqrstuv", title: "Diner scene" },
+          reason: "not_heard",
+          remaining: [],
+        })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const focusSource = vi.fn();
+    const rendered = await renderSubmission("next", (element) =>
+      element.props.id === "quote-finder-source" ? { focus: focusSource } : null
+    );
+    const searchBox = () =>
+      rendered.root.findByProps({ "aria-label": "Search YouTube videos" });
+    enterQuote(rendered, "I do what I do best", "");
+    await act(async () => {
+      findButton(rendered, "Use Quote Finder").props.onClick();
+    });
+    expect(
+      rendered.root.findAllByProps({ id: "quote-finder-source" })
+    ).toHaveLength(0);
+
+    await act(async () => {
+      findButton(rendered, "Find it").props.onClick();
+    });
+    expect(renderedText(rendered)).toContain(
+      "Add your quote and the movie or show above, then press Find it."
+    );
+    expect(focusSource).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method)).toEqual([]);
+
+    act(() => {
+      rendered.root
+        .findByProps({ id: "quote-finder-source" })
+        .props.onChange({ target: { value: "Heat" } });
+    });
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-source" }).props.value
+    ).toBe("Heat");
+    expect(searchBox().props.value).toBe("Heat I do what I do best");
+    await act(async () => {
+      findButton(rendered, "Find it").props.onClick();
+    });
+    const locate = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST"
+    );
+    expect(JSON.parse(String(locate?.[1]?.body))).toMatchObject({
+      quoteText: "I do what I do best",
+      sourceTitle: "Heat",
+    });
+    // The fields stay while the finder is open, and reset on the next opening.
+    expect(
+      rendered.root.findAllByProps({ id: "quote-finder-source" })
+    ).not.toHaveLength(0);
+    act(() => findButton(rendered, "Done").props.onClick());
+    await act(async () => {
+      findButton(rendered, "Use Quote Finder").props.onClick();
+    });
+    expect(
+      rendered.root.findAllByProps({ id: "quote-finder-source" })
+    ).toHaveLength(0);
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
@@ -938,7 +1041,7 @@ describe("ConvexQuotabungaSubmission writes", () => {
     );
     const mounts = mocks.editorMounts;
     await act(async () => {
-      findButton(rendered, "Find it for me").props.onClick();
+      findButton(rendered, "Find it").props.onClick();
     });
     // The listener picked this video, so nothing changes until they say so.
     expect(mocks.editorMounts).toBe(mounts);
@@ -1016,12 +1119,12 @@ describe("ConvexQuotabungaSubmission writes", () => {
       });
       posts.push(found(DINER, [TRAILER]));
       await act(async () => {
-        findButton(rendered, "Find it for me").props.onClick();
+        findButton(rendered, "Find it").props.onClick();
       });
       await reopen(rendered);
       posts.push(found(TRAILER, []));
       await act(async () => {
-        findButton(rendered, "Find it for me").props.onClick();
+        findButton(rendered, "Find it").props.onClick();
       });
       expect(bodies()).toEqual([[DINER, TRAILER], [TRAILER]]);
       // The form holds the assistant's earlier suggestion, so no Load it.
@@ -1047,11 +1150,11 @@ describe("ConvexQuotabungaSubmission writes", () => {
           })
       );
       await act(async () => {
-        findButton(rendered, "Find it for me").props.onClick();
+        findButton(rendered, "Find it").props.onClick();
       });
       await reopen(rendered);
       expect(renderedText(rendered)).toContain(reason);
-      expect(() => findButton(rendered, "Find it for me")).toThrow();
+      expect(() => findButton(rendered, "Find it")).toThrow();
       expect(gets()).toHaveLength(1);
     });
 
@@ -1068,7 +1171,7 @@ describe("ConvexQuotabungaSubmission writes", () => {
       });
       posts.push(found(DINER, []));
       await act(async () => {
-        findButton(rendered, "Find it for me").props.onClick();
+        findButton(rendered, "Find it").props.onClick();
       });
       act(() => findButton(rendered, "Show player").props.onClick());
       expect(scrollIntoView).toHaveBeenCalledWith({
