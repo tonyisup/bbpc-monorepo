@@ -521,8 +521,7 @@ export const submitMine = authenticatedMutation({
     if (existing === null) {
       const season = await resolveQuoteSeasonForEpisode(
         ctx,
-        episode._id,
-        args.today,
+        episode,
       );
       submissionId = await ctx.db.insert("quoteSubmissions", {
         userId: ctx.actor.user._id,
@@ -722,8 +721,7 @@ export const createForUser = adminMutation({
     }
     const season = await resolveQuoteSeasonForEpisode(
       ctx,
-      episode._id,
-      args.today,
+      episode,
     );
     const now = validateQuoteTimestamp(
       args.now ?? Date.now(),
@@ -940,6 +938,12 @@ export const awardPlacements = adminMutation({
       );
     }
     const episode = await requireQuoteEpisode(ctx, args.episodeId);
+    if (isEpisodeRoundOpen(episode, Date.now())) {
+      domainError(
+        "CONFLICT",
+        "Quote placements cannot be awarded while the round is open.",
+      );
+    }
     const submissions = await listQuoteSubmissionsForEpisode(
       ctx,
       episode._id,

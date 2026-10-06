@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -310,6 +310,12 @@ async function seedBalance(
 }
 
 describe("gambling API", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T12:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
   test("picks and wagers remain editable during recording grace and reject writes at the exact deadline", async () => {
     vi.useFakeTimers();
     const startedAt = Date.parse("2026-07-24T12:00:00Z");
@@ -575,6 +581,32 @@ describe("gambling API", () => {
         .withIdentity(ADMIN_IDENTITY)
         .query(api.games.gambling.getTypeById, { id: created.id }),
     ).resolves.toBeNull();
+  });
+
+  test("uses the server date and current balance despite forged wager dates", async () => {
+    const t = createTestBackend();
+    const { adminId, memberId, hostId } = await seedActors(t);
+    const { seasonId, pastSeasonId, ratingId } = await seedFoundation(t);
+    const round = await seedRound(t, { ownerId: adminId, hostId, ratingId, suffix: "1" });
+    await advanceToS3(t);
+    await seedBalance(t, { userId: memberId, seasonId: pastSeasonId, adjustment: 100 });
+    const args = {
+      clientApiVersion: BBPC_API_VERSION,
+      assignmentId: round.assignmentId,
+      points: 10,
+      today: "2025-07-24",
+      createdAt: Date.parse("2025-07-24"),
+    };
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    await expectDomainError(member.mutation(api.games.gambling.submit, args), "CONFLICT");
+    await seedBalance(t, { userId: memberId, seasonId, adjustment: 20 });
+    vi.setSystemTime(new Date("2027-01-01T07:59:59.999Z"));
+    const created = await member.mutation(api.games.gambling.submit, args);
+    expect(created.season?.id).toBe(seasonId);
+    vi.setSystemTime(new Date("2027-01-01T08:00:00Z"));
+    await expectDomainError(member.mutation(api.games.gambling.submit, args), "NOT_FOUND");
+    expect(await t.run((ctx) => ctx.db.query("gamblingEntries").take(2)))
+      .toMatchObject([{ _id: created.id, seasonId }]);
   });
 
   test("derives member ownership and idempotently upserts the canonical wager key", async () => {
@@ -844,6 +876,7 @@ describe("gambling API", () => {
       }),
       "VALIDATION_FAILED",
     );
+    vi.setSystemTime(new Date("2027-01-01T08:00:00Z"));
     await expectDomainError(
       t.withIdentity(MEMBER_IDENTITY).mutation(api.games.gambling.submit, {
         clientApiVersion: BBPC_API_VERSION,

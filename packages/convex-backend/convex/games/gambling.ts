@@ -287,10 +287,16 @@ export const submit = authenticatedMutation({
   },
   returns: gamblingEntryValidator,
   handler: async (ctx, args) => {
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
     const points = validateGamblingPoints(args.points);
     const { season, gamblingType } = await validateGamblingParents(ctx, {
       userId: ctx.actor.user._id,
-      season: { kind: "current", today: args.today },
+      season: { kind: "current", today },
       gamblingTypeId: args.gamblingTypeId,
       assignmentId: args.assignmentId,
       targetUserId: args.targetUserId,
