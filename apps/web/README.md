@@ -49,6 +49,14 @@ balance. `QUOTE_LOCATE_SERVER_KEY` is a random secret set to the same value here
 the Convex deployment's environment (`npx convex env set QUOTE_LOCATE_SERVER_KEY ...`);
 without it the assistant stays hidden.
 
+The public Quotabunga archive at `/game/quotabunga`, linked from `/game`, lists each
+season's rounds, entries, and winners and plays YouTube clips in place. `?season=<id>`
+picks a season and `?season=all` shows every season; anything else falls back to the
+current season, or the newest one. It needs no keys. A round's quotes and winners
+appear once its episode is published. Deploy the backend with
+`games.public.quotabungaSeasons` and `quotabungaSeason` first; until then the page
+shows its error state.
+
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can
 therefore be tested atomically from the repository root with `pnpm run check`.
