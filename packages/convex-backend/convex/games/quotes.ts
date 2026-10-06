@@ -35,7 +35,7 @@ import {
   requireQuoteEpisode,
   requireQuoteSubmission,
   searchQuoteSubmissionCandidates,
-  toMemberQuoteSubmission,
+  toListenerQuoteSubmission,
   toQuoteEpisode,
 } from "./quoteReadModel.js";
 import { quotesPossiblyMatch } from "./quoteSimilarity.js";
@@ -280,7 +280,7 @@ export const currentForMe = authenticatedQuery({
       submission:
         submission === null
           ? null
-          : toMemberQuoteSubmission(submission),
+          : toListenerQuoteSubmission(submission, episode),
     };
   },
 });
@@ -309,7 +309,7 @@ export const mineForEpisode = authenticatedQuery({
       submission:
         submission === null
           ? null
-          : toMemberQuoteSubmission(submission),
+          : toListenerQuoteSubmission(submission, episode),
     };
   },
 });
@@ -568,8 +568,9 @@ export const submitMine = authenticatedMutation({
       targetId: submissionId,
       cutoverRunId: ctx.systemState.cutoverRunId,
     });
-    return toMemberQuoteSubmission(
+    return toListenerQuoteSubmission(
       await requireQuoteSubmission(ctx, submissionId),
+      episode,
     );
   },
 });

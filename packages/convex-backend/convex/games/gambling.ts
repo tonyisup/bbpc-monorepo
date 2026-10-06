@@ -16,6 +16,7 @@ import {
 import { writeAuditEvent } from "../lib/audit.js";
 import type { ApplicationActor } from "../lib/actors.js";
 import { domainError } from "../lib/errors.js";
+import { isPublishedEpisode } from "../lib/transcriptVisibility.js";
 import {
   MAX_ASSIGNMENTS_FOR_GAMBLING_READ,
   MAX_GAMBLING_ENTRIES_PER_READ,
@@ -26,6 +27,7 @@ import {
   assertGamblingReadLimit,
   hydrateGamblingEntries,
   hydrateGamblingEntry,
+  withholdUnpublishedWagerResult,
   requireGamblingEntry,
   requireGamblingType,
   toGamblingType,
@@ -90,6 +92,16 @@ async function readEntriesForAssignmentUser(
   return entries;
 }
 
+/** Wagers as their owner may see them: no outcome before the episode is out. */
+async function hydrateListenerEntries(
+  ctx: Parameters<typeof hydrateGamblingEntries>[0],
+  entries: Array<Doc<"gamblingEntries">>,
+) {
+  return (await hydrateGamblingEntries(ctx, entries)).map(
+    withholdUnpublishedWagerResult,
+  );
+}
+
 async function resolveReadType(
   ctx: Parameters<typeof requireGamblingType>[0],
   id: Id<"gamblingTypes"> | undefined,
@@ -148,7 +160,7 @@ export const mineForAssignment = authenticatedQuery({
   returns: v.array(gamblingEntryValidator),
   handler: async (ctx, args) => {
     await requirePointAssignment(ctx, args.assignmentId);
-    return await hydrateGamblingEntries(
+    return await hydrateListenerEntries(
       ctx,
       await readEntriesForAssignmentUser(
         ctx,
@@ -166,6 +178,10 @@ export const hasWonForEpisode = authenticatedQuery({
     const episode = await ctx.db.get("episodes", args.episodeId);
     if (episode === null) {
       domainError("NOT_FOUND", "The episode is unavailable.");
+    }
+    // A win stays unannounced until the episode is published.
+    if (!isPublishedEpisode(episode)) {
+      return false;
     }
     const assignments = await ctx.db
       .query("assignments")
@@ -208,7 +224,7 @@ export const mineForAssignments = authenticatedQuery({
       await requirePointAssignment(ctx, assignmentId);
       groups.push({
         assignmentId,
-        entries: await hydrateGamblingEntries(
+        entries: await hydrateListenerEntries(
           ctx,
           await readEntriesForAssignmentUser(
             ctx,
@@ -236,7 +252,7 @@ export const mineForType = authenticatedQuery({
       )
       .take(MAX_GAMBLING_ENTRIES_PER_READ + 1);
     assertGamblingReadLimit(entries, "User gambling-type entries");
-    return await hydrateGamblingEntries(ctx, entries);
+    return await hydrateListenerEntries(ctx, entries);
   },
 });
 
@@ -256,7 +272,7 @@ export const mineForActiveTypes = authenticatedQuery({
         activeEntries.push(entry);
       }
     }
-    return await hydrateGamblingEntries(ctx, activeEntries);
+    return await hydrateListenerEntries(ctx, activeEntries);
   },
 });
 

@@ -7672,6 +7672,63 @@ export type PublicApiType = {
                 allIncorrect: number | null;
                 correctHost: number | null;
             }>;
+            quotabungaSeason: FunctionReference<"query", "public", {
+                now: number;
+                seasonId: Id<"seasons">;
+                today: string;
+            }, {
+                listeners: Array<{
+                    entryCount: number;
+                    points: number;
+                    user: {
+                        id: Id<"users">;
+                        name: string | null;
+                    };
+                    wins: number;
+                }>;
+                rounds: Array<{
+                    entries: Array<{
+                        clipEndSeconds: number | null;
+                        clipStartSeconds: number | null;
+                        clipUrl: string | null;
+                        id: Id<"quoteSubmissions">;
+                        inBracket: boolean;
+                        placement: 1 | 2 | 3 | null;
+                        quoteText: string;
+                        sourceTitle: string;
+                        sourceType: "MOVIE" | "TV" | "OTHER";
+                        user: {
+                            id: Id<"users">;
+                            name: string | null;
+                        };
+                    }>;
+                    entryCount: number;
+                    episode: {
+                        date: string | null;
+                        id: Id<"episodes">;
+                        number: number;
+                        slug: string | null;
+                        title: string;
+                    };
+                    state: "open" | "locked" | "revealed";
+                }>;
+                season: {
+                    endedOn: string | null;
+                    id: Id<"seasons">;
+                    isCurrent: boolean;
+                    startedOn: string | null;
+                    title: string;
+                };
+            } | null>;
+            quotabungaSeasons: FunctionReference<"query", "public", {
+                today: string;
+            }, Array<{
+                endedOn: string | null;
+                id: Id<"seasons">;
+                isCurrent: boolean;
+                startedOn: string | null;
+                title: string;
+            }>>;
         };
         quotes: {
             awardPlacements: FunctionReference<"mutation", "public", {

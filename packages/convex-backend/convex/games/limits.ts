@@ -53,6 +53,9 @@ export const MAX_TAG_VOTE_PAGE_SIZE = 100;
 export const MAX_QUOTE_EPISODE_SELECTOR_SIZE = 100;
 export const MAX_QUOTE_SUBMISSIONS_FOR_SELECTOR = 2000;
 export const MAX_QUOTE_SUBMISSIONS_PER_EPISODE = 500;
+export const MAX_QUOTE_SUBMISSIONS_PER_SEASON = 1000;
+// Episodes not yet published: normally the next one and the one just recorded.
+export const MAX_UNPUBLISHED_EPISODES = 50;
 export const MAX_QUOTE_SIMILARITY_CANDIDATES_PER_SEARCH = 20;
 export const MAX_QUOTE_TRANSCRIPT_CANDIDATES_FOR_MEMBER = 24;
 export const MAX_QUOTE_TRANSCRIPT_MATCHES_FOR_MEMBER = 3;

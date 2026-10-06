@@ -1,16 +1,19 @@
 import {
+  type FilterBuilder,
+  type NamedTableInfo,
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
 
-import type { Doc, Id } from "../_generated/dataModel.js";
+import type { DataModel, Doc, Id } from "../_generated/dataModel.js";
 import { authenticatedQuery } from "../functions.js";
 import { domainError } from "../lib/errors.js";
 import {
   assertGamblingReadLimit,
   calculateAvailablePointsForUser,
   hydrateGamblingEntries,
+  withholdUnpublishedWagerResult,
 } from "./gamblingReadModel.js";
 import {
   LATEST_POINT_CHANGE_WINDOW_MS,
@@ -34,6 +37,7 @@ import {
   pointValue,
 } from "./pointReadModel.js";
 import { resolvePointSeason } from "./pointWriteModel.js";
+import { loadResultEmbargo, visiblePoints } from "./resultEmbargo.js";
 import {
   countSeasonEpisodesThrough,
   findCurrentSeason,
@@ -51,18 +55,39 @@ import {
 } from "./validators.js";
 import { requireSeason, validatePlainDate } from "./writeModel.js";
 
+/**
+ * The listener's own held point ids. Point pages leave these out inside the
+ * query, before pagination, so a page is never short or empty because of
+ * them and its length says nothing about what is being held.
+ */
+/** A query filter that leaves out the given points. */
+function except(held: Array<Id<"points">>) {
+  return (q: FilterBuilder<NamedTableInfo<DataModel, "points">>) =>
+    q.and(...held.map((id) => q.neq(q.field("_id"), id)));
+}
+
+async function heldPointIds(
+  ctx: Parameters<typeof loadResultEmbargo>[0],
+  userId: Id<"users">,
+): Promise<Array<Id<"points">>> {
+  return [...(await loadResultEmbargo(ctx, userId)).pointIds];
+}
+
 export const myPointsPage = authenticatedQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(pointCoreValidator),
   handler: async (ctx, args) => {
     validatePointPageSize(args.paginationOpts.numItems);
-    const result = await ctx.db
+    const held = await heldPointIds(ctx, ctx.actor.user._id);
+    const points = ctx.db
       .query("points")
       .withIndex("by_userId_and_earnedAt", (index) =>
         index.eq("userId", ctx.actor.user._id),
       )
-      .order("desc")
-      .paginate(args.paginationOpts);
+      .order("desc");
+    // convex-query-audit: allow-filter held ids cannot be an index range
+    const shown = held.length === 0 ? points : points.filter(except(held));
+    const result = await shown.paginate(args.paginationOpts);
     return {
       ...result,
       page: await Promise.all(
@@ -98,11 +123,14 @@ export const myAvailablePoints = authenticatedQuery({
 });
 
 /**
- * Returns the member's points near the current season's latest point. Clients
- * treat the latest point's Pacific day as the last episode and sum this
- * member's points from that day. Resolving each point's episode would cost
- * several reads per point on a query every signed-in page subscribes to, and
- * manual adjustments have no episode anyway.
+ * Returns the member's points near the current season's latest visible point.
+ * Clients treat that point's Pacific day as the last episode and sum this
+ * member's points from that day; a point's own episode is not resolved, and
+ * manual adjustments have none anyway. Points for an unpublished episode are
+ * skipped, so the badge changes when the episode comes out. Every signed-in
+ * page subscribes to this, and finding the newest visible point in the whole
+ * season needs the everyone-wide embargo, which is why that embargo reads
+ * only award-bearing rows and nothing listeners write during an open round.
  */
 export const myLatestPointChange = authenticatedQuery({
   args: { today: v.string() },
@@ -117,17 +145,21 @@ export const myLatestPointChange = authenticatedQuery({
     // pin every member's last episode to that future day.
     const endOfToday =
       Date.parse(`${today}T00:00:00Z`) + PACIFIC_DAY_END_OFFSET_MS;
-    const latest = await ctx.db
+    const embargo = await loadResultEmbargo(ctx);
+    // Held points are the newest ones, so the first visible point is at most
+    // that many rows down.
+    const newest = await ctx.db
       .query("points")
       .withIndex("by_seasonId_and_earnedAt", (index) =>
         index.eq("seasonId", season._id).lt("earnedAt", endOfToday),
       )
       .order("desc")
-      .first();
-    if (latest === null) {
+      .take(embargo.pointIds.size + 1);
+    const latest = visiblePoints(newest, embargo).at(0);
+    if (latest === undefined) {
       return null;
     }
-    const points = await ctx.db
+    const windowPoints = await ctx.db
       .query("points")
       .withIndex("by_userId_and_seasonId_and_earnedAt", (index) =>
         index
@@ -137,13 +169,14 @@ export const myLatestPointChange = authenticatedQuery({
           .lte("earnedAt", latest.earnedAt),
       )
       .take(MAX_POINTS_FOR_LATEST_CHANGE + 1);
-    if (points.length > MAX_POINTS_FOR_LATEST_CHANGE) {
+    if (windowPoints.length > MAX_POINTS_FOR_LATEST_CHANGE) {
       domainError(
         "CONFLICT",
         "Latest point change exceeds the supported point limit.",
         { details: { limit: MAX_POINTS_FOR_LATEST_CHANGE } },
       );
     }
+    const points = visiblePoints(windowPoints, embargo);
     const pointTypeIds = new Set<Id<"gamePointTypes">>();
     for (const point of points) {
       if (point.gamePointTypeId !== undefined) {
@@ -212,13 +245,14 @@ export const mySeasons = authenticatedQuery({
   handler: async (ctx, args) => {
     const today = validatePlainDate(args.today, "Current season date");
     const userId = ctx.actor.user._id;
-    const [current, seasons] = await Promise.all([
+    const [current, seasons, embargo] = await Promise.all([
       findCurrentSeason(ctx, today),
       ctx.db
         .query("seasons")
         .withIndex("by_startedOn")
         .order("desc")
         .take(MAX_SEASONS_TO_INSPECT + 1),
+      loadResultEmbargo(ctx),
     ]);
     if (seasons.length > MAX_SEASONS_TO_INSPECT) {
       domainError(
@@ -232,7 +266,12 @@ export const mySeasons = authenticatedQuery({
         seasons.map(async (season) => ({
           season,
           isCurrent: current !== null && current._id === season._id,
-          seasonPoints: await readMemberSeasonPoints(ctx, userId, season._id),
+          seasonPoints: await readMemberSeasonPoints(
+            ctx,
+            userId,
+            season._id,
+            embargo,
+          ),
         })),
       )
     ).filter((entry) => entry.isCurrent || entry.seasonPoints.length > 0);
@@ -251,10 +290,18 @@ export const mySeasons = authenticatedQuery({
           await Promise.all([
             hydrateSeason(ctx, season),
             isCurrent
-              ? calculateAvailablePointsForUser(ctx, userId, season._id)
+              ? calculateAvailablePointsForUser(
+                  ctx,
+                  userId,
+                  season._id,
+                  undefined,
+                  embargo,
+                )
               : null,
             isCurrent ? countSeasonEpisodesThrough(ctx, season, today) : null,
-            isCurrent ? loadSeasonStanding(ctx, season._id, userId) : null,
+            isCurrent
+              ? loadSeasonStanding(ctx, season._id, userId, embargo)
+              : null,
           ]);
         return {
           season: hydrated,
@@ -285,20 +332,29 @@ export const mySeasonOverview = authenticatedQuery({
     const userId = ctx.actor.user._id;
     const [
       current,
-      seasonPoints,
-      performance,
-      available,
       recordedEpisodeCount,
       hydrated,
+      [seasonPoints, performance, available],
     ] = await Promise.all([
       findCurrentSeason(ctx, today),
-      readMemberSeasonPoints(ctx, userId, season._id),
-      // A season too large to total still shows the member's own numbers;
-      // only the standing and the chart go blank.
-      tryLoadSeasonPerformance(ctx, season._id),
-      calculateAvailablePointsForUser(ctx, userId, season._id),
       countSeasonEpisodesThrough(ctx, season, today),
       hydrateSeason(ctx, season),
+      loadResultEmbargo(ctx).then(
+        async (embargo) =>
+          await Promise.all([
+            readMemberSeasonPoints(ctx, userId, season._id, embargo),
+            // A season too large to total still shows the member's own
+            // numbers; only the standing and the chart go blank.
+            tryLoadSeasonPerformance(ctx, season._id, embargo),
+            calculateAvailablePointsForUser(
+              ctx,
+              userId,
+              season._id,
+              undefined,
+              embargo,
+            ),
+          ]),
+      ),
     ]);
     const pointTypes = await loadPointTypes(ctx, seasonPoints);
     let total = 0;
@@ -336,13 +392,16 @@ export const mySeasonPointsPage = authenticatedQuery({
   handler: async (ctx, args) => {
     validatePointPageSize(args.paginationOpts.numItems);
     await requireSeason(ctx, args.seasonId);
-    const result = await ctx.db
+    const held = await heldPointIds(ctx, ctx.actor.user._id);
+    const points = ctx.db
       .query("points")
       .withIndex("by_userId_and_seasonId_and_earnedAt", (index) =>
         index.eq("userId", ctx.actor.user._id).eq("seasonId", args.seasonId),
       )
-      .order("desc")
-      .paginate(args.paginationOpts);
+      .order("desc");
+    // convex-query-audit: allow-filter held ids cannot be an index range
+    const shown = held.length === 0 ? points : points.filter(except(held));
+    const result = await shown.paginate(args.paginationOpts);
     return {
       ...result,
       page: await Promise.all(
@@ -361,7 +420,12 @@ export const mySeasonStanding = authenticatedQuery({
   returns: v.union(seasonStandingValidator, v.null()),
   handler: async (ctx, args) => {
     await requireSeason(ctx, args.seasonId);
-    return await loadSeasonStanding(ctx, args.seasonId, ctx.actor.user._id);
+    return await loadSeasonStanding(
+      ctx,
+      args.seasonId,
+      ctx.actor.user._id,
+      await loadResultEmbargo(ctx),
+    );
   },
 });
 
@@ -379,6 +443,8 @@ export const mySeasonWagers = authenticatedQuery({
       .order("desc")
       .take(MAX_GAMBLING_ENTRIES_PER_READ + 1);
     assertGamblingReadLimit(entries, "Season wagers");
-    return await hydrateGamblingEntries(ctx, entries);
+    return (await hydrateGamblingEntries(ctx, entries)).map(
+      withholdUnpublishedWagerResult,
+    );
   },
 });

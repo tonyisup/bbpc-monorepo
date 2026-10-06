@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { anonymousQuery } from "../functions.js";
 import { domainError } from "../lib/errors.js";
+import { isPublishedStatus } from "../lib/transcriptVisibility.js";
 import { MAX_PUBLIC_YEAR_REVIEWS } from "./limits.js";
 import { hydrateReviewDetail } from "./readModel.js";
 import { yearMovieReviewValidator } from "./validators.js";
@@ -59,6 +60,10 @@ export const listMovieReviewsForYear = anonymousQuery({
           : assignmentRelationship !== undefined
             ? assignmentRelationship.assignment.episode
             : null;
+      // A host's rating is the answer to the round, so it waits for the episode.
+      if (episode !== null && !isPublishedStatus(episode.status)) {
+        return [];
+      }
       return [
         {
           id: review.id,

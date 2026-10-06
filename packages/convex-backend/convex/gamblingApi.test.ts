@@ -396,6 +396,7 @@ describe("gambling API", () => {
       hostId,
       ratingId,
       suffix: "15",
+      episodeStatus: "recording",
     });
     await t.run(async (ctx) => {
       await ctx.db.insert("gamblingEntries", {
@@ -427,6 +428,17 @@ describe("gambling API", () => {
     });
     await initializeS1(t);
 
+    // A win is not announced until the episode is published.
+    await expect(
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.gambling.hasWonForEpisode, {
+          episodeId: round.episodeId,
+        }),
+    ).resolves.toBe(false);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", round.episodeId, { status: "published" });
+    });
     await expect(
       t
         .withIdentity(MEMBER_IDENTITY)

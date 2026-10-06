@@ -3,12 +3,18 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import { MAX_TRANSCRIPT_PASSAGES } from "./transcriptModel.js";
 import { domainError } from "./errors.js";
 
-/** Return whether an episode is currently eligible for public transcript search. */
+/** Return whether a stored episode status means the episode is published. */
+export function isPublishedStatus(status: string | null | undefined): boolean {
+  return status === "published" || status === "Published";
+}
+
+/**
+ * Return whether an episode is published. This one definition decides both
+ * public transcript search and when listeners may see an episode's game
+ * results (see games/resultEmbargo.ts).
+ */
 export function isPublishedEpisode(episode: Doc<"episodes"> | null): boolean {
-  return (
-    episode !== null &&
-    ["published", "Published"].includes(episode.status ?? "")
-  );
+  return episode !== null && isPublishedStatus(episode.status);
 }
 
 /** Load an episode's passages while enforcing the atomic replacement limit. */

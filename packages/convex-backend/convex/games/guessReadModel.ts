@@ -3,6 +3,7 @@ import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
+import { isPublishedStatus } from "../lib/transcriptVisibility.js";
 import { toRating } from "../ratings/readModel.js";
 import { hydrateAssignmentReview } from "../reviews/readModel.js";
 import {
@@ -78,6 +79,30 @@ export async function hydrateGuess(
     point:
       point === null ? null : await hydratePointCore(ctx, point),
   };
+}
+
+/**
+ * A guess as its owner may see it. Until the episode is published neither the
+ * host's rating nor the point it earned is shown.
+ */
+export function withholdUnpublishedGuessResult(
+  guess: GuessDetail,
+): GuessDetail {
+  const { assignmentReview } = guess;
+  return isPublishedStatus(assignmentReview.assignment.episode.status)
+    ? guess
+    : {
+        ...guess,
+        point: null,
+        assignmentReview: {
+          ...assignmentReview,
+          review: {
+            ...assignmentReview.review,
+            rating: null,
+            reviewedAt: null,
+          },
+        },
+      };
 }
 
 export async function readGuessesForAssignmentUser(

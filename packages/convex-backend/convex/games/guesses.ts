@@ -26,6 +26,7 @@ import {
   hydrateGuess,
   readGuessesForAssignmentUser,
   requireGuess,
+  withholdUnpublishedGuessResult,
 } from "./guessReadModel.js";
 import {
   getOrCreateHostAssignmentReview,
@@ -96,6 +97,16 @@ async function hydrateGuesses(
 ) {
   return await Promise.all(
     guesses.map((guess) => hydrateGuess(ctx, guess)),
+  );
+}
+
+/** Guesses as their owner may see them: no outcome before the episode is out. */
+async function hydrateListenerGuesses(
+  ctx: Parameters<typeof hydrateGuess>[0],
+  guesses: Array<Doc<"guesses">>,
+) {
+  return (await hydrateGuesses(ctx, guesses)).map(
+    withholdUnpublishedGuessResult,
   );
 }
 
@@ -309,7 +320,7 @@ export const mineForAssignment = authenticatedQuery({
   returns: v.array(guessValidator),
   handler: async (ctx, args) => {
     await requirePointAssignment(ctx, args.assignmentId);
-    return await hydrateGuesses(
+    return await hydrateListenerGuesses(
       ctx,
       await readGuessesForAssignmentUser(
         ctx,
@@ -330,7 +341,7 @@ export const mineForAssignments = authenticatedQuery({
       await requirePointAssignment(ctx, assignmentId);
       groups.push({
         assignmentId,
-        guesses: await hydrateGuesses(
+        guesses: await hydrateListenerGuesses(
           ctx,
           await readGuessesForAssignmentUser(
             ctx,
@@ -382,7 +393,9 @@ export const submit = authenticatedMutation({
       targetId: result.guess._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
     });
-    return await hydrateGuess(ctx, result.guess);
+    return withholdUnpublishedGuessResult(
+      await hydrateGuess(ctx, result.guess),
+    );
   },
 });
 

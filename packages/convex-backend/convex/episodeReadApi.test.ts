@@ -533,6 +533,7 @@ describe("public episode read API", () => {
     const episodeId = await seedEpisode(t, {
       number: 12,
       slug: "episode-results",
+      status: "published",
     });
     const expected = await t.run(async (ctx) => {
       const hostId = await ctx.db.insert("users", {
@@ -689,11 +690,22 @@ describe("public episode read API", () => {
     expect(Object.keys(result.gamblingWinners[0]?.user ?? {})).not.toContain(
       "email",
     );
+
+    // The same winners stay unannounced while the episode is not published.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", episodeId, { status: "recording" });
+    });
+    expect(
+      await t.query(api.episodes.public.results, { episodeId }),
+    ).toEqual({ gamblingWinners: [], guessWinners: [] });
   });
 
   test("fails closed when public episode results are corrupt or oversized", async () => {
     const missingUser = createTestBackend();
-    const missingUserEpisodeId = await seedEpisode(missingUser, { number: 13 });
+    const missingUserEpisodeId = await seedEpisode(missingUser, {
+      number: 13,
+      status: "published",
+    });
     await missingUser.run(async (ctx) => {
       const userId = await ctx.db.insert("users", {
         status: "active",
@@ -741,6 +753,7 @@ describe("public episode read API", () => {
     const oversized = createTestBackend();
     const oversizedEpisodeId = await seedEpisode(oversized, {
       number: 14,
+      status: "published",
     });
     await oversized.run(async (ctx) => {
       const userId = await ctx.db.insert("users", {

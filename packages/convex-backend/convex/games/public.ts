@@ -3,13 +3,20 @@ import { v } from "convex/values";
 import { anonymousQuery } from "../functions.js";
 import { loadSeasonPerformance } from "./memberSeasonReadModel.js";
 import {
+  listQuoteArchiveSeasons,
+  loadQuoteArchiveSeason,
+} from "./quoteArchiveReadModel.js";
+import {
   countSeasonEpisodesThrough,
   findCurrentSeason,
   hydrateSeason,
 } from "./readModel.js";
+import { loadResultEmbargo } from "./resultEmbargo.js";
 import {
   currentPerformanceValidator,
   predictionScoringValidator,
+  quoteArchiveSeasonDetailValidator,
+  quoteArchiveSeasonValidator,
   seasonValidator,
 } from "./validators.js";
 import { validatePlainDate } from "./writeModel.js";
@@ -85,10 +92,12 @@ export const currentPerformance = anonymousQuery({
     if (season === null) {
       return null;
     }
+    // Standings move when an episode is published, not when it is recorded.
     const performance = await loadSeasonPerformance(
       ctx,
       season._id,
       "Current performance",
+      await loadResultEmbargo(ctx),
     );
     return {
       season: await hydrateSeason(ctx, season),
@@ -99,5 +108,30 @@ export const currentPerformance = anonymousQuery({
       ),
       ...performance,
     };
+  },
+});
+
+export const quotabungaSeasons = anonymousQuery({
+  args: { today: v.string() },
+  returns: v.array(quoteArchiveSeasonValidator),
+  handler: async (ctx, args) => {
+    const today = validatePlainDate(args.today, "Current date");
+    return await listQuoteArchiveSeasons(ctx, today);
+  },
+});
+
+/**
+ * `now` only decides whether an unrevealed round reads as open or locked, so
+ * a client that sends another time cannot reveal anything.
+ */
+export const quotabungaSeason = anonymousQuery({
+  args: { seasonId: v.id("seasons"), today: v.string(), now: v.number() },
+  returns: v.union(quoteArchiveSeasonDetailValidator, v.null()),
+  handler: async (ctx, args) => {
+    const today = validatePlainDate(args.today, "Current date");
+    const season = await ctx.db.get("seasons", args.seasonId);
+    return season === null
+      ? null
+      : await loadQuoteArchiveSeason(ctx, season, { today, now: args.now });
   },
 });

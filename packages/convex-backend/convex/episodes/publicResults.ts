@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
+import { isPublishedEpisode } from "../lib/transcriptVisibility.js";
 import { MAX_EPISODE_RESULT_RELATIONSHIPS } from "./limits.js";
 
 type RelatedTable =
@@ -63,6 +64,10 @@ export async function readEpisodeResults(
   const episode = await ctx.db.get("episodes", episodeId);
   if (episode === null) {
     domainError("NOT_FOUND", "The episode is unavailable.");
+  }
+  // Winners are announced on the episode, so they wait for it to be published.
+  if (!isPublishedEpisode(episode)) {
+    return { gamblingWinners: [], guessWinners: [] };
   }
 
   const assignments = await ctx.db

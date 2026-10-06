@@ -753,8 +753,15 @@ describe("Quotabunga workflows", () => {
       clipUrl: null,
       listenerNotes: null,
       createdAt: 100,
-      updatedAt: 200,
+      // The listener's view reports the creation time until the episode is
+      // published, because an award would move the real one.
+      updatedAt: 100,
     });
+    expect(
+      await t.run(async (ctx) => {
+        return (await ctx.db.get("quoteSubmissions", created.id))?.updatedAt;
+      }),
+    ).toBe(200);
     expect(JSON.stringify(updated)).not.toContain(
       "Private moderation note",
     );
@@ -1299,6 +1306,7 @@ describe("Quotabunga workflows", () => {
       });
       await ctx.db.patch("quoteSubmissions", created.id, {
         status: "INCLUDED",
+        placement: 1,
         pointId,
       });
     });
@@ -1330,7 +1338,8 @@ describe("Quotabunga workflows", () => {
     const mine = await t
       .withIdentity(MEMBER_IDENTITY)
       .query(api.games.quotes.currentForMe, {});
-    expect(mine.submission?.scored).toBe(true);
+    // The entry's result is held until its episode is published.
+    expect(mine.submission).toMatchObject({ scored: false, placement: null });
     expect(JSON.stringify(mine)).not.toContain("Private");
   });
 
