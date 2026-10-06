@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -10,6 +12,15 @@ export default function QuotabungaArchiveError({
   error: Error;
   reset: () => void;
 }) {
+  const router = useRouter();
+  const [isRetrying, startRetry] = useTransition();
+  // The page failed while loading on the server, so clearing the error is
+  // not enough: the route has to be fetched again.
+  const retry = () =>
+    startRetry(() => {
+      router.refresh();
+      reset();
+    });
   return (
     <div className="bbpc-page space-y-6">
       <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
@@ -23,8 +34,12 @@ export default function QuotabungaArchiveError({
           Nothing is lost. Try again in a moment.
         </p>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-4">
-          <Button onClick={reset} className="h-11 px-4 font-bold">
-            Try again
+          <Button
+            onClick={retry}
+            disabled={isRetrying}
+            className="h-11 px-4 font-bold"
+          >
+            {isRetrying ? "Trying again" : "Try again"}
           </Button>
           <Link
             href="/game"

@@ -9,6 +9,7 @@ import {
   MAX_ACTIVE_WAGERS_FOR_TOTAL,
   MAX_GAMBLING_ENTRIES_PER_READ,
   MAX_POINTS_FOR_AGGREGATE,
+  assertPointAggregateLimit,
 } from "./limits.js";
 import {
   calculatePointTotal,
@@ -188,24 +189,31 @@ export function assertGamblingReadLimit(
 
 /**
  * A wager as a listener may see it. Until the episode is published a settled
- * wager still reads as locked, with no award.
+ * wager still reads as locked, and no wager on it shows an award.
  */
 export function withholdUnpublishedWagerResult(
   entry: GamblingEntryDetail,
 ): GamblingEntryDetail {
+  if (
+    entry.assignment === null ||
+    isPublishedStatus(entry.assignment.episode.status)
+  ) {
+    return entry;
+  }
   const settled = entry.status === "won" || entry.status === "lost";
-  return settled &&
-    entry.assignment !== null &&
-    !isPublishedStatus(entry.assignment.episode.status)
-    ? { ...entry, status: "locked", awardPoint: null }
-    : entry;
+  return {
+    ...entry,
+    status: settled ? "locked" : entry.status,
+    awardPoint: null,
+  };
 }
 
 /**
  * What a listener can wager right now. Results for an unpublished episode do
  * not count yet: its awards are left out and its settled wagers keep their
- * stake reserved, exactly as while the round was locked. Pass an embargo the
- * caller already loaded for this listener, or for everyone, to reuse it.
+ * stake reserved, exactly as while the round was locked. The same balance
+ * gates a wager an administrator enters for the listener. Pass an embargo
+ * the caller already loaded for this listener, or for everyone, to reuse it.
  */
 export async function calculateAvailablePointsForUser(
   ctx: QueryCtx,
@@ -252,6 +260,9 @@ export async function calculateAvailablePointsForUser(
       { details: { limit: MAX_ACTIVE_WAGERS_FOR_TOTAL } },
     );
   }
+  // Checked before held points are taken out, so the limit still covers
+  // every row that was read.
+  assertPointAggregateLimit(points, "Available points");
   let wageredPoints = 0;
   for (const entry of [...pending, ...locked]) {
     if (entry._id !== excludeEntryId) {

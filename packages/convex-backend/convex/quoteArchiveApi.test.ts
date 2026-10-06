@@ -689,6 +689,53 @@ describe("Quotabunga public archive", () => {
     );
   });
 
+  test("ranks a listener with a win above one with more points", async () => {
+    const t = createTestBackend();
+    const { pastSeasonId } = await seedSeasons(t);
+    const [winner, runnerUp] = await Promise.all([
+      seedUser(t, "One Win"),
+      seedUser(t, "Many Seconds"),
+    ]);
+    // Three second places are worth more points than one first place.
+    for (const number of [4, 5, 6]) {
+      const episodeId = await seedEpisode(t, { number, status: "published" });
+      await insertQuote(t, {
+        userId: runnerUp,
+        episodeId,
+        seasonId: pastSeasonId,
+        quoteText: `Second in ${String(number)}`,
+        status: "INCLUDED",
+        placement: 2,
+      });
+      if (number === 4) {
+        await insertQuote(t, {
+          userId: winner,
+          episodeId,
+          seasonId: pastSeasonId,
+          quoteText: "The one win",
+          status: "INCLUDED",
+          placement: 1,
+        });
+      }
+    }
+
+    const detail = await t.query(api.games.public.quotabungaSeason, {
+      seasonId: pastSeasonId,
+      today: TODAY,
+      now: NOW,
+    });
+    expect(
+      detail?.listeners.map((listener) => [
+        listener.user.name,
+        listener.wins,
+        listener.points,
+      ]),
+    ).toEqual([
+      ["One Win", 1, 40],
+      ["Many Seconds", 0, 60],
+    ]);
+  });
+
   test("returns null for a season that does not exist", async () => {
     const t = createTestBackend();
     const { quietSeasonId } = await seedSeasons(t);

@@ -4,7 +4,7 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server";
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 
 import type { DataModel, Doc, Id } from "../_generated/dataModel.js";
 import { authenticatedQuery } from "../functions.js";
@@ -55,22 +55,41 @@ import {
 } from "./validators.js";
 import { requireSeason, validatePlainDate } from "./writeModel.js";
 
-/**
- * The listener's own held point ids. Point pages leave these out inside the
- * query, before pagination, so a page is never short or empty because of
- * them and its length says nothing about what is being held.
- */
 /** A query filter that leaves out the given points. */
 function except(held: Array<Id<"points">>) {
   return (q: FilterBuilder<NamedTableInfo<DataModel, "points">>) =>
     q.and(...held.map((id) => q.neq(q.field("_id"), id)));
 }
 
+/**
+ * The listener's own held point ids. Point pages leave these out inside the
+ * query, before pagination, so a page is never short or empty because of
+ * them and its length says nothing about what is being held. Sorted, so the
+ * same held points always build the same query: a cursor only continues the
+ * query that issued it.
+ */
 async function heldPointIds(
   ctx: Parameters<typeof loadResultEmbargo>[0],
   userId: Id<"users">,
 ): Promise<Array<Id<"points">>> {
-  return [...(await loadResultEmbargo(ctx, userId)).pointIds];
+  return [...(await loadResultEmbargo(ctx, userId)).pointIds].sort();
+}
+
+/**
+ * Page options with the caller's read caps removed. Those caps count rows
+ * before the held-point filter runs, so a listener could set them to one row
+ * and learn from the empty pages how many of their points are being held.
+ */
+function withoutReadCaps(
+  paginationOpts: Infer<typeof paginationOptsValidator>,
+): Infer<typeof paginationOptsValidator> {
+  const { numItems, cursor, endCursor, id } = paginationOpts;
+  return {
+    numItems,
+    cursor,
+    ...(endCursor === undefined ? {} : { endCursor }),
+    ...(id === undefined ? {} : { id }),
+  };
 }
 
 export const myPointsPage = authenticatedQuery({
@@ -87,7 +106,7 @@ export const myPointsPage = authenticatedQuery({
       .order("desc");
     // convex-query-audit: allow-filter held ids cannot be an index range
     const shown = held.length === 0 ? points : points.filter(except(held));
-    const result = await shown.paginate(args.paginationOpts);
+    const result = await shown.paginate(withoutReadCaps(args.paginationOpts));
     return {
       ...result,
       page: await Promise.all(
@@ -401,7 +420,7 @@ export const mySeasonPointsPage = authenticatedQuery({
       .order("desc");
     // convex-query-audit: allow-filter held ids cannot be an index range
     const shown = held.length === 0 ? points : points.filter(except(held));
-    const result = await shown.paginate(args.paginationOpts);
+    const result = await shown.paginate(withoutReadCaps(args.paginationOpts));
     return {
       ...result,
       page: await Promise.all(

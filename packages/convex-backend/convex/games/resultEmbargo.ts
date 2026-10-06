@@ -23,8 +23,8 @@ export interface ResultEmbargo {
   /** Points awarded for unpublished episodes. */
   pointIds: ReadonlySet<Id<"points">>;
   /**
-   * Wagers on unpublished episodes' assignments: every settled one, and for
-   * the listener form that listener's unsettled ones too.
+   * Wagers on unpublished episodes' assignments. Everyone form: every
+   * settled wager. Listener form: only that listener's, settled or not.
    */
   wagers: ReadonlyArray<Doc<"gamblingEntries">>;
 }
@@ -46,7 +46,9 @@ function assertWithin(
 /**
  * Every episode that is not published. "Published" and "published" both
  * count as published, so this reads the three status ranges around them; an
- * episode with no status sorts into the first.
+ * episode with no status sorts into the first. These ranges and
+ * isPublishedStatus in lib/transcriptVisibility.ts state the same rule and
+ * must change together.
  */
 async function readUnpublishedEpisodes(
   ctx: EmbargoReadContext,
@@ -80,11 +82,13 @@ async function readUnpublishedEpisodes(
  * The embargo for everyone, or for one listener when `userId` is given.
  *
  * The everyone form reads only rows that can carry an award: settled wagers,
- * bracket quotes, point links, and guesses on reviews a host has rated. What
- * listeners write during an open round (pending wagers, new guesses, new
- * quotes) stays out of it, so that traffic neither re-runs every subscribed
- * read nor counts against the limits here. A guess point an administrator
- * attaches by hand before the host has rated is the one award this misses.
+ * bracket quotes, point links, and guesses once their assignment has been
+ * settled or their host has rated. What listeners write during an open round
+ * (pending wagers, new guesses, new quotes) stays out of it, so that traffic
+ * neither re-runs every subscribed read nor counts against the limits here.
+ * It misses two awards only an administrator can create by hand: a point
+ * attached to a guess before any settlement or rating exists, and one
+ * attached to a wager that is not settled.
  *
  * The listener form reads that listener's rows through their own indexes,
  * which keeps a balance check inside a mutation from depending on anyone
@@ -135,7 +139,7 @@ export async function loadResultEmbargo(
 
       await Promise.all(
         assignments.map(async (assignment) => {
-          const [links, reviews, entries] = await Promise.all([
+          const [links, reviews, entries, settlement] = await Promise.all([
             userId === undefined
               ? ctx.db
                   .query("assignmentPointLinks")
@@ -167,6 +171,12 @@ export async function loadResultEmbargo(
                       .eq("assignmentId", assignment._id),
                   )
                   .take(MAX_GAMBLING_ENTRIES_PER_READ + 1),
+            ctx.db
+              .query("guessSettlements")
+              .withIndex("by_assignmentId", (index) =>
+                index.eq("assignmentId", assignment._id),
+              )
+              .first(),
           ]);
           assertWithin(
             links,
@@ -187,14 +197,17 @@ export async function loadResultEmbargo(
             reviews.map(async (assignmentReview) => {
               let guesses: Array<Doc<"guesses">>;
               if (userId === undefined) {
-                const review = await ctx.db.get(
-                  "reviews",
-                  assignmentReview.reviewId,
-                );
-                // Guesses are settled against the host's rating, so none of
-                // them has a point before it exists.
-                if (review?.ratingId === undefined) {
-                  return;
+                // Guesses earn points when the assignment is settled against
+                // the hosts' ratings. A settled assignment keeps its guesses
+                // held even if a rating is cleared afterwards.
+                if (settlement === null) {
+                  const review = await ctx.db.get(
+                    "reviews",
+                    assignmentReview.reviewId,
+                  );
+                  if (review?.ratingId === undefined) {
+                    return;
+                  }
                 }
                 guesses = await ctx.db
                   .query("guesses")

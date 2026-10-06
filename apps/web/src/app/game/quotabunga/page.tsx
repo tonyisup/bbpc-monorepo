@@ -62,7 +62,7 @@ function SeasonTabs({
               href={getQuotabungaArchivePath(tab.key)}
               aria-current={tab.key === selected ? "page" : undefined}
               className={cn(
-                "flex h-11 items-center whitespace-nowrap rounded-[7px] px-3.5 text-sm font-semibold text-zinc-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:h-9",
+                "flex h-11 items-center whitespace-nowrap rounded-[7px] px-3.5 text-sm font-semibold text-zinc-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 lg:h-9",
                 tab.key === selected &&
                   "bg-[color:var(--bbpc-surface-raised)] text-white shadow-[inset_0_0_0_1px_var(--bbpc-border)]"
               )}
@@ -109,7 +109,7 @@ function SeasonBlock({
   const dates = seasonDateRange(season);
   return (
     <details className="bbpc-panel group overflow-hidden" open={defaultOpen}>
-      <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-4 py-4 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 md:grid-cols-[minmax(0,1fr)_auto_auto] md:px-5 [&::-webkit-details-marker]:hidden">
+      <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-4 py-4 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500 md:grid-cols-[minmax(0,1fr)_auto_auto] lg:px-5 [&::-webkit-details-marker]:hidden">
         <div>
           <h2 className="flex items-center gap-2.5 text-xl font-extrabold text-white">
             {season.title}
@@ -225,7 +225,10 @@ export default async function QuotabungaArchivePage({
           </p>
         </div>
       ) : (
-        <ClipPlaybackProvider>
+        // Keyed by the view, so changing season starts with nothing playing.
+        <ClipPlaybackProvider
+          key={view.kind === "all" ? ALL_SEASONS : view.season.id}
+        >
           <SeasonTabs
             seasons={seasons}
             selected={view.kind === "all" ? ALL_SEASONS : view.season.id}

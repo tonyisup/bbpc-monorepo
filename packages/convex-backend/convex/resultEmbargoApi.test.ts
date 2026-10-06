@@ -10,6 +10,7 @@ import type { Id } from "./_generated/dataModel.js";
 import { MAX_ASSIGNMENTS_PER_EPISODE } from "./assignments/limits.js";
 import {
   MAX_GUESSES_PER_ASSIGNMENT,
+  MAX_POINTS_FOR_AGGREGATE,
   MAX_UNPUBLISHED_EPISODES,
 } from "./games/limits.js";
 import { MAX_REVIEW_RELATIONSHIPS } from "./reviews/limits.js";
@@ -565,6 +566,189 @@ describe("results wait for the episode to be published", () => {
       }
       expect((await read(cursor)).page).toEqual([]);
     }
+  });
+
+  test("a read cap on a point page cannot be used to count held points", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeason(t, "recording");
+    const member = t.withIdentity(MEMBER_IDENTITY);
+    const capped = { numItems: 1, cursor: null, maximumRowsRead: 1 };
+
+    // The newest row is a held point. Honoring the cap would read only that
+    // row and return an empty page; the cap is dropped instead.
+    const all = await member.query(api.games.member.myPointsPage, {
+      paginationOpts: capped,
+    });
+    expect(all.page.map((point) => point.id)).toEqual([
+      seeded.publishedPointId,
+    ]);
+    const season = await member.query(api.games.member.mySeasonPointsPage, {
+      seasonId: seeded.seasonId,
+      paginationOpts: capped,
+    });
+    expect(season.page.map((point) => point.id)).toEqual([
+      seeded.publishedPointId,
+    ]);
+  });
+
+  test("the last-episode badge leaves out held points inside its window", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeason(t, "recording");
+    // A visible point dated after the recording pulls the held awards into
+    // the badge's window.
+    const later = RECORDED_AT + 60 * 60 * 1000;
+    await t.run(async (ctx) => {
+      await ctx.db.insert("points", {
+        userId: seeded.memberId,
+        seasonId: seeded.seasonId,
+        adjustment: 1,
+        earnedAt: later,
+        reason: "Synthetic point",
+      });
+    });
+
+    expect(
+      await t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.member.myLatestPointChange, { today: TODAY }),
+    ).toEqual({
+      seasonId: seeded.seasonId,
+      lastScoredAt: later,
+      points: [{ earnedAt: later, pointValue: 1 }],
+    });
+  });
+
+  test("settled guesses stay held when a host's rating is cleared", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeason(t, "recording");
+    await t.run(async (ctx) => {
+      const assignmentReview = await ctx.db.get(
+        "assignmentReviews",
+        seeded.held.assignmentReviewId,
+      );
+      if (assignmentReview === null) {
+        throw new Error("fixture");
+      }
+      await ctx.db.patch("reviews", assignmentReview.reviewId, {
+        ratingId: undefined,
+      });
+    });
+    // With no rating and no settlement the guess point would slip through.
+    expect((await publicTotals(t)).totals).toEqual({ Member: 108, Other: 50 });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("guessSettlements", {
+        assignmentId: seeded.held.assignmentId,
+        userId: seeded.memberId,
+        seasonId: seeded.seasonId,
+        outcome: "mixed",
+        correctCount: 1,
+        settledAt: RECORDED_AT,
+      });
+    });
+    expect((await publicTotals(t)).totals).toEqual({ Member: 103, Other: 50 });
+  });
+
+  test("no wager on an unpublished episode shows an award", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeason(t, "recording");
+    // An administrator can attach a point to a wager that is not settled.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("gamblingEntries", seeded.wonWagerId, {
+        status: "pending",
+      });
+    });
+
+    const wagers = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .query(api.games.gambling.mineForAssignment, {
+        assignmentId: seeded.held.assignmentId,
+      });
+    expect(wagers).toHaveLength(1);
+    expect(wagers[0]).toMatchObject({ status: "pending", awardPoint: null });
+  });
+
+  test("the balance fails closed past the point limit even with held points", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeason(t, "recording");
+    await t.run(async (ctx) => {
+      for (let index = 0; index < MAX_POINTS_FOR_AGGREGATE; index += 1) {
+        await ctx.db.insert("points", {
+          userId: seeded.memberId,
+          seasonId: seeded.seasonId,
+          adjustment: 0,
+          earnedAt: EARLY,
+        });
+      }
+    });
+
+    await expect(
+      t.withIdentity(MEMBER_IDENTITY).query(api.games.member.myAvailablePoints, {
+        season: { kind: "season", seasonId: seeded.seasonId },
+      }),
+    ).rejects.toSatisfy(
+      (error) =>
+        error instanceof ConvexError &&
+        (error.data as { code?: string }).code === "CONFLICT",
+    );
+  });
+
+  test("submitting a guess never returns the host's rating early", async () => {
+    const t = createTestBackend();
+    const seeded = await seedSeason(t, "recording");
+    await openWrites(t);
+    // The open round's host review already carries a rating in this fixture.
+    const { openAssignmentId, hostId, ratingId } = await t.run(async (ctx) => {
+      const open = await ctx.db
+        .query("episodes")
+        .withIndex("by_status_and_number", (index) => index.eq("status", "next"))
+        .unique();
+      const assignment = await ctx.db
+        .query("assignments")
+        .withIndex("by_episodeId", (index) =>
+          index.eq("episodeId", open?._id as Id<"episodes">),
+        )
+        .unique();
+      const rating = await ctx.db.query("ratings").first();
+      if (assignment === null || rating === null) {
+        throw new Error("fixture");
+      }
+      // Guesses are made against a host, and a host holds an admin role.
+      const roleId = await ctx.db.insert("roles", {
+        name: "Administrator",
+        normalizedName: "administrator",
+        description: "Administrator role",
+        admin: true,
+        permissions: ["admin"],
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("userRoles", {
+        userId: assignment.userId,
+        roleId,
+        assignedAt: 1,
+      });
+      return {
+        openAssignmentId: assignment._id,
+        hostId: assignment.userId,
+        ratingId: rating._id,
+      };
+    });
+
+    const guess = await t
+      .withIdentity(MEMBER_IDENTITY)
+      .mutation(api.games.guesses.submit, {
+        clientApiVersion: BBPC_API_VERSION,
+        assignmentId: openAssignmentId,
+        hostId,
+        ratingId,
+        today: TODAY,
+      });
+    expect(guess).toMatchObject({
+      point: null,
+      assignmentReview: { review: { rating: null, reviewedAt: null } },
+    });
+    expect(seeded.held.assignmentId).not.toBe(openAssignmentId);
   });
 
   test("an open round's entries do not count against the limits", async () => {

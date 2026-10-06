@@ -11,7 +11,7 @@ export default function QuotabungaArchiveLoading() {
         className="bbpc-panel divide-y divide-white/[0.12]"
       >
         {[70, 52, 61].map((width) => (
-          <div key={width} className="space-y-2.5 px-4 py-5 md:px-5">
+          <div key={width} className="space-y-2.5 px-4 py-5 lg:px-5">
             <div className="h-3.5 w-28 rounded-md bg-white/[0.08]" />
             <div
               className="h-3.5 rounded-md bg-white/[0.08]"

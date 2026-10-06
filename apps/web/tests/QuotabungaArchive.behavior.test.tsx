@@ -8,6 +8,9 @@ import {
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const linkStatus = vi.hoisted(() => ({ pending: false }));
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 vi.mock("next/link", () => ({
   useLinkStatus: () => linkStatus,
@@ -244,6 +247,47 @@ describe("Quotabunga archive helpers", () => {
       { user: { id: "user-second", name: "Second" }, wins: 2, points: 100, entryCount: 4 },
       { user: { id: "user-win", name: "Winner" }, wins: 1, points: 40, entryCount: 1 },
     ]);
+  });
+
+  test("features the highest-numbered round that has a first place", () => {
+    const older = round(5, [entry("old-win", { placement: 1 })]);
+    const newer = round(12, [entry("new-win", { placement: 1 })]);
+    const detail = (rounds: QuotabungaRound[]): QuotabungaSeasonDetail => ({
+      season: pastSeason,
+      rounds,
+      listeners: [],
+    });
+    for (const details of [
+      [detail([older, newer])],
+      [detail([newer, older])],
+      [detail([older]), detail([newer])],
+      [detail([newer]), detail([older])],
+    ]) {
+      expect(latestWinner(details)?.entry.id).toBe("new-win");
+    }
+  });
+
+  test("orders merged listeners by wins, then points, then entries", () => {
+    const tally = (
+      id: string,
+      wins: number,
+      points: number,
+      entryCount: number
+    ) => ({ user: { id, name: id }, wins, points, entryCount });
+    expect(
+      mergeListeners([
+        {
+          season: pastSeason,
+          rounds: [],
+          listeners: [
+            tally("b", 0, 60, 9),
+            tally("a", 1, 40, 1),
+            tally("c", 1, 40, 2),
+            tally("d", 1, 50, 1),
+          ],
+        },
+      ]).map((listener) => listener.user.id)
+    ).toEqual(["d", "c", "a", "b"]);
   });
 
   test("only YouTube clip links survive loading", () => {
@@ -537,6 +581,41 @@ describe("Quotabunga round rows", () => {
     expect(toggle.props["aria-expanded"]).toBe(false);
     expect(root.findAllByType("iframe")).toHaveLength(0);
     expect(text(root)).not.toContain("Quote next");
+
+    // Opening the round again does not start the clip by itself.
+    act(() => toggle.props.onClick());
+    expect(toggle.props["aria-expanded"]).toBe(true);
+    expect(root.findAllByType("iframe")).toHaveLength(0);
+    expect(
+      root.findAllByType("button").some((button) => /Stop/u.test(text(button)))
+    ).toBe(false);
+  });
+
+  test("names each clip button for what it does", () => {
+    const root = render(
+      <QuotabungaRoundRow
+        round={round(9, [
+          entry("lead", { placement: 1, clipUrl: YOUTUBE }),
+          entry("next", {
+            placement: 2,
+            clipUrl: OTHER_YOUTUBE,
+            clipStartSeconds: 3,
+            clipEndSeconds: 8,
+          }),
+        ])}
+      />
+    );
+    act(() => buttonNamed(root, /2 entries/u).props.onClick());
+    expect(text(buttonNamed(root, /Play clip/u))).toBe(
+      "Play clip from Source lead"
+    );
+    expect(text(buttonNamed(root, /0:05/u))).toBe(
+      "Play 0:05 clip from Source next"
+    );
+    act(() => buttonNamed(root, /0:05/u).props.onClick());
+    expect(text(buttonNamed(root, /Stop/u))).toBe(
+      "Stop the clip from Source next"
+    );
   });
 
   test("a round with no first place leads with its best finisher", () => {
@@ -614,7 +693,7 @@ describe("Quotabunga ledger and champion band", () => {
     expect(shown).toContain("1 win · 40 pts");
     const summary = root.findByType("summary");
     expect(text(summary)).toContain("All 4 listeners");
-    expect(text(summary)).toContain("Show top 3 only");
+    expect(text(summary)).toContain("Show fewer");
     act(() => buttonNamed(root, /0:07/u).props.onClick());
     expect(root.findAllByType("iframe")).toHaveLength(1);
 
@@ -704,6 +783,41 @@ describe("Quotabunga ledger and champion band", () => {
     expect(text(root.findByType("summary"))).toContain("All 3 listeners");
   });
 
+  test("the short list never stops partway through a tie", () => {
+    const [win] = fullRound.entries;
+    if (win === undefined) throw new Error("fixture");
+    const tally = (name: string, wins: number, points: number) => ({
+      user: { id: `user-${name}`, name },
+      wins,
+      points,
+      entryCount: 1,
+    });
+    const root = render(
+      <QuotabungaChampionBand
+        round={fullRound}
+        entry={win}
+        listeners={[
+          tally("Ada", 2, 80),
+          ...["Bo", "Cy", "Di", "Ed"].map((name) => tally(name, 1, 40)),
+          tally("Flo", 0, 20),
+        ]}
+        scope="Season 2"
+      />
+    );
+    const [top, rest] = root.findAllByType("ol");
+    if (top === undefined || rest === undefined) throw new Error("lists");
+    // Four listeners share second place, so all four are shown.
+    expect(top.findAllByType("li").map((row) => text(row).slice(0, 3))).toEqual([
+      "1Ad",
+      "2Bo",
+      "2Cy",
+      "2Di",
+      "2Ed",
+    ]);
+    expect(rest.findAllByType("li")).toHaveLength(1);
+    expect(top.props.role).toBe("list");
+  });
+
   test("a long winning quote is set smaller and wider", () => {
     const long = entry("long", {
       placement: 1,
@@ -785,7 +899,10 @@ describe("Quotabunga ledger and champion band", () => {
     );
     expect(text(root)).toContain("The Quotabunga rounds could not load");
     expect(text(root)).not.toContain("boom");
+    // The page failed on the server, so a retry has to fetch it again.
+    router.refresh.mockClear();
     act(() => buttonNamed(root, /Try again/u).props.onClick());
+    expect(router.refresh).toHaveBeenCalledTimes(1);
     expect(retried).toBe(1);
     expect(root.findByType("a").props.href).toBe("/game");
   });

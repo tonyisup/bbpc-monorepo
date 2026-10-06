@@ -25,16 +25,27 @@ export function ClipButton({
     return <span className="text-[13px] text-zinc-400">No clip</span>;
   }
   const Icon = playing ? SquareIcon : PlayIcon;
+  const duration = clipDurationLabel(entry);
+  // Spoken as "Stop the clip from Jaws", "Play 0:07 clip from Jaws" or
+  // "Play clip from Jaws"; only the middle part is shown.
+  const [before, shown, after] = playing
+    ? ["", "Stop", " the clip"]
+    : duration === null
+    ? ["", "Play clip", ""]
+    : ["Play ", duration, " clip"];
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/[0.12] bg-white/[0.06] pl-3 pr-3.5 text-[13px] font-semibold text-zinc-200 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:h-9"
+      className="inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/[0.12] bg-white/[0.06] pl-3 pr-3.5 text-[13px] font-semibold text-zinc-200 transition-colors hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 lg:h-9"
     >
       <Icon aria-hidden="true" className="size-3 fill-current" />
-      {playing ? "Stop" : clipDurationLabel(entry) ?? "Play clip"}
-      <span className="sr-only">
-        {playing ? " the clip" : " clip"} from {sourceLabel(entry)}
+      <span>
+        {before !== "" && <span className="sr-only">{before}</span>}
+        {shown}
+        <span className="sr-only">
+          {after} from {sourceLabel(entry)}
+        </span>
       </span>
     </button>
   );

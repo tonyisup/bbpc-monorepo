@@ -219,7 +219,7 @@ export function QuotabungaRoundRow({ round }: { round: QuotabungaRound }) {
               aria-expanded={expanded}
               aria-controls={entriesId}
               onClick={toggleExpanded}
-              className="-mx-2 inline-flex h-11 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold tabular-nums text-zinc-200 transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 md:h-9"
+              className="-mx-2 inline-flex h-11 items-center gap-1.5 rounded-lg px-2 text-[13px] font-semibold tabular-nums text-zinc-200 transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 lg:h-9"
             >
               {entryCountLabel(round.entryCount)}
               <span className="sr-only">
@@ -247,7 +247,7 @@ export function QuotabungaRoundRow({ round }: { round: QuotabungaRound }) {
       {expanded && (
         <div id={entriesId} className="px-4 pb-3 lg:pl-[5.5rem] lg:pr-5">
           {played.length > 0 && (
-            <ul className="border-t border-white/[0.12]">
+            <ul role="list" className="border-t border-white/[0.12]">
               {played.map((entry) => (
                 <EntryRow
                   key={entry.id}
@@ -269,7 +269,7 @@ export function QuotabungaRoundRow({ round }: { round: QuotabungaRound }) {
               <h3 className="bbpc-label border-t border-white/[0.12] pb-1 pt-3.5">
                 Also submitted
               </h3>
-              <ul>
+              <ul role="list">
                 {alsoSubmitted.map((entry) => (
                   <EntryRow
                     key={entry.id}

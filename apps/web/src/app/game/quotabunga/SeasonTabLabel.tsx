@@ -15,7 +15,8 @@ export function SeasonTabLabel({ children }: { children: ReactNode }) {
     <span
       className={cn(
         "flex items-center gap-1.5",
-        pending && "animate-pulse motion-reduce:animate-none"
+        // Dimmed as well as pulsing, so it still shows with motion reduced.
+        pending && "animate-pulse opacity-60 motion-reduce:animate-none"
       )}
     >
       {children}

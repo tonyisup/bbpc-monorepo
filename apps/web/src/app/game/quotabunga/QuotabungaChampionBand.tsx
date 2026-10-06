@@ -39,7 +39,7 @@ function ListenerRows({ listeners }: { listeners: RankedListener[] }) {
           <span className="text-[13px] tabular-nums text-zinc-400">
             {rank}
           </span>
-          <span className="truncate font-bold text-white">
+          <span className="break-words font-bold text-white">
             {listenerName(listener.user.name)}
           </span>
           <span className="text-[13px] tabular-nums text-zinc-400">
@@ -78,15 +78,17 @@ export function QuotabungaChampionBand({
     listener,
     rank: ranks[index] ?? index + 1,
   }));
-  // Listeners arrive sorted by wins, so the winners are a prefix.
-  const top = ranked
-    .slice(0, TOP_LISTENERS)
-    .filter(({ listener }) => listener.wins > 0);
+  // Listeners arrive sorted by wins, so the winners are a prefix. The short
+  // list never stops partway through listeners who share a rank.
+  const lastShownRank = ranked[TOP_LISTENERS - 1]?.rank ?? Infinity;
+  const top = ranked.filter(
+    ({ listener, rank }) => listener.wins > 0 && rank <= lastShownRank
+  );
   const rest = ranked.slice(top.length);
   const isLong = entry.quoteText.length > LONG_QUOTE_LENGTH;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       <section
         aria-labelledby="latest-winner-heading"
         className="bbpc-panel p-5 sm:px-7 sm:py-6"
@@ -139,7 +141,7 @@ export function QuotabungaChampionBand({
         <h2 id="most-wins-heading" className="bbpc-label">
           Most wins · {scope}
         </h2>
-        <ol className="mt-2">
+        <ol role="list" className="mt-2">
           <ListenerRows listeners={top} />
         </ol>
         {rest.length > 0 && (
@@ -148,11 +150,9 @@ export function QuotabungaChampionBand({
               <span className="group-open:hidden">
                 All {listeners.length} listeners
               </span>
-              <span className="hidden group-open:inline">
-                Show top {TOP_LISTENERS} only
-              </span>
+              <span className="hidden group-open:inline">Show fewer</span>
             </summary>
-            <ol>
+            <ol role="list">
               <ListenerRows listeners={rest} />
             </ol>
           </details>

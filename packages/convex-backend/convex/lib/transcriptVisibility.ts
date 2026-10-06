@@ -9,9 +9,10 @@ export function isPublishedStatus(status: string | null | undefined): boolean {
 }
 
 /**
- * Return whether an episode is published. This one definition decides both
- * public transcript search and when listeners may see an episode's game
- * results (see games/resultEmbargo.ts).
+ * Return whether an episode is published. Public transcript search and the
+ * hold on game results both depend on it; readUnpublishedEpisodes in
+ * games/resultEmbargo.ts states the same rule as index ranges and must
+ * change with isPublishedStatus.
  */
 export function isPublishedEpisode(episode: Doc<"episodes"> | null): boolean {
   return episode !== null && isPublishedStatus(episode.status);

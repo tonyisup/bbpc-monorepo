@@ -73,7 +73,11 @@ test("the archive loader rejects round states and places the page cannot draw", 
 });
 
 test("the archive page shares one clip player and rounds the clock to cache", () => {
-  assert.match(page, /<ClipPlaybackProvider>[\s\S]*<\/ClipPlaybackProvider>/u);
+  // Keyed by the selected view, so a season change never resumes a clip.
+  assert.match(
+    page,
+    /<ClipPlaybackProvider\s+key=\{view\.kind === "all" \? ALL_SEASONS : view\.season\.id\}\s*>[\s\S]*<\/ClipPlaybackProvider>/u
+  );
   assert.match(page, /key=\{winner\.entry\.id\}/u);
   assert.match(page, /Math\.floor\(Date\.now\(\) \/ 60_000\) \* 60_000/u);
   assert.match(page, /<SeasonTabLabel>/u);
