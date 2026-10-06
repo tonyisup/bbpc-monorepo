@@ -67,6 +67,12 @@ function except(held: Array<Id<"points">>) {
  * them and its length says nothing about what is being held. Sorted, so the
  * same held points always build the same query: a cursor only continues the
  * query that issued it.
+ *
+ * Known limit: because the held ids are part of the query, a cursor issued
+ * before a listener's held set changed is refused afterwards. A listener who
+ * keeps an old cursor can therefore tell that something of theirs started or
+ * stopped being held, though not what. Closing that needs paging that does
+ * not depend on the held set at all.
  */
 async function heldPointIds(
   ctx: Parameters<typeof loadResultEmbargo>[0],

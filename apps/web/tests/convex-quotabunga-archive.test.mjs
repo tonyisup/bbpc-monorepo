@@ -78,6 +78,9 @@ test("the archive page shares one clip player and rounds the clock to cache", ()
     page,
     /<ClipPlaybackProvider\s+key=\{view\.kind === "all" \? ALL_SEASONS : view\.season\.id\}\s*>[\s\S]*<\/ClipPlaybackProvider>/u
   );
+  // The tabs sit before the keyed provider, or switching season would
+  // remount them and drop keyboard focus.
+  assert.ok(page.indexOf("<SeasonTabs") < page.indexOf("<ClipPlaybackProvider"));
   assert.match(page, /key=\{winner\.entry\.id\}/u);
   assert.match(page, /Math\.floor\(Date\.now\(\) \/ 60_000\) \* 60_000/u);
   assert.match(page, /<SeasonTabLabel>/u);

@@ -60,7 +60,7 @@ export function toQuoteEpisode(
   };
 }
 
-export function toMemberQuoteSubmission(
+function toMemberQuoteSubmission(
   submission: Doc<"quoteSubmissions">,
 ): QuoteMemberSubmission {
   return {

@@ -11,7 +11,11 @@ import type {
 
 export const ALL_SEASONS = "all";
 
-/** Points the hosts award for each place, as the game rules list them. */
+/**
+ * Points the hosts award for each place, as the game rules list them. The
+ * backend's quotePlacementAdjustment awards the same amounts and totals them
+ * for the wins board, so the two must change together.
+ */
 const PLACEMENT_POINTS: Record<1 | 2 | 3, number> = {
   1: 40,
   2: 20,

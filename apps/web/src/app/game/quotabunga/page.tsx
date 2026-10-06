@@ -225,54 +225,56 @@ export default async function QuotabungaArchivePage({
           </p>
         </div>
       ) : (
-        // Keyed by the view, so changing season starts with nothing playing.
-        <ClipPlaybackProvider
-          key={view.kind === "all" ? ALL_SEASONS : view.season.id}
-        >
+        <>
           <SeasonTabs
             seasons={seasons}
             selected={view.kind === "all" ? ALL_SEASONS : view.season.id}
           />
+          {/* Keyed by the view, so changing season starts with nothing
+              playing. The tabs stay outside it and keep keyboard focus. */}
+          <ClipPlaybackProvider
+            key={view.kind === "all" ? ALL_SEASONS : view.season.id}
+          >
+            {winner !== null && (
+              <QuotabungaChampionBand
+                key={winner.entry.id}
+                round={winner.round}
+                entry={winner.entry}
+                listeners={listeners}
+                scope={view.kind === "all" ? "All seasons" : view.season.title}
+              />
+            )}
 
-          {winner !== null && (
-            <QuotabungaChampionBand
-              key={winner.entry.id}
-              round={winner.round}
-              entry={winner.entry}
-              listeners={listeners}
-              scope={view.kind === "all" ? "All seasons" : view.season.title}
-            />
-          )}
-
-          {view.kind === "all" ? (
-            <div className="space-y-3">
-              {details.map((detail, index) => (
-                <SeasonBlock
+            {view.kind === "all" ? (
+              <div className="space-y-3">
+                {details.map((detail, index) => (
+                  <SeasonBlock
+                    key={detail.season.id}
+                    detail={detail}
+                    defaultOpen={index === 0}
+                  />
+                ))}
+              </div>
+            ) : (
+              details.map((detail) => (
+                <section
                   key={detail.season.id}
-                  detail={detail}
-                  defaultOpen={index === 0}
-                />
-              ))}
-            </div>
-          ) : (
-            details.map((detail) => (
-              <section
-                key={detail.season.id}
-                aria-labelledby="season-rounds-heading"
-                className="bbpc-panel overflow-hidden"
-              >
-                <h2 id="season-rounds-heading" className="sr-only">
-                  {detail.season.title} rounds
-                </h2>
-                <QuotabungaLedger
-                  rounds={detail.rounds}
-                  initialCount={SEASON_ROUNDS_SHOWN}
-                  empty={<EmptySeason />}
-                />
-              </section>
-            ))
-          )}
-        </ClipPlaybackProvider>
+                  aria-labelledby="season-rounds-heading"
+                  className="bbpc-panel overflow-hidden"
+                >
+                  <h2 id="season-rounds-heading" className="sr-only">
+                    {detail.season.title} rounds
+                  </h2>
+                  <QuotabungaLedger
+                    rounds={detail.rounds}
+                    initialCount={SEASON_ROUNDS_SHOWN}
+                    empty={<EmptySeason />}
+                  />
+                </section>
+              ))
+            )}
+          </ClipPlaybackProvider>
+        </>
       )}
     </div>
   );

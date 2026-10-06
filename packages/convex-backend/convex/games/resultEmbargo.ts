@@ -171,12 +171,16 @@ export async function loadResultEmbargo(
                       .eq("assignmentId", assignment._id),
                   )
                   .take(MAX_GAMBLING_ENTRIES_PER_READ + 1),
-            ctx.db
-              .query("guessSettlements")
-              .withIndex("by_assignmentId", (index) =>
-                index.eq("assignmentId", assignment._id),
-              )
-              .first(),
+            // Only the everyone form needs to know whether the assignment
+            // has been settled; see the guesses below.
+            userId === undefined
+              ? ctx.db
+                  .query("guessSettlements")
+                  .withIndex("by_assignmentId", (index) =>
+                    index.eq("assignmentId", assignment._id),
+                  )
+                  .first()
+              : null,
           ]);
           assertWithin(
             links,
