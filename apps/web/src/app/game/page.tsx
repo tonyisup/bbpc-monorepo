@@ -4,6 +4,7 @@ import { Episode } from "@/components/Episode";
 import RatingIcon from "@/components/RatingIcon";
 import { SeasonStandingsDisclosure } from "@/components/SeasonStandingsDisclosure";
 import { getPacificTodayPlainDate } from "@/lib/dates";
+import { getQuotabungaArchivePath } from "@/lib/routes";
 import { getNextScheduledEpisode } from "@/server/convex/episodes";
 import {
   getConvexCurrentPerformance,
@@ -43,6 +44,14 @@ export default async function GamePage() {
         <p className="mt-3 text-base leading-relaxed text-zinc-300">
           Predict the hosts&apos; ratings, send in a memorable quote, and climb
           the season standings.
+        </p>
+        <p className="mt-3">
+          <Link
+            href={getQuotabungaArchivePath()}
+            className="rounded font-semibold text-red-300 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            Quotabunga winners and past rounds
+          </Link>
         </p>
       </header>
 
@@ -94,6 +103,10 @@ export default async function GamePage() {
                   ? `Each season lasts ${performance.season.episodeCount} episodes.`
                   : "Each season lasts a set number of episodes."}{" "}
                 The player with the most points wins.
+              </p>
+              <p>
+                Results, points and the standings update when each episode is
+                published, not when it is recorded.
               </p>
               <p>
                 The winner picks a movie and joins the hosts to discuss it on
@@ -167,6 +180,15 @@ export default async function GamePage() {
                 <dt>Third place</dt>
                 <dd className="font-bold text-white">10 points</dd>
               </dl>
+              <p>
+                <Link
+                  href={getQuotabungaArchivePath()}
+                  className="font-semibold text-red-300 underline"
+                >
+                  See every past round and winner
+                </Link>
+                .
+              </p>
               <p>
                 You can also email{" "}
                 <a
