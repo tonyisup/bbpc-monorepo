@@ -88,7 +88,8 @@ async function readUnpublishedEpisodes(
  * neither re-runs every subscribed read nor counts against the limits here.
  * It misses two awards only an administrator can create by hand: a point
  * attached to a guess before any settlement or rating exists, and one
- * attached to a wager that is not settled.
+ * attached to a wager that is not settled. A wager with no assignment
+ * belongs to no episode, so it is never held.
  *
  * The listener form reads that listener's rows through their own indexes,
  * which keeps a balance check inside a mutation from depending on anyone

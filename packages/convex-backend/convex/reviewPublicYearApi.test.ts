@@ -114,7 +114,14 @@ describe("public year movie reviews", () => {
         movieId,
         reviewedAt: Date.UTC(2025, 6, 1),
       });
-      return { extraEpisodeId, movieId, ratingId, reviewId, userId };
+      return {
+        assignmentEpisodeId,
+        extraEpisodeId,
+        movieId,
+        ratingId,
+        reviewId,
+        userId,
+      };
     });
 
     const reviews = await t.query(
@@ -162,8 +169,8 @@ describe("public year movie reviews", () => {
       "name",
     ]);
 
-    // The review follows the episode it is shown under: while that one is
-    // unpublished, or has no status at all, the rating stays out.
+    // While the episode it is shown under is unpublished, or has no status
+    // at all, the rating stays out.
     for (const status of ["recording", undefined]) {
       await t.run(async (ctx) => {
         await ctx.db.patch("episodes", ids.extraEpisodeId, { status });
@@ -174,6 +181,20 @@ describe("public year movie reviews", () => {
         }),
       ).toEqual([]);
     }
+
+    // The same holds for any other episode the review belongs to: a published
+    // extra must not release the rating of an unpublished assignment.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", ids.extraEpisodeId, {
+        status: "published",
+      });
+      await ctx.db.patch("episodes", ids.assignmentEpisodeId, {
+        status: "recording",
+      });
+    });
+    expect(
+      await t.query(api.reviews.public.listMovieReviewsForYear, { year: 2026 }),
+    ).toEqual([]);
   });
 
   test("rejects invalid year selectors", async () => {

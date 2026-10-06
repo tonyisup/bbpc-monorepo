@@ -152,10 +152,12 @@ export const myAvailablePoints = authenticatedQuery({
  * Clients treat that point's Pacific day as the last episode and sum this
  * member's points from that day; a point's own episode is not resolved, and
  * manual adjustments have none anyway. Points for an unpublished episode are
- * skipped, so the badge changes when the episode comes out. Every signed-in
- * page subscribes to this, and finding the newest visible point in the whole
- * season needs the everyone-wide embargo, which is why that embargo reads
- * only award-bearing rows and nothing listeners write during an open round.
+ * skipped, so the badge changes when the episode comes out, unless a newer
+ * visible point (a manual adjustment, say) already holds the last day. Every
+ * signed-in page subscribes to this, and finding the newest visible point in
+ * the whole season needs the everyone-wide embargo, which is why that embargo
+ * reads only award-bearing rows and nothing listeners write during an open
+ * round.
  */
 export const myLatestPointChange = authenticatedQuery({
   args: { today: v.string() },
