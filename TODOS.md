@@ -89,11 +89,34 @@ its placement points, so a member sending a past date can file an episode under 
 season.
 
 **Context:** Pre-existing behaviour surfaced by the ship review. Episodes are not linked
-to seasons; `resolveQuoteSeasonForEpisode` inherits from the earliest submission.
+to seasons; `resolveQuoteSeasonForEpisode` inherits from the earliest submission. The
+public Quotabunga page groups rounds by that season, so a misfiled round shows under the
+wrong season tab. `games.gambling.submit` trusts the caller's `today` the same way, so a
+wager can be booked against a past season's balance; fix both together.
 
 **Effort:** S
 **Priority:** P3
 **Depends on:** Every episode that accepts quotes having a date
+
+### Keep the scored-quote edit error from giving away a placement
+
+**What:** Refuse `games.quotes.awardPlacements` while `isEpisodeRoundOpen` is still true,
+or make `submitMine` and `withdrawMine` return the generic round-closed conflict for a
+held award.
+
+**Why:** Results are hidden from listeners until the episode is published, but a listener
+whose quote was placed while the round is still open gets "A scored quote submission
+cannot be edited" when they try to save or withdraw it, which tells them they placed.
+
+**Context:** Found by the adversarial review of the result hold (PR for
+`feat/quotabunga-archive`). It only happens if places are awarded inside the 10-minute
+grace period after an episode is set to recording, so it was deferred rather than risk an
+error for whoever runs the recording. `toListenerQuoteSubmission` already reports
+`scored: false` in that window, so the form still offers Edit and Withdraw.
+
+**Effort:** S
+**Priority:** P3
+**Depends on:** Deciding whether awarding may wait for the round to close
 
 ### Share one round-clock hook between the prediction and Quotabunga panels
 

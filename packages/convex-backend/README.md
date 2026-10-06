@@ -424,7 +424,7 @@ The first consumer-facing domain slice exposes anonymous, read-only episode func
   and
 - `episodes.public.results` returns only the public winning-gamble and correct-guess
   fields needed by an episode page, with independent 50-row assignment, review, guess,
-  and winner limits.
+  and winner limits. For an episode that is not published it returns both lists empty.
 
 The shared episode DTO contains the episode display fields, assignments, public user
 name/image, movies, extras, shows, and links needed by the primary site. It deliberately
@@ -435,7 +435,8 @@ parents fail closed instead of returning a partial graph.
 
 `games.gambling.hasWonForEpisode` derives the member from Clerk and returns only the
 boolean needed by the primary home-page banner. It inspects at most 25 episode
-assignments and applies the existing 500-entry per-user/assignment gambling bound.
+assignments and applies the existing 500-entry per-user/assignment gambling bound. It
+returns `false` until the episode is published.
 
 Authenticated episode audio operations replace the primary app's owner-scoped Prisma
 routes. `episodes.audio.listMine` uses native pagination over a compound
@@ -449,7 +450,9 @@ lifecycle mutations, bounded native audio-message pagination, link add/remove, a
 administrator-authored audio metadata. Slugs use the legacy-compatible normalized
 algorithm with bounded collision allocation, optional metadata can be explicitly
 cleared, and transitions to `recording` or `published` transactionally lock pending
-gambling entries. All writes require administrator access, S3/S4 application writes,
+gambling entries. Setting an episode to `published` is also what releases its game
+results to listeners (see [Result hold](#result-hold)). All writes require
+administrator access, S3/S4 application writes,
 and the pinned client API version, and emit PII-free audit evidence. Hard episode
 deletion remains deferred until its relationship-cascade contract is verified; remote
 audio-file deletion remains deferred until it can use a durable external-effect intent.
@@ -548,6 +551,34 @@ idempotent for an existing date with identical number and title, allocates the s
 the server for a new published episode, and rejects metadata drift. Operation IDs are
 bounded value-free labels and appear only in audit metadata.
 
+## Result hold
+
+Points are awarded at the recording, but listeners see a result only once its episode
+is published (status `published` or `Published`). `convex/games/resultEmbargo.ts`
+works out which points and wagers belong to unpublished episodes, and every
+listener-facing read leaves them out:
+
+- `games.public.currentPerformance` and the totals, standings, and point pages in
+  `games.member` omit points awarded for an unpublished episode.
+  `myLatestPointChange` skips them too.
+- `episodes.public.results` returns no winners, and `games.gambling.hasWonForEpisode`
+  returns `false`.
+- A listener's own wagers (the `games.gambling.mineFor*` queries and
+  `games.member.mySeasonWagers`) show a settled wager as `locked` with no
+  `awardPoint`.
+- A listener's own guesses (`games.guesses.mineForAssignment`, `mineForAssignments`,
+  and the `submit` response) carry no `point`, host `rating`, or `reviewedAt`.
+- A listener's own quote entry reads `placement: null` and `scored: false`.
+- `reviews.public.listMovieReviewsForYear` omits a review until every episode it is
+  linked to is published.
+
+Available points follow the same rule. Awards from an unpublished episode are not
+counted and settled wagers on it keep their stake reserved, so winnings cannot be
+wagered until the episode is published. Administrator and recording reads are not
+held. The hold is computed at read time from the episode's status, so an administrator
+setting it to `published` releases the results. Reads that total or page points fail
+with `CONFLICT` once more than 200 episodes are unpublished.
+
 ## Quotabunga API
 
 Authenticated members read their entry for any one episode with
@@ -566,7 +597,9 @@ milliseconds) for its `isOpen` flag; `currentForMe` accepts it and, without one,
 only a `next` episode as open. Ownership is always derived from the linked Clerk
 identity, and the mutation upserts at most one submission per user and episode. Scored
 submissions cannot be edited or withdrawn. Member responses expose the public quote
-fields and score state but never administrator notes.
+fields and score state but never administrator notes. Until the entry's episode is
+published, `placement` reads `null`, `scored` reads `false`, and `updatedAt` equals
+`createdAt` (see [Result hold](#result-hold)).
 
 A submission may carry a clip range. `clipStartSeconds` and the optional
 `clipEndSeconds` accept finite seconds from 0 through 86400, fractions included. An end
@@ -638,6 +671,28 @@ or clip-start values. Synthetic tests cover access/write gates, open-round owner
 normalization, deterministic brackets, award recalculation and cleanup, relationship
 corruption, audit privacy, and bounded reads.
 
+### Public archive
+
+Two anonymous queries back the public Quotabunga page at `/game/quotabunga`. `today` is
+the caller's `YYYY-MM-DD` date.
+
+- `games.public.quotabungaSeasons({ today })` lists every season with a quote
+  submission, plus the current season, newest start date first. Each row carries
+  `id`, `title`, `startedOn`, `endedOn`, and `isCurrent`. It inspects at most 100
+  seasons and fails with `CONFLICT` beyond that.
+- `games.public.quotabungaSeason({ seasonId, today, now })` returns that season's
+  `rounds` and `listeners`, or `null` for an unknown season. A round is one episode,
+  highest episode number first, with a `state` of `open`, `locked`, or `revealed`.
+  Only a `revealed` round, one whose episode is published, returns `entries` (quote,
+  source, clip link and range, `inBracket`, `placement`, and the listener's `id` and
+  `name`) and the episode `slug`. Until then a round returns its episode and
+  `entryCount` but no entries.
+  Rejected entries, listener notes, and administrator notes are never returned.
+  `listeners` tallies each listener's `wins` (first places), placement `points`, and
+  `entryCount` across revealed rounds. `now` (epoch milliseconds) only decides whether
+  an unrevealed round reads as `open` or `locked`. More than 2000 submissions in one
+  season fail with `CONFLICT`.
+
 ## Season progress API
 
 A season can declare an optional `episodeCount`, a whole number from 1 through 500.
@@ -647,7 +702,9 @@ clears it, and every season DTO returns it or `null`.
 `games.public.currentPerformance` also returns `recordedEpisodeCount`. Episodes are not
 linked to seasons, so it counts dated episodes of any status from the season's start
 through `today` or the season's end date, whichever is earlier, and stops counting at
-500. It is `null` when the season has no episode count or start date.
+500. It is `null` when the season has no episode count or start date. The standings
+and points `currentPerformance` returns leave out results for unpublished episodes (see
+[Result hold](#result-hold)).
 
 Authenticated `games.member.myLatestPointChange` takes the caller's `YYYY-MM-DD` date
 and returns `seasonId`, `lastScoredAt` (the season's latest point time), and the
@@ -656,7 +713,8 @@ Points from 08:00 UTC on the day after `today`, the end of a Pacific standard-ti
 are ignored so a mistyped future date cannot pin the result. Clients sum the points
 on the latest point's Pacific day as the last-episode change. It returns `null` when
 there is no current season or no season point dated through today, and more than 200
-matching points fail with `CONFLICT`.
+matching points fail with `CONFLICT`. Points for unpublished episodes are skipped, both
+when finding the latest point and in the member's `points`.
 
 Administrator `games.points.listForSeasonPage` items carry an `episode` (`id`,
 `number`, `title`) resolved through the point's assignment link, guess, or wager
@@ -667,7 +725,10 @@ when the chain has no episode.
 
 Authenticated members read their own season history through `games.member`. `today` is
 the caller's `YYYY-MM-DD` date, and every function that takes a `seasonId` returns
-`NOT_FOUND` for an unknown season.
+`NOT_FOUND` for an unknown season. Every function here applies the
+[result hold](#result-hold): totals, `available`, standings, and point pages leave out
+points for unpublished episodes, and `mySeasonWagers` shows a settled wager on one as
+`locked` with no award.
 
 - `mySeasons({ today })` lists the seasons the caller has scored in, plus the current
   season even before their first point, current season first and then newest start

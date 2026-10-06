@@ -171,4 +171,27 @@ describe("SeasonPointsByEpisode", () => {
     await flush();
     expect(text(rendered)).toContain("could not be loaded");
   });
+
+  test("retries from the first page, because an old cursor can stop working", async () => {
+    mocks.loadPage
+      .mockResolvedValueOnce(page([point("p1", episode418, 3)], false, "c1"))
+      .mockRejectedValueOnce(new Error("InvalidCursor"))
+      .mockResolvedValueOnce(page([point("p2", episode417, 1)], true, ""));
+    const rendered = await renderPoints();
+    await act(async () => {
+      button(rendered, "Show older points").props.onClick();
+    });
+    await flush();
+    await act(async () => {
+      button(rendered, "Try again").props.onClick();
+    });
+    await flush();
+
+    expect(mocks.loadPage.mock.calls.map((call) => call[2])).toEqual([
+      null,
+      "c1",
+      null,
+    ]);
+    expect(text(rendered)).not.toContain("could not be loaded");
+  });
 });

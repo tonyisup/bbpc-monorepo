@@ -74,11 +74,13 @@ describe("public year movie reviews", () => {
       const assignmentEpisodeId = await ctx.db.insert("episodes", {
         number: 10,
         title: "Assignment Episode",
+        status: "published",
         slug: "assignment-episode",
       });
       const extraEpisodeId = await ctx.db.insert("episodes", {
         number: 11,
         title: "Extra Episode",
+        status: "published",
         slug: "extra-episode",
       });
       const assignmentId = await ctx.db.insert("assignments", {
@@ -112,7 +114,14 @@ describe("public year movie reviews", () => {
         movieId,
         reviewedAt: Date.UTC(2025, 6, 1),
       });
-      return { extraEpisodeId, movieId, ratingId, reviewId, userId };
+      return {
+        assignmentEpisodeId,
+        extraEpisodeId,
+        movieId,
+        ratingId,
+        reviewId,
+        userId,
+      };
     });
 
     const reviews = await t.query(
@@ -148,7 +157,7 @@ describe("public year movie reviews", () => {
           id: ids.extraEpisodeId,
           number: 11,
           title: "Extra Episode",
-          status: null,
+          status: "published",
           slug: "extra-episode",
         },
         reviewedAt: Date.UTC(2026, 5, 1),
@@ -159,6 +168,33 @@ describe("public year movie reviews", () => {
       "image",
       "name",
     ]);
+
+    // While the episode it is shown under is unpublished, or has no status
+    // at all, the rating stays out.
+    for (const status of ["recording", undefined]) {
+      await t.run(async (ctx) => {
+        await ctx.db.patch("episodes", ids.extraEpisodeId, { status });
+      });
+      expect(
+        await t.query(api.reviews.public.listMovieReviewsForYear, {
+          year: 2026,
+        }),
+      ).toEqual([]);
+    }
+
+    // The same holds for any other episode the review belongs to: a published
+    // extra must not release the rating of an unpublished assignment.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", ids.extraEpisodeId, {
+        status: "published",
+      });
+      await ctx.db.patch("episodes", ids.assignmentEpisodeId, {
+        status: "recording",
+      });
+    });
+    expect(
+      await t.query(api.reviews.public.listMovieReviewsForYear, { year: 2026 }),
+    ).toEqual([]);
   });
 
   test("rejects invalid year selectors", async () => {
@@ -186,6 +222,7 @@ describe("public year movie reviews", () => {
       const episodeId = await ctx.db.insert("episodes", {
         number: 12,
         title: "Assignment Only",
+        status: "published",
       });
       const assignmentId = await ctx.db.insert("assignments", {
         userId: assignmentOwnerId,
@@ -236,8 +273,20 @@ describe("public year movie reviews", () => {
         id: ids.episodeId,
         number: 12,
         title: "Assignment Only",
+        status: "published",
       },
     });
+
+    // A host's rating is the answer to the round: it waits for the episode.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", ids.episodeId, { status: "recording" });
+    });
+    const held = await t.query(api.reviews.public.listMovieReviewsForYear, {
+      year: 2026,
+    });
+    expect(held.map((review) => review.id)).toEqual([
+      ids.relationshipFreeReviewId,
+    ]);
   });
 
   test("fails closed when a year exceeds the public review bound", async () => {

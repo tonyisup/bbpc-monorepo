@@ -297,6 +297,67 @@ export const currentQuoteSubmissionValidator = v.object({
   ),
 });
 
+export const quoteArchiveSeasonValidator = v.object({
+  id: v.id("seasons"),
+  title: v.string(),
+  startedOn: nullableStringValidator,
+  endedOn: nullableStringValidator,
+  isCurrent: v.boolean(),
+});
+
+const quoteArchiveUserValidator = v.object({
+  id: v.id("users"),
+  name: nullableStringValidator,
+});
+
+export const quoteArchiveEntryValidator = v.object({
+  id: v.id("quoteSubmissions"),
+  quoteText: v.string(),
+  sourceTitle: v.string(),
+  sourceType: quoteSourceTypeValidator,
+  clipUrl: nullableStringValidator,
+  clipStartSeconds: nullableNumberValidator,
+  clipEndSeconds: nullableNumberValidator,
+  inBracket: v.boolean(),
+  placement: v.union(
+    v.literal(1),
+    v.literal(2),
+    v.literal(3),
+    v.null(),
+  ),
+  user: quoteArchiveUserValidator,
+});
+
+export const quoteArchiveRoundValidator = v.object({
+  episode: v.object({
+    id: v.id("episodes"),
+    number: v.number(),
+    title: v.string(),
+    date: nullableStringValidator,
+    slug: nullableStringValidator,
+  }),
+  state: v.union(
+    v.literal("open"),
+    v.literal("locked"),
+    v.literal("revealed"),
+  ),
+  entryCount: v.number(),
+  entries: v.array(quoteArchiveEntryValidator),
+});
+
+export const quoteArchiveListenerValidator = v.object({
+  user: quoteArchiveUserValidator,
+  wins: v.number(),
+  points: v.number(),
+  entryCount: v.number(),
+});
+
+export const quoteArchiveSeasonDetailValidator = v.object({
+  season: quoteArchiveSeasonValidator,
+  rounds: v.array(quoteArchiveRoundValidator),
+  listeners: v.array(quoteArchiveListenerValidator),
+});
+
 export const quoteTranscriptMatchValidator = v.object({
   episodeNumber: v.number(),
   episodeTitle: v.string(),

@@ -35,7 +35,7 @@ import {
   requireQuoteEpisode,
   requireQuoteSubmission,
   searchQuoteSubmissionCandidates,
-  toMemberQuoteSubmission,
+  toListenerQuoteSubmission,
   toQuoteEpisode,
 } from "./quoteReadModel.js";
 import { quotesPossiblyMatch } from "./quoteSimilarity.js";
@@ -280,7 +280,7 @@ export const currentForMe = authenticatedQuery({
       submission:
         submission === null
           ? null
-          : toMemberQuoteSubmission(submission),
+          : toListenerQuoteSubmission(submission, episode),
     };
   },
 });
@@ -309,7 +309,7 @@ export const mineForEpisode = authenticatedQuery({
       submission:
         submission === null
           ? null
-          : toMemberQuoteSubmission(submission),
+          : toListenerQuoteSubmission(submission, episode),
     };
   },
 });
@@ -521,8 +521,7 @@ export const submitMine = authenticatedMutation({
     if (existing === null) {
       const season = await resolveQuoteSeasonForEpisode(
         ctx,
-        episode._id,
-        args.today,
+        episode,
       );
       submissionId = await ctx.db.insert("quoteSubmissions", {
         userId: ctx.actor.user._id,
@@ -568,8 +567,9 @@ export const submitMine = authenticatedMutation({
       targetId: submissionId,
       cutoverRunId: ctx.systemState.cutoverRunId,
     });
-    return toMemberQuoteSubmission(
+    return toListenerQuoteSubmission(
       await requireQuoteSubmission(ctx, submissionId),
+      episode,
     );
   },
 });
@@ -721,8 +721,7 @@ export const createForUser = adminMutation({
     }
     const season = await resolveQuoteSeasonForEpisode(
       ctx,
-      episode._id,
-      args.today,
+      episode,
     );
     const now = validateQuoteTimestamp(
       args.now ?? Date.now(),
@@ -939,6 +938,12 @@ export const awardPlacements = adminMutation({
       );
     }
     const episode = await requireQuoteEpisode(ctx, args.episodeId);
+    if (isEpisodeRoundOpen(episode, Date.now())) {
+      domainError(
+        "CONFLICT",
+        "Quote placements cannot be awarded while the round is open.",
+      );
+    }
     const submissions = await listQuoteSubmissionsForEpisode(
       ctx,
       episode._id,

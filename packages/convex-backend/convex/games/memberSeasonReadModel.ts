@@ -8,6 +8,7 @@ import {
   assertPointAggregateLimit,
 } from "./limits.js";
 import { pointValue } from "./pointReadModel.js";
+import { type ResultEmbargo, visiblePoints } from "./resultEmbargo.js";
 import type {
   performancePointValidator,
   performanceUserValidator,
@@ -15,6 +16,7 @@ import type {
 } from "./validators.js";
 
 type SeasonReadContext = Pick<QueryCtx, "db">;
+type HeldPoints = Pick<ResultEmbargo, "pointIds">;
 type PerformanceUser = Infer<typeof performanceUserValidator>;
 type PerformancePoint = Infer<typeof performancePointValidator>;
 type SeasonStanding = Infer<typeof seasonStandingValidator>;
@@ -69,13 +71,15 @@ export function valueOf(
 }
 
 /**
- * Every point in a season, oldest first, or null once the season has more
- * than the aggregate limit. Callers decide whether that is an error (the
- * public standings) or a section to leave blank (a member's own pages).
+ * Every point in a season that listeners may see, oldest first, or null once
+ * the season has more than the aggregate limit. Callers decide whether that
+ * is an error (the public standings) or a section to leave blank (a member's
+ * own pages). Points for unpublished episodes are left out.
  */
 async function readSeasonPoints(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
+  embargo: HeldPoints,
 ): Promise<Array<Doc<"points">> | null> {
   const points = await ctx.db
     .query("points")
@@ -84,7 +88,9 @@ async function readSeasonPoints(
     )
     .order("asc")
     .take(MAX_POINTS_FOR_AGGREGATE + 1);
-  return points.length > MAX_POINTS_FOR_AGGREGATE ? null : points;
+  return points.length > MAX_POINTS_FOR_AGGREGATE
+    ? null
+    : visiblePoints(points, embargo);
 }
 
 /**
@@ -96,8 +102,9 @@ export async function loadSeasonPerformance(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
   label: string,
+  embargo: HeldPoints,
 ): Promise<SeasonPerformance> {
-  const performance = await tryLoadSeasonPerformance(ctx, seasonId);
+  const performance = await tryLoadSeasonPerformance(ctx, seasonId, embargo);
   if (performance === null) {
     domainError(
       "CONFLICT",
@@ -112,8 +119,9 @@ export async function loadSeasonPerformance(
 export async function tryLoadSeasonPerformance(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
+  embargo: HeldPoints,
 ): Promise<SeasonPerformance | null> {
-  const points = await readSeasonPoints(ctx, seasonId);
+  const points = await readSeasonPoints(ctx, seasonId, embargo);
   if (points === null) {
     return null;
   }
@@ -178,8 +186,9 @@ export async function loadSeasonStanding(
   ctx: SeasonReadContext,
   seasonId: Id<"seasons">,
   userId: Id<"users">,
+  embargo: HeldPoints,
 ): Promise<SeasonStanding | null> {
-  const points = await readSeasonPoints(ctx, seasonId);
+  const points = await readSeasonPoints(ctx, seasonId, embargo);
   if (points === null) {
     return null;
   }
@@ -202,13 +211,15 @@ export function totalsByUser(
 }
 
 /**
- * The member's own points in one season. A single member cannot realistically
- * exceed the aggregate limit in one season, so that is a conflict.
+ * The member's own points in one season, without those for unpublished
+ * episodes. A single member cannot realistically exceed the aggregate limit
+ * in one season, so that is a conflict.
  */
 export async function readMemberSeasonPoints(
   ctx: SeasonReadContext,
   userId: Id<"users">,
   seasonId: Id<"seasons">,
+  embargo: HeldPoints,
 ): Promise<Array<Doc<"points">>> {
   const points = await ctx.db
     .query("points")
@@ -217,7 +228,7 @@ export async function readMemberSeasonPoints(
     )
     .take(MAX_POINTS_FOR_AGGREGATE + 1);
   assertPointAggregateLimit(points, "Member season points");
-  return points;
+  return visiblePoints(points, embargo);
 }
 
 /**

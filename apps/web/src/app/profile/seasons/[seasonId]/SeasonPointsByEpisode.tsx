@@ -125,9 +125,9 @@ export function SeasonPointsByEpisode({ seasonId }: { seasonId: string }) {
           </p>
           <Button
             variant="outline"
-            onClick={() =>
-              void loadPage(history.cursor, history.points.length === 0)
-            }
+            // From the top: a cursor stops working when the set of points
+            // being held for an unpublished episode changes.
+            onClick={() => void loadPage(null, true)}
           >
             Try again
           </Button>

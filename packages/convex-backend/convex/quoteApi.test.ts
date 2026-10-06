@@ -197,16 +197,19 @@ async function seedFoundation(t: TestBackend) {
     const nextEpisodeId = await ctx.db.insert("episodes", {
       number: 12,
       title: "Next episode",
+      date: "2026-07-24",
       status: "next",
     });
     const recordingEpisodeId = await ctx.db.insert("episodes", {
       number: 11,
       title: "Recording episode",
+      date: "2026-07-17",
       status: "recording",
     });
     const oldEpisodeId = await ctx.db.insert("episodes", {
       number: 10,
       title: "Old episode",
+      date: "2026-07-10",
       status: "published",
     });
     return {
@@ -295,6 +298,112 @@ const GODFATHER_PASSAGE =
   "okay so my quote this week is from the godfather and it goes I'm gonna make him an offer he can't refuse which honestly is the best line in the movie and nobody can tell me otherwise";
 
 describe("Quotabunga workflows", () => {
+  test.each(["2026-01-01", "2026-12-31"])(
+    "derives new quote seasons from the episode date %s",
+    async (date) => {
+      const t = createTestBackend();
+      const { otherId } = await seedActors(t);
+      await advanceToS3(t);
+      const foundation = await seedFoundation(t);
+      await t.run(async (ctx) => {
+        await ctx.db.insert("seasons", {
+          title: "Past season",
+          gameTypeId: foundation.gameTypeId,
+          startedOn: "2025-01-01",
+          endedOn: "2025-12-31",
+        });
+        await ctx.db.patch("episodes", foundation.nextEpisodeId, { date });
+      });
+      const submitted = await t.withIdentity(MEMBER_IDENTITY).mutation(
+        api.games.quotes.submitMine,
+        {
+          ...memberContent,
+          clientApiVersion: BBPC_API_VERSION,
+          today: "2025-07-24",
+          now: Date.parse("2025-07-24"),
+        },
+      );
+      expect(await t.run((ctx) => ctx.db.get("quoteSubmissions", submitted.id)))
+        .toMatchObject({ seasonId: foundation.seasonId });
+      // Admin creation must use the episode date even before any submission exists.
+      await t.run((ctx) => ctx.db.delete("quoteSubmissions", submitted.id));
+      const created = await t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.games.quotes.createForUser,
+        {
+          ...memberContent,
+          clientApiVersion: BBPC_API_VERSION,
+          episodeId: foundation.nextEpisodeId,
+          userId: otherId,
+          today: "2025-07-24",
+        },
+      );
+      expect(created.seasonId).toBe(foundation.seasonId);
+    },
+  );
+
+  test.each([
+    { date: undefined, code: "CONFLICT" },
+    { date: "2027-01-01", code: "NOT_FOUND" },
+  ])("rejects new quotes when the episode date cannot resolve a season: $date", async ({ date, code }) => {
+    const t = createTestBackend();
+    await seedActors(t);
+    await advanceToS3(t);
+    const foundation = await seedFoundation(t);
+    await t.run((ctx) => ctx.db.patch("episodes", foundation.nextEpisodeId, { date }));
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).mutation(api.games.quotes.submitMine, {
+        ...memberContent,
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+      code,
+    );
+    expect(await t.run((ctx) => ctx.db.query("quoteSubmissions").take(1))).toEqual([]);
+  });
+
+  test("rejects placements while the round is writable and awards at the deadline", async () => {
+    vi.useFakeTimers();
+    const deadline = Date.parse("2026-07-24T12:10:00Z");
+    vi.setSystemTime(deadline - 1);
+    try {
+      const t = createTestBackend();
+      const { memberId } = await seedActors(t);
+      await advanceToS3(t);
+      const foundation = await seedFoundation(t);
+      const id = await insertQuote(t, {
+        userId: memberId,
+        episodeId: foundation.nextEpisodeId,
+        seasonId: foundation.seasonId,
+        status: "INCLUDED",
+      });
+      const args = {
+        clientApiVersion: BBPC_API_VERSION,
+        episodeId: foundation.nextEpisodeId,
+        placements: [{ submissionId: id, placement: 1 }],
+        now: deadline + 1000,
+        earnedAt: deadline + 1000,
+      };
+      const admin = t.withIdentity(ADMIN_IDENTITY);
+      await expectDomainError(admin.mutation(api.games.quotes.awardPlacements, args), "CONFLICT");
+      await t.run((ctx) => ctx.db.patch("episodes", foundation.nextEpisodeId, {
+        status: "recording",
+        predictionClosesAt: deadline,
+      }));
+      await expectDomainError(admin.mutation(api.games.quotes.awardPlacements, args), "CONFLICT");
+      const before = await t.run((ctx) => ctx.db.get("quoteSubmissions", id));
+      expect(before?.pointId).toBeUndefined();
+      expect(before?.placement).toBeUndefined();
+      expect(await t.run((ctx) => ctx.db.query("points").take(1))).toEqual([]);
+      vi.setSystemTime(deadline);
+      await expect(admin.mutation(api.games.quotes.awardPlacements, args))
+        .resolves.toEqual({ awarded: 1, cleared: 0 });
+      const after = await t.run((ctx) => ctx.db.get("quoteSubmissions", id));
+      expect(after?.pointId).toBeDefined();
+      expect(after?.placement).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("returns no search anchors for quotes below the minimum length", () => {
     expect(quoteSearchAnchors("Tiny")).toEqual([]);
   });
@@ -753,8 +862,15 @@ describe("Quotabunga workflows", () => {
       clipUrl: null,
       listenerNotes: null,
       createdAt: 100,
-      updatedAt: 200,
+      // The listener's view reports the creation time until the episode is
+      // published, because an award would move the real one.
+      updatedAt: 100,
     });
+    expect(
+      await t.run(async (ctx) => {
+        return (await ctx.db.get("quoteSubmissions", created.id))?.updatedAt;
+      }),
+    ).toBe(200);
     expect(JSON.stringify(updated)).not.toContain(
       "Private moderation note",
     );
@@ -1299,6 +1415,7 @@ describe("Quotabunga workflows", () => {
       });
       await ctx.db.patch("quoteSubmissions", created.id, {
         status: "INCLUDED",
+        placement: 1,
         pointId,
       });
     });
@@ -1330,7 +1447,8 @@ describe("Quotabunga workflows", () => {
     const mine = await t
       .withIdentity(MEMBER_IDENTITY)
       .query(api.games.quotes.currentForMe, {});
-    expect(mine.submission?.scored).toBe(true);
+    // The entry's result is held until its episode is published.
+    expect(mine.submission).toMatchObject({ scored: false, placement: null });
     expect(JSON.stringify(mine)).not.toContain("Private");
   });
 
@@ -1416,6 +1534,11 @@ describe("Quotabunga workflows", () => {
     const { adminId, memberId, otherId } = await seedActors(t);
     await advanceToS3(t);
     const foundation = await seedFoundation(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", foundation.nextEpisodeId, {
+        status: "recording",
+      });
+    });
     const firstId = await insertQuote(t, {
       userId: adminId,
       episodeId: foundation.nextEpisodeId,

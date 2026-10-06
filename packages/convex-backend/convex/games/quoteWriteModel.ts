@@ -1,4 +1,4 @@
-import type { Doc, Id } from "../_generated/dataModel.js";
+import type { Doc } from "../_generated/dataModel.js";
 import type {
   MutationCtx,
   QueryCtx,
@@ -228,29 +228,17 @@ export function validatePlacement(value: number): 1 | 2 | 3 {
 
 export async function resolveQuoteSeasonForEpisode(
   ctx: QuoteReadContext,
-  episodeId: Id<"episodes">,
-  today: string,
+  episode: Doc<"episodes">,
 ): Promise<Doc<"seasons">> {
-  const existing = await ctx.db
-    .query("quoteSubmissions")
-    .withIndex("by_episodeId_and_createdAt", (index) =>
-      index.eq("episodeId", episodeId),
-    )
-    .first();
-  if (existing !== null) {
-    const season = await ctx.db.get("seasons", existing.seasonId);
-    if (season === null) {
-      domainError(
-        "CONFLICT",
-        "Existing quote submission has a missing season.",
-        { details: { quoteSubmissionId: existing._id } },
-      );
-    }
-    return season;
+  if (episode.date === undefined) {
+    domainError(
+      "CONFLICT",
+      "An episode date is required to assign a quote season.",
+    );
   }
   return await resolvePointSeason(ctx, {
     kind: "current",
-    today,
+    today: episode.date,
   });
 }
 

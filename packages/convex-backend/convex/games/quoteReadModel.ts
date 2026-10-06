@@ -60,7 +60,7 @@ export function toQuoteEpisode(
   };
 }
 
-export function toMemberQuoteSubmission(
+function toMemberQuoteSubmission(
   submission: Doc<"quoteSubmissions">,
 ): QuoteMemberSubmission {
   return {
@@ -79,6 +79,27 @@ export function toMemberQuoteSubmission(
     createdAt: submission.createdAt,
     updatedAt: submission.updatedAt,
   };
+}
+
+/**
+ * A listener's own entry. Its placement and whether it scored stay hidden
+ * until the episode is published. Awarding a place also stamps `updatedAt`,
+ * so until then that reads as the creation time; otherwise a listener could
+ * tell an award from the timestamp moving.
+ */
+export function toListenerQuoteSubmission(
+  submission: Doc<"quoteSubmissions">,
+  episode: Doc<"episodes">,
+): QuoteMemberSubmission {
+  const detail = toMemberQuoteSubmission(submission);
+  return isPublishedEpisode(episode)
+    ? detail
+    : {
+        ...detail,
+        placement: null,
+        scored: false,
+        updatedAt: detail.createdAt,
+      };
 }
 
 export async function requireQuoteSubmission(

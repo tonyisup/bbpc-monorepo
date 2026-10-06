@@ -4,16 +4,23 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { hydrateAssignment } from "../assignments/readModel.js";
 import { domainError } from "../lib/errors.js";
+import { isPublishedStatus } from "../lib/transcriptVisibility.js";
 import {
   MAX_ACTIVE_WAGERS_FOR_TOTAL,
   MAX_GAMBLING_ENTRIES_PER_READ,
   MAX_POINTS_FOR_AGGREGATE,
+  assertPointAggregateLimit,
 } from "./limits.js";
 import {
   calculatePointTotal,
   hydratePointCore,
 } from "./pointReadModel.js";
 import { hydrateSeason } from "./readModel.js";
+import {
+  type ResultEmbargo,
+  loadResultEmbargo,
+  visiblePoints,
+} from "./resultEmbargo.js";
 import type {
   gamblingEntryValidator,
   gamblingStatusValidator,
@@ -180,13 +187,43 @@ export function assertGamblingReadLimit(
   }
 }
 
+/**
+ * A wager as a listener may see it. Until the episode is published a settled
+ * wager still reads as locked, and no wager on it shows an award.
+ */
+export function withholdUnpublishedWagerResult(
+  entry: GamblingEntryDetail,
+): GamblingEntryDetail {
+  if (
+    entry.assignment === null ||
+    isPublishedStatus(entry.assignment.episode.status)
+  ) {
+    return entry;
+  }
+  const settled = entry.status === "won" || entry.status === "lost";
+  return {
+    ...entry,
+    status: settled ? "locked" : entry.status,
+    awardPoint: null,
+  };
+}
+
+/**
+ * What a listener can wager right now. Results for an unpublished episode do
+ * not count yet: its awards are left out and its settled wagers keep their
+ * stake reserved, exactly as while the round was locked. The same balance
+ * gates a wager an administrator enters for the listener. Pass an embargo
+ * the caller already loaded for this listener, or for everyone, to reuse it.
+ */
 export async function calculateAvailablePointsForUser(
   ctx: QueryCtx,
   userId: Id<"users">,
   seasonId: Id<"seasons">,
   excludeEntryId?: Id<"gamblingEntries">,
+  loadedEmbargo?: ResultEmbargo,
 ): Promise<number> {
-  const [points, pending, locked] = await Promise.all([
+  const [embargo, points, pending, locked] = await Promise.all([
+    loadedEmbargo ?? loadResultEmbargo(ctx, userId),
     ctx.db
       .query("points")
       .withIndex("by_userId_and_seasonId", (index) =>
@@ -223,11 +260,27 @@ export async function calculateAvailablePointsForUser(
       { details: { limit: MAX_ACTIVE_WAGERS_FOR_TOTAL } },
     );
   }
+  // Checked before held points are taken out, so the limit still covers
+  // every row that was read.
+  assertPointAggregateLimit(points, "Available points");
   let wageredPoints = 0;
   for (const entry of [...pending, ...locked]) {
     if (entry._id !== excludeEntryId) {
       wageredPoints += entry.points;
     }
   }
-  return (await calculatePointTotal(ctx, points)) - wageredPoints;
+  for (const entry of embargo.wagers) {
+    if (
+      entry.userId === userId &&
+      entry.seasonId === seasonId &&
+      entry._id !== excludeEntryId &&
+      (entry.status === "won" || entry.status === "lost")
+    ) {
+      wageredPoints += entry.points;
+    }
+  }
+  return (
+    (await calculatePointTotal(ctx, visiblePoints(points, embargo))) -
+    wageredPoints
+  );
 }
