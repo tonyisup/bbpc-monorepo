@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
 
 from lib import cowork_handoff
 from lib.convex_client import ConvexPipelineClient
@@ -1289,13 +1289,18 @@ def _extract_result(
     states, review_windows = _score_catalog_movies(windows, catalog)
     candidate_limit = int(settings["movie_extractor_candidate_limit"])
     top_states = states[:candidate_limit]
-    accepted_indices, unmatched_titles, llm_used = _rerank_with_llm(
-        stem,
-        episode_meta,
-        top_states,
-        review_windows,
-        settings,
-    )
+    try:
+        accepted_indices, unmatched_titles, llm_used = _rerank_with_llm(
+            stem,
+            episode_meta,
+            top_states,
+            review_windows,
+            settings,
+        )
+    except OpenAIError as exc:
+        # The rerank only confirms borderline candidates; the heuristic scores stand without it.
+        print(f"Movie extractor: LLM rerank failed ({exc}); using heuristic results.")
+        accepted_indices, unmatched_titles, llm_used = set(), [], False
     heuristic_unmatched = _extract_unmatched_titles(review_windows, catalog)
 
     candidates: list[dict[str, Any]] = []
@@ -1557,44 +1562,35 @@ def _extract_with_transcript(
     episode_meta: EpisodeMetadata | None,
     db_movies: list,
 ) -> dict[str, Any]:
-    try:
-        if catalog is not None:
-            # Target extraction to known episode movies.
-            payload = extract_movies_from_segments(
-                _load_transcript(transcript_file),
-                catalog,
-                config=config,
-                stem=stem,
-                episode_meta=episode_meta,
-                ensure_catalog_movies=True,
-            )
-            # Preserve legacy artifact field names while sourcing from Convex.
-            payload["extractor"]["dbEpisodeId"] = episode_meta.id if episode_meta else None
-            payload["extractor"]["dbEpisodeNumber"] = episode_meta.number if episode_meta else None
-            payload["extractor"]["dbEpisodeTitle"] = episode_meta.title if episode_meta else None
-            payload["extractor"]["dbMovieCount"] = len(catalog)
-            payload["extractor"]["dbSources"] = _summarize_db_sources(db_movies)
-        else:
-            # Fallback: full catalog extraction
-            payload = extract_movies_from_transcript(
-                transcript_file,
-                config=config,
-                episode_path=context.get("episode_path"),
-            )
-    except Exception as exc:
-        print(f"Movie extractor error: {exc}")
-        import traceback; traceback.print_exc()
-        payload = {
-            "episode": _episode_payload(stem, None),
-            "extractor": {
-                "version": EXTRACTOR_VERSION,
-                "llmEnabled": bool(settings.get("movie_extractor_llm_enabled")),
-                "llmUsed": False,
-            },
-            "movies": [],
-            "unmatchedTitles": [],
-            "candidates": [],
-        }
+    if catalog is not None:
+        # A whole-catalog fallback widens what can be matched; only real episode
+        # assignments are listed without transcript evidence.
+        has_assignments = any(
+            (em.source if hasattr(em, "source") else em.get("source")) != "catalog_fallback"
+            for em in db_movies
+        )
+        # Target extraction to known episode movies.
+        payload = extract_movies_from_segments(
+            _load_transcript(transcript_file),
+            catalog,
+            config=config,
+            stem=stem,
+            episode_meta=episode_meta,
+            ensure_catalog_movies=has_assignments,
+        )
+        # Preserve legacy artifact field names while sourcing from Convex.
+        payload["extractor"]["dbEpisodeId"] = episode_meta.id if episode_meta else None
+        payload["extractor"]["dbEpisodeNumber"] = episode_meta.number if episode_meta else None
+        payload["extractor"]["dbEpisodeTitle"] = episode_meta.title if episode_meta else None
+        payload["extractor"]["dbMovieCount"] = len(catalog)
+        payload["extractor"]["dbSources"] = _summarize_db_sources(db_movies)
+    else:
+        # Fallback: full catalog extraction
+        payload = extract_movies_from_transcript(
+            transcript_file,
+            config=config,
+            episode_path=context.get("episode_path"),
+        )
     return payload
 
 

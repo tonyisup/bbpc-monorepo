@@ -303,7 +303,8 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 
 def _prepare_vertical_background(image_path: Path) -> Path:
     prepared_path = image_path.with_name(f"{image_path.stem}_vertical.png")
-    if prepared_path.exists():
+    # A regenerated still is newer than its cached crop.
+    if prepared_path.exists() and prepared_path.stat().st_mtime >= image_path.stat().st_mtime:
         return prepared_path
     with Image.open(image_path) as base:
         bw, bh = base.size

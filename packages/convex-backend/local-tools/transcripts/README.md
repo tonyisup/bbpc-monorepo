@@ -63,7 +63,8 @@ import sys
 from dotenv import dotenv_values
 sys.path.insert(0, "apps/pipeline")
 from lib.convex_client import ClerkM2MTokenProvider
-config = dotenv_values(os.path.expanduser("~/bbpc-pipeline-data/.env"))
+data_dir = os.path.expanduser(os.environ.get("BBPC_PIPELINE_DATA_DIR") or "~/bbpc-pipeline-data")
+config = dotenv_values(os.path.join(data_dir, ".env"))
 try:
     token = ClerkM2MTokenProvider(machine_secret_key=config["CLERK_MACHINE_SECRET_KEY"])()
 except Exception:

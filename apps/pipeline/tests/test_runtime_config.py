@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 class RuntimeConfigTests(unittest.TestCase):
@@ -240,6 +241,29 @@ class RuntimeConfigTests(unittest.TestCase):
             get_azure_connection_string()
 
         self.assertIn("AZURE_STORAGE_CONNECTION_STRING", str(ctx.exception))
+
+
+    def test_env_loads_from_the_checkout_then_the_data_directory_it_selects(self):
+        from lib import runtime_config
+
+        checkout = Path(self.temp_dir.name) / "checkout"
+        shared = Path(self.temp_dir.name) / "shared"
+        checkout.mkdir()
+        shared.mkdir()
+        (checkout / ".env").write_text(
+            f"BBPC_PIPELINE_DATA_DIR={shared}\nBBPC_TEST_BOTH=checkout\n", encoding="utf-8"
+        )
+        (shared / ".env").write_text("BBPC_TEST_BOTH=shared\nBBPC_TEST_SHARED_ONLY=shared\n", encoding="utf-8")
+        for name in ("BBPC_PIPELINE_DATA_DIR", "BBPC_TEST_BOTH", "BBPC_TEST_SHARED_ONLY"):
+            os.environ.pop(name, None)
+
+        with mock.patch.object(runtime_config, "PIPELINE_ROOT", checkout), mock.patch.object(
+            runtime_config, "_CONFIG_ENV_LOADED", False
+        ):
+            runtime_config._ensure_env_loaded()
+
+        self.assertEqual(os.environ["BBPC_TEST_SHARED_ONLY"], "shared")
+        self.assertEqual(os.environ["BBPC_TEST_BOTH"], "checkout")
 
 
 if __name__ == "__main__":

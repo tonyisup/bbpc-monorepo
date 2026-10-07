@@ -163,6 +163,7 @@ def transcribe_podcast(audio_path, output_json=None):
         interrupted = True
         print("\nInterrupted. Saving partial transcript...")
     except Exception as e:
+        interrupted = True
         print(f"\nCRITICAL ERROR during transcription: {e}")
         print("Saving partial transcript...")
     finally:

@@ -503,8 +503,11 @@ def run(
             except OSError:
                 pass
 
-    with out_path.open("w") as f:
+    # Write beside the target and swap it in, so a failed write keeps the previous transcript.
+    tmp_path = out_path.with_name(f"{out_path.name}.tmp")
+    with tmp_path.open("w") as f:
         json.dump(transcript, f, indent=2)
+    os.replace(tmp_path, out_path)
 
     final_timestamp = transcript[-1]["end"] if transcript else 0.0
     logger.info(

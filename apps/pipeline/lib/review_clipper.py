@@ -148,15 +148,14 @@ def run(context: Dict[str, Any]) -> None:
             slug = _slugify(title)
             output_name = f"{slug}-{idx:02d}.m4a"
             output_path = output_dir / output_name
-            if output_path.exists():
-                continue
-            try:
-                _render_clip(episode_audio, output_path, window["start"], window["end"])
-            except subprocess.CalledProcessError as exc:
-                err = (exc.stderr or exc.stdout or str(exc)).strip()
-                print(f"  Failed review clip for '{title}' [{window['start']:.2f}-{window['end']:.2f}]: {err}")
-                continue
-            created_count += 1
+            if not output_path.exists():
+                try:
+                    _render_clip(episode_audio, output_path, window["start"], window["end"])
+                except subprocess.CalledProcessError as exc:
+                    err = (exc.stderr or exc.stdout or str(exc)).strip()
+                    print(f"  Failed review clip for '{title}' [{window['start']:.2f}-{window['end']:.2f}]: {err}")
+                    continue
+                created_count += 1
             manifest["clips"].append(
                 {
                     "movieTitle": title,

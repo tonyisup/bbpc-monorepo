@@ -18,7 +18,7 @@ transcribe → import_transcript → movies → review_clip → diarize → pars
 | 3 | `movies` | `lib/movie_extractor.py` | Heuristic + LLM movie extraction from transcript evidence windows |
 | 4 | `review_clip` | `lib/review_clipper.py` | Cuts audio clips around movie-review evidence windows |
 | 5 | `diarize` | `lib/diarizer.py` | Speaker identification (placeholder) |
-| 6 | `parse` | `lib/parser.py` | GPT-5.6 Terra SEO analysis: titles, descriptions, keywords, clip candidates |
+| 6 | `parse` | `lib/parser.py` | LLM SEO analysis (`settings.seo_model`): titles, descriptions, keywords, clip candidates |
 | 7 | `clip` | `lib/clipper.py` | Renders vertical 9:16 video with AI backgrounds, Ken Burns zoom, ASS subtitles |
 | 8 | `thumbnail` | `lib/thumbnail.py` | Generates 1920x1920 episode thumbnail from reviewed movie posters + BBPC logo |
 | 9 | `publish` | `lib/publisher.py` | Idempotently publishes SEO metadata to Convex |
@@ -46,9 +46,11 @@ directory; `episodes/20260405.mp3` in the examples means that file inside it.
 The pipeline refuses to start when the directory is missing rather than begin an
 empty one and reprocess every episode.
 
-`.env` is read from the first of `./.env`, `apps/pipeline/.env`, and
-`$BBPC_PIPELINE_DATA_DIR/.env`. Keeping it in the data directory shares one copy
-across worktrees.
+`.env` is read from `apps/pipeline/.env` and then `$BBPC_PIPELINE_DATA_DIR/.env`;
+both are loaded when both exist. A variable already set in the shell, or by the
+first file, is never replaced, so `apps/pipeline/.env` can set
+`BBPC_PIPELINE_DATA_DIR` to choose the second. Neither depends on the working
+directory. Keeping secrets in the data directory shares one copy across worktrees.
 
 ### Run full pipeline for an episode
 
@@ -150,7 +152,7 @@ generation remains separately configured through `settings.visuals_provider`.
 
 For reasoning-capable SEO models, `settings.seo_max_output_tokens` reserves a
 completion budget for the full SEO/clip JSON payload (the shipped value is
-`8192`), and `settings.seo_reasoning_effort` is forwarded to OpenRouter (the
+`65536`), and `settings.seo_reasoning_effort` is forwarded to OpenRouter (the
 shipped value is `low`). Keep the larger budget when the response includes
 `candidateClips`, `clipAnalysis`, or `highlights`; a too-small budget can be
 consumed by hidden reasoning before the model emits any JSON.

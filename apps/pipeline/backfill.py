@@ -294,8 +294,12 @@ def backfill(date_after=None, date_before=None, dry_run=False):
             episode_path = EPISODES_DIR / filename
             if not episode_path.exists():
                 blob_client = container_client.get_blob_client(filename)
-                with open(episode_path, "wb") as f:
+                # Download beside the target; an interrupted run must not leave a
+                # partial file that the existence check then skips.
+                partial_path = episode_path.with_name(f"{episode_path.name}.part")
+                with open(partial_path, "wb") as f:
                     f.write(blob_client.download_blob().readall())
+                partial_path.replace(episode_path)
             episode_progress.advance(episode_task)
             live.update(make_layout(overall_progress, episode_progress, table))
 

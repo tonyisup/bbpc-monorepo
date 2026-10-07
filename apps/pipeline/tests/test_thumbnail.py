@@ -302,5 +302,18 @@ class ThumbnailTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+    def test_text_only_thumbnail_creates_a_missing_output_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "thumbnails" / "thumb.png"
+            with mock.patch("lib.thumbnail._fetch_movie_posters", return_value={}):
+                result = thumbnail.generate_thumbnail(
+                    movie_ids=["fake-id"],
+                    output_path=out,
+                    config={"settings": {"brand_logo_enabled": False}},
+                )
+            self.assertTrue(result)
+            self.assertTrue(out.is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

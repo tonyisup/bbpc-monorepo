@@ -2,25 +2,55 @@
 """LLM-based extraction for BBPC movie extractor."""
 
 import json
-import re
-import sys
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-lib_path = Path(__file__).parent
-if str(lib_path) not in sys.path:
-    sys.path.insert(0, str(lib_path))
+from openai import OpenAI
 
-import movie_extractor
-import runtime_config
-runtime_config._ensure_env_loaded()
+from lib import movie_extractor, runtime_config
 
 _normalize_basic = movie_extractor._normalize_basic
 _llm_available = movie_extractor._llm_available
 resolve_pipeline_llm_endpoints = runtime_config.resolve_pipeline_llm_endpoints
-from openai import OpenAI
 
 LLM_MODULE_LOADED = True
+
+
+def _token_run_start(longer: tuple, shorter: tuple) -> int | None:
+    """Index where *shorter* appears as consecutive whole words in *longer*."""
+    for start in range(len(longer) - len(shorter) + 1):
+        if longer[start:start + len(shorter)] == shorter:
+            return start
+    return None
+
+
+def _best_catalog_match(norm: str, catalog_by_norm: dict, *, ignore_numbers: bool = False):
+    """Return the catalog entry for a normalized title: exact, else the closest whole-word match.
+
+    A partial match needs the shorter title to have at least two words and to
+    appear as consecutive whole words in the longer one, so "alien" never
+    matches "aliens" and a one-word title never matches a longer one. With
+    *ignore_numbers*, titles that are equal apart from standalone numbers also
+    match. The candidate sharing the most words wins, then a prefix, then the
+    closest length.
+    """
+    exact = catalog_by_norm.get(norm)
+    if exact:
+        return exact
+    tokens = tuple(norm.split())
+    bare = tuple(token for token in tokens if not token.isdigit())
+    best, best_rank = None, None
+    for key, entry in catalog_by_norm.items():
+        key_tokens = tuple(key.split())
+        rank = None
+        shorter, longer = sorted((tokens, key_tokens), key=len)
+        start = _token_run_start(longer, shorter) if len(shorter) >= 2 else None
+        if start is not None:
+            rank = (len(shorter), start == 0, len(shorter) - len(longer))
+        elif ignore_numbers and bare and bare == tuple(t for t in key_tokens if not t.isdigit()):
+            rank = (len(bare), False, -abs(len(tokens) - len(key_tokens)))
+        if rank is not None and (best_rank is None or rank > best_rank):
+            best, best_rank = entry, rank
+    return best
 
 
 def _build_prompt(episode_label, segments, catalog_size):
@@ -186,13 +216,7 @@ def _extract_llm(episode_stem, episode_meta, segments, catalog, settings):
             if norm in seen:
                 continue
 
-            ci = catalog_by_norm.get(norm)
-            if not ci:
-                for nk, vc in catalog_by_norm.items():
-                    if norm.startswith(nk) or nk.startswith(norm) or (len(norm) > 5 and norm in nk):
-                        ci = vc
-                        break
-
+            ci = _best_catalog_match(norm, catalog_by_norm)
             if not ci:
                 continue
 
@@ -326,28 +350,8 @@ def extract_movies_and_unmatched_with_llm_full_transcript(
                 continue
 
             norm = _normalize_basic(raw_title)
-            ci = catalog_by_norm.get(norm)
-            if not ci:
-                # Fuzzy: try stripping sequel numbers and re-matching
-                norm_no_nums = _normalize_basic(
-                    re.sub(r'\b\d+\b', '', raw_title).strip()
-                )
-                for nk, vc in catalog_by_norm.items():
-                    # Direct substring match
-                    if norm.startswith(nk) or nk.startswith(norm):
-                        ci = vc
-                        break
-                    # Match without sequel numbers
-                    nk_no_nums_norm = _normalize_basic(
-                        re.sub(r'\b\d+\b', '', vc["title"]).strip()
-                    )
-                    if norm_no_nums == nk_no_nums_norm:
-                        ci = vc
-                        break
-                    # Partial overlap for long titles
-                    if len(norm) > 5 and (norm in nk or nk in norm):
-                        ci = vc
-                        break
+            # Sequel numbers are often added or dropped in speech.
+            ci = _best_catalog_match(norm, catalog_by_norm, ignore_numbers=True)
             if not ci:
                 continue
 

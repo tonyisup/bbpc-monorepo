@@ -194,5 +194,22 @@ class MovieExtractorLlmExtTests(unittest.TestCase):
         self.assertEqual(len(merged[0]["evidence"]), 2)
 
 
+    def test_best_catalog_match_uses_whole_words_and_the_closest_title(self):
+        lookup = {
+            "aliens": {"movie_id": "aliens"},
+            "friday the 13th": {"movie_id": "friday-1"},
+            "friday the 13th part 2": {"movie_id": "friday-2"},
+            "ready or not here i come": {"movie_id": "ready-2"},
+        }
+        match = movie_extractor_llm_ext._best_catalog_match
+
+        self.assertIsNone(match("alien", lookup))
+        self.assertIsNone(match("friday", lookup))
+        self.assertEqual(match("friday the 13th part 2 the body count continues", lookup)["movie_id"], "friday-2")
+        self.assertEqual(match("the friday the 13th", lookup)["movie_id"], "friday-1")
+        self.assertIsNone(match("ready or not 2 here i come", lookup))
+        self.assertEqual(match("ready or not 2 here i come", lookup, ignore_numbers=True)["movie_id"], "ready-2")
+
+
 if __name__ == "__main__":
     unittest.main()

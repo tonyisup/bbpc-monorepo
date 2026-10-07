@@ -54,4 +54,4 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 ## Maintenance
 - Ensure `.env` is used for all secrets.
 - Monitor OpenRouter and direct OpenAI image usage for cost control.
-- `data/` is gitignored — use `git add -f` for specific artifacts.
+- Episodes, transcripts, and output live in `BBPC_PIPELINE_DATA_DIR`, outside the repository; never commit them.

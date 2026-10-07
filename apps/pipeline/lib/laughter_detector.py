@@ -111,9 +111,10 @@ def detect_laughter(
     merged: List[Dict[str, Any]] = []
     centroid_med = 0.0
     rms_med = 0.0
+    features = _audio_features(y=y, sr=sr, hop_length=hop_length)
     for pass_idx, pass_params in enumerate(fallback_passes):
         merged, pass_diag = _run_detection_pass(
-            y=y,
+            features=features,
             sr=sr,
             hop_length=hop_length,
             params=pass_params,
@@ -162,31 +163,44 @@ def detect_laughter(
     return clips
 
 
+def _audio_features(*, y: np.ndarray, sr: int, hop_length: int) -> Dict[str, np.ndarray]:
+    """Compute what does not depend on detection parameters, once for every pass."""
+    import librosa
+
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
+    return {
+        "onset_frames": librosa.frames_to_time(
+            np.arange(len(onset_env)), sr=sr, hop_length=hop_length
+        ),
+        # Sorted so each window's onsets can be counted by binary search.
+        "onset_times": np.sort(
+            np.asarray(_detect_onset_times(y=y, sr=sr, hop_length=hop_length), dtype=float)
+        ),
+        "centroid": librosa.feature.spectral_centroid(y=y, sr=sr, hop_length=hop_length)[0],
+        "rms": librosa.feature.rms(y=y, hop_length=hop_length)[0],
+        "spectrum": np.abs(librosa.stft(y, hop_length=hop_length)),
+        "freqs": librosa.fft_frequencies(sr=sr),
+    }
+
+
 def _run_detection_pass(
     *,
-    y: np.ndarray,
+    features: Dict[str, np.ndarray],
     sr: int,
     hop_length: int,
     params: LaughterDetectionParams,
     max_detections: int,
 ) -> tuple[List[Dict[str, Any]], Dict[str, float]]:
     """Run one laughter-detection pass with a single parameter set."""
-    import librosa
-
-    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop_length)
-    onset_frames = librosa.frames_to_time(
-        np.arange(len(onset_env)), sr=sr, hop_length=hop_length
-    )
-    onset_times = _detect_onset_times(y=y, sr=sr, hop_length=hop_length)
-    centroid = librosa.feature.spectral_centroid(
-        y=y, sr=sr, hop_length=hop_length
-    )[0]
+    onset_frames = features["onset_frames"]
+    onset_times = features["onset_times"]
+    centroid = features["centroid"]
     centroid_med = float(np.median(centroid))
-    rms = librosa.feature.rms(y=y, hop_length=hop_length)[0]
+    rms = features["rms"]
     rms_med = float(np.median(rms))
 
-    S = np.abs(librosa.stft(y, hop_length=hop_length))
-    freqs = librosa.fft_frequencies(sr=sr)
+    S = features["spectrum"]
+    freqs = features["freqs"]
     laugh_band_mask = (freqs >= params.laughter_fmin) & (freqs <= params.laughter_fmax)
     speech_band_mask = (freqs < params.laughter_fmin) | (freqs > params.laughter_fmax)
     laugh_energy = np.sum(S[laugh_band_mask], axis=0)
@@ -198,13 +212,15 @@ def _run_detection_pass(
     step = max(1, window_frames // 2)
     laugh_candidates = []
 
-    for i in range(0, max(1, len(onset_env) - window_frames), step):
-        window_ends = min(i + window_frames, len(onset_env))
+    for i in range(0, max(1, len(onset_frames) - window_frames), step):
+        window_ends = min(i + window_frames, len(onset_frames))
         if window_ends <= i:
             continue
-        window_onsets = sum(
-            1 for t in onset_times if onset_frames[i] <= t < onset_frames[window_ends - 1]
+        # Onsets t with onset_frames[i] <= t < onset_frames[window_ends - 1].
+        first, past_last = np.searchsorted(
+            onset_times, [onset_frames[i], onset_frames[window_ends - 1]], side="left"
         )
+        window_onsets = int(past_last - first)
         window_duration_sec = (window_ends - i) * hop_length / sr
         onset_rate = window_onsets / max(window_duration_sec, 0.01)
         avg_centroid = float(np.mean(centroid[i:window_ends]))

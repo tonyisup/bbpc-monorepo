@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -366,6 +367,25 @@ class ClipperLocalVisualsTests(unittest.TestCase):
         segment = {"start": 0.0, "end": 22.4, "text": " time,", "words": [{"start": 0.0, "end": 22.4, "text": "time,"}]}
         captions = self._dialogues(clipper._build_ass_subtitles([segment], start=0.0, end=30.0))
         self.assertEqual(captions, [("0:00:00.00", "0:00:01.50", "TIME,")])
+
+
+    def test_prepare_vertical_background_recrops_only_a_newer_still(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            still = Path(temp_dir) / "01-clip.png"
+            Image.new("RGB", (64, 64), (255, 0, 0)).save(still)
+            prepared = clipper._prepare_vertical_background(still)
+            first_written = prepared.stat().st_mtime_ns
+
+            clipper._prepare_vertical_background(still)
+            self.assertEqual(prepared.stat().st_mtime_ns, first_written)
+
+            Image.new("RGB", (64, 64), (0, 0, 255)).save(still)
+            newer = prepared.stat().st_mtime + 10
+            os.utime(still, (newer, newer))
+            clipper._prepare_vertical_background(still)
+
+            with Image.open(prepared) as crop:
+                self.assertEqual(crop.convert("RGB").getpixel((0, 0)), (0, 0, 255))
 
 
 if __name__ == "__main__":

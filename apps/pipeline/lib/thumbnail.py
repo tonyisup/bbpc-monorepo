@@ -333,6 +333,8 @@ def generate_thumbnail(
 
     Returns True if the thumbnail was written successfully.
     """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     # Fetch poster URLs
     poster_map = _fetch_movie_posters(movie_ids, convex_client)
     if not poster_map:
@@ -381,7 +383,6 @@ def generate_thumbnail(
     canvas = _add_title_text(canvas, episode_title, movie_titles or [])
 
     # Write output
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(output_path, format="PNG", optimize=True)
     logger.info("Thumbnail: wrote %s (%d posters)", output_path.name, len(posters))
     return True

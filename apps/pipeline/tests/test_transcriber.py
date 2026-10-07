@@ -1,6 +1,8 @@
 import json
 import shutil
 import subprocess
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -176,3 +178,23 @@ def test_coverage_gate_rejects_out_of_order_segment_starts():
     transcript = [{"start": 5, "end": 6}, {"start": 4, "end": 99}]
     with pytest.raises(RuntimeError, match="out of order"):
         transcriber._require_complete_transcript(transcript, 100)
+
+
+def test_failed_write_keeps_the_previous_transcript(tmp_path, monkeypatch):
+    audio = tmp_path / "audio.mp3"
+    audio.write_bytes(b"synthetic")
+    output = tmp_path / "transcript.json"
+    previous = [{"start": 0, "end": 3, "text": "Earlier partial"}]
+    output.write_text(json.dumps(previous))
+    segments = iter([SimpleNamespace(start=0, end=10, text="New")])
+    model = SimpleNamespace(
+        transcribe=lambda *a, **k: (segments, SimpleNamespace(language="en", language_probability=1))
+    )
+    monkeypatch.setattr(transcriber, "_get_model", lambda *_: model)
+    monkeypatch.setattr(transcriber, "_probe_audio_duration", lambda *_: 10)
+    monkeypatch.setattr(transcriber.json, "dump", Mock(side_effect=OSError("disk full")))
+
+    with pytest.raises(OSError, match="disk full"):
+        transcriber.run(str(audio), output_path=str(output), resume=False, engine="faster-whisper")
+
+    assert json.loads(output.read_text()) == previous

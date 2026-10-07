@@ -22,26 +22,23 @@ def _ensure_env_loaded() -> None:
     global _CONFIG_ENV_LOADED
     if _CONFIG_ENV_LOADED:
         return
-    # Try multiple .env locations
-    env_paths = [
-        Path(".env"),
-        Path("lib/.env"),
-        PIPELINE_ROOT / ".env",
-        data_dir() / ".env",
-    ]
-    for env_path in env_paths:
-        if env_path.exists():
+    # The checkout's .env loads first so it can set BBPC_PIPELINE_DATA_DIR, which
+    # then selects the shared one. A value that is already set is never replaced.
+    loaded = False
+    for locate in (lambda: PIPELINE_ROOT / ".env", lambda: data_dir() / ".env"):
+        env_path = locate()
+        if env_path.is_file():
             load_dotenv(env_path)
             print(f"[ENV] Loaded {env_path}")
-            break
-    else:
+            loaded = True
+    if not loaded:
         print("[ENV] WARNING: No .env file found")
-    
+
     _CONFIG_ENV_LOADED = True
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Dict[str, Any]:
-    _ensure_env_loaded()  # .env may set BBPC_PIPELINE_DATA_DIR.
+    _ensure_env_loaded()  # apps/pipeline/.env may set BBPC_PIPELINE_DATA_DIR.
     config_path = Path(path).expanduser()
     with config_path.open(encoding="utf-8") as f:
         return resolve_data_paths(json.load(f))

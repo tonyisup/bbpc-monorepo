@@ -5,8 +5,8 @@
 #   - once Cowork has written its files, the next run resumes from `movies`
 set -uo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")"
-source venv/bin/activate
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+source venv/bin/activate || exit 1
 
 python pipeline.py "$@"
 status=$?

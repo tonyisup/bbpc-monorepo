@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from openai import OpenAIError
+
 from lib import movie_extractor
 
 
@@ -328,6 +330,59 @@ class MovieExtractorTests(unittest.TestCase):
 
             with self.assertRaises(FileNotFoundError):
                 movie_extractor.run(context)
+
+
+    _SKETCH_SEGMENTS = [
+        {"start": 10.0, "end": 18.0, "text": "my homework i assign sketch 2025 when a young girl's sketchbook opens a portal"},
+        {"start": 18.0, "end": 27.0, "text": "i give sketch a dollar"},
+    ]
+
+    def test_rerank_failure_keeps_heuristic_results(self):
+        catalog = _catalog(("movie-1", "Sketch", 2025))
+
+        with mock.patch.object(movie_extractor, "_rerank_with_llm", side_effect=OpenAIError("provider down")):
+            payload = movie_extractor.extract_movies_from_segments(
+                self._SKETCH_SEGMENTS, catalog, config=self.base_config
+            )
+
+        self.assertEqual([movie["title"] for movie in payload["movies"]], ["Sketch"])
+        self.assertFalse(payload["extractor"]["llmUsed"])
+
+    def test_catalog_fallback_rows_are_matched_but_not_listed_as_assigned(self):
+        fallback = [
+            self._pipeline_movie("movie-1", "Sketch", 2025, "catalog_fallback"),
+            self._pipeline_movie("movie-2", "Mystery Road", 2023, "catalog_fallback"),
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            transcript_path = Path(temp_dir) / "20260101.json"
+            transcript_path.write_text(json.dumps(self._SKETCH_SEGMENTS), encoding="utf-8")
+
+            payload = movie_extractor._extract_with_transcript(
+                {},
+                transcript_path,
+                self.base_config,
+                movie_extractor._settings(self.base_config),
+                "20260101",
+                movie_extractor._build_catalog_from_episode_movies(fallback),
+                None,
+                fallback,
+            )
+
+        self.assertEqual([movie["title"] for movie in payload["movies"]], ["Sketch"])
+        self.assertEqual(payload["extractor"]["dbSources"], {"catalog_fallback": 2})
+
+    def test_extraction_failures_are_not_turned_into_an_empty_artifact(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            transcript_path = Path(temp_dir) / "20260101.json"
+            transcript_path.write_text(json.dumps(self._SKETCH_SEGMENTS), encoding="utf-8")
+
+            with mock.patch.object(
+                movie_extractor, "extract_movies_from_transcript", side_effect=RuntimeError("Convex unavailable")
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Convex unavailable"):
+                    movie_extractor._extract_with_transcript(
+                        {}, transcript_path, self.base_config, {}, "20260101", None, None, []
+                    )
 
 
 if __name__ == "__main__":
