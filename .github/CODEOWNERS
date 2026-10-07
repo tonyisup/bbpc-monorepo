@@ -11,3 +11,6 @@
 /apps/web/ @tonyisup
 /apps/admin/ @tonyisup
 /apps/recording/ @tonyisup
+
+# Local operator tooling.
+/apps/pipeline/ @tonyisup

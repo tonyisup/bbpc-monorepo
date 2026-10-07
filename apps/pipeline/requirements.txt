@@ -1,0 +1,21 @@
+faster-whisper
+parakeet-mlx; sys_platform == "darwin" and platform_machine == "arm64"
+moviepy
+pydub
+librosa>=0.11,<0.12
+openai
+google-genai>=1.0.0
+requests
+tqdm
+python-dotenv
+rich
+azure-storage-blob
+clerk-backend-api==6.0.1
+mutagen
+diffusers
+transformers
+pillow>=11.3
+torch>=2.6
+accelerate
+sentencepiece
+pyannote.audio>=3.1

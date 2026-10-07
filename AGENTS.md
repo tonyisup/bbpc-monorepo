@@ -2,8 +2,12 @@
 
 - Use Node.js 22 or newer and manage dependencies from the repository root with pnpm
   workspaces. Do not create workspace-local lockfiles.
-- Keep the three applications independently deployable. Shared application code should
-  become an explicit package rather than a cross-app relative import.
+- Keep the three web applications independently deployable. Shared application code
+  should become an explicit package rather than a cross-app relative import.
+- `apps/pipeline` is a Python tool run by hand, not a pnpm workspace package: do not add
+  a `package.json` there. Test it from that directory with `python -m pytest tests`.
+  Its episodes, transcripts, output, and `.env` live outside the checkout in
+  `BBPC_PIPELINE_DATA_DIR`; never copy them into the repository.
 - Before changing anything under `packages/convex-backend/convex`, read
   `packages/convex-backend/convex/_generated/ai/guidelines.md` in full.
 - Before changing the Next.js 16 recording app, read the relevant installed guide under

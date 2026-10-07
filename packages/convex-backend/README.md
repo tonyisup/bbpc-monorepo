@@ -1,7 +1,7 @@
 # BBPC Convex
 
 Shared Convex backend and workspace API contract for `bbpc`, `bbpc-admin`, and
-`bbpc-recording`. `bbpc-pipeline` consumes the deployed service API.
+`bbpc-recording`. The pipeline in `apps/pipeline` consumes the deployed service API.
 
 The guarded SQL production clone remains the migration source of truth until cutover.
 Production-derived extracts, staging rows, backups, checkpoints, and reconciliation

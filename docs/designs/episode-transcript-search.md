@@ -8,7 +8,7 @@ Workflow: office-hours
 
 Listeners can search words heard in an episode on the public website and see the matching passage and timestamp. The user selected this over topic/semantic search. Admin search is outside this change.
 
-Transcript producer: the `bbpc-pipeline` repository at `/Users/juicebox/src/bbpc/bbpc-pipeline`. Pipeline-relative paths below refer to that repository; application/backend paths refer to this monorepo.
+Transcript producer: the pipeline, which was the separate `bbpc-pipeline` repository when this was written and is now `apps/pipeline`. Pipeline-relative paths below are relative to that directory; its transcripts live in `BBPC_PIPELINE_DATA_DIR`.
 
 ## Current behavior and evidence
 
