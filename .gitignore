@@ -1,9 +1,11 @@
 # Legacy source repositories retained during the monorepo transition.
-# Their full histories are imported under apps/ and packages/.
+# Their full histories are imported under apps/ and packages/; the pipeline
+# came in as a snapshot.
 /bbpc/
 /bbpc-admin/
 /bbpc-convex/
 /bbpc-recording/
+/bbpc-pipeline/
 
 # Other sibling projects are outside this monorepo's current scope.
 /audacity/
@@ -11,7 +13,6 @@
 /bbpc-autoresearch/
 /bbpc-cleanup/
 /bbpc-db/
-/bbpc-pipeline/
 
 # Root workspace artifacts.
 node_modules/

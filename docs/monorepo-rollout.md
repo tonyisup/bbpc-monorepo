@@ -52,6 +52,25 @@ superseded application repositories are archived on GitHub after verification. T
 former backend repository became the canonical monorepo, and its legacy `master`
 branch remains available as a rollback source.
 
+## Pipeline import (2026-10-07)
+
+The Python episode pipeline moved from the local `bbpc-pipeline` repository to
+`apps/pipeline` as a snapshot of its tip, `be57612`. Its history was deliberately left
+behind: that repository was never pushed, its earliest commits contain credentials, and
+this repository is public. The sibling checkout remains the local history archive and
+rollback source and must not be published as it stands.
+
+The snapshot omits the tracked runtime logs, a stray test image, the committed
+`pyvenv.cfg`, stale debugging notes, one-off scratch scripts, and both clip-review
+interfaces. The pipeline is not a pnpm workspace package and is never deployed. It
+resolves the transcript importer from this checkout instead of a sibling path, and its
+episodes, transcripts, output, and `.env` live outside the repository in
+`BBPC_PIPELINE_DATA_DIR`. A Pipeline workflow runs its pytest suite on macOS when
+`apps/pipeline` changes; it is not a required check.
+
+To roll back, run the pipeline from the sibling checkout with its own data directories
+restored.
+
 ## CI and deployment ownership
 
 The canonical public repository is

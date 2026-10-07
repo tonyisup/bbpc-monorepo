@@ -1,0 +1,14 @@
+# What the test suite imports. The models and audio stack in requirements.txt
+# are only needed to run the pipeline itself.
+pytest
+requests
+python-dotenv
+openai
+httpx
+pillow
+numpy
+azure-storage-blob
+rich
+clerk-backend-api
+librosa
+mutagen
