@@ -8,10 +8,7 @@ import type { ConvexReactClient } from "convex/react";
 
 import {
   Check,
-  ChevronDown,
-  ChevronUp,
   Film,
-  Info,
   Loader2,
   Mic,
   Play,
@@ -27,13 +24,20 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FC,
+  type ReactNode,
 } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
 import RatingIcon from "@/components/RatingIcon";
 import { ConvexAssignmentGamblingBoard } from "@/components/ConvexAssignmentGamblingBoard";
+import {
+  GameSheet,
+  GameSheetHeader,
+  GameSheetRow,
+} from "@/components/GameSheet";
 import { VoiceVisualizer } from "@/components/common/VoiceVisualizer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -109,9 +113,11 @@ function findGuessForHost(guesses: ConvexPredictionGuess[], hostId: string) {
 function ConvexAssignmentVoiceMessages({
   assignmentId,
   isVisible,
+  title,
 }: {
   assignmentId: string;
   isVisible: boolean;
+  title: string;
 }) {
   const convex = useConvex();
   const [messages, setMessages] = useState<AssignmentAudioMessage[]>([]);
@@ -254,9 +260,9 @@ function ConvexAssignmentVoiceMessages({
   const busy = isSubmitting || isUploading;
 
   return (
-    <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
+    <div className="space-y-3 rounded-lg border border-white/10 bg-[color:var(--bbpc-surface-raised)] p-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-bold text-white">Assignment voice message</p>
+        <p className="text-sm font-bold text-white">{title}</p>
         <span className="text-xs text-zinc-400">
           {isLoading ? "Loading…" : `${messages.length} saved`}
         </span>
@@ -303,28 +309,22 @@ function ConvexAssignmentVoiceMessages({
         </Alert>
       ) : null}
 
-      <div className="flex min-h-24 items-center justify-center rounded-md bg-white/[0.04] p-3 text-center">
-        {isRecording ? (
-          <div className="flex flex-col items-center">
-            <VoiceVisualizer
-              volume={volume}
-              isRecording={isRecording}
-              className="mb-2"
-            />
-            <span className="font-bold text-white">
-              Recording {formatTime(recordingTime)}
-            </span>
-          </div>
-        ) : audioBlob !== null ? (
-          <span className="text-sm text-zinc-300">
-            Ready to send · {formatTime(recordingTime)}
+      {isRecording ? (
+        <div className="flex flex-col items-center rounded-md bg-white/[0.04] p-3 text-center">
+          <VoiceVisualizer
+            volume={volume}
+            isRecording={isRecording}
+            className="mb-2"
+          />
+          <span className="font-bold text-white">
+            Recording {formatTime(recordingTime)}
           </span>
-        ) : (
-          <span className="text-sm text-zinc-400">
-            Record a short message for the episode.
-          </span>
-        )}
-      </div>
+        </div>
+      ) : audioBlob !== null ? (
+        <p className="rounded-md bg-white/[0.04] p-3 text-center text-sm text-zinc-300">
+          Ready to send · {formatTime(recordingTime)}
+        </p>
+      ) : null}
 
       {isRecording ? (
         <Button
@@ -377,9 +377,20 @@ function ConvexAssignmentVoiceMessages({
           </Button>
         </div>
       ) : (
-        <Button type="button" className="w-full" onClick={startRecording}>
-          <Mic className="mr-2 h-4 w-4" /> Record voice message
-        </Button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={startRecording}
+          >
+            <Mic className="mr-2 h-4 w-4" />
+            {messages.length > 0 ? "Record another" : "Record voice message"}
+          </Button>
+          <span className="text-sm text-zinc-400">
+            Record a short message for the episode.
+          </span>
+        </div>
       )}
 
       {errorMessage !== null ? (
@@ -391,16 +402,61 @@ function ConvexAssignmentVoiceMessages({
   );
 }
 
+// One column for the host, then one per rating. The rating count comes from
+// the season's scale, so it is passed as a custom property.
+const scorecardGrid =
+  "grid grid-cols-[3.75rem_repeat(var(--ratings),minmax(0,1fr))] items-center gap-1.5 px-4 sm:grid-cols-[minmax(8.75rem,1.15fr)_repeat(var(--ratings),minmax(0,1fr))] sm:px-6";
+
+const pickedTone: Record<number, string> = {
+  1: "border-red-500/55 bg-red-500/15",
+  2: "border-orange-500/55 bg-orange-500/15",
+  3: "border-yellow-500/55 bg-yellow-500/15",
+  4: "border-green-500/55 bg-green-500/15",
+};
+
+// RatingIcon only draws the four standard ratings; any other value is shown
+// by name instead, on two lines where a phone cell is narrow.
+const namedCell =
+  "line-clamp-2 px-1 text-center text-[0.6875rem] leading-tight sm:text-sm";
+
+function hasRatingIcon(value: number) {
+  return value >= 1 && value <= 4;
+}
+
+function formatCountdown(seconds: number) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** A rating's icon and name, as shown in a cell the listener has picked. */
+function PickedRating({ rating }: { rating: ConvexPredictionRating }) {
+  const hasIcon = hasRatingIcon(rating.value);
+  return (
+    <>
+      {hasIcon ? <RatingIcon value={rating.value} /> : null}
+      <span className="sr-only">{rating.name}</span>
+      <span
+        aria-hidden="true"
+        className={hasIcon ? "hidden sm:inline" : namedCell}
+      >
+        {rating.name}
+      </span>
+    </>
+  );
+}
+
 export function ConvexPredictionGame({
   episodeId,
   assignments,
   episodeStatus: initialEpisodeStatus,
   searchQuery = "",
+  children,
 }: {
   episodeId: string;
   assignments: PredictionGameAssignment[];
   episodeStatus: string;
   searchQuery?: string;
+  /** Further rows of the same sheet, shown after the movies. */
+  children?: ReactNode;
 }) {
   const convex = useConvex();
   const liveWindow = useQuery(api.episodes.public.predictionWindow, {
@@ -432,16 +488,6 @@ export function ConvexPredictionGame({
   const [savingHosts, setSavingHosts] = useState<Record<string, string | null>>(
     {}
   );
-  const [openRequest, setOpenRequest] = useState({
-    assignmentId: "",
-    sequence: 0,
-  });
-  const openAssignment = (assignmentId: string) => {
-    setOpenRequest((current) => ({
-      assignmentId,
-      sequence: current.sequence + 1,
-    }));
-  };
   const loadGenerationRef = useRef(0);
   const assignmentIds = useMemo(
     () => assignments.map((assignment) => assignment.id),
@@ -475,58 +521,79 @@ export function ConvexPredictionGame({
     void reload();
   }, [reload]);
 
+  // Every state keeps the same three slots, so the rows passed as children
+  // stay mounted while the picks load.
+  const sheet = (
+    content: ReactNode,
+    status: ReactNode = null,
+    footer: ReactNode = null
+  ) => (
+    <GameSheet aria-label="Listener game">
+      <GameSheetHeader title="Guess the hosts’ ratings">
+        {status}
+      </GameSheetHeader>
+      {content}
+      {children}
+      {footer}
+    </GameSheet>
+  );
+
   if (isLoading && data === null) {
-    return (
-      <div
-        className="h-64 animate-pulse rounded-xl bg-white/[0.04]"
-        aria-label="Loading saved picks"
-        role="status"
-      />
+    return sheet(
+      <GameSheetRow aria-label="Loading saved picks" role="status">
+        <div className="h-3 w-48 animate-pulse rounded bg-white/[0.06]" />
+        <div className="mt-4 space-y-1.5">
+          {[0, 1, 2].map((row) => (
+            <div
+              key={row}
+              className="h-11 animate-pulse rounded-lg bg-white/[0.04]"
+            />
+          ))}
+        </div>
+      </GameSheetRow>
     );
   }
 
   if (loadError !== null && data === null) {
-    return (
-      <div
-        className="rounded-xl border border-red-500/30 bg-red-500/[0.08] p-5"
+    return sheet(
+      <GameSheetRow
+        className="flex flex-wrap items-center justify-between gap-3"
         role="alert"
       >
-        <p className="font-bold text-white">Couldn&apos;t load the game.</p>
-        <p className="mt-1 text-sm text-zinc-300">{loadError}</p>
-        <Button
-          className="mt-4"
-          variant="outline"
-          onClick={() => void reload()}
-        >
+        <div>
+          <p className="font-bold text-white">Couldn&apos;t load the game.</p>
+          <p className="mt-0.5 text-zinc-300">{loadError}</p>
+        </div>
+        <Button variant="outline" onClick={() => void reload()}>
           Try again
         </Button>
-      </div>
+      </GameSheetRow>
     );
   }
 
   if (data === null) {
-    return null;
+    return sheet(null);
   }
 
   if (!data.activeSeason) {
-    return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+    return sheet(
+      <GameSheetRow>
         <p className="font-bold text-white">No active game season</p>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-0.5 text-zinc-400">
           Picks will return when the next season begins.
         </p>
-      </div>
+      </GameSheetRow>
     );
   }
 
   if (data.hosts.length === 0 || data.ratings.length === 0) {
-    return (
-      <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
+    return sheet(
+      <GameSheetRow>
         <p className="font-bold text-white">Picks aren&apos;t available yet</p>
-        <p className="mt-1 text-sm text-zinc-400">
+        <p className="mt-0.5 text-zinc-400">
           The hosts and rating scale still need to be set up for this round.
         </p>
-      </div>
+      </GameSheetRow>
     );
   }
 
@@ -547,242 +614,191 @@ export function ConvexPredictionGame({
       ).length,
     0
   );
-  const roundState = getPredictionRoundState(episodeStatus, true, closesAt, now);
+  const roundState = getPredictionRoundState(
+    episodeStatus,
+    true,
+    closesAt,
+    now
+  );
   const isRoundOpen = roundState === PredictionRoundState.OPEN;
   const isRoundLocked = roundState === PredictionRoundState.LOCKED;
   const isClosingSoon = isRoundOpen && episodeStatus === "recording";
   const missedPickCount = totalPickCount - savedPickCount;
   const remainingSeconds =
     closesAt === null ? 0 : Math.max(0, Math.ceil((closesAt - now) / 1000));
-  const assignmentProgress = playableAssignments.map((assignment) => {
-    const saved = data.hosts.filter(
-      (host) =>
-        host.id !== savingHosts[assignment.id] &&
-        findGuessForHost(data.guessesByAssignment[assignment.id] ?? [], host.id)
-    ).length;
-    return { assignment, saved, complete: saved === data.hosts.length };
-  });
-  const completedMovies = assignmentProgress.filter(
-    (item) => item.complete
-  ).length;
+  const gridStyle = { "--ratings": data.ratings.length } as CSSProperties;
+  const scoring = [
+    { points: data.scoring.correctHost, label: "per correct host" },
+    { points: data.scoring.allCorrectBonus, label: "bonus for all correct" },
+    { points: data.scoring.allIncorrect, label: "if every pick misses" },
+  ].filter(
+    (rule): rule is { points: number; label: string } => rule.points !== null
+  );
 
-  return (
-    <section className="space-y-4" aria-label="Rating predictions">
-      <div className="rounded-xl border border-white/10 bg-black/20 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
-                isClosingSoon
-                  ? "border-amber-400/30 bg-amber-400/10 text-amber-200"
-                  : isRoundOpen
-                  ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                  : "border-white/15 bg-white/[0.06] text-zinc-300"
-              )}
-            >
-              {isClosingSoon
-                ? "Closing soon"
-                : isRoundOpen
-                ? "Round open"
-                : isRoundLocked
-                ? "Picks locked"
-                : "Picks not open yet"}
-            </span>
-            <p className="text-sm font-semibold text-white" aria-live="polite">
-              {savedPickCount} of {totalPickCount} picks{" "}
-              {isRoundLocked ? "locked in" : "saved"}
-            </p>
-          </div>
-          {savedPickCount === totalPickCount && totalPickCount > 0 ? (
-            <span className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-300">
+  const status = (
+    <>
+      <span
+        className={cn(
+          "inline-flex items-center gap-2 whitespace-nowrap font-bold before:h-2 before:w-2 before:rounded-full",
+          isClosingSoon
+            ? "text-amber-200 before:bg-amber-400"
+            : isRoundOpen
+            ? "text-emerald-300 before:bg-emerald-400"
+            : "text-zinc-300 before:bg-zinc-500"
+        )}
+      >
+        {isClosingSoon
+          ? "Closing soon"
+          : isRoundOpen
+          ? "Open"
+          : isRoundLocked
+          ? "Locked"
+          : "Not open yet"}
+      </span>
+      {isClosingSoon ? (
+        <span>
+          <b className="tabular-nums text-white">
+            {formatCountdown(remainingSeconds)}
+          </b>{" "}
+          left to pick and wager
+        </span>
+      ) : isRoundOpen ? (
+        <span>Locks 10 min after recording starts</span>
+      ) : isRoundLocked ? (
+        <span>Picks and wagers are final</span>
+      ) : null}
+    </>
+  );
+
+  return sheet(
+    <>
+      {!isRoundOpen && !isRoundLocked ? (
+        <GameSheetRow>
+          <p className="font-bold text-white">
+            Picks aren’t open for this episode yet.
+          </p>
+        </GameSheetRow>
+      ) : totalPickCount > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-white/10 px-4 py-3 text-sm sm:px-6">
+          {totalPickCount <= 12 ? (
+            <div className="flex gap-1" aria-hidden="true">
+              {Array.from({ length: totalPickCount }, (_, index) => (
+                <span
+                  key={index}
+                  className={cn(
+                    "h-1.5 w-5 rounded-full sm:w-7",
+                    index < savedPickCount ? "bg-zinc-100" : "bg-white/[0.12]"
+                  )}
+                />
+              ))}
+            </div>
+          ) : null}
+          <p className="text-zinc-300" aria-live="polite">
+            <b className="text-white">
+              {savedPickCount} of {totalPickCount}
+            </b>{" "}
+            picks {isRoundLocked ? "locked in" : "saved"}
+            {isRoundLocked && missedPickCount > 0
+              ? ` · you missed ${missedPickCount}`
+              : null}
+          </p>
+          {savedPickCount === totalPickCount ? (
+            <span className="ml-auto inline-flex items-center gap-1.5 font-bold text-emerald-300">
               <Check className="h-4 w-4" aria-hidden="true" />
               All picks complete
             </span>
           ) : null}
         </div>
-        <p className="mt-3 text-sm leading-relaxed text-zinc-300">
-          {isRoundOpen
-            ? "Choose the rating you think each host will give. Changes save automatically. Picks and wagers stay editable until 10 minutes after recording starts."
-            : isRoundLocked
-            ? "Picks and wagers are locked for this round. Your saved choices are shown below."
-            : "Picks aren’t open for this episode yet."}
-        </p>
-        {isRoundLocked && missedPickCount > 0 ? (
-          <p className="mt-2 text-sm text-zinc-400">
-            You missed {missedPickCount}{" "}
-            {missedPickCount === 1 ? "pick" : "picks"} this round.
-          </p>
-        ) : null}
-        {isClosingSoon ? (
-          <p className="mt-2 font-semibold tabular-nums text-amber-200">
-            Picks and wagers close in {Math.floor(remainingSeconds / 60)}:
-            {String(remainingSeconds % 60).padStart(2, "0")}.
-          </p>
-        ) : null}
-        {playableAssignments.length > 1 ? (
-          <nav className="mt-4 space-y-2" aria-label="Movie pick checklist">
-            <p className="text-sm font-semibold text-white" aria-live="polite">
-              {completedMovies} of {playableAssignments.length}{" "}
-              {playableAssignments.length === 1 ? "movie" : "movies"}{" "}
-              {isRoundOpen
-                ? "complete. Pick ratings for every movie."
-                : "picked."}
-            </p>
-            <ol className="grid gap-2 sm:grid-cols-2">
-              {assignmentProgress.map(
-                ({ assignment, saved, complete }, index) => (
-                  <li key={assignment.id}>
-                    <button
-                      type="button"
-                      className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      onClick={() => openAssignment(assignment.id)}
-                    >
-                      <span className="min-w-0 break-words font-semibold">
-                        {index + 1}.{" "}
-                        {assignment.movie?.title ?? "Unknown movie"}
-                      </span>
-                      <span
-                        className={cn(
-                          "shrink-0 text-xs",
-                          complete
-                            ? "text-emerald-300"
-                            : isRoundOpen
-                            ? "text-amber-200"
-                            : "text-zinc-400"
-                        )}
-                      >
-                        {complete
-                          ? isRoundOpen
-                            ? "Complete"
-                            : "All picked"
-                          : isRoundOpen
-                          ? `${saved}/${data.hosts.length} saved`
-                          : saved === 0
-                          ? "No picks"
-                          : `${saved} of ${data.hosts.length} picked`}
-                      </span>
-                    </button>
-                  </li>
-                )
-              )}
-            </ol>
-          </nav>
-        ) : null}
-        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-white/10 pt-4">
-          {data.ratings.map((rating) => (
-            <div
-              key={rating.id}
-              className="inline-flex items-center gap-2 text-sm text-zinc-300"
-            >
-              <RatingIcon value={rating.value} />
-              <span className="font-semibold text-white">{rating.name}</span>
-              {rating.category ? (
-                <span className="text-zinc-500">{rating.category}</span>
-              ) : null}
-            </div>
-          ))}
-        </div>
-        <details className="mt-4 border-t border-white/10 pt-3 text-sm">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-semibold text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 [&::-webkit-details-marker]:hidden">
-            <Info className="h-4 w-4" aria-hidden="true" />
-            How picks score
-          </summary>
-          <dl className="grid gap-2 pb-2 pt-1 sm:grid-cols-3">
-            <ScoringItem
-              label="Correct host"
-              points={data.scoring.correctHost}
-            />
-            <ScoringItem
-              label="All hosts correct"
-              points={data.scoring.allCorrectBonus}
-            />
-            <ScoringItem
-              label="All hosts wrong"
-              points={data.scoring.allIncorrect}
-            />
-          </dl>
-        </details>
-      </div>
-
-      {loadError !== null ? (
-        <div
-          className="rounded-lg border border-red-500/30 bg-red-500/[0.08] p-3 text-sm text-red-100"
-          role="alert"
-        >
-          {loadError} Your currently displayed choices have not been changed.
-        </div>
       ) : null}
 
-      {assignments.map((assignment) => (
-        <ConvexAssignmentPrediction
-          key={assignment.id}
-          assignment={assignment}
-          hosts={data.hosts}
-          ratings={data.ratings}
-          guesses={data.guessesByAssignment[assignment.id] ?? []}
-          episodeStatus={episodeStatus}
-          closesAt={closesAt}
-          now={now}
-          searchQuery={searchQuery}
-          initiallyExpanded={false}
-          openRequest={
-            openRequest.assignmentId === assignment.id
-              ? openRequest.sequence
-              : 0
-          }
-          nextIncompleteAssignment={
-            assignmentProgress.find(
-              (item) => !item.complete && item.assignment.id !== assignment.id
-            )?.assignment
-          }
-          onContinue={openAssignment}
-          onSavingChange={(hostId) => {
-            setSavingHosts((current) => ({
-              ...current,
-              [assignment.id]: hostId,
-            }));
-          }}
-          onGuessSaved={(guess) => {
-            setData((current) => {
-              if (current === null) {
-                return current;
-              }
-              const existing = current.guessesByAssignment[assignment.id] ?? [];
-              return {
-                ...current,
-                guessesByAssignment: {
-                  ...current.guessesByAssignment,
-                  [assignment.id]: [
-                    ...existing.filter(
-                      (candidate) => candidate.hostId !== guess.hostId
-                    ),
-                    guess,
-                  ],
-                },
-              };
-            });
-          }}
-        />
-      ))}
-    </section>
-  );
-}
+      {loadError !== null ? (
+        <GameSheetRow className="text-red-100" role="alert">
+          {loadError} Your currently displayed choices have not been changed.
+        </GameSheetRow>
+      ) : null}
 
-function ScoringItem({
-  label,
-  points,
-}: {
-  label: string;
-  points: number | null;
-}) {
-  return (
-    <div className="grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-white/[0.04] px-3 py-2">
-      <dt className="text-zinc-400">{label}</dt>
-      <dd className="font-black tabular-nums text-white">
-        {points === null ? "Unavailable" : `${points > 0 ? "+" : ""}${points}`}
-      </dd>
-    </div>
+      <div className="border-t border-white/10" style={gridStyle}>
+        {isRoundOpen || isRoundLocked ? (
+          <div
+            className={cn(
+              scorecardGrid,
+              "sticky top-16 z-10 border-b border-white/10 bg-[color:var(--bbpc-surface-raised)] py-2.5"
+            )}
+          >
+            <span />
+            {data.ratings.map((rating) => (
+              <div
+                key={rating.id}
+                className="flex min-w-0 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-bold text-white sm:flex-row sm:gap-2 sm:text-[0.8125rem]"
+              >
+                <RatingIcon value={rating.value} />
+                <span className="max-w-full truncate">{rating.name}</span>
+                {rating.category ? (
+                  <span className="hidden font-medium text-zinc-400 lg:inline">
+                    {rating.category}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {assignments.map((assignment) => (
+          <ConvexAssignmentPrediction
+            key={assignment.id}
+            assignment={assignment}
+            hosts={data.hosts}
+            ratings={data.ratings}
+            guesses={data.guessesByAssignment[assignment.id] ?? []}
+            episodeStatus={episodeStatus}
+            closesAt={closesAt}
+            now={now}
+            searchQuery={searchQuery}
+            onSavingChange={(hostId) => {
+              setSavingHosts((current) => ({
+                ...current,
+                [assignment.id]: hostId,
+              }));
+            }}
+            onGuessSaved={(guess) => {
+              setData((current) => {
+                if (current === null) {
+                  return current;
+                }
+                const existing =
+                  current.guessesByAssignment[assignment.id] ?? [];
+                return {
+                  ...current,
+                  guessesByAssignment: {
+                    ...current.guessesByAssignment,
+                    [assignment.id]: [
+                      ...existing.filter(
+                        (candidate) => candidate.hostId !== guess.hostId
+                      ),
+                      guess,
+                    ],
+                  },
+                };
+              });
+            }}
+          />
+        ))}
+      </div>
+    </>,
+    status,
+    scoring.length > 0 ? (
+      <dl className="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-white/10 bg-black/20 px-4 py-3.5 text-[0.8125rem] text-zinc-400 sm:px-6">
+        {scoring.map((rule) => (
+          <div key={rule.label} className="flex gap-1.5">
+            <dt className="order-2">{rule.label}</dt>
+            <dd className="font-bold tabular-nums text-white">
+              {rule.points > 0 ? "+" : rule.points < 0 ? "−" : ""}
+              {Math.abs(rule.points)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    ) : null
   );
 }
 
@@ -795,12 +811,8 @@ interface ConvexAssignmentPredictionProps {
   closesAt: number | null;
   now: number;
   searchQuery: string;
-  initiallyExpanded: boolean;
   onGuessSaved: (guess: ConvexPredictionGuess) => void;
   onSavingChange: (hostId: string | null) => void;
-  openRequest: number;
-  nextIncompleteAssignment?: PredictionGameAssignment;
-  onContinue: (assignmentId: string) => void;
 }
 
 const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
@@ -812,24 +824,12 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
   closesAt,
   now,
   searchQuery,
-  initiallyExpanded,
   onGuessSaved,
   onSavingChange,
-  openRequest,
-  nextIncompleteAssignment,
-  onContinue,
 }) => {
   const convex = useConvex();
-  const [isExpanded, setIsExpanded] = useState(initiallyExpanded);
-  const [hasExpanded, setHasExpanded] = useState(initiallyExpanded);
-  const headingRef = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    if (openRequest === 0) return;
-    setHasExpanded(true);
-    setIsExpanded(true);
-    headingRef.current?.scrollIntoView({ block: "start" });
-    headingRef.current?.focus({ preventScroll: true });
-  }, [openRequest]);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const [hasOpenedVoice, setHasOpenedVoice] = useState(false);
   const [optimisticGuess, setOptimisticGuess] =
     useState<ConvexPredictionGuess | null>(null);
   const [savingHostId, setSavingHostId] = useState<string | null>(null);
@@ -844,14 +844,18 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
   ).length;
   const hasAllGuesses = hosts.length > 0 && selectedCount === hosts.length;
   const allPicksSaved = hasAllGuesses && savingHostId === null;
-  const isRoundOpen =
-    getPredictionRoundState(
-      episodeStatus,
-      assignment.playable,
-      closesAt,
-      now
-    ) === PredictionRoundState.OPEN;
+  const roundState = getPredictionRoundState(
+    episodeStatus,
+    assignment.playable,
+    closesAt,
+    now
+  );
+  const isRoundOpen = roundState === PredictionRoundState.OPEN;
   const isUnplayable = !assignment.playable;
+  // An unopened round has no grid yet; a locked one keeps it, read-only.
+  const showsGrid =
+    !isUnplayable && roundState !== PredictionRoundState.UNAVAILABLE;
+  const movieTitle = assignment.movie?.title ?? "Unknown movie";
 
   const chooseRating = async (hostId: string, ratingId: string) => {
     if (!isRoundOpen || savingHostId !== null) {
@@ -891,171 +895,126 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
     }
   };
 
+  const failedHost = hosts.find((host) => host.id === failedPick?.hostId);
+
   return (
-    <article className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-        <div className="flex min-w-0 items-center gap-3">
-          {assignment.movie?.poster ? (
-            <Image
-              src={assignment.movie.poster}
-              alt=""
-              width={40}
-              height={60}
-              sizes="40px"
-              className="h-[60px] w-10 shrink-0 rounded-md border border-white/10 object-cover shadow-sm"
-            />
-          ) : (
-            <div
-              className="flex h-[60px] w-10 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-zinc-500"
-              aria-hidden="true"
-            >
-              <Film className="h-4 w-4" />
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3
-                ref={headingRef}
-                tabIndex={-1}
-                className="scroll-mt-24 text-xl font-black text-white"
-              >
-                {assignment.movie
-                  ? highlightText(assignment.movie.title, searchQuery)
-                  : "Unknown movie"}
-              </h3>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs font-bold",
-                  isUnplayable
-                    ? "bg-white/[0.06] text-zinc-300"
-                    : allPicksSaved
-                    ? "bg-emerald-400/10 text-emerald-300"
-                    : isRoundOpen
-                    ? "bg-amber-400/10 text-amber-200"
-                    : "bg-white/[0.06] text-zinc-300"
-                )}
-              >
-                {savingHostId !== null
-                  ? "Saving…"
-                  : isUnplayable
-                  ? "Not in play"
-                  : allPicksSaved
-                  ? isRoundOpen
-                    ? "Complete"
-                    : "All picked"
-                  : isRoundOpen
-                  ? selectedCount === 0
-                    ? "Needs picks"
-                    : `${selectedCount} of ${hosts.length} saved`
-                  : selectedCount === 0
-                  ? "No picks made"
-                  : `${selectedCount} of ${hosts.length} picked`}
-              </span>
-            </div>
-            <p className="mt-1 text-sm text-zinc-400">
-              {isUnplayable
-                ? "This movie isn’t part of the game."
-                : isRoundOpen
-                ? savingHostId !== null
-                  ? "Saving your choice. Wait for confirmation before leaving."
-                  : allPicksSaved
-                  ? "Your choices are saved. You can edit them while the round is open."
-                  : `Choose ${hosts.length - selectedCount} more ${
-                      hosts.length - selectedCount === 1 ? "rating" : "ratings"
-                    }.`
-                : selectedCount === 0
-                ? "This round is closed. You didn’t make picks for this movie."
-                : "This round is closed. Your picks are shown below."}
-            </p>
+    <article className="border-t border-white/10 py-4 first-of-type:border-t-0">
+      <div className="flex items-center gap-3 px-4 sm:px-6">
+        {assignment.movie?.poster ? (
+          <Image
+            src={assignment.movie.poster}
+            alt=""
+            width={40}
+            height={60}
+            sizes="40px"
+            className="h-[60px] w-10 shrink-0 rounded-md border border-white/10 object-cover shadow-sm"
+          />
+        ) : (
+          <div
+            className="flex h-[60px] w-10 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-zinc-500"
+            aria-hidden="true"
+          >
+            <Film className="h-4 w-4" />
           </div>
-        </div>
-        <Button
-          type="button"
-          variant={isExpanded ? "ghost" : "outline"}
-          className="min-h-11 shrink-0 justify-between sm:justify-center"
-          aria-expanded={isExpanded}
-          onClick={() => {
-            setHasExpanded(true);
-            setIsExpanded((value) => !value);
-          }}
-        >
-          {isExpanded
-            ? isRoundOpen || selectedCount > 0
-              ? "Hide picks"
-              : "Hide details"
-            : isRoundOpen
-            ? selectedCount > 0
-              ? "View or edit picks"
-              : "Make picks"
-            : selectedCount > 0
-            ? "View picks"
-            : "View details"}
-          {isExpanded ? (
-            <ChevronUp aria-hidden="true" />
+        )}
+        <h3 className="min-w-0 break-words text-[1.0625rem] font-extrabold leading-tight text-white">
+          {assignment.movie
+            ? highlightText(assignment.movie.title, searchQuery)
+            : movieTitle}
+        </h3>
+        <div className="ml-auto flex shrink-0 items-center gap-3 text-[0.8125rem] font-bold sm:gap-4">
+          {savingHostId !== null ? (
+            <span className="text-amber-200">Saving…</span>
+          ) : isUnplayable ? (
+            <span className="font-medium text-zinc-400">Not in the game</span>
+          ) : !showsGrid ? null : allPicksSaved ? (
+            <span className="inline-flex items-center gap-1 text-emerald-300">
+              <Check className="h-3.5 w-3.5" aria-hidden="true" />
+              All picked
+            </span>
+          ) : isRoundOpen ? (
+            <span className="text-amber-200">
+              {hosts.length - selectedCount} to go
+            </span>
           ) : (
-            <ChevronDown aria-hidden="true" />
+            <span className="font-medium text-zinc-400">
+              {selectedCount === 0
+                ? "No picks made"
+                : `${selectedCount} of ${hosts.length} picked`}
+            </span>
           )}
-        </Button>
+          <button
+            type="button"
+            className="inline-flex min-h-11 min-w-11 items-center justify-end gap-1.5 rounded-md text-zinc-300 underline underline-offset-4 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+            aria-expanded={isVoiceOpen}
+            aria-label={`Voice message for ${movieTitle}`}
+            onClick={() => {
+              setHasOpenedVoice(true);
+              setIsVoiceOpen((value) => !value);
+            }}
+          >
+            <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Voice message</span>
+          </button>
+        </div>
       </div>
 
-      {!isExpanded && selectedCount > 0 ? (
-        <ul className="grid gap-x-6 gap-y-2 border-t border-white/10 px-4 py-3 sm:px-5 md:grid-cols-3">
-          {hosts.map((host) => {
-            const guess = findGuessForHost(guesses, host.id);
-            return guess ? (
-              <li
-                key={host.id}
-                className="flex min-w-0 items-center gap-2 whitespace-nowrap text-sm text-zinc-300"
-              >
-                <span className="font-semibold text-white">
-                  {host.name ?? "Host"}
-                </span>
-                <span aria-hidden="true">—</span>
-                <RatingIcon value={guess.rating.value} />
-                <span>{guess.rating.name}</span>
-              </li>
-            ) : null;
-          })}
-        </ul>
+      {hasOpenedVoice ? (
+        <div hidden={!isVoiceOpen} className="px-4 pt-1.5 sm:px-6">
+          <ConvexAssignmentVoiceMessages
+            assignmentId={assignment.id}
+            isVisible={isVoiceOpen}
+            title={
+              assignment.movie
+                ? `Voice message for ${assignment.movie.title}`
+                : "Assignment voice message"
+            }
+          />
+        </div>
       ) : null}
 
-      {hasExpanded ? (
-        <div
-          hidden={!isExpanded}
-          className="space-y-4 border-t border-white/10 p-4 sm:p-5"
-        >
-          {hosts.map((host) => {
+      {showsGrid
+        ? hosts.map((host) => {
+            const hostName = host.name ?? "Host";
             const guess =
               optimisticGuess?.hostId === host.id
                 ? optimisticGuess
                 : findGuessForHost(guesses, host.id);
             if (!isRoundOpen) {
               return (
-                <div
-                  key={host.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:p-4"
-                >
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-                    <span className="font-bold text-white">
-                      {host.name ?? "Host"}
+                <div key={host.id} className={cn(scorecardGrid, "mt-1.5")}>
+                  <div className="min-w-0 pr-1">
+                    <span className="block break-words text-sm font-bold leading-tight text-white sm:text-[0.9375rem]">
+                      {hostName}
                     </span>
-                    {guess ? (
-                      <>
-                        <span aria-hidden="true" className="text-zinc-500">
-                          —
-                        </span>
-                        <RatingIcon value={guess.rating.value} />
-                        <span className="text-zinc-300">{guess.rating.name}</span>
-                      </>
-                    ) : (
-                      <span className="text-zinc-400">No pick made</span>
+                    {guess ? null : (
+                      <span className="block text-xs font-semibold text-zinc-400">
+                        No pick
+                      </span>
                     )}
                   </div>
-                  {guess ? (
-                    <span className="text-xs font-semibold text-zinc-400">
-                      Locked
-                    </span>
-                  ) : null}
+                  {ratings.map((rating) =>
+                    guess?.rating.id === rating.id ? (
+                      <span
+                        key={rating.id}
+                        className={cn(
+                          "flex h-11 min-w-0 items-center justify-center gap-2 rounded-lg border text-sm font-bold text-white",
+                          pickedTone[rating.value] ??
+                            "border-red-400 bg-red-500/15"
+                        )}
+                      >
+                        <PickedRating rating={rating} />
+                      </span>
+                    ) : (
+                      <span
+                        key={rating.id}
+                        className="flex h-11 items-center justify-center rounded-lg border border-dashed border-white/[0.09]"
+                        aria-hidden="true"
+                      >
+                        <span className="h-1 w-1 rounded-full bg-white/20" />
+                      </span>
+                    )
+                  )}
                 </div>
               );
             }
@@ -1065,157 +1024,146 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
             return (
               <fieldset
                 key={host.id}
-                className="rounded-lg border border-white/10 bg-black/20 p-3 sm:p-4"
+                className={cn(scorecardGrid, "mt-1.5 min-w-0")}
                 disabled={savingHostId !== null}
               >
-                <legend className="px-1 font-bold text-white">
-                  {host.name ?? "Host"}
-                </legend>
-                <div className="mb-3 flex min-h-6 items-center justify-between gap-3">
+                <legend className="sr-only">{hostName}</legend>
+                <div className="min-w-0 pr-1">
+                  <span
+                    className="block break-words text-sm font-bold leading-tight text-white sm:text-[0.9375rem]"
+                    aria-hidden="true"
+                  >
+                    {hostName}
+                  </span>
                   <span
                     className={cn(
-                      "text-xs font-semibold",
-                      isSaving
-                        ? "text-amber-200"
-                        : didFail
-                        ? "text-red-300"
-                        : isSaved
-                        ? "text-emerald-300"
-                        : "text-zinc-500"
+                      "sr-only text-xs font-semibold",
+                      !isSaved && "sm:not-sr-only",
+                      didFail ? "text-red-300" : "text-amber-200"
                     )}
                     aria-live="polite"
                   >
                     {isSaving
                       ? "Saving…"
                       : didFail
-                      ? "Couldn’t save"
+                      ? "Not saved"
                       : isSaved
                       ? lastSavedHostId === host.id
                         ? "Saved just now"
                         : "Saved"
-                      : "Not picked"}
+                      : "Pick"}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {ratings.map((rating) => {
-                    const isSelected = guess?.rating.id === rating.id;
-                    return (
-                      <label key={rating.id} className="cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`convex-prediction-${assignment.id}-${host.id}`}
-                          value={rating.id}
-                          checked={isSelected}
-                          onChange={() => void chooseRating(host.id, rating.id)}
-                          disabled={savingHostId !== null}
-                          className="peer sr-only"
-                        />
-                        <span
-                          className={cn(
-                            "flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-red-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-black",
-                            isSelected
-                              ? "border-red-400 bg-red-500/15 text-white"
-                              : "border-white/15 bg-white/[0.035] text-zinc-300 hover:border-white/30 hover:bg-white/[0.07]",
-                            savingHostId !== null &&
-                              "cursor-not-allowed opacity-60"
-                          )}
-                        >
-                          <RatingIcon value={rating.value} />
-                          <span>{rating.name}</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                {ratings.map((rating) => {
+                  const isSelected = guess?.rating.id === rating.id;
+                  const hasIcon = hasRatingIcon(rating.value);
+                  return (
+                    <label
+                      key={rating.id}
+                      className="group min-w-0 cursor-pointer"
+                      title={rating.name}
+                    >
+                      <input
+                        type="radio"
+                        name={`convex-prediction-${assignment.id}-${host.id}`}
+                        value={rating.id}
+                        checked={isSelected}
+                        onChange={() => void chooseRating(host.id, rating.id)}
+                        disabled={savingHostId !== null}
+                        className="peer sr-only"
+                      />
+                      <span
+                        className={cn(
+                          "flex h-11 min-w-0 items-center justify-center gap-2 rounded-lg border text-sm font-bold transition-colors peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-red-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-black",
+                          isSelected
+                            ? cn(
+                                "text-white",
+                                pickedTone[rating.value] ??
+                                  "border-red-400 bg-red-500/15"
+                              )
+                            : "border-transparent bg-white/[0.035] text-zinc-400 hover:border-white/25 hover:bg-white/[0.07]",
+                          savingHostId !== null && "cursor-not-allowed",
+                          isSaving && "opacity-50"
+                        )}
+                      >
+                        {isSelected ? (
+                          <PickedRating rating={rating} />
+                        ) : (
+                          <>
+                            {hasIcon ? (
+                              // Every empty cell names its rating, so a pick
+                              // never depends on the legend being in view.
+                              <span className="opacity-60 transition-opacity group-hover:opacity-100">
+                                <RatingIcon value={rating.value} />
+                              </span>
+                            ) : null}
+                            <span className={hasIcon ? "sr-only" : namedCell}>
+                              {rating.name}
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
               </fieldset>
             );
-          })}
+          })
+        : null}
 
-          {errorMessage !== null && failedPick !== null ? (
-            <div
-              className="flex flex-col gap-3 rounded-lg border border-red-500/30 bg-red-500/[0.08] p-3 sm:flex-row sm:items-center sm:justify-between"
-              role="alert"
+      {errorMessage !== null && failedPick !== null ? (
+        <div
+          className="mx-4 mt-2.5 flex flex-col gap-2 rounded-lg border border-red-500/30 bg-red-500/[0.08] py-2 pl-3 pr-2 sm:mx-6 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <p className="text-sm text-red-100">
+            <b>{failedHost?.name ?? "Host"}:</b> {errorMessage}
+          </p>
+          {isRoundOpen ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                void chooseRating(failedPick.hostId, failedPick.ratingId)
+              }
+              disabled={savingHostId !== null}
             >
-              <p className="text-sm text-red-100">{errorMessage}</p>
-              {isRoundOpen ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    void chooseRating(failedPick.hostId, failedPick.ratingId)
-                  }
-                  disabled={savingHostId !== null}
-                >
-                  Retry save
-                </Button>
-              ) : null}
-            </div>
+              Retry save
+            </Button>
           ) : null}
-
-          {allPicksSaved && nextIncompleteAssignment && isRoundOpen ? (
-            <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
-              <p className="text-sm text-foreground">
-                This movie is complete. There are still picks to make for
-                another movie.
-              </p>
-              <Button
-                className="mt-2 h-auto min-h-11 whitespace-normal text-left"
-                onClick={() => onContinue(nextIncompleteAssignment.id)}
-              >
-                Continue to{" "}
-                {nextIncompleteAssignment.movie?.title ?? "the next movie"}
-              </Button>
-            </div>
-          ) : null}
-
-          {hasAllGuesses ? (
-            <details className="rounded-lg border border-white/10 bg-black/20">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center gap-2">
-                  {isRoundOpen ? (
-                    <>
-                      Wager points{" "}
-                      <span className="text-zinc-500">— optional</span>
-                    </>
-                  ) : (
-                    "Your wagers"
-                  )}
-                </span>
-                <ChevronDown
-                  className="h-4 w-4 text-zinc-400"
-                  aria-hidden="true"
-                />
-              </summary>
-              <div className="border-t border-white/10 p-3 sm:p-4">
-                {savingHostId !== null ? (
-                  <p role="status" className="mb-3 text-sm text-amber-200">
-                    Wagering will be available after your pick finishes saving.
-                  </p>
-                ) : null}
-                <fieldset
-                  disabled={savingHostId !== null}
-                  aria-label="Wager options"
-                >
-                  <ConvexAssignmentGamblingBoard
-                    assignmentId={assignment.id}
-                    hosts={hosts}
-                    guesses={guesses}
-                    episodeStatus={episodeStatus}
-                    closesAt={closesAt}
-                    now={now}
-                    playable={assignment.playable}
-                  />
-                </fieldset>
-              </div>
-            </details>
-          ) : null}
-
-          <ConvexAssignmentVoiceMessages
-            assignmentId={assignment.id}
-            isVisible={isExpanded}
-          />
         </div>
+      ) : null}
+
+      {!showsGrid ? null : hasAllGuesses ? (
+        <fieldset
+          className="mx-4 mt-3 min-w-0 border-t border-dashed border-white/10 pt-1 sm:mx-6"
+          disabled={savingHostId !== null}
+          aria-label="Wager options"
+        >
+          {savingHostId !== null ? (
+            <p role="status" className="pt-2 text-sm text-amber-200">
+              Wagering will be available after your pick finishes saving.
+            </p>
+          ) : null}
+          <ConvexAssignmentGamblingBoard
+            assignmentId={assignment.id}
+            hosts={hosts}
+            guesses={guesses}
+            episodeStatus={episodeStatus}
+            closesAt={closesAt}
+            now={now}
+            playable={assignment.playable}
+          />
+        </fieldset>
+      ) : isRoundOpen ? (
+        <p className="mx-4 mt-3 flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-dashed border-white/10 pt-1 text-sm text-zinc-400 sm:mx-6">
+          <span className="bbpc-label sm:w-16">Wager</span>
+          Optional. Opens when{" "}
+          {hosts.length === 1
+            ? "your pick is in."
+            : `all ${hosts.length} picks are in.`}
+        </p>
       ) : null}
     </article>
   );

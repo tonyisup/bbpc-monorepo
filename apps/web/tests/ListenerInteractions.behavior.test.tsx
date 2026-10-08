@@ -1,4 +1,4 @@
-import React, { useState, type ReactNode } from "react";
+import React, { useEffect, useState, type ReactNode } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -160,8 +160,8 @@ async function renderPicks() {
       episodeStatus="next"
     />
   );
-  await click("Make picks");
 }
+const movieText = () => renderer.root.findAllByType("article").map(text);
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("window", {
@@ -183,32 +183,219 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-test("wager review explains the exact whole-point return before submission", async () => {
-  const submit = vi.fn();
+async function renderWager(
+  submit: () => Promise<void>,
+  close = vi.fn(),
+  overrides: {
+    existingBet?: { points: number; status: string };
+    userPoints?: number;
+    isEditing?: boolean;
+  } = {}
+) {
   await render(
     <BettingCoin
       type={{ id: "type", multiplier: 1.5 }}
-      label="One host"
-      description="Predict one host correctly"
-      payoutTone="standard"
-      existingBet={undefined}
+      label="Host One"
+      name="Host One"
+      existingBet={overrides.existingBet}
       assignmentId="assignment"
-      userPoints={100}
-      isRoundOpen
+      userPoints={overrides.userPoints ?? 100}
+      isEditing={overrides.isEditing ?? true}
+      onEdit={vi.fn()}
+      onClose={close}
       onSubmit={submit}
     />
   );
-  await click("Set wager");
+  return close;
+}
+const typeWager = (value: string) =>
   act(() =>
-    renderer.root.findByType("input").props.onChange({ target: { value: "3" } })
+    renderer.root.findByType("input").props.onChange({ target: { value } })
   );
-  act(() =>
-    renderer.root.findByType("form").props.onSubmit({ preventDefault: vi.fn() })
-  );
+const confirmWager = () =>
+  act(async () => {
+    await renderer.root
+      .findByType("form")
+      .props.onSubmit({ preventDefault: vi.fn() });
+  });
+
+test("a wager states its exact whole-point loss and win before it is confirmed", async () => {
+  const submit = vi.fn().mockResolvedValue(undefined);
+  const close = await renderWager(submit);
+  typeWager("3");
   expect(screenText()).toContain(
-    "A loss costs 3 points. A win earns 4 points in profit and returns 7 points total, including your wager."
+    "Miss and you lose 3. Hit and you win +4, with your 3 back."
+  );
+  // Every movie lists the same bets, so the movie keeps their ids apart.
+  const input = renderer.root.findByType("input");
+  expect(input.props.id).toBe("wager-assignment-type-all");
+  expect(input.props["aria-describedby"]).toBe(
+    "wager-assignment-type-all-outcome"
+  );
+  expect(button("Confirm 3 pts").props.disabled).toBe(false);
+  expect(submit).not.toHaveBeenCalled();
+  await confirmWager();
+  expect(submit).toHaveBeenCalledWith({
+    gamblingTypeId: "type",
+    points: 3,
+    assignmentId: "assignment",
+    targetUserId: undefined,
+  });
+  expect(close).toHaveBeenCalledTimes(1);
+});
+
+test("a wager above the listener's points is refused without a request", async () => {
+  const submit = vi.fn().mockResolvedValue(undefined);
+  const close = await renderWager(submit);
+  typeWager("101");
+  expect(screenText()).not.toContain("Miss and you lose");
+  await confirmWager();
+  expect(screenText()).toContain(
+    "You can wager up to 100 points on this outcome."
+  );
+  await click("Max 100");
+  expect(screenText()).toContain(
+    "Miss and you lose 100. Hit and you win +150, with your 100 back."
   );
   expect(submit).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+});
+
+test("a wager that fails to save stays open with its reason and cannot be sent twice", async () => {
+  const request = deferred<void>();
+  const submit = vi
+    .fn<() => Promise<void>>()
+    .mockReturnValueOnce(request.promise)
+    .mockRejectedValueOnce(new Error(""));
+  const close = await renderWager(submit);
+  typeWager("5");
+  await confirmWager();
+  expect(button("Saving…").props.disabled).toBe(true);
+  expect(button("Cancel").props.disabled).toBe(true);
+  expect(button("Max 100").props.disabled).toBe(true);
+  expect(renderer.root.findByType("input").props.disabled).toBe(true);
+  await act(async () => {
+    request.reject(new Error("ROUND_LOCKED"));
+  });
+  expect(text(renderer.root.findByProps({ role: "alert" }))).toBe(
+    "Betting closed before this wager could be saved."
+  );
+  expect(button("Confirm 5 pts").props.disabled).toBe(false);
+  await confirmWager();
+  expect(text(renderer.root.findByProps({ role: "alert" }))).toBe(
+    "Couldn’t save this wager. Check your connection and retry."
+  );
+  expect(submit).toHaveBeenCalledTimes(2);
+  expect(close).not.toHaveBeenCalled();
+  expect(renderer.root.findAllByType("form")).toHaveLength(1);
+});
+
+test("an existing wager opens at its stake, clears to zero and is read-only once settled", async () => {
+  const submit = vi.fn().mockResolvedValue(undefined);
+  const close = await renderWager(submit, vi.fn(), {
+    existingBet: { points: 20, status: "pending" },
+  });
+  expect(renderer.root.findByType("input").props.value).toBe("20");
+  expect(screenText()).toContain(
+    "Miss and you lose 20. Hit and you win +30, with your 20 back."
+  );
+  // The stake already placed counts toward what can be risked.
+  expect(button("Max 120")).toBeDefined();
+  await click("Clear wager");
+  expect(submit).toHaveBeenCalledWith({
+    gamblingTypeId: "type",
+    points: 0,
+    assignmentId: "assignment",
+    targetUserId: undefined,
+  });
+  expect(close).toHaveBeenCalledTimes(1);
+  act(() => renderer.unmount());
+
+  await renderWager(submit, vi.fn(), {
+    existingBet: { points: 20, status: "won" },
+    isEditing: false,
+  });
+  expect(screenText()).toContain("20 pts · wins +30");
+  expect(screenText()).toContain("Wager won");
+  expect(renderer.root.findAllByType("button")).toHaveLength(0);
+});
+
+test("a wager must be a whole number above zero, and the quick amounts stay within the listener's points", async () => {
+  const submit = vi.fn().mockResolvedValue(undefined);
+  const close = await renderWager(submit, vi.fn(), { userPoints: 20 });
+  expect(
+    renderer.root
+      .findByType("form")
+      .findAllByType("button")
+      .map((node) => text(node).trim())
+  ).toEqual(["10", "Max 20", "Confirm wager", "Cancel"]);
+  expect(screenText()).toContain("You can risk up to 20 points on this bet.");
+  for (const amount of ["", "0", "2.5", "-3"]) {
+    typeWager(amount);
+    expect(renderer.root.findAllByProps({ role: "alert" })).toHaveLength(0);
+    await confirmWager();
+    expect(text(renderer.root.findByProps({ role: "alert" }))).toBe(
+      "Enter a whole number greater than zero."
+    );
+  }
+  await click("10");
+  expect(renderer.root.findAllByProps({ role: "alert" })).toHaveLength(0);
+  expect(renderer.root.findByType("input").props.value).toBe("10");
+  expect(button("Confirm 10 pts")).toBeDefined();
+  expect(submit).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+});
+
+test("the game sheet keeps its other rows mounted while picks load, fail and recover", async () => {
+  let rowMounts = 0;
+  const QuoteRow = () => {
+    useEffect(() => {
+      rowMounts += 1;
+    }, []);
+    return <p>Quote row</p>;
+  };
+  const game = (
+    <ConvexPredictionGame
+      episodeId="episode"
+      assignments={[
+        {
+          id: "assignment",
+          playable: true,
+          movie: { title: "Test movie", poster: null },
+        },
+      ]}
+      episodeStatus="next"
+    >
+      <QuoteRow />
+    </ConvexPredictionGame>
+  );
+  const firstLoad = deferred<unknown>();
+  mocks.loadPicks.mockReturnValueOnce(firstLoad.promise);
+  await render(game);
+  expect(
+    renderer.root.findAllByProps({ "aria-label": "Loading saved picks" })
+  ).not.toHaveLength(0);
+  expect(screenText()).toContain("Quote row");
+
+  await act(async () => {
+    firstLoad.reject(new Error("offline"));
+  });
+  expect(screenText()).toContain("Check your connection and retry.");
+  expect(screenText()).toContain("Quote row");
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(0);
+
+  await click("Try again");
+  expect(mocks.loadPicks).toHaveBeenCalledTimes(2);
+  expect(screenText()).not.toContain("Check your connection and retry.");
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(1);
+  expect(screenText()).toContain("Quote row");
+  expect(rowMounts).toBe(1);
+  // The scoring rules close the sheet with signed points.
+  expect(renderer.root.findAllByType("dd").map(text)).toEqual([
+    "+1",
+    "+2",
+    "−1",
+  ]);
 });
 
 test("pending and failed picks never announce completion or unlock wagering", async () => {
@@ -252,7 +439,6 @@ test("an edit in flight clears the completion claim and disables existing wageri
       episodeStatus="next"
     />
   );
-  await click("View or edit picks");
   const request = deferred<unknown>();
   mocks.savePick.mockReturnValueOnce(request.promise);
   await act(async () => {
@@ -275,12 +461,17 @@ test("rating controls belong to a named host fieldset", async () => {
   expect(text(group.children[0])).toBe("Host One");
 });
 
-test("voice drafts and accessible actions survive hiding and reopening picks", async () => {
+test("voice drafts and accessible actions survive closing and reopening the voice message", async () => {
   await renderPicks();
+  const toggle = () => button("Voice message for Test movie");
+  expect(toggle().props["aria-expanded"]).toBe(false);
+  await click("Voice message for Test movie");
   await click("Record voice message");
   expect(screenText()).toContain("Ready to send");
-  await click("Hide picks");
-  await click("Make picks");
+  await click("Voice message for Test movie");
+  expect(toggle().props["aria-expanded"]).toBe(false);
+  await click("Voice message for Test movie");
+  expect(toggle().props["aria-expanded"]).toBe(true);
   expect(screenText()).toContain("Ready to send");
   expect(button("Send voice message").props["aria-label"]).toBe(
     "Send voice message"
@@ -421,7 +612,7 @@ test("removal requires confirmation and preserves the entry after a failed delet
   expect(renderer.root.findAllByType("h3").map(text)).not.toContain("Movie a");
 });
 
-test("all movie cards start closed and finishing one points to the remaining movie", async () => {
+test("every movie's picks are open at once and each movie reports its own progress", async () => {
   await render(
     <ConvexPredictionGame
       episodeId="episode"
@@ -440,9 +631,9 @@ test("all movie cards start closed and finishing one points to the remaining mov
       episodeStatus="next"
     />
   );
-  expect(renderer.root.findAllByType("fieldset")).toHaveLength(0);
-  expect(screenText()).toContain("0 of 2 movies complete");
-  await click("Make picks");
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(2);
+  expect(screenText()).toContain("0 of 2 picks saved");
+  expect(movieText().every((movie) => movie.includes("1 to go"))).toBe(true);
   mocks.savePick.mockResolvedValueOnce({
     id: "saved",
     hostId: "host",
@@ -451,18 +642,17 @@ test("all movie cards start closed and finishing one points to the remaining mov
   await act(async () =>
     renderer.root.findAllByType("input")[0]!.props.onChange()
   );
-  expect(screenText()).toContain("1 of 2 movies complete");
+  expect(screenText()).toContain("1 of 2 picks saved");
   expect(screenText()).not.toContain("All picks complete");
-  expect(button("Make picks").props["aria-expanded"]).toBe(false);
-  await click("Continue to Second movie");
-  expect(
-    renderer.root
-      .findAllByType("button")
-      .filter((node) => text(node).trim() === "Hide picks")
-  ).toHaveLength(2);
+  const [first, second] = movieText();
+  expect(first).toContain("All picked");
+  expect(first).toContain("Set wager");
+  expect(second).toContain("1 to go");
+  expect(second).toContain("Opens when your pick is in.");
+  expect(second).not.toContain("Set wager");
 });
 
-test("only playable movies contribute to prediction progress and Continue", async () => {
+test("only playable movies contribute to prediction progress", async () => {
   await render(
     <ConvexPredictionGame
       episodeId="episode"
@@ -487,10 +677,14 @@ test("only playable movies contribute to prediction progress and Continue", asyn
     />
   );
   expect(screenText()).toContain("0 of 2 picks saved");
-  expect(screenText()).toContain("0 of 2 movies complete");
-  expect(screenText()).not.toContain("0 of 3 movies complete");
+  expect(screenText()).not.toContain("0 of 3 picks saved");
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(2);
+  const bonus = movieText()[1]!;
+  expect(bonus).toContain("Bonus movie");
+  expect(bonus).toContain("Not in the game");
+  expect(bonus).not.toContain("to go");
+  expect(bonus).not.toContain("Wager");
 
-  await click("Make picks");
   mocks.savePick.mockResolvedValueOnce({
     id: "saved",
     hostId: "host",
@@ -501,9 +695,7 @@ test("only playable movies contribute to prediction progress and Continue", asyn
   );
 
   expect(screenText()).toContain("1 of 2 picks saved");
-  expect(screenText()).toContain("1 of 2 movies complete");
-  expect(screenText()).toContain("Continue to Second movie");
-  expect(screenText()).not.toContain("Continue to Bonus movie");
+  expect(screenText()).not.toContain("All picks complete");
 });
 
 test("live recording changes start a visible countdown and lock an already-open page at its deadline", async () => {
@@ -536,27 +728,27 @@ test("live recording changes start a visible countdown and lock an already-open 
       />
     );
   });
-  expect(screenText()).toContain("Picks and wagers close in 10:00");
+  expect(screenText()).toContain("Closing soon");
+  expect(screenText()).toContain("10:00 left to pick and wager");
   expect(renderer.root.findAllByType("fieldset")[0]!.props.disabled).toBe(
     false
   );
   await act(async () => {
     await vi.advanceTimersByTimeAsync(600_000);
   });
-  expect(screenText()).toContain("Picks locked");
-  expect(screenText()).toContain("0 of 1 picks locked in");
-  expect(screenText()).toContain("You missed 1 pick this round.");
-  expect(screenText()).toContain("No picks made");
-  expect(screenText()).toContain("No pick made");
-  expect(screenText()).toContain("Hide details");
-  expect(screenText()).not.toContain("Needs picks");
-  expect(screenText()).not.toContain("Make picks");
-  expect(screenText()).not.toContain("stay editable");
+  expect(screenText()).toContain("Locked");
+  expect(screenText()).toContain("Picks and wagers are final");
+  expect(screenText()).toContain("0 of 1 picks locked in · you missed 1");
+  expect(movieText()[0]).toContain("No picks made");
+  expect(movieText()[0]).toContain("Host OneNo pick");
+  expect(screenText()).not.toContain("to go");
+  expect(screenText()).not.toContain("Wager");
+  expect(screenText()).not.toContain("Locks 10 min");
   expect(renderer.root.findAllByType("input")).toHaveLength(0);
   expect(mocks.savePick).not.toHaveBeenCalled();
 });
 
-test("a locked round shows saved picks as read-only rows without edit prompts", async () => {
+test("a locked round shows saved picks as a read-only grid without edit prompts", async () => {
   mocks.loadPicks.mockResolvedValue({
     ...initialPicks,
     guessesByAssignment: {
@@ -576,16 +768,16 @@ test("a locked round shows saved picks as read-only rows without edit prompts", 
       episodeStatus="published"
     />
   );
-  expect(screenText()).toContain("Picks locked");
-  expect(screenText()).toContain("1 of 1 picks locked in");
-  expect(screenText()).toContain("All picked");
-  expect(screenText()).not.toContain("You missed");
-  expect(screenText()).not.toContain("View or edit picks");
-  await click("View picks");
   expect(screenText()).toContain("Locked");
-  expect(screenText()).toContain("Your wagers");
-  expect(screenText()).not.toContain("optional");
+  expect(screenText()).toContain("Picks and wagers are final");
+  expect(screenText()).toContain("1 of 1 picks locked in");
+  expect(screenText()).not.toContain("you missed");
+  expect(movieText()[0]).toContain("All picked");
+  expect(movieText()[0]).toContain("Rating 2");
+  expect(movieText()[0]).not.toContain("Rating 1");
+  expect(movieText()[0]).not.toContain("No pick");
   expect(renderer.root.findAllByType("input")).toHaveLength(0);
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(1);
 });
 
 test("a movie outside the game and an unopened round use their own wording", async () => {
@@ -602,10 +794,10 @@ test("a movie outside the game and an unopened round use their own wording", asy
       episodeStatus="next"
     />
   );
-  expect(screenText()).toContain("Round open");
-  expect(screenText()).toContain("Not in play");
-  expect(screenText()).toContain("This movie isn’t part of the game.");
-  expect(screenText()).not.toContain("This round is closed");
+  expect(screenText()).toContain("Open");
+  expect(screenText()).toContain("Not in the game");
+  expect(screenText()).not.toContain("picks saved");
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(0);
   act(() => renderer.unmount());
   await render(
     <ConvexPredictionGame
@@ -620,7 +812,9 @@ test("a movie outside the game and an unopened round use their own wording", asy
       episodeStatus="draft"
     />
   );
-  expect(screenText()).toContain("Picks not open yet");
+  expect(screenText()).toContain("Not open yet");
   expect(screenText()).toContain("Picks aren’t open for this episode yet.");
-  expect(screenText()).not.toContain("Picks locked");
+  expect(screenText()).not.toContain("Locked");
+  expect(screenText()).toContain("Test movie");
+  expect(renderer.root.findAllByType("fieldset")).toHaveLength(0);
 });

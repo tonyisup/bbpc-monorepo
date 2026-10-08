@@ -1,15 +1,17 @@
 "use client";
 
 import { useConvex } from "convex/react";
-import { AlertTriangle, Coins } from "lucide-react";
+import { Coins, Lock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FC } from "react";
 
 import BettingCoin, {
-  type PayoutTone,
+  type ExistingWager,
   type WagerInput,
+  type WagerType,
+  linkButton,
+  wagerProfit,
 } from "@/components/BettingCoin";
 import RatingIcon from "@/components/RatingIcon";
-import { Button } from "@/components/ui/button";
 import {
   type ConvexAssignmentWagerData,
   loadConvexAssignmentWagers,
@@ -26,15 +28,18 @@ import {
 } from "@/lib/predictionRound.mjs";
 import { cn } from "@/lib/utils";
 
-type WagerOption = {
-  lookupId: string;
-  label: string;
-  description: string;
-  targetHostId?: string;
-};
-
 const wagerHostIdentifiers = ["mcp", "fonso", "harley"] as const;
 type WagerHostIdentifier = (typeof wagerHostIdentifiers)[number];
+
+type WagerOption = {
+  key: string;
+  type: WagerType;
+  targetHostId?: string;
+  identifiers: WagerHostIdentifier[];
+  /** The hosts in plain words, such as "MCP + Fonso". */
+  name: string;
+  bet: ExistingWager | undefined;
+};
 
 const fallbackHostNames: Record<WagerHostIdentifier, string> = {
   mcp: "MCP",
@@ -83,6 +88,20 @@ export const ConvexAssignmentGamblingBoard: FC<{
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  // One bet is edited at a time.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  // While a bet saves, the other bets and Done wait, so its result always
+  // has its own open form to land in.
+  const [isSaving, setIsSaving] = useState(false);
+  // Opening and closing the list swaps its toggle button; focus follows it.
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const focusToggleRef = useRef(false);
+  useEffect(() => {
+    if (!focusToggleRef.current) return;
+    focusToggleRef.current = false;
+    toggleRef.current?.focus();
+  }, [isEditorOpen]);
   const isRoundOpen =
     getPredictionRoundState(episodeStatus, playable, closesAt, now) ===
     PredictionRoundState.OPEN;
@@ -115,9 +134,10 @@ export const ConvexAssignmentGamblingBoard: FC<{
   if (isLoading && data === null) {
     return (
       <div
-        className="rounded-lg bg-white/[0.03] p-4 text-sm text-zinc-400"
+        className="flex min-h-12 items-center gap-2.5 text-sm text-zinc-400"
         role="status"
       >
+        <span className="bbpc-label sm:w-16">Wager</span>
         Loading wager options…
       </div>
     );
@@ -126,19 +146,18 @@ export const ConvexAssignmentGamblingBoard: FC<{
   if (data === null) {
     return (
       <div
-        className="rounded-lg border border-red-500/30 bg-red-500/[0.08] p-4"
+        className="flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm"
         role="alert"
       >
-        <p className="font-bold text-white">Couldn&apos;t load wagering.</p>
-        <p className="mt-1 text-sm text-zinc-300">{loadError}</p>
-        <Button
-          className="mt-3"
-          size="sm"
-          variant="outline"
+        <span className="bbpc-label sm:w-16">Wager</span>
+        <span className="text-red-100">{loadError}</span>
+        <button
+          type="button"
+          className={cn(linkButton, "ml-auto")}
           onClick={() => void reload()}
         >
           Try again
-        </Button>
+        </button>
       </div>
     );
   }
@@ -188,231 +207,269 @@ export const ConvexAssignmentGamblingBoard: FC<{
       )
       .join(" + ");
 
-  const getSingleHostForLookupId = (lookupId: string) => {
-    const identifier = getHostIdentifiersForLookupId(lookupId)[0];
-    return identifier ? getHostByIdentifier(identifier) : undefined;
-  };
-
   const handleSubmit = async (input: WagerInput) => {
+    setIsSaving(true);
     try {
       await submitConvexWager(convex, input);
       await reload();
     } catch (error) {
       await reload();
       throw error;
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const hostOptions: WagerOption[] = [
+  const groups = [
     {
-      lookupId: "mcp-rating-guess-1x",
-      targetHostId: getSingleHostForLookupId("mcp-rating-guess-1x")?.id,
-      label: `${getHostLabelForLookupId("mcp-rating-guess-1x")}’s rating`,
-      description: "Win if this one host matches your saved pick.",
+      title: "One host",
+      lookupIds: [
+        "mcp-rating-guess-1x",
+        "fonso-rating-guess-1x",
+        "harley-rating-guess-1x",
+      ],
     },
     {
-      lookupId: "fonso-rating-guess-1x",
-      targetHostId: getSingleHostForLookupId("fonso-rating-guess-1x")?.id,
-      label: `${getHostLabelForLookupId("fonso-rating-guess-1x")}’s rating`,
-      description: "Win if this one host matches your saved pick.",
+      title: "Two hosts",
+      lookupIds: [
+        "mcp-fonso-rating-guess-2x",
+        "mcp-harley-rating-guess-2x",
+        "fonso-harley-rating-guess-2x",
+      ],
     },
-    {
-      lookupId: "harley-rating-guess-1x",
-      targetHostId: getSingleHostForLookupId("harley-rating-guess-1x")?.id,
-      label: `${getHostLabelForLookupId("harley-rating-guess-1x")}’s rating`,
-      description: "Win if this one host matches your saved pick.",
-    },
-  ].filter((option) => option.targetHostId);
+    { title: "All three", lookupIds: ["all-rating-guess-3x"] },
+  ].map((group) => ({
+    title: group.title,
+    options: group.lookupIds.flatMap((lookupId): WagerOption[] => {
+      const type = getTypeFor(lookupId);
+      const identifiers = getHostIdentifiersForLookupId(lookupId);
+      const [onlyHost] = identifiers;
+      // A one-host bet names its host; the others cover the hosts together.
+      const targetHostId =
+        identifiers.length === 1 && onlyHost !== undefined
+          ? getHostByIdentifier(onlyHost)?.id
+          : undefined;
+      if (type === undefined || (identifiers.length === 1 && !targetHostId)) {
+        return [];
+      }
+      return [
+        {
+          key: `${lookupId}-${targetHostId ?? "all"}`,
+          type,
+          targetHostId,
+          identifiers,
+          name: getHostLabelForLookupId(lookupId),
+          bet: getBetFor(lookupId, targetHostId),
+        },
+      ];
+    }),
+  }));
+  const placed = groups
+    .flatMap((group) => group.options)
+    .filter((option) => (option.bet?.points ?? 0) > 0);
+  // Only a pending bet is still at stake; a rejected or settled one is not.
+  const live = placed.filter((option) => option.bet?.status === "pending");
+  const staked = live.reduce(
+    (total, option) => total + (option.bet?.points ?? 0),
+    0
+  );
+  const possibleWin = live.reduce(
+    (total, option) =>
+      total + wagerProfit(option.bet?.points ?? 0, option.type.multiplier),
+    0
+  );
 
-  const pairOptions: WagerOption[] = [
-    {
-      lookupId: "mcp-fonso-rating-guess-2x",
-      label: getHostLabelForLookupId("mcp-fonso-rating-guess-2x"),
-      description: "Win only if both hosts match your saved picks.",
-    },
-    {
-      lookupId: "mcp-harley-rating-guess-2x",
-      label: getHostLabelForLookupId("mcp-harley-rating-guess-2x"),
-      description: "Win only if both hosts match your saved picks.",
-    },
-    {
-      lookupId: "fonso-harley-rating-guess-2x",
-      label: getHostLabelForLookupId("fonso-harley-rating-guess-2x"),
-      description: "Win only if both hosts match your saved picks.",
-    },
-  ];
+  /** The hosts a bet rides on, each with the rating the listener picked. */
+  const renderHosts = (option: WagerOption) => (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-white">
+      {option.identifiers.map((identifier, index) => {
+        const host = getHostByIdentifier(identifier);
+        const guess = guesses.find(
+          (candidate) => candidate.hostId === host?.id
+        );
+        return (
+          <span
+            key={identifier}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap"
+          >
+            {index > 0 ? (
+              <span className="mr-0.5 font-normal text-zinc-500">+</span>
+            ) : null}
+            {firstName(host, fallbackHostNames[identifier])}
+            {guess ? <RatingIcon value={guess.rating.value} /> : null}
+          </span>
+        );
+      })}
+    </p>
+  );
 
-  const allOptions: WagerOption[] = [
-    {
-      lookupId: "all-rating-guess-3x",
-      label: getHostLabelForLookupId("all-rating-guess-3x"),
-      description: "Win only if every host matches your saved picks.",
-    },
-  ];
+  const describeBet = (option: WagerOption) =>
+    option.identifiers.length === wagerHostIdentifiers.length
+      ? "all three hosts"
+      : option.name;
 
-  const getPayoutMultiplier = (options: WagerOption[]) =>
-    options
-      .map((option) => getTypeFor(option.lookupId)?.multiplier)
-      .find((multiplier) => multiplier !== undefined);
+  if (!isRoundOpen) {
+    return (
+      <div className="flex min-h-12 flex-wrap items-baseline gap-x-2.5 gap-y-1 py-3 text-sm">
+        <span className="bbpc-label sm:w-16">Wager</span>
+        {placed.length === 0 ? (
+          <span className="text-zinc-400">No wagers</span>
+        ) : (
+          <ul className="space-y-1.5">
+            {placed.map((option) => (
+              <li
+                key={option.key}
+                className="flex flex-wrap items-center gap-x-2.5 gap-y-1"
+              >
+                <span className="text-zinc-300">
+                  <b className="text-white">{option.bet?.points} pts</b> on{" "}
+                  {describeBet(option)}
+                </span>
+                <Multiplier value={option.type.multiplier} />
+                <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                  <Lock className="h-3 w-3" aria-hidden="true" />
+                  {option.bet?.status === "pending"
+                    ? "locked"
+                    : option.bet?.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
 
-  const renderOptions = (options: WagerOption[], payoutTone: PayoutTone) =>
-    options.map((option) => {
-      const type = getTypeFor(option.lookupId);
-      return type ? (
-        <BettingCoin
-          key={`${option.lookupId}-${option.targetHostId ?? "all"}`}
-          type={type}
-          targetHostId={option.targetHostId}
-          label={option.label}
-          description={option.description}
-          payoutTone={payoutTone}
-          existingBet={getBetFor(option.lookupId, option.targetHostId)}
-          assignmentId={assignmentId}
-          userPoints={data.availablePoints}
-          isRoundOpen={isRoundOpen}
-          onSubmit={handleSubmit}
-          formatSubmissionError={wagerError}
-        />
-      ) : null;
-    });
+  if (!isEditorOpen) {
+    const only = live.length === 1 ? live[0] : undefined;
+    return (
+      <div className="flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
+        <span className="bbpc-label sm:w-16">Wager</span>
+        {only ? (
+          <>
+            <span className="text-zinc-300">
+              <b className="text-white">{staked} pts</b> on {describeBet(only)}
+            </span>
+            <Multiplier value={only.type.multiplier} />
+            <span className="text-zinc-400">
+              +{possibleWin} if{" "}
+              {only.identifiers.length === 1
+                ? "it matches"
+                : only.identifiers.length === 2
+                ? "both match"
+                : "they all match"}
+            </span>
+          </>
+        ) : live.length > 1 ? (
+          <>
+            <span className="text-zinc-300">
+              <b className="text-white">{staked} pts</b> on {live.length} bets
+            </span>
+            <span className="text-zinc-400">up to +{possibleWin}</span>
+          </>
+        ) : (
+          <span className="text-zinc-400">
+            {placed.length > 0
+              ? "None at stake."
+              : "Optional. None placed yet."}
+          </span>
+        )}
+        <button
+          ref={toggleRef}
+          type="button"
+          className={cn(linkButton, "ml-auto")}
+          aria-expanded={false}
+          onClick={() => {
+            focusToggleRef.current = true;
+            setIsEditorOpen(true);
+            // Another movie's wager may have changed the balance since.
+            void reload();
+          }}
+        >
+          {placed.length > 0 ? "Change" : "Add a wager"}
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5">
+    <div className="pb-1 pt-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="bbpc-label">Wager</span>
+        <span className="inline-flex items-center gap-1.5 text-sm text-zinc-400 sm:ml-auto">
+          <Coins className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
+          <b className="text-white">{data.availablePoints}</b> pts available
+        </span>
+        <button
+          ref={toggleRef}
+          type="button"
+          className={cn(linkButton, "ml-auto min-w-11 justify-end sm:ml-0")}
+          aria-expanded
+          disabled={isSaving}
+          onClick={() => {
+            focusToggleRef.current = true;
+            setEditingKey(null);
+            setIsEditorOpen(false);
+          }}
+        >
+          Done
+        </button>
+      </div>
+      <p className="mt-0.5 text-[0.8125rem] text-zinc-400">
+        Optional. Each line is its own bet on your saved picks, and a miss costs
+        the points you risked.
+      </p>
+
       {loadError !== null ? (
-        <div
-          className="rounded-lg border border-red-500/30 bg-red-500/[0.08] p-3 text-sm text-red-100"
+        <p
+          className="mt-3 rounded-lg border border-red-500/30 bg-red-500/[0.08] p-3 text-sm text-red-100"
           role="alert"
         >
           {loadError}
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-4 sm:grid-cols-[1fr_auto] sm:items-start">
-        <div>
-          <p className="flex items-center gap-2 font-bold text-white">
-            <AlertTriangle
-              className="h-4 w-4 text-amber-300"
-              aria-hidden="true"
-            />
-            † Wagers can lose points
-          </p>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-300">
-            A loss deducts your wager. A win returns the wager plus the listed
-            multiplier payout.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg bg-black/25 px-3 py-2 text-sm">
-          <Coins className="h-4 w-4 text-amber-300" aria-hidden="true" />
-          <span className="text-zinc-400">Available</span>
-          <strong className="text-white">{data.availablePoints} points</strong>
-        </div>
-      </div>
-
-      {!isRoundOpen ? (
-        <p className="rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-3 text-sm font-semibold text-amber-100">
-          Betting is closed. Existing wagers are locked and shown below.
         </p>
       ) : null}
 
-      <div className="rounded-lg bg-white/[0.025] p-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-          Your saved picks
-        </p>
-        <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-          {hosts.map((host) => {
-            const guess = guesses.find(
-              (candidate) => candidate.hostId === host.id
-            );
-            return (
-              <li
-                key={host.id}
-                className="flex items-center gap-2 text-sm text-zinc-300"
-              >
-                <span className="font-semibold text-white">
-                  {host.name ?? "Host"}
-                </span>
-                {guess ? (
-                  <RatingIcon value={guess.rating.value} />
-                ) : (
-                  <span>Not picked</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      <WagerGroup
-        title="One host"
-        payoutMultiplier={getPayoutMultiplier(hostOptions)}
-        payoutTone="standard"
-        description="Lower risk: one result must match."
-      >
-        {renderOptions(hostOptions, "standard")}
-      </WagerGroup>
-      <WagerGroup
-        title="Two hosts"
-        payoutMultiplier={getPayoutMultiplier(pairOptions)}
-        payoutTone="boosted"
-        description="Both selected results must match."
-      >
-        {renderOptions(pairOptions, "boosted")}
-      </WagerGroup>
-      <WagerGroup
-        title="All hosts"
-        payoutMultiplier={getPayoutMultiplier(allOptions)}
-        payoutTone="maximum"
-        description="Highest risk: all three results must match."
-      >
-        {renderOptions(allOptions, "maximum")}
-      </WagerGroup>
+      {groups.map((group) => {
+        const multiplier = group.options[0]?.type.multiplier;
+        return multiplier === undefined ? null : (
+          <section key={group.title} className="mt-3.5">
+            <h4 className="bbpc-label flex items-center gap-2 pb-1.5">
+              {group.title}
+              <Multiplier value={multiplier} />
+            </h4>
+            {group.options.map((option) => (
+              <BettingCoin
+                key={option.key}
+                type={option.type}
+                targetHostId={option.targetHostId}
+                label={renderHosts(option)}
+                name={option.name}
+                existingBet={option.bet}
+                assignmentId={assignmentId}
+                userPoints={data.availablePoints}
+                isEditing={editingKey === option.key}
+                disabled={isSaving}
+                onEdit={() => setEditingKey(option.key)}
+                onClose={() =>
+                  setEditingKey((current) =>
+                    current === option.key ? null : current
+                  )
+                }
+                onSubmit={handleSubmit}
+                formatSubmissionError={wagerError}
+              />
+            ))}
+          </section>
+        );
+      })}
     </div>
   );
 };
 
-function WagerGroup({
-  title,
-  payoutMultiplier,
-  payoutTone,
-  description,
-  children,
-}: {
-  title: string;
-  payoutMultiplier: number | undefined;
-  payoutTone: PayoutTone;
-  description: string;
-  children: React.ReactNode;
-}) {
-  const sectionTone =
-    payoutTone === "standard"
-      ? "border-cyan-400/20 bg-cyan-400/[0.035]"
-      : payoutTone === "boosted"
-      ? "border-amber-400/20 bg-amber-400/[0.035]"
-      : "border-rose-400/20 bg-rose-400/[0.035]";
-  const payoutBadge =
-    payoutTone === "standard"
-      ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-200"
-      : payoutTone === "boosted"
-      ? "border-amber-300/30 bg-amber-400/10 text-amber-200"
-      : "border-rose-300/30 bg-rose-400/10 text-rose-200";
-
+function Multiplier({ value }: { value: number }) {
   return (
-    <section className={cn("rounded-xl border p-3 sm:p-4", sectionTone)}>
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h4 className="font-black text-white">{title}</h4>
-        {payoutMultiplier !== undefined ? (
-          <span
-            className={cn(
-              "rounded-full border px-2 py-0.5 text-xs font-black",
-              payoutBadge
-            )}
-          >
-            {payoutMultiplier}x payout
-          </span>
-        ) : null}
-        <p className="basis-full text-xs text-zinc-400">{description}</p>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-3">{children}</div>
-    </section>
+    <span className="rounded-full border border-white/[0.12] px-1.5 py-px text-[0.6875rem] font-extrabold normal-case tracking-normal text-zinc-300">
+      {value}x
+    </span>
   );
 }

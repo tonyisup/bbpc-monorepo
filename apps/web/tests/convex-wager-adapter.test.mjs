@@ -35,11 +35,11 @@ test("the Convex wager board reuses neutral controls without SQL dependencies", 
   assert.match(board, /getPredictionRoundState\(episodeStatus, playable, closesAt, now\)/u);
   assert.match(board, /await reload\(\)[\s\S]*throw error/u);
   assert.match(board, /formatSubmissionError=\{wagerError\}/u);
-  assert.match(board, /Wagers can lose points/u);
-  assert.match(board, /Available/u);
+  assert.match(board, /a miss\s+costs\s+the\s+points\s+you\s+risked/u);
+  assert.match(board, /pts available/u);
   assert.match(board, /One host/u);
   assert.match(board, /Two hosts/u);
-  assert.match(board, /All hosts/u);
+  assert.match(board, /All three/u);
 });
 
 test("wagering is exposed only after every host prediction is present", () => {

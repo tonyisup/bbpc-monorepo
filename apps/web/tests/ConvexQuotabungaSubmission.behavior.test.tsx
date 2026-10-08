@@ -229,7 +229,9 @@ async function renderSubmission(
   createNodeMock?: (element: {
     type: unknown;
     props: Record<string, unknown>;
-  }) => unknown
+  }) => unknown,
+  /** A listener without an entry opens the form from the row's button. */
+  openForm = true
 ) {
   await act(async () => {
     renderer = create(
@@ -248,7 +250,16 @@ async function renderSubmission(
   if (renderer === null) {
     throw new Error("Quotabunga form did not render.");
   }
-  return renderer;
+  const rendered: ReactTestRenderer = renderer;
+  const start = rendered.root
+    .findAllByType("button")
+    .find((candidate) => instanceText(candidate) === "Add your quote");
+  if (openForm && start !== undefined) {
+    await act(async () => {
+      start.props.onClick();
+    });
+  }
+  return rendered;
 }
 
 function enterQuote(
@@ -1456,5 +1467,55 @@ describe("ConvexQuotabungaSubmission writes", () => {
     });
     expect(mocks.withdraw).not.toHaveBeenCalled();
     expect(renderedText(rendered)).toContain("Hold on to ya");
+  });
+
+  test("a listener without an entry starts from Add your quote, and Cancel keeps the draft", async () => {
+    const rendered = await renderSubmission("next", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    await act(async () => {
+      findButton(rendered, "Add your quote").props.onClick();
+    });
+    expect(rendered.root.findAllByType("form")).toHaveLength(1);
+    expect(
+      rendered.root
+        .findAllByType("button")
+        .filter((candidate) => instanceText(candidate) === "Add your quote")
+    ).toHaveLength(0);
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    await act(async () => {
+      findButton(rendered, "Cancel").props.onClick();
+    });
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    await act(async () => {
+      findButton(rendered, "Add your quote").props.onClick();
+    });
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("Hold on to ya");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("a locked round offers no way to start an entry", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, isOpen: false });
+    const rendered = await renderSubmission("recording", undefined, false);
+    expect(renderedText(rendered)).toContain("are locked");
+    expect(rendered.root.findAllByType("button")).toHaveLength(0);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+  });
+
+  test("withdrawing leaves the form open for a replacement entry", async () => {
+    mocks.load.mockResolvedValueOnce({ ...openRound, submission: savedEntry });
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true)
+    );
+    const rendered = await renderSubmission();
+    await act(async () => {
+      await findButton(rendered, "Withdraw").props.onClick();
+    });
+    expect(rendered.root.findAllByType("form")).toHaveLength(1);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("");
   });
 });

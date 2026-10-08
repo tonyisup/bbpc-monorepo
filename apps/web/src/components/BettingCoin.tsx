@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { type FormEvent, type FC, useState } from "react";
+import { type FormEvent, type FC, type ReactNode, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -15,8 +15,6 @@ export type WagerInput = {
   targetUserId?: string;
 };
 
-export type PayoutTone = "standard" | "boosted" | "maximum";
-
 export interface WagerType {
   id: string;
   multiplier: number;
@@ -27,76 +25,66 @@ export interface ExistingWager {
   status: string;
 }
 
+// Settlement awards whole points, rounding fractional profits down.
+export function wagerProfit(points: number, multiplier: number) {
+  return Math.floor(points * multiplier);
+}
+
+const quickAmounts = [10, 25, 50];
+
+export const linkButton =
+  "inline-flex min-h-11 items-center rounded-md text-[0.8125rem] font-semibold text-zinc-300 underline underline-offset-4 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-50";
+
 interface BettingCoinProps {
   type: WagerType;
   targetHostId?: string;
-  label: string;
-  description: string;
-  payoutTone: PayoutTone;
+  /** The hosts this bet rides on, as the listener sees them. */
+  label: ReactNode;
+  /** The same hosts in plain words, for button names. */
+  name: string;
   existingBet: ExistingWager | undefined;
   assignmentId: string;
   userPoints: number;
-  isRoundOpen: boolean;
+  isEditing: boolean;
+  /** Another bet on this board is being saved. */
+  disabled?: boolean;
+  onEdit: () => void;
+  onClose: () => void;
   onSubmit: (input: WagerInput) => Promise<void>;
   formatSubmissionError?: (error: unknown) => string;
 }
 
+/** One bet in the wager list: a line to read, or the form that changes it. */
 const BettingCoin: FC<BettingCoinProps> = ({
   type,
   targetHostId,
   label,
-  description,
-  payoutTone,
+  name,
   existingBet,
   assignmentId,
   userPoints,
-  isRoundOpen,
+  isEditing,
+  disabled = false,
+  onEdit,
+  onClose,
   onSubmit,
   formatSubmissionError,
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
   const [amount, setAmount] = useState(existingBet?.points.toString() ?? "");
-  const [reviewAmount, setReviewAmount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isResolved = Boolean(existingBet && existingBet.status !== "pending");
-  const isLocked = !isRoundOpen || isResolved;
   const currentAmount = existingBet?.points ?? 0;
   const maximumAmount = userPoints + currentAmount;
-  // Settlement awards whole points, rounding fractional profits down.
-  const reviewProfit = Math.floor((reviewAmount ?? 0) * type.multiplier);
-  const payoutBorder =
-    payoutTone === "standard"
-      ? "border-cyan-400/20"
-      : payoutTone === "boosted"
-      ? "border-amber-400/20"
-      : "border-rose-400/20";
-  const payoutBadge =
-    payoutTone === "standard"
-      ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-200"
-      : payoutTone === "boosted"
-      ? "border-amber-300/30 bg-amber-400/10 text-amber-200"
-      : "border-rose-300/30 bg-rose-400/10 text-rose-200";
-
-  const validateAmount = () => {
-    const points = Number(amount);
-    if (!Number.isInteger(points) || points <= 0) {
-      setError("Enter a whole number greater than zero.");
-      return null;
-    }
-    if (points > maximumAmount) {
-      setError(`You can wager up to ${maximumAmount} points on this outcome.`);
-      return null;
-    }
-    setError(null);
-    return points;
-  };
-
-  const prepareReview = (event: FormEvent) => {
-    event.preventDefault();
-    const points = validateAmount();
-    if (points !== null) setReviewAmount(points);
-  };
+  const typedAmount = Number(amount);
+  const points =
+    Number.isInteger(typedAmount) &&
+    typedAmount > 0 &&
+    typedAmount <= maximumAmount
+      ? typedAmount
+      : null;
+  // Every movie lists the same bets, so the movie is part of the id.
+  const inputId = `wager-${assignmentId}-${type.id}-${targetHostId ?? "all"}`;
 
   const submit = async (points: number) => {
     setIsSubmitting(true);
@@ -109,8 +97,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
         targetUserId: targetHostId,
       });
       setAmount(points > 0 ? points.toString() : "");
-      setReviewAmount(null);
-      setIsEditing(false);
+      onClose();
     } catch (submissionError) {
       const message =
         formatSubmissionError?.(submissionError) ??
@@ -121,180 +108,164 @@ const BettingCoin: FC<BettingCoinProps> = ({
           : message ||
               "Couldn’t save this wager. Check your connection and retry."
       );
-      setReviewAmount(null);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return (
-    <div
-      className={cn(
-        "rounded-lg border bg-black/20 p-3",
-        currentAmount > 0 ? "border-emerald-400/30" : payoutBorder
-      )}
-    >
-      <div className="flex min-h-11 items-start justify-between gap-3">
-        <div>
-          <p className="font-bold text-white">{label}</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
-            {description}
-          </p>
+  const confirm = (event: FormEvent) => {
+    event.preventDefault();
+    if (points !== null) {
+      void submit(points);
+    } else if (!Number.isInteger(typedAmount) || typedAmount <= 0) {
+      setError("Enter a whole number greater than zero.");
+    } else {
+      setError(`You can wager up to ${maximumAmount} points on this outcome.`);
+    }
+  };
+
+  if (!isEditing) {
+    return (
+      <div className="flex min-h-12 items-center gap-x-4 border-t border-white/[0.07] py-1.5 text-sm">
+        <div className="min-w-0 flex-1 sm:flex sm:items-center sm:justify-between sm:gap-4">
+          {label}
+          {currentAmount > 0 ? (
+            <p className="whitespace-nowrap text-zinc-400">
+              <b className="text-white">{currentAmount} pts</b> · wins +
+              {wagerProfit(currentAmount, type.multiplier)}
+            </p>
+          ) : null}
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-md border px-2.5 py-1 text-sm font-black tabular-nums",
-            payoutBadge
-          )}
-        >
-          <span className="mr-1 text-[10px] uppercase tracking-wider opacity-70">
-            Pays
+        {isResolved ? (
+          <span className="shrink-0 text-right text-xs font-semibold text-zinc-400">
+            Wager {existingBet?.status}
           </span>
-          {type.multiplier}x
-        </span>
+        ) : (
+          <button
+            type="button"
+            className={cn(linkButton, "min-w-11 shrink-0 justify-end")}
+            disabled={disabled}
+            aria-label={`${
+              currentAmount > 0 ? "Edit" : "Add"
+            } wager on ${name}`}
+            onClick={() => {
+              setAmount(currentAmount > 0 ? currentAmount.toString() : "");
+              setError(null);
+              onEdit();
+            }}
+          >
+            {currentAmount > 0 ? "Edit" : "Add"}
+          </button>
+        )}
       </div>
+    );
+  }
 
-      {currentAmount > 0 && (
-        <p className="mt-3 text-sm font-semibold text-emerald-300">
-          {currentAmount} points {isLocked ? "locked" : "wagered"}
+  return (
+    <form
+      className="-mx-2 mb-1.5 rounded-[0.625rem] border border-white/20 bg-[color:var(--bbpc-surface-raised)] p-3 sm:-mx-3.5 sm:p-3.5"
+      onSubmit={confirm}
+    >
+      {label}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label
+          htmlFor={inputId}
+          className="text-[0.8125rem] font-bold text-zinc-300"
+        >
+          Points to risk
+        </label>
+        <Input
+          id={inputId}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={maximumAmount}
+          step={1}
+          value={amount}
+          onChange={(event) => {
+            setAmount(event.target.value);
+            setError(null);
+          }}
+          className="h-11 w-24 bg-black/30 font-bold tabular-nums"
+          aria-describedby={`${inputId}-outcome`}
+          aria-invalid={Boolean(error)}
+          disabled={isSubmitting}
+        />
+        {[
+          ...quickAmounts.filter((quick) => quick < maximumAmount),
+          maximumAmount,
+        ]
+          .filter((quick) => quick > 0)
+          .map((quick) => (
+            <button
+              key={quick}
+              type="button"
+              className="min-h-11 min-w-11 rounded-full border border-white/[0.12] px-3 text-[0.8125rem] font-bold text-zinc-300 hover:border-white/30 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-50"
+              disabled={isSubmitting}
+              onClick={() => {
+                setAmount(quick.toString());
+                setError(null);
+              }}
+            >
+              {quick === maximumAmount ? `Max ${quick}` : quick}
+            </button>
+          ))}
+      </div>
+      <p id={`${inputId}-outcome`} className="mt-3 text-sm text-zinc-300">
+        {points !== null ? (
+          <>
+            Miss and you lose <b className="text-white">{points}</b>. Hit and
+            you win{" "}
+            <b className="text-white">
+              +{wagerProfit(points, type.multiplier)}
+            </b>
+            , with your {points} back.
+          </>
+        ) : (
+          `You can risk up to ${maximumAmount} points on this bet.`
+        )}
+      </p>
+      {error && (
+        <p className="mt-2 text-xs font-semibold text-red-300" role="alert">
+          {error}
         </p>
       )}
-
-      {isLocked ? (
-        <p className="mt-3 text-xs text-zinc-500">
-          {currentAmount > 0
-            ? isResolved
-              ? `Wager ${existingBet?.status ?? "locked"}.`
-              : "This wager can’t be changed after picks close."
-            : "Betting closed for this outcome."}
-        </p>
-      ) : !isEditing ? (
-        <Button
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+        <Button type="submit" className="min-h-11" disabled={isSubmitting}>
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" aria-hidden="true" />
+              Saving…
+            </>
+          ) : points !== null ? (
+            `Confirm ${points} pts`
+          ) : (
+            "Confirm wager"
+          )}
+        </Button>
+        <button
           type="button"
-          className="mt-3 min-h-11 w-full"
-          variant="outline"
+          className={linkButton}
+          disabled={isSubmitting}
           onClick={() => {
-            setAmount(currentAmount > 0 ? currentAmount.toString() : "");
             setError(null);
-            setIsEditing(true);
+            onClose();
           }}
         >
-          {currentAmount > 0 ? "Edit wager" : "Set wager"}
-        </Button>
-      ) : reviewAmount === null ? (
-        <form className="mt-3 space-y-3" onSubmit={prepareReview}>
-          <div>
-            <label
-              htmlFor={`wager-${type.id}-${targetHostId ?? "all"}`}
-              className="text-xs font-bold text-zinc-300"
-            >
-              Points to risk
-            </label>
-            <Input
-              id={`wager-${type.id}-${targetHostId ?? "all"}`}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={maximumAmount}
-              step={1}
-              value={amount}
-              onChange={(event) => {
-                setAmount(event.target.value);
-                setError(null);
-              }}
-              className="mt-1 h-11 bg-black/30"
-              aria-describedby={`wager-help-${type.id}-${
-                targetHostId ?? "all"
-              }`}
-              aria-invalid={Boolean(error)}
-              disabled={isSubmitting}
-            />
-            <p
-              id={`wager-help-${type.id}-${targetHostId ?? "all"}`}
-              className="mt-1 text-xs text-zinc-500"
-            >
-              Available: {userPoints} points · Maximum here: {maximumAmount}
-            </p>
-          </div>
-          {error && (
-            <p className="text-xs font-semibold text-red-300" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="flex gap-2">
-            <Button
-              type="submit"
-              className="min-h-11 flex-1"
-              disabled={isSubmitting}
-            >
-              Review wager
-            </Button>
-            <Button
-              type="button"
-              className="min-h-11"
-              variant="ghost"
-              onClick={() => {
-                setIsEditing(false);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-          {currentAmount > 0 && (
-            <Button
-              type="button"
-              className="min-h-11 w-full text-red-300"
-              variant="ghost"
-              onClick={() => void submit(0)}
-              disabled={isSubmitting}
-            >
-              Clear wager
-            </Button>
-          )}
-        </form>
-      ) : (
-        <div className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] p-3">
-          <p className="font-bold text-white">Confirm {reviewAmount} points?</p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-300">
-            A loss costs {reviewAmount} points. A win earns {reviewProfit}{" "}
-            points in profit and returns {reviewAmount + reviewProfit} points
-            total, including your wager.
-          </p>
-          {error && (
-            <p className="mt-2 text-xs font-semibold text-red-300" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="mt-3 flex gap-2">
-            <Button
-              type="button"
-              className="min-h-11 flex-1"
-              onClick={() => void submit(reviewAmount)}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="animate-spin" aria-hidden="true" />
-                  Saving…
-                </>
-              ) : (
-                "Confirm wager"
-              )}
-            </Button>
-            <Button
-              type="button"
-              className="min-h-11"
-              variant="ghost"
-              onClick={() => setReviewAmount(null)}
-              disabled={isSubmitting}
-            >
-              Back
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+          Cancel
+        </button>
+        {currentAmount > 0 && (
+          <button
+            type="button"
+            className={cn(linkButton, "text-red-300 sm:ml-auto")}
+            onClick={() => void submit(0)}
+            disabled={isSubmitting}
+          >
+            Clear wager
+          </button>
+        )}
+      </div>
+    </form>
   );
 };
 
