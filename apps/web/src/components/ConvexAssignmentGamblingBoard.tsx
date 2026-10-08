@@ -407,7 +407,7 @@ export const ConvexAssignmentGamblingBoard: FC<{
         <button
           ref={toggleRef}
           type="button"
-          className={cn(linkButton, "ml-auto min-w-11 justify-end sm:ml-0")}
+          className={cn(linkButton, "ml-auto justify-end sm:ml-0")}
           aria-expanded
           disabled={isSaving}
           onClick={() => {

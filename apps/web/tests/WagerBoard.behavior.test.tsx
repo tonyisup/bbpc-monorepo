@@ -318,6 +318,26 @@ test("focus stays with the list's toggle and returns to a bet's own line", async
   expect(focused).toEqual(["Done", "Add wager on Fonso"]);
   await click("Done");
   expect(focused).toEqual(["Done", "Add wager on Fonso", "toggle"]);
+
+  // A saved wager closes its form and hands focus to its line, once.
+  focused.length = 0;
+  await click("Change");
+  await click("Add wager on Harley");
+  act(() =>
+    renderer.root
+      .findByType("input")
+      .props.onChange({ target: { value: "20" } })
+  );
+  await act(async () => {
+    await renderer.root
+      .findByType("form")
+      .props.onSubmit({ preventDefault: vi.fn() });
+  });
+  expect(renderer.root.findAllByType("form")).toHaveLength(0);
+  expect(focused).toEqual(["Done", "Add wager on Harley"]);
+  await click("Edit wager on MCP");
+  await click("Cancel");
+  expect(focused).toEqual(["Done", "Add wager on Harley", "Edit wager on MCP"]);
 });
 
 test("a rejected wager is not counted as points at stake", async () => {
@@ -333,6 +353,9 @@ test("a rejected wager is not counted as points at stake", async () => {
   expect(screenText()).toContain("None at stake.");
   await click("Change");
   expect(screenText()).toContain("Wager rejected");
+  // A rejected bet shows what was risked, not a win it cannot pay.
+  expect(screenText()).toContain("25 pts");
+  expect(screenText()).not.toContain("wins +");
 });
 
 test("a wager locked before the round reopened still counts as points at stake", async () => {
@@ -341,6 +364,7 @@ test("a wager locked before the round reopened still counts as points at stake",
   expect(screenText()).toContain("+75 if they all match");
   expect(screenText()).not.toContain("None at stake.");
   await click("Change");
+  expect(screenText()).toContain("25 pts · wins +75");
   expect(screenText()).toContain("Wager locked");
 });
 

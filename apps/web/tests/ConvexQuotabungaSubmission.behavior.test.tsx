@@ -1568,4 +1568,55 @@ describe("ConvexQuotabungaSubmission writes", () => {
       rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
     ).toBe("");
   });
+
+  test("a save in flight keeps its button focusable, ignores a second press and survives a failure", async () => {
+    const request = deferred<void>();
+    mocks.submit.mockReturnValueOnce(request.promise);
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    const save = () => findButton(rendered, "Submit quote");
+    await act(async () => {
+      void rendered.root
+        .findByType("form")
+        .props.onSubmit({ preventDefault: vi.fn() });
+    });
+    expect(save().props["aria-disabled"]).toBe(true);
+    expect(save().props.disabled).toBe(false);
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      request.reject(new Error("offline"));
+    });
+    expect(save().props["aria-disabled"]).toBe(false);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("Hold on to ya");
+  });
+
+  test("a withdrawal in flight keeps its button focusable, ignores a second press and survives a failure", async () => {
+    const request = deferred<void>();
+    mocks.withdraw.mockReturnValueOnce(request.promise);
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const rendered = await renderSubmission();
+    const withdraw = () => findButton(rendered, "Withdraw");
+    await act(async () => {
+      void withdraw().props.onClick();
+    });
+    expect(withdraw().props["aria-disabled"]).toBe(true);
+    expect(withdraw().props.disabled).toBeUndefined();
+    await act(async () => {
+      await withdraw().props.onClick();
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(mocks.withdraw).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      request.reject(new Error("offline"));
+    });
+    expect(withdraw().props["aria-disabled"]).toBe(false);
+    expect(renderedText(rendered)).toContain("Hold on to ya");
+  });
 });

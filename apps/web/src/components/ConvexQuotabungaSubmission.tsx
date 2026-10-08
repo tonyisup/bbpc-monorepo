@@ -260,7 +260,7 @@ export function ConvexQuotabungaSubmission({
   const currentRoundLink = hasAired ? (
     <Link
       href="/game"
-      className="inline-flex items-center gap-1 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
+      className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
     >
       Submit to the current round
     </Link>
@@ -437,8 +437,11 @@ export function ConvexQuotabungaSubmission({
     setClipUrl(nextUrl);
   };
 
+  // Save and Withdraw stay focusable while their request is in flight and
+  // ignore a second press, so the keyboard keeps its place if it fails.
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSaving) return;
     const normalizedQuote = quoteText.trim();
     const normalizedSource = sourceTitle.trim();
     const normalizedClipUrl = clipUrl.trim();
@@ -505,6 +508,7 @@ export function ConvexQuotabungaSubmission({
   };
 
   const withdraw = async () => {
+    if (isWithdrawing) return;
     if (!window.confirm("Withdraw this Quotabunga entry?")) {
       return;
     }
@@ -586,6 +590,7 @@ export function ConvexQuotabungaSubmission({
                   <Button
                     size="sm"
                     variant="outline"
+                    className="min-h-11"
                     onClick={() => void reload()}
                   >
                     Try again
@@ -656,9 +661,9 @@ export function ConvexQuotabungaSubmission({
                       <Pencil className="h-4 w-4" /> Edit
                     </Button>
                     <Button
-                      className="min-h-11 flex-1 sm:flex-none"
+                      className="min-h-11 flex-1 aria-disabled:opacity-50 sm:flex-none"
                       variant="outline"
-                      disabled={isWithdrawing}
+                      aria-disabled={isWithdrawing}
                       onClick={() => void withdraw()}
                     >
                       {isWithdrawing ? (
@@ -822,6 +827,7 @@ export function ConvexQuotabungaSubmission({
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-h-11"
                   onClick={() => {
                     if (submission) {
                       pendingFocusRef.current = "edit";
@@ -836,8 +842,9 @@ export function ConvexQuotabungaSubmission({
                 </Button>
                 <Button
                   type="submit"
+                  className="min-h-11 aria-disabled:opacity-50"
+                  aria-disabled={isSaving}
                   disabled={
-                    isSaving ||
                     quoteText.trim().length === 0 ||
                     sourceTitle.trim().length === 0
                   }

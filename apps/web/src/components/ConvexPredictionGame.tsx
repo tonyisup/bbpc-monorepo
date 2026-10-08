@@ -564,7 +564,11 @@ export function ConvexPredictionGame({
           <p className="font-bold text-white">Couldn&apos;t load the game.</p>
           <p className="mt-0.5 text-zinc-300">{loadError}</p>
         </div>
-        <Button variant="outline" onClick={() => void reload()}>
+        <Button
+          variant="outline"
+          className="min-h-11"
+          onClick={() => void reload()}
+        >
           Try again
         </Button>
       </GameSheetRow>
@@ -717,7 +721,12 @@ export function ConvexPredictionGame({
         </GameSheetRow>
       ) : null}
 
-      <div className="border-t border-white/10" style={gridStyle}>
+      {/* The scroll margin keeps a control that takes focus clear of the
+          site header and the pinned legend. */}
+      <div
+        className="border-t border-white/10 [&_:is(a,button,input,select,textarea)]:scroll-mt-36"
+        style={gridStyle}
+      >
         {isRoundOpen || isRoundLocked ? (
           <div
             className={cn(
@@ -839,6 +848,28 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
     ratingId: string;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Retry save disappears with its alert, so once the retry settles, focus
+  // goes to the saved pick, or back to Retry save if it failed again.
+  const radioRefs = useRef(new Map<string, HTMLInputElement>());
+  const retryRef = useRef<HTMLButtonElement>(null);
+  const retriedHostRef = useRef<string | null>(null);
+  useEffect(() => {
+    const hostId = retriedHostRef.current;
+    if (hostId === null || savingHostId !== null) return;
+    retriedHostRef.current = null;
+    // The listener has moved on to another control; leave them there.
+    if (
+      typeof document !== "undefined" &&
+      document.activeElement !== null &&
+      document.activeElement !== document.body
+    ) {
+      return;
+    }
+    const ratingId = findGuessForHost(guesses, hostId)?.rating.id;
+    (
+      retryRef.current ?? radioRefs.current.get(`${hostId}:${ratingId}`)
+    )?.focus();
+  });
   const selectedCount = hosts.filter((host) =>
     findGuessForHost(guesses, host.id)
   ).length;
@@ -1022,10 +1053,12 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
             const didFail = failedPick?.hostId === host.id;
             const isSaved = !isSaving && !didFail && Boolean(guess?.rating.id);
             return (
+              // While a pick saves, the cells stay focusable and ignore
+              // input, so the keyboard keeps its place in the grid.
               <fieldset
                 key={host.id}
                 className={cn(scorecardGrid, "mt-1.5 min-w-0")}
-                disabled={savingHostId !== null}
+                aria-disabled={savingHostId !== null}
               >
                 <legend className="sr-only">{hostName}</legend>
                 <div className="min-w-0 pr-1">
@@ -1069,7 +1102,12 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
                         value={rating.id}
                         checked={isSelected}
                         onChange={() => void chooseRating(host.id, rating.id)}
-                        disabled={savingHostId !== null}
+                        aria-disabled={savingHostId !== null}
+                        ref={(node) => {
+                          const key = `${host.id}:${rating.id}`;
+                          if (node) radioRefs.current.set(key, node);
+                          else radioRefs.current.delete(key);
+                        }}
                         className="peer sr-only"
                       />
                       <span
@@ -1124,10 +1162,12 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
               type="button"
               size="sm"
               variant="outline"
-              onClick={() =>
-                void chooseRating(failedPick.hostId, failedPick.ratingId)
-              }
-              disabled={savingHostId !== null}
+              className="min-h-11"
+              ref={retryRef}
+              onClick={() => {
+                retriedHostRef.current = failedPick.hostId;
+                void chooseRating(failedPick.hostId, failedPick.ratingId);
+              }}
             >
               Retry save
             </Button>

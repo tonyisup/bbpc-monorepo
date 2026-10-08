@@ -95,10 +95,14 @@ export function GameParticipation({
         <GameSheetRow className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <p className="text-zinc-300">{message}</p>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={refreshAccount}>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={refreshAccount}
+            >
               Try again
             </Button>
-            <Button variant="ghost" onClick={signOut}>
+            <Button variant="ghost" className="min-h-11" onClick={signOut}>
               Sign out
             </Button>
           </div>

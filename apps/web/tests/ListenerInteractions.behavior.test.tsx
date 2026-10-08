@@ -232,7 +232,7 @@ test("a wager states its exact whole-point loss and win before it is confirmed",
   expect(input.props["aria-describedby"]).toBe(
     "wager-assignment-type-all-outcome"
   );
-  expect(button("Confirm 3 pts").props.disabled).toBe(false);
+  expect(button("Confirm 3 pts").props["aria-disabled"]).toBe(false);
   expect(submit).not.toHaveBeenCalled();
   await confirmWager();
   expect(submit).toHaveBeenCalledWith({
@@ -270,17 +270,23 @@ test("a wager that fails to save stays open with its reason and cannot be sent t
   const close = await renderWager(submit);
   typeWager("5");
   await confirmWager();
-  expect(button("Saving…").props.disabled).toBe(true);
+  // The control that held focus when the save began stays focusable.
+  expect(button("Saving…").props["aria-disabled"]).toBe(true);
+  expect(button("Saving…").props.disabled).toBeUndefined();
+  expect(renderer.root.findByType("input").props.readOnly).toBe(true);
+  expect(renderer.root.findByType("input").props.disabled).toBeUndefined();
   expect(button("Cancel").props.disabled).toBe(true);
   expect(button("Max 100").props.disabled).toBe(true);
-  expect(renderer.root.findByType("input").props.disabled).toBe(true);
+  await confirmWager();
+  expect(submit).toHaveBeenCalledTimes(1);
   await act(async () => {
     request.reject(new Error("ROUND_LOCKED"));
   });
   expect(text(renderer.root.findByProps({ role: "alert" }))).toBe(
     "Betting closed before this wager could be saved."
   );
-  expect(button("Confirm 5 pts").props.disabled).toBe(false);
+  expect(button("Confirm 5 pts").props["aria-disabled"]).toBe(false);
+  expect(renderer.root.findByType("input").props.readOnly).toBe(false);
   await confirmWager();
   expect(text(renderer.root.findByProps({ role: "alert" }))).toBe(
     "Couldn’t save this wager. Check your connection and retry."
@@ -315,7 +321,9 @@ test("an existing wager opens at its stake, clears to zero and is read-only once
     existingBet: { points: 20, status: "won" },
     isEditing: false,
   });
-  expect(screenText()).toContain("20 pts · wins +30");
+  // A settled bet no longer promises a win.
+  expect(screenText()).toContain("20 pts");
+  expect(screenText()).not.toContain("wins +");
   expect(screenText()).toContain("Wager won");
   expect(renderer.root.findAllByType("button")).toHaveLength(0);
 });
@@ -390,7 +398,7 @@ test("the game sheet keeps its other rows mounted while picks load, fail and rec
   expect(renderer.root.findAllByType("fieldset")).toHaveLength(1);
   expect(screenText()).toContain("Quote row");
   expect(rowMounts).toBe(1);
-  // The scoring rules close the sheet with signed points.
+  // The scoring rules follow the picks, with signed points.
   expect(renderer.root.findAllByType("dd").map(text)).toEqual([
     "+1",
     "+2",
@@ -730,9 +738,9 @@ test("live recording changes start a visible countdown and lock an already-open 
   });
   expect(screenText()).toContain("Closing soon");
   expect(screenText()).toContain("10:00 left to pick and wager");
-  expect(renderer.root.findAllByType("fieldset")[0]!.props.disabled).toBe(
-    false
-  );
+  expect(
+    renderer.root.findAllByType("fieldset")[0]!.props["aria-disabled"]
+  ).toBe(false);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(600_000);
   });
@@ -817,4 +825,94 @@ test("a movie outside the game and an unopened round use their own wording", asy
   expect(screenText()).not.toContain("Locked");
   expect(screenText()).toContain("Test movie");
   expect(renderer.root.findAllByType("fieldset")).toHaveLength(0);
+});
+
+test("a pick in flight keeps its cells focusable and ignores a second choice", async () => {
+  const request = deferred<unknown>();
+  mocks.savePick.mockReturnValueOnce(request.promise);
+  await renderPicks();
+  const cells = () => renderer.root.findAllByType("input");
+  await act(async () => {
+    cells()[0]!.props.onChange();
+  });
+  expect(cells().map((cell) => cell.props.disabled)).toEqual([
+    undefined,
+    undefined,
+  ]);
+  expect(cells().map((cell) => cell.props["aria-disabled"])).toEqual([
+    true,
+    true,
+  ]);
+  await act(async () => {
+    cells()[1]!.props.onChange();
+  });
+  expect(mocks.savePick).toHaveBeenCalledTimes(1);
+  expect(cells()[0]!.props.checked).toBe(true);
+  await act(async () => {
+    request.resolve({ id: "guess", hostId: "host", rating: ratings[0] });
+  });
+  expect(cells().map((cell) => cell.props["aria-disabled"])).toEqual([
+    false,
+    false,
+  ]);
+});
+
+test("Retry save hands focus to the saved pick, or back to itself when it fails again", async () => {
+  const focused: string[] = [];
+  await act(async () => {
+    renderer = create(
+      <ConvexPredictionGame
+        episodeId="episode"
+        assignments={[
+          {
+            id: "assignment",
+            playable: true,
+            movie: { title: "Test movie", poster: null },
+          },
+        ]}
+        episodeStatus="next"
+      />,
+      {
+        createNodeMock: (element) => ({
+          focus: () =>
+            focused.push(
+              element.type === "input"
+                ? `cell ${String(element.props.value)}`
+                : String(element.props.children)
+            ),
+          scrollIntoView: vi.fn(),
+        }),
+      }
+    );
+  });
+  const pick = (index: number) =>
+    act(async () => {
+      renderer.root.findAllByType("input")[index]!.props.onChange();
+    });
+
+  // A pick that fails leaves focus on the cell the listener chose.
+  mocks.savePick.mockRejectedValueOnce(new Error("offline"));
+  await pick(0);
+  expect(focused).toEqual([]);
+
+  mocks.savePick.mockRejectedValueOnce(new Error("offline"));
+  await click("Retry save");
+  expect(focused).toEqual(["Retry save"]);
+
+  mocks.savePick.mockResolvedValueOnce({
+    id: "guess",
+    hostId: "host",
+    rating: ratings[0],
+  });
+  await click("Retry save");
+  expect(focused).toEqual(["Retry save", "cell r1"]);
+
+  // Focus is handed over once; a later pick does not pull it back.
+  mocks.savePick.mockResolvedValueOnce({
+    id: "guess",
+    hostId: "host",
+    rating: ratings[1],
+  });
+  await pick(1);
+  expect(focused).toEqual(["Retry save", "cell r1"]);
 });

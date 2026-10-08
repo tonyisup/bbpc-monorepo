@@ -40,7 +40,7 @@ export function wagerProfit(points: number, multiplier: number) {
 const quickAmounts = [10, 25, 50];
 
 export const linkButton =
-  "inline-flex min-h-11 items-center rounded-md text-[0.8125rem] font-semibold text-zinc-300 underline underline-offset-4 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-50";
+  "inline-flex min-h-11 min-w-11 items-center rounded-md text-[0.8125rem] font-semibold text-zinc-300 underline underline-offset-4 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:opacity-50 aria-disabled:opacity-50";
 
 interface BettingCoinProps {
   type: WagerType;
@@ -89,6 +89,9 @@ const BettingCoin: FC<BettingCoinProps> = ({
     lineButtonRef.current?.focus();
   }, [isEditing]);
   const isResolved = Boolean(existingBet && existingBet.status !== "pending");
+  // Only a pending or locked bet can still pay out.
+  const canStillWin =
+    existingBet?.status === "pending" || existingBet?.status === "locked";
   const currentAmount = existingBet?.points ?? 0;
   const maximumAmount = userPoints + currentAmount;
   const typedAmount = Number(amount);
@@ -101,7 +104,10 @@ const BettingCoin: FC<BettingCoinProps> = ({
   // Every movie lists the same bets, so the movie is part of the id.
   const inputId = `wager-${assignmentId}-${type.id}-${targetHostId ?? "all"}`;
 
+  // While a save is in flight its controls stay focusable and ignore input,
+  // so the keyboard keeps its place if the save fails.
   const submit = async (points: number) => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -131,6 +137,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
 
   const confirm = (event: FormEvent) => {
     event.preventDefault();
+    if (isSubmitting) return;
     if (points !== null) {
       void submit(points);
     } else if (!Number.isInteger(typedAmount) || typedAmount <= 0) {
@@ -147,8 +154,10 @@ const BettingCoin: FC<BettingCoinProps> = ({
           {label}
           {currentAmount > 0 ? (
             <p className="whitespace-nowrap text-zinc-400">
-              <b className="text-white">{currentAmount} pts</b> · wins +
-              {wagerProfit(currentAmount, type.multiplier)}
+              <b className="text-white">{currentAmount} pts</b>
+              {canStillWin
+                ? ` · wins +${wagerProfit(currentAmount, type.multiplier)}`
+                : null}
             </p>
           ) : null}
         </div>
@@ -160,7 +169,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
           <button
             ref={lineButtonRef}
             type="button"
-            className={cn(linkButton, "min-w-11 shrink-0 justify-end")}
+            className={cn(linkButton, "shrink-0 justify-end")}
             disabled={disabled}
             aria-label={`${
               currentAmount > 0 ? "Edit" : "Add"
@@ -208,7 +217,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
           className="h-11 w-24 bg-black/30 font-bold tabular-nums"
           aria-describedby={`${inputId}-outcome`}
           aria-invalid={Boolean(error)}
-          disabled={isSubmitting}
+          readOnly={isSubmitting}
         />
         {[
           ...quickAmounts.filter((quick) => quick < maximumAmount),
@@ -250,7 +259,11 @@ const BettingCoin: FC<BettingCoinProps> = ({
         </p>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <Button type="submit" className="min-h-11" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="min-h-11 aria-disabled:opacity-50"
+          aria-disabled={isSubmitting}
+        >
           {isSubmitting ? (
             <>
               <Loader2 className="animate-spin" aria-hidden="true" />
@@ -279,7 +292,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
             type="button"
             className={cn(linkButton, "text-red-300 sm:ml-auto")}
             onClick={() => void submit(0)}
-            disabled={isSubmitting}
+            aria-disabled={isSubmitting}
           >
             Clear wager
           </button>
