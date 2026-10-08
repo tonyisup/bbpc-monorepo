@@ -16,6 +16,7 @@ from lib.convex_client import (
     ConvexPipelineClient,
     ConvexTransportError,
     PipelineEpisode,
+    PipelineEpisodeShow,
     stable_operation_id,
 )
 
@@ -139,6 +140,53 @@ def test_authenticates_and_validates_episode_context() -> None:
         "args": {"date": "2026-07-24"},
         "format": "json",
     }
+
+
+def test_reads_show_extras_from_the_episode_context() -> None:
+    session = FakeSession(
+        success(
+            {
+                "episode": episode_payload(),
+                "movies": [],
+                "shows": [
+                    {
+                        "id": "show-1",
+                        "title": "Severance",
+                        "year": 2022.0,
+                        "poster": "https://example.test/severance.jpg",
+                    }
+                ],
+            }
+        )
+    )
+
+    shows = client(session).get_episode_shows_by_date("2026-07-24")
+
+    assert shows == (
+        PipelineEpisodeShow(
+            show_id="show-1",
+            title="Severance",
+            year=2022,
+            poster="https://example.test/severance.jpg",
+        ),
+    )
+    assert session.calls[0]["json"] == {
+        "path": "pipeline/content:getEpisodeContextByDate",
+        "args": {"date": "2026-07-24"},
+        "format": "json",
+    }
+
+
+@pytest.mark.parametrize(
+    "context",
+    [None, {"episode": episode_payload(), "movies": []}],
+)
+def test_show_extras_are_empty_without_an_episode_or_shows_field(
+    context: object,
+) -> None:
+    session = FakeSession(success(context))
+
+    assert client(session).get_episode_shows_by_date("2026-07-24") == ()
 
 
 @pytest.mark.parametrize(
@@ -474,6 +522,19 @@ def test_rejects_contract_drift_and_unsafe_configuration() -> None:
                 )
             )
         ).get_episode_context_by_date("2026-07-24")
+
+    with pytest.raises(ConvexContractError, match="shows must be an array"):
+        client(
+            FakeSession(
+                success(
+                    {
+                        "episode": episode_payload(),
+                        "movies": [],
+                        "shows": "not-an-array",
+                    }
+                )
+            )
+        ).get_episode_shows_by_date("2026-07-24")
 
     with pytest.raises(ValueError, match="must use HTTPS"):
         ConvexPipelineClient(

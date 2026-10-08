@@ -183,6 +183,14 @@ class PipelineEpisodeMovie:
 
 
 @dataclass(frozen=True)
+class PipelineEpisodeShow:
+    show_id: str
+    title: str
+    year: int
+    poster: str | None
+
+
+@dataclass(frozen=True)
 class PipelineMovie:
     movie_id: str
     title: str
@@ -301,6 +309,18 @@ def _episode_movie(value: object) -> PipelineEpisodeMovie:
     )
 
 
+def _episode_show(value: object) -> PipelineEpisodeShow:
+    item = _require_mapping(value, "Pipeline episode show")
+    return PipelineEpisodeShow(
+        show_id=_require_string(item.get("id"), "Pipeline show id"),
+        title=_require_string(item.get("title"), "Pipeline show title"),
+        year=_require_int(item.get("year"), "Pipeline show year"),
+        poster=_require_nullable_string(
+            item.get("poster"), "Pipeline show poster"
+        ),
+    )
+
+
 def _movie(value: object) -> PipelineMovie:
     item = _require_mapping(value, "Pipeline movie")
     return PipelineMovie(
@@ -328,6 +348,19 @@ def _episode_context(
         _episode(context.get("episode")),
         tuple(_episode_movie(movie) for movie in movies),
     )
+
+
+def _episode_shows(value: object) -> tuple[PipelineEpisodeShow, ...]:
+    if value is None:
+        return ()
+    context = _require_mapping(value, "Pipeline episode context")
+    # A backend deployed before show extras were added omits the field.
+    shows = context.get("shows", [])
+    if not isinstance(shows, list):
+        raise ConvexContractError(
+            "Pipeline episode context shows must be an array."
+        )
+    return tuple(_episode_show(show) for show in shows)
 
 
 class ConvexPipelineClient:
@@ -540,6 +573,16 @@ class ConvexPipelineClient:
             self._query(
                 "pipeline/content:getEpisodeContextById",
                 {"id": episode_id},
+            )
+        )
+
+    def get_episode_shows_by_date(
+        self, date: str
+    ) -> tuple[PipelineEpisodeShow, ...]:
+        """Return the TV shows reviewed as extras on the dated episode."""
+        return _episode_shows(
+            self._query(
+                "pipeline/content:getEpisodeContextByDate", {"date": date}
             )
         )
 

@@ -1,7 +1,8 @@
 """Thumbnail stage — generates episode thumbnails by compositing movie posters + BBPC logo.
 
-Fetches poster URLs from the Movie table for each reviewed movie, downloads them,
-and composites a 1920x1080 thumbnail with the BBPC logo overlaid.
+Fetches poster URLs from the Movie table for each reviewed movie, plus the posters
+of TV shows reviewed as extras, downloads them, and composites a 1920x1080
+thumbnail with the BBPC logo overlaid.
 """
 from __future__ import annotations
 
@@ -13,7 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-from lib.convex_client import ConvexPipelineClient
+from lib.convex_client import ConvexPipelineClient, PipelineEpisodeShow
+from lib.episode_db import get_episode_shows_by_stem
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,22 @@ def _fetch_movie_posters(
     except Exception as exc:
         logger.warning("Thumbnail: Convex poster lookup failed: %s", exc)
         return {}
+
+
+def _fetch_episode_shows(
+    stem: str,
+    client: ConvexPipelineClient | None = None,
+) -> List[PipelineEpisodeShow]:
+    """Query Convex for the TV shows reviewed as extras on the episode.
+
+    The movie extraction only covers movies, so shows come from the episode itself.
+    """
+    try:
+        convex = client or ConvexPipelineClient.from_environment()
+        return get_episode_shows_by_stem(convex, stem)
+    except Exception as exc:
+        logger.warning("Thumbnail: Convex show lookup failed: %s", exc)
+        return []
 
 
 def _download_image(url: str, timeout: int = 30) -> Optional[Image.Image]:
@@ -274,8 +292,9 @@ def _add_title_text(
     canvas: Image.Image,
     episode_title: str,
     movie_titles: List[str],
+    show_titles: List[str],
 ) -> Image.Image:
-    """Add episode title and movie count text at the bottom of the canvas."""
+    """Add episode title and movie/show count text at the bottom of the canvas."""
     draw = ImageDraw.Draw(canvas)
 
     # Try to use a system font; fall back to default
@@ -292,10 +311,12 @@ def _add_title_text(
 
     # Episode title at bottom-left
     label = episode_title or ""
-    if movie_titles:
-        count_label = f"{len(movie_titles)} movie{'s' if len(movie_titles) > 1 else ''} reviewed"
-    else:
-        count_label = ""
+    counts = [
+        f"{len(titles)} {noun}{'s' if len(titles) > 1 else ''}"
+        for titles, noun in ((movie_titles, "movie"), (show_titles, "show"))
+        if titles
+    ]
+    count_label = f"{' and '.join(counts)} reviewed" if counts else ""
 
     margin = LOGO_MARGIN
     y = THUMB_HEIGHT - margin - font_size - (small_font_size + 8 if count_label else 0)
@@ -322,10 +343,13 @@ def generate_thumbnail(
     episode_title: str = "",
     movie_titles: Optional[List[str]] = None,
     convex_client: ConvexPipelineClient | None = None,
+    show_poster_urls: Optional[List[str]] = None,
+    show_titles: Optional[List[str]] = None,
 ) -> bool:
     """Generate a 1920x1080 episode thumbnail.
 
-    1. Fetches poster URLs from Convex for the given movie IDs.
+    1. Fetches poster URLs from Convex for the given movie IDs; show poster
+       URLs are passed in and follow the movies.
     2. Downloads each poster image.
     3. Composites posters in centred rows (row count chosen to maximise size).
     4. Overlays the BBPC logo at top-left.
@@ -337,23 +361,25 @@ def generate_thumbnail(
 
     # Fetch poster URLs
     poster_map = _fetch_movie_posters(movie_ids, convex_client)
-    if not poster_map:
-        logger.warning("Thumbnail: no poster URLs found for %d movie(s)", len(movie_ids))
+    poster_urls = [poster_map[mid] for mid in movie_ids if poster_map.get(mid)]
+    poster_urls.extend(show_poster_urls or [])
+    if not poster_urls:
+        logger.warning(
+            "Thumbnail: no poster URLs found for %d movie(s) and %d show(s)",
+            len(movie_ids), len(show_titles or []),
+        )
         # Still generate a text-only thumbnail
         canvas = Image.new("RGB", (THUMB_WIDTH, THUMB_HEIGHT), BG_COLOR)
         canvas_rgba = canvas.convert("RGBA")
         canvas_rgba = _apply_logo(canvas_rgba, config)
-        canvas_rgba = _add_title_text(canvas_rgba, episode_title, movie_titles or [])
+        canvas_rgba = _add_title_text(canvas_rgba, episode_title, movie_titles or [], show_titles or [])
         canvas_rgba.convert("RGB").save(output_path, format="PNG", optimize=True)
         logger.info("Thumbnail: wrote text-only thumbnail to %s", output_path)
         return True
 
     # Download posters
     posters: List[Image.Image] = []
-    for mid in movie_ids:
-        url = poster_map.get(mid)
-        if not url:
-            continue
+    for url in poster_urls:
         img = _download_image(url)
         if img:
             posters.append(img)
@@ -363,7 +389,7 @@ def generate_thumbnail(
         canvas = Image.new("RGB", (THUMB_WIDTH, THUMB_HEIGHT), BG_COLOR)
         canvas_rgba = canvas.convert("RGBA")
         canvas_rgba = _apply_logo(canvas_rgba, config)
-        canvas_rgba = _add_title_text(canvas_rgba, episode_title, movie_titles or [])
+        canvas_rgba = _add_title_text(canvas_rgba, episode_title, movie_titles or [], show_titles or [])
         canvas_rgba.convert("RGB").save(output_path, format="PNG", optimize=True)
         return True
 
@@ -380,7 +406,7 @@ def generate_thumbnail(
     canvas = _apply_logo(canvas, config)
 
     # Title text
-    canvas = _add_title_text(canvas, episode_title, movie_titles or [])
+    canvas = _add_title_text(canvas, episode_title, movie_titles or [], show_titles or [])
 
     # Write output
     canvas.convert("RGB").save(output_path, format="PNG", optimize=True)
@@ -434,6 +460,9 @@ def run(context: dict) -> None:
             year = m.get("year")
             movie_titles.append(f"{title} ({year})" if year else title)
 
+    # TV shows reviewed as extras are not part of the movie extraction.
+    shows = _fetch_episode_shows(stem, context.get("convex_client"))
+
     # Episode title from canonical context or extraction metadata.
     episode_title = ""
     db_episode = context.get("db_episode")
@@ -459,6 +488,8 @@ def run(context: dict) -> None:
         episode_title=episode_title,
         movie_titles=movie_titles,
         convex_client=context.get("convex_client"),
+        show_poster_urls=[show.poster for show in shows if show.poster],
+        show_titles=[f"{show.title} ({show.year})" for show in shows],
     )
     if ok:
         context["thumbnail_path"] = str(thumb_path)

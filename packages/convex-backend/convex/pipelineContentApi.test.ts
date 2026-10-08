@@ -202,7 +202,7 @@ describe("pipeline content API", () => {
       title: "Moon",
       year: 2009,
     });
-    await t.run(async (ctx) => {
+    const extraShowId = await t.run(async (ctx) => {
       const userId = await ctx.db.insert("users", {
         name: "Host",
         email: "host@example.test",
@@ -241,6 +241,24 @@ describe("pipeline content API", () => {
         reviewId: duplicateReviewId,
         episodeId,
       });
+      const showId = await ctx.db.insert("shows", {
+        title: "Severance",
+        normalizedTitle: "severance",
+        year: 2022,
+        poster: "https://example.test/severance.jpg",
+        url: "https://example.test/severance",
+      });
+      for (const reviewer of [userId, undefined]) {
+        const showReviewId = await ctx.db.insert("reviews", {
+          ...(reviewer === undefined ? {} : { userId: reviewer }),
+          showId,
+        });
+        await ctx.db.insert("extraReviews", {
+          reviewId: showReviewId,
+          episodeId,
+        });
+      }
+      return showId;
     });
     const service = t.withIdentity(SERVICE_IDENTITY);
 
@@ -267,6 +285,14 @@ describe("pipeline content API", () => {
           assignmentType: null,
         },
       ],
+      shows: [
+        {
+          id: extraShowId,
+          title: "Severance",
+          year: 2022,
+          poster: "https://example.test/severance.jpg",
+        },
+      ],
     });
     await expect(
       service.query(api.pipeline.content.getEpisodeContextById, {
@@ -275,6 +301,7 @@ describe("pipeline content API", () => {
     ).resolves.toMatchObject({
       episode: { id: episodeId },
       movies: [{ id: assignmentMovieId }, { id: extraMovieId }],
+      shows: [{ id: extraShowId }],
     });
     await expect(
       service.query(api.pipeline.content.listMovieCatalogPage, {
@@ -445,13 +472,7 @@ describe("pipeline content API", () => {
       },
     );
     await invalidExtraReview.run(async (ctx) => {
-      const showId = await ctx.db.insert("shows", {
-        title: "Severance",
-        normalizedTitle: "severance",
-        year: 2022,
-        url: "https://example.test/severance",
-      });
-      const reviewId = await ctx.db.insert("reviews", { showId });
+      const reviewId = await ctx.db.insert("reviews", {});
       await ctx.db.insert("extraReviews", {
         reviewId,
         episodeId: invalidExtraEpisodeId,
@@ -495,6 +516,36 @@ describe("pipeline content API", () => {
         .withIdentity(SERVICE_IDENTITY)
         .query(api.pipeline.content.getEpisodeContextById, {
           id: missingExtraEpisodeId,
+        }),
+      "CONFLICT",
+    );
+
+    const missingExtraShow = createTestBackend();
+    await seedService(missingExtraShow);
+    const missingShowEpisodeId = await seedEpisode(missingExtraShow, {
+      number: 4,
+      title: "Missing Extra Show",
+      date: "2026-08-14",
+    });
+    await missingExtraShow.run(async (ctx) => {
+      const showId = await ctx.db.insert("shows", {
+        title: "Severance",
+        normalizedTitle: "severance",
+        year: 2022,
+        url: "https://example.test/severance",
+      });
+      const reviewId = await ctx.db.insert("reviews", { showId });
+      await ctx.db.insert("extraReviews", {
+        reviewId,
+        episodeId: missingShowEpisodeId,
+      });
+      await ctx.db.delete("shows", showId);
+    });
+    await expectDomainError(
+      missingExtraShow
+        .withIdentity(SERVICE_IDENTITY)
+        .query(api.pipeline.content.getEpisodeContextById, {
+          id: missingShowEpisodeId,
         }),
       "CONFLICT",
     );

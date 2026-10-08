@@ -551,6 +551,12 @@ export type PublicApiType = {
             title: string;
             year: number;
           }>;
+          shows: Array<{
+            id: Id<"shows">;
+            poster: string | null;
+            title: string;
+            year: number;
+          }>;
         } | null
       >;
       getEpisodeContextById: FunctionReference<
@@ -576,6 +582,12 @@ export type PublicApiType = {
             id: Id<"movies">;
             poster: string | null;
             source: "assignment" | "extra_review";
+            title: string;
+            year: number;
+          }>;
+          shows: Array<{
+            id: Id<"shows">;
+            poster: string | null;
             title: string;
             year: number;
           }>;
