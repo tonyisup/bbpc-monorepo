@@ -335,6 +335,15 @@ test("a rejected wager is not counted as points at stake", async () => {
   expect(screenText()).toContain("Wager rejected");
 });
 
+test("a wager locked before the round reopened still counts as points at stake", async () => {
+  await renderBoard([entry("all-rating-guess-3x", 25, null, "locked")]);
+  expect(screenText()).toContain("25 pts on all three hosts");
+  expect(screenText()).toContain("+75 if they all match");
+  expect(screenText()).not.toContain("None at stake.");
+  await click("Change");
+  expect(screenText()).toContain("Wager locked");
+});
+
 test("a locked round lists each wager and offers nothing to change", async () => {
   await renderBoard(
     [

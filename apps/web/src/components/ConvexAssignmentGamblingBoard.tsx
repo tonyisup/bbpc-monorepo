@@ -267,8 +267,12 @@ export const ConvexAssignmentGamblingBoard: FC<{
   const placed = groups
     .flatMap((group) => group.options)
     .filter((option) => (option.bet?.points ?? 0) > 0);
-  // Only a pending bet is still at stake; a rejected or settled one is not.
-  const live = placed.filter((option) => option.bet?.status === "pending");
+  // A pending or locked bet still holds its points; a rejected or settled
+  // one does not.
+  const live = placed.filter(
+    (option) =>
+      option.bet?.status === "pending" || option.bet?.status === "locked"
+  );
   const staked = live.reduce(
     (total, option) => total + (option.bet?.points ?? 0),
     0
