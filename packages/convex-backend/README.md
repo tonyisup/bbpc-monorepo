@@ -45,7 +45,9 @@ It deletes the `authIdentities` and `servicePrincipals` rows that staging's own
 500 rows per run; repeat it until it returns `done: true`. Members, roles and role
 memberships stay, so the next staging sign-in links by verified email and keeps its
 roles. It refuses every deployment but staging, and a repeat run changes nothing.
-The pipeline has no staging principal afterwards.
+The reset removes pipeline principals copied from production but preserves those
+issued by staging's issuer. Provision a staging pipeline principal afterwards only
+if staging did not already have one.
 
 The workflow uses a deployment-scoped key named
 `github-actions-staging`; the key value belongs in the GitHub `staging` environment as

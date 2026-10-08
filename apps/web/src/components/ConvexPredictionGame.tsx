@@ -533,8 +533,8 @@ export function ConvexPredictionGame({
         {status}
       </GameSheetHeader>
       {content}
-      {children}
       {footer}
+      {children}
     </GameSheet>
   );
 
