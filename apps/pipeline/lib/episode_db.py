@@ -4,7 +4,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from lib.convex_client import ConvexPipelineClient, PipelineEpisode
+from lib.convex_client import (
+    ConvexPipelineClient,
+    PipelineEpisode,
+    PipelineEpisodeShow,
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +103,17 @@ def get_episode_movies_by_stem(
             for movie in movies
         ],
     )
+
+
+def get_episode_shows_by_stem(
+    client: ConvexPipelineClient,
+    stem: str,
+) -> list[PipelineEpisodeShow]:
+    """Return the TV shows reviewed as extras on the episode for this stem."""
+    if len(stem) < 8 or not stem[:8].isdigit():
+        return []
+    date_str = f"{stem[:4]}-{stem[4:6]}-{stem[6:8]}"
+    return list(client.get_episode_shows_by_date(date_str))
 
 
 def get_episode_movies_with_fallback(

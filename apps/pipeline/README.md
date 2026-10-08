@@ -20,7 +20,7 @@ transcribe → import_transcript → movies → review_clip → diarize → pars
 | 5 | `diarize` | `lib/diarizer.py` | Speaker identification (placeholder) |
 | 6 | `parse` | `lib/parser.py` | LLM SEO analysis (`settings.seo_model`): titles, descriptions, keywords, clip candidates |
 | 7 | `clip` | `lib/clipper.py` | Renders vertical 9:16 video with AI backgrounds, Ken Burns zoom, ASS subtitles |
-| 8 | `thumbnail` | `lib/thumbnail.py` | Generates 1920x1920 episode thumbnail from reviewed movie posters + BBPC logo |
+| 8 | `thumbnail` | `lib/thumbnail.py` | Generates 1920x1920 episode thumbnail from reviewed movie and TV show extra posters + BBPC logo |
 | 9 | `publish` | `lib/publisher.py` | Idempotently publishes SEO metadata to Convex |
 
 ## Quick Start

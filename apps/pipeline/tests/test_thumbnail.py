@@ -10,6 +10,7 @@ from unittest import mock
 from PIL import Image
 
 from lib import thumbnail
+from lib.convex_client import PipelineEpisodeShow
 
 
 class ThumbnailTests(unittest.TestCase):
@@ -74,6 +75,105 @@ class ThumbnailTests(unittest.TestCase):
                 )
             self.assertTrue(result)
             self.assertTrue(out.is_file())
+
+    def test_thumbnail_adds_show_posters_after_movie_posters(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "thumb.png"
+            with mock.patch(
+                "lib.thumbnail._fetch_movie_posters",
+                return_value={"m1": "https://example.com/movie.jpg"},
+            ), mock.patch(
+                "lib.thumbnail._download_image",
+                return_value=self._make_poster(),
+            ) as download, mock.patch(
+                "lib.thumbnail._layout_posters",
+                wraps=thumbnail._layout_posters,
+            ) as layout:
+                result = thumbnail.generate_thumbnail(
+                    movie_ids=["m1"],
+                    output_path=out,
+                    config={"settings": {"brand_logo_enabled": False}},
+                    show_poster_urls=["https://example.com/show.jpg"],
+                    show_titles=["Severance (2022)"],
+                )
+            self.assertTrue(result)
+            self.assertEqual(
+                [call.args[0] for call in download.call_args_list],
+                ["https://example.com/movie.jpg", "https://example.com/show.jpg"],
+            )
+            self.assertEqual(len(layout.call_args.args[0]), 2)
+
+    def test_thumbnail_uses_show_posters_when_no_movie_has_one(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "thumb.png"
+            with mock.patch(
+                "lib.thumbnail._fetch_movie_posters", return_value={}
+            ), mock.patch(
+                "lib.thumbnail._download_image",
+                return_value=self._make_poster(),
+            ), mock.patch(
+                "lib.thumbnail._layout_posters",
+                wraps=thumbnail._layout_posters,
+            ) as layout:
+                thumbnail.generate_thumbnail(
+                    movie_ids=["m1"],
+                    output_path=out,
+                    config={"settings": {"brand_logo_enabled": False}},
+                    show_poster_urls=["https://example.com/show.jpg"],
+                )
+            self.assertEqual(len(layout.call_args.args[0]), 1)
+
+    def test_title_bar_counts_movies_and_shows(self):
+        cases = [
+            (["A", "B"], ["S"], "2 movies and 1 show reviewed"),
+            (["A"], [], "1 movie reviewed"),
+            ([], ["S", "T"], "2 shows reviewed"),
+        ]
+        for movie_titles, show_titles, expected in cases:
+            with self.subTest(expected=expected):
+                canvas = Image.new("RGBA", (thumbnail.THUMB_WIDTH, thumbnail.THUMB_HEIGHT))
+                with mock.patch("lib.thumbnail.ImageDraw.Draw") as draw:
+                    thumbnail._add_title_text(canvas, "Ep 1: Test", movie_titles, show_titles)
+                drawn = [call.args[1] for call in draw.return_value.text.call_args_list]
+                self.assertEqual(drawn, ["Ep 1: Test", expected])
+
+    def test_run_adds_the_episodes_show_extras(self):
+        with tempfile.TemporaryDirectory() as td:
+            ep_path = Path(td) / "20260101.mp3"
+            ep_path.touch()
+            movies_dir = Path(td) / "movies"
+            movies_dir.mkdir()
+            (movies_dir / "20260101.movies.json").write_text(
+                json.dumps({"movies": [{"matchedMovieId": "m1", "title": "Arrival", "year": 2016}]}),
+                encoding="utf-8",
+            )
+            convex = mock.Mock()
+            convex.get_episode_shows_by_date.return_value = (
+                PipelineEpisodeShow("show-1", "Severance", 2022, "https://example.com/show.jpg"),
+                PipelineEpisodeShow("show-2", "Posterless", 2020, None),
+            )
+            context = {
+                "config": {
+                    "settings": {"thumbnail_enabled": True},
+                    "paths": {"output_dir": td},
+                },
+                "episode_path": str(ep_path),
+                "convex_client": convex,
+            }
+            with mock.patch("lib.thumbnail.generate_thumbnail", return_value=True) as generate:
+                thumbnail.run(context)
+
+            convex.get_episode_shows_by_date.assert_called_once_with("2026-01-01")
+            kwargs = generate.call_args.kwargs
+            self.assertEqual(kwargs["movie_ids"], ["m1"])
+            self.assertEqual(kwargs["show_poster_urls"], ["https://example.com/show.jpg"])
+            self.assertEqual(kwargs["show_titles"], ["Severance (2022)", "Posterless (2020)"])
+
+    def test_fetch_episode_shows_returns_nothing_when_convex_fails(self):
+        convex = mock.Mock()
+        convex.get_episode_shows_by_date.side_effect = RuntimeError("offline")
+
+        self.assertEqual(thumbnail._fetch_episode_shows("20260101", convex), [])
 
     def test_thumbnail_skips_failed_downloads(self):
         """Failed poster downloads are silently skipped; remaining posters used."""

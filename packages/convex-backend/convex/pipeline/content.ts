@@ -56,9 +56,17 @@ const pipelineEpisodeMovieValidator = v.object({
   assignmentType: nullableString,
 });
 
+const pipelineEpisodeShowValidator = v.object({
+  id: v.id("shows"),
+  title: v.string(),
+  year: v.number(),
+  poster: nullableString,
+});
+
 const pipelineEpisodeContextValidator = v.object({
   episode: pipelineEpisodeValidator,
   movies: v.array(pipelineEpisodeMovieValidator),
+  shows: v.array(pipelineEpisodeShowValidator),
 });
 
 const pipelineMovieValidator = v.object({
@@ -177,7 +185,27 @@ async function requireEpisodeByDate(
   return episode;
 }
 
-async function readEpisodeMovies(
+function toPipelineShow(show: Doc<"shows">) {
+  return {
+    id: show._id,
+    title: show.title,
+    year: show.year,
+    poster: nullable(show.poster),
+  };
+}
+
+function byTitleYearAndId(
+  left: { id: string; title: string; year: number },
+  right: { id: string; title: string; year: number },
+): number {
+  return (
+    left.title.localeCompare(right.title) ||
+    left.year - right.year ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+async function readEpisodeMoviesAndShows(
   ctx: Pick<QueryCtx, "db">,
   episodeId: Id<"episodes">,
 ) {
@@ -221,6 +249,10 @@ async function readEpisodeMovies(
       assignmentType: string | null;
     }
   >();
+  const shows = new Map<
+    Id<"shows">,
+    ReturnType<typeof toPipelineShow>
+  >();
   for (const assignment of assignments) {
     const movie = await ctx.db.get("movies", assignment.movieId);
     if (movie === null) {
@@ -240,13 +272,29 @@ async function readEpisodeMovies(
   for (const extraReview of extraReviews) {
     const review = await ctx.db.get("reviews", extraReview.reviewId);
     if (
-      review?.movieId === undefined ||
-      review.showId !== undefined
+      review === null ||
+      (review.movieId === undefined) === (review.showId === undefined)
     ) {
       domainError(
         "CONFLICT",
-        "A pipeline extra review has an invalid movie relationship.",
+        "A pipeline extra review must reference exactly one movie or show.",
       );
+    }
+    if (review.movieId === undefined) {
+      const show =
+        review.showId === undefined
+          ? null
+          : await ctx.db.get("shows", review.showId);
+      if (show === null) {
+        domainError(
+          "CONFLICT",
+          "A pipeline extra review references a missing show.",
+        );
+      }
+      if (!shows.has(show._id)) {
+        shows.set(show._id, toPipelineShow(show));
+      }
+      continue;
     }
     const movie = await ctx.db.get("movies", review.movieId);
     if (movie === null) {
@@ -263,12 +311,10 @@ async function readEpisodeMovies(
       });
     }
   }
-  return [...movies.values()].sort(
-    (left, right) =>
-      left.title.localeCompare(right.title) ||
-      left.year - right.year ||
-      left.id.localeCompare(right.id),
-  );
+  return {
+    movies: [...movies.values()].sort(byTitleYearAndId),
+    shows: [...shows.values()].sort(byTitleYearAndId),
+  };
 }
 
 export const getEpisodeByDate = pipelineQuery({
@@ -300,7 +346,7 @@ export const getEpisodeContextByDate = pipelineQuery({
     }
     return {
       episode: toPipelineEpisode(episode),
-      movies: await readEpisodeMovies(ctx, episode._id),
+      ...(await readEpisodeMoviesAndShows(ctx, episode._id)),
     };
   },
 });
@@ -316,7 +362,7 @@ export const getEpisodeContextById = pipelineQuery({
     }
     return {
       episode: toPipelineEpisode(episode),
-      movies: await readEpisodeMovies(ctx, episode._id),
+      ...(await readEpisodeMoviesAndShows(ctx, episode._id)),
     };
   },
 });
