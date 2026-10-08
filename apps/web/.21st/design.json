@@ -184,7 +184,7 @@
     "Preserve BBPC dark surfaces and red accents using src/styles/globals.css.",
     "Use compact numbered syllabus rows and collapsed assignment history.",
     "Use BBPC dark neutral surfaces and red accents for Quotabunga, matching the rest of the listener game.",
-    "Keep all prediction cards closed initially; show every assignment in a completion checklist and offer a next-unfinished-movie action.",
+    "Put the listener game on one flat sheet of hairline-divided rows (GameSheet) instead of nested cards: keep every movie's pick grid open under a sticky rating legend, show each movie's wagers as a summary line that opens the list of bets with a single Confirm, and make Quotabunga the last row, starting from an Add your quote button.",
     "Rating picks and wagers share a deadline ten minutes after the episode enters recording; show the live countdown and enforce the deadline on the server.",
     "Quotabunga uses a YouTube preview above a red quote-range lane and a timed transcript lane; subtitle timing is preserved without inventing word boundaries."
   ],
