@@ -177,14 +177,25 @@ export function ConvexQuotabungaSubmission({
   const [isEditing, setIsEditing] = useState(false);
   // A listener without an entry opens the form from the row's button.
   const [isComposing, setIsComposing] = useState(false);
-  // Cancel swaps the form for the Add button; focus goes back to it.
+  // Focus follows the listener's own action into the form and back out to
+  // the button that opens it. It never moves when the entry loads.
+  const quoteRef = useRef<HTMLTextAreaElement>(null);
   const startButtonRef = useRef<HTMLButtonElement>(null);
-  const focusStartButtonRef = useRef(false);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingFocusRef = useRef<"quote" | "start" | "edit" | null>(null);
   useEffect(() => {
-    if (!focusStartButtonRef.current) return;
-    focusStartButtonRef.current = false;
-    startButtonRef.current?.focus();
-  }, [isComposing]);
+    const target =
+      pendingFocusRef.current === "quote"
+        ? quoteRef.current
+        : pendingFocusRef.current === "start"
+        ? startButtonRef.current
+        : pendingFocusRef.current === "edit"
+        ? editButtonRef.current
+        : null;
+    if (target === null) return;
+    pendingFocusRef.current = null;
+    target.focus();
+  });
   const [quoteText, setQuoteText] = useState("");
   const [sourceTitle, setSourceTitle] = useState("");
   const [sourceType, setSourceType] = useState<ConvexQuoteSourceType>("MOVIE");
@@ -300,6 +311,9 @@ export function ConvexQuotabungaSubmission({
     try {
       const result = await loadConvexQuotabunga(convex, episodeId);
       if (loadGenerationRef.current === generation) {
+        // A saved entry opens read-only. Set first, so its form never mounts
+        // on load even where the two updates are not batched.
+        setIsEditing(result.submission === null);
         setCurrent(result);
       }
     } catch {
@@ -472,6 +486,9 @@ export function ConvexQuotabungaSubmission({
           : { clipEndSeconds: parsedClipEnd }),
         listenerNotes: normalizedNotes || null,
       });
+      // Set before the reload renders the saved entry, so focus lands on its
+      // Edit button in that same render and never later.
+      pendingFocusRef.current = "edit";
       await reload();
       setIsEditing(false);
       toast.success("Your Quotabunga entry is in!");
@@ -496,6 +513,7 @@ export function ConvexQuotabungaSubmission({
     try {
       await withdrawConvexQuotabunga(convex, episodeId);
       resetForm();
+      pendingFocusRef.current = "quote";
       await reload();
       setIsEditing(true);
       setIsComposing(true);
@@ -545,7 +563,10 @@ export function ConvexQuotabungaSubmission({
           <Button
             ref={startButtonRef}
             className="min-h-11 w-full sm:w-auto"
-            onClick={() => setIsComposing(true)}
+            onClick={() => {
+              pendingFocusRef.current = "quote";
+              setIsComposing(true);
+            }}
           >
             Add your quote
           </Button>
@@ -610,7 +631,7 @@ export function ConvexQuotabungaSubmission({
                       href={submission.clipUrl}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="mt-2 inline-flex items-center gap-1 text-[0.8125rem] font-semibold text-zinc-300 underline underline-offset-4 hover:text-white"
+                      className="mt-1 inline-flex min-h-11 items-center gap-1 text-[0.8125rem] font-semibold text-zinc-300 underline underline-offset-4 hover:text-white"
                     >
                       View submitted clip
                       {submission.clipStartSeconds !== null &&
@@ -626,7 +647,11 @@ export function ConvexQuotabungaSubmission({
                     <Button
                       className="min-h-11 flex-1 sm:flex-none"
                       variant="outline"
-                      onClick={() => setIsEditing(true)}
+                      ref={editButtonRef}
+                      onClick={() => {
+                        pendingFocusRef.current = "quote";
+                        setIsEditing(true);
+                      }}
                     >
                       <Pencil className="h-4 w-4" /> Edit
                     </Button>
@@ -675,8 +700,7 @@ export function ConvexQuotabungaSubmission({
                 </label>
                 <Textarea
                   id="convex-quotabunga-quote"
-                  // The form only appears on the listener's own action.
-                  autoFocus
+                  ref={quoteRef}
                   required
                   maxLength={MAX_QUOTE_TEXT_LENGTH}
                   value={quoteText}
@@ -800,9 +824,10 @@ export function ConvexQuotabungaSubmission({
                   variant="outline"
                   onClick={() => {
                     if (submission) {
+                      pendingFocusRef.current = "edit";
                       setIsEditing(false);
                     } else {
-                      focusStartButtonRef.current = true;
+                      pendingFocusRef.current = "start";
                       setIsComposing(false);
                     }
                   }}

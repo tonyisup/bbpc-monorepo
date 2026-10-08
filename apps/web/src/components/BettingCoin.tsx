@@ -1,7 +1,14 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { type FormEvent, type FC, type ReactNode, useState } from "react";
+import {
+  type FormEvent,
+  type FC,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -73,6 +80,14 @@ const BettingCoin: FC<BettingCoinProps> = ({
   const [amount, setAmount] = useState(existingBet?.points.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Closing the form puts focus back on the line's Add or Edit button.
+  const lineButtonRef = useRef<HTMLButtonElement>(null);
+  const focusLineButtonRef = useRef(false);
+  useEffect(() => {
+    if (isEditing || !focusLineButtonRef.current) return;
+    focusLineButtonRef.current = false;
+    lineButtonRef.current?.focus();
+  }, [isEditing]);
   const isResolved = Boolean(existingBet && existingBet.status !== "pending");
   const currentAmount = existingBet?.points ?? 0;
   const maximumAmount = userPoints + currentAmount;
@@ -97,6 +112,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
         targetUserId: targetHostId,
       });
       setAmount(points > 0 ? points.toString() : "");
+      focusLineButtonRef.current = true;
       onClose();
     } catch (submissionError) {
       const message =
@@ -142,6 +158,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
           </span>
         ) : (
           <button
+            ref={lineButtonRef}
             type="button"
             className={cn(linkButton, "min-w-11 shrink-0 justify-end")}
             disabled={disabled}
@@ -176,6 +193,8 @@ const BettingCoin: FC<BettingCoinProps> = ({
         </label>
         <Input
           id={inputId}
+          // The form only opens from this line's own Add or Edit button.
+          autoFocus
           type="number"
           inputMode="numeric"
           min={1}
@@ -249,6 +268,7 @@ const BettingCoin: FC<BettingCoinProps> = ({
           disabled={isSubmitting}
           onClick={() => {
             setError(null);
+            focusLineButtonRef.current = true;
             onClose();
           }}
         >

@@ -1,4 +1,3 @@
-import React from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
@@ -278,6 +277,47 @@ test("while one bet saves, the other bets and Done wait for its result", async (
   expect(renderer.root.findAllByType("form")).toHaveLength(0);
   expect(button("Done").props.disabled).toBe(false);
   expect(button("Add wager on Harley").props.disabled).toBe(false);
+});
+
+test("focus stays with the list's toggle and returns to a bet's own line", async () => {
+  const focused: string[] = [];
+  mocks.load.mockResolvedValue({
+    types,
+    entries: [oneHost],
+    availablePoints: 140,
+  });
+  await act(async () => {
+    renderer = create(
+      <ConvexAssignmentGamblingBoard
+        assignmentId="assignment"
+        hosts={hosts}
+        guesses={guesses}
+        episodeStatus="next"
+        playable
+        closesAt={null}
+        now={0}
+      />,
+      {
+        createNodeMock: (element) => ({
+          focus: () =>
+            focused.push(
+              String(
+                element.props["aria-label"] ??
+                  (element.props["aria-expanded"] === true ? "Done" : "toggle")
+              )
+            ),
+        }),
+      }
+    );
+  });
+  expect(focused).toEqual([]);
+  await click("Change");
+  expect(focused).toEqual(["Done"]);
+  await click("Add wager on Fonso");
+  await click("Cancel");
+  expect(focused).toEqual(["Done", "Add wager on Fonso"]);
+  await click("Done");
+  expect(focused).toEqual(["Done", "Add wager on Fonso", "toggle"]);
 });
 
 test("a rejected wager is not counted as points at stake", async () => {

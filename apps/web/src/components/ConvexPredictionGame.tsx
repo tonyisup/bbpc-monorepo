@@ -405,7 +405,7 @@ function ConvexAssignmentVoiceMessages({
 // One column for the host, then one per rating. The rating count comes from
 // the season's scale, so it is passed as a custom property.
 const scorecardGrid =
-  "grid grid-cols-[3.75rem_repeat(var(--ratings),minmax(0,1fr))] items-center gap-1.5 px-4 sm:grid-cols-[minmax(8.75rem,1.15fr)_repeat(var(--ratings),minmax(0,1fr))] sm:px-6";
+  "grid grid-cols-[3.25rem_repeat(var(--ratings),minmax(0,1fr))] items-center gap-1 px-4 sm:grid-cols-[minmax(8.75rem,1.15fr)_repeat(var(--ratings),minmax(0,1fr))] sm:gap-1.5 sm:px-6";
 
 const pickedTone: Record<number, string> = {
   1: "border-red-500/55 bg-red-500/15",
@@ -417,7 +417,7 @@ const pickedTone: Record<number, string> = {
 // RatingIcon only draws the four standard ratings; any other value is shown
 // by name instead, on two lines where a phone cell is narrow.
 const namedCell =
-  "line-clamp-2 px-1 text-center text-[0.6875rem] leading-tight sm:text-sm";
+  "line-clamp-2 break-words px-1 text-center text-[0.6875rem] leading-tight sm:text-sm";
 
 function hasRatingIcon(value: number) {
   return value >= 1 && value <= 4;
@@ -729,7 +729,7 @@ export function ConvexPredictionGame({
             {data.ratings.map((rating) => (
               <div
                 key={rating.id}
-                className="flex min-w-0 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-bold text-white sm:flex-row sm:gap-2 sm:text-[0.8125rem]"
+                className="flex min-w-0 flex-col items-center justify-center gap-0.5 text-[0.625rem] font-bold tracking-tight text-white sm:flex-row sm:gap-2 sm:text-[0.8125rem] sm:tracking-normal"
               >
                 <RatingIcon value={rating.value} />
                 <span className="max-w-full truncate">{rating.name}</span>

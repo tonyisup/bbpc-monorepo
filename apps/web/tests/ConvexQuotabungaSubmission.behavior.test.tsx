@@ -581,7 +581,10 @@ describe("ConvexQuotabungaSubmission round window", () => {
     const text = renderedText(rendered);
     expect(text).toContain("Hold on to ya");
     expect(text).toContain("This episode has aired");
-    expect(text).not.toContain("Submit to Quotabunga");
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(
+      rendered.root.findAllByType("button").map((b) => instanceText(b).trim())
+    ).not.toContain("Edit");
     expect(
       rendered.root.findAllByType("button").map((b) => instanceText(b))
     ).not.toContain("Withdraw");
@@ -1493,6 +1496,53 @@ describe("ConvexQuotabungaSubmission writes", () => {
       rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
     ).toBe("Hold on to ya");
     expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("focus follows the listener into the form and back, and never moves on load", async () => {
+    const focused: string[] = [];
+    const mounted: string[] = [];
+    const nodes = (element: {
+      type: unknown;
+      props: Record<string, unknown>;
+    }) => {
+      const name = String(element.props.id ?? element.type);
+      mounted.push(name);
+      return { focus: () => focused.push(name) };
+    };
+    const press = async (rendered: ReactTestRenderer, label: string) => {
+      const target = rendered.root
+        .findAllByType("button")
+        .find((candidate) => instanceText(candidate).trim() === label);
+      if (target === undefined) throw new Error(`No ${label} button rendered.`);
+      await act(async () => {
+        await target.props.onClick();
+      });
+    };
+
+    // A saved entry loads read-only: its form never mounts and nothing is focused.
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    let rendered = await renderSubmission("next", nodes);
+    expect(mounted).not.toContain("convex-quotabunga-quote");
+    expect(focused).toEqual([]);
+    await press(rendered, "Edit");
+    expect(focused).toEqual(["convex-quotabunga-quote"]);
+    await press(rendered, "Cancel");
+    expect(focused).toEqual(["convex-quotabunga-quote", "button"]);
+    act(() => rendered.unmount());
+    renderer = null;
+
+    // A first entry: Add opens the form on the quote, Cancel returns to Add.
+    focused.length = 0;
+    mocks.load.mockResolvedValue(openRound);
+    rendered = await renderSubmission("next", nodes, false);
+    expect(focused).toEqual([]);
+    await press(rendered, "Add your quote");
+    expect(focused).toEqual(["convex-quotabunga-quote"]);
+    await press(rendered, "Cancel");
+    expect(focused).toEqual(["convex-quotabunga-quote", "button"]);
+    expect(instanceText(findButton(rendered, "Add your quote"))).toBe(
+      "Add your quote"
+    );
   });
 
   test("a locked round offers no way to start an entry", async () => {
