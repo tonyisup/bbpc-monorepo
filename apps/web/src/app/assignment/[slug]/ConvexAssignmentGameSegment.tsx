@@ -1,6 +1,11 @@
 "use client";
 
 import { ConvexPredictionGame } from "@/components/ConvexPredictionGame";
+import {
+  GameSheet,
+  GameSheetHeader,
+  GameSheetRow,
+} from "@/components/GameSheet";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import { Button } from "@/components/ui/button";
 import type { ConvexPublicAssignment } from "@/server/convex/assignments";
@@ -48,46 +53,46 @@ export function ConvexAssignmentGameSegment({
 
   if (status === "unauthenticated" || user === null) {
     return (
-      <section className="w-full max-w-4xl rounded-xl border border-red-500/20 bg-red-500/[0.06] p-5 text-center">
-        <h2 className="text-xl font-bold text-white">Submit your guesses</h2>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-300">
-          Sign in to predict the hosts&apos; ratings and optionally wager
-          points.
-        </p>
-        <Button className="mt-4" onClick={signIn}>
-          Sign in to play
-        </Button>
-      </section>
+      <GameSheet className="w-full max-w-4xl" aria-label="Listener game">
+        <GameSheetHeader title="Guess the hosts’ ratings" />
+        <GameSheetRow className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <p className="text-zinc-300">
+            Sign in to predict the hosts&apos; ratings and optionally wager
+            points.
+          </p>
+          <Button className="min-h-11 w-full sm:w-auto" onClick={signIn}>
+            Sign in to play
+          </Button>
+        </GameSheetRow>
+      </GameSheet>
     );
   }
 
   if (accountStatus !== "ready" || user.appUserId === null) {
     return (
-      <section className="w-full max-w-4xl rounded-xl border border-red-500/20 bg-red-500/[0.06] p-5 text-center">
-        <h2 className="text-xl font-bold text-white">
-          Game account needs attention
-        </h2>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-zinc-300">
-          {accountErrorMessage(accountIssue)}
-        </p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <Button variant="outline" onClick={refreshAccount}>
-            Try again
-          </Button>
-          <Button variant="ghost" onClick={signOut}>
-            Sign out
-          </Button>
-        </div>
-      </section>
+      <GameSheet className="w-full max-w-4xl" aria-label="Listener game">
+        <GameSheetHeader title="Game account needs attention" />
+        <GameSheetRow className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <p className="text-zinc-300">{accountErrorMessage(accountIssue)}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={refreshAccount}
+            >
+              Try again
+            </Button>
+            <Button variant="ghost" className="min-h-11" onClick={signOut}>
+              Sign out
+            </Button>
+          </div>
+        </GameSheetRow>
+      </GameSheet>
     );
   }
 
   return (
-    <section className="w-full max-w-4xl space-y-4">
-      <div>
-        <p className="bbpc-kicker">Listener game</p>
-        <h2 className="text-2xl font-black text-white">Submit your guesses</h2>
-      </div>
+    <div className="w-full max-w-4xl">
       <ConvexPredictionGame
         episodeId={assignment.episode.id}
         key={`${user.appUserId}:${assignment.id}`}
@@ -103,6 +108,6 @@ export function ConvexAssignmentGameSegment({
         ]}
         episodeStatus={assignment.episode.status ?? ""}
       />
-    </section>
+    </div>
   );
 }

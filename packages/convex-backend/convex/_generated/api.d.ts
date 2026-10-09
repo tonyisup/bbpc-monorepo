@@ -81,6 +81,7 @@ import type * as identity_impersonation from "../identity/impersonation.js";
 import type * as identity_limits from "../identity/limits.js";
 import type * as identity_linking from "../identity/linking.js";
 import type * as identity_linkingWriteModel from "../identity/linkingWriteModel.js";
+import type * as identity_maintenance from "../identity/maintenance.js";
 import type * as identity_profile from "../identity/profile.js";
 import type * as identity_provisioning from "../identity/provisioning.js";
 import type * as identity_provisioningWriteModel from "../identity/provisioningWriteModel.js";
@@ -248,6 +249,7 @@ declare const fullApi: ApiFromModules<{
   "identity/limits": typeof identity_limits;
   "identity/linking": typeof identity_linking;
   "identity/linkingWriteModel": typeof identity_linkingWriteModel;
+  "identity/maintenance": typeof identity_maintenance;
   "identity/profile": typeof identity_profile;
   "identity/provisioning": typeof identity_provisioning;
   "identity/provisioningWriteModel": typeof identity_provisioningWriteModel;

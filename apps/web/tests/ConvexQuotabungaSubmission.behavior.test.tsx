@@ -229,7 +229,9 @@ async function renderSubmission(
   createNodeMock?: (element: {
     type: unknown;
     props: Record<string, unknown>;
-  }) => unknown
+  }) => unknown,
+  /** A listener without an entry opens the form from the row's button. */
+  openForm = true
 ) {
   await act(async () => {
     renderer = create(
@@ -248,7 +250,16 @@ async function renderSubmission(
   if (renderer === null) {
     throw new Error("Quotabunga form did not render.");
   }
-  return renderer;
+  const rendered: ReactTestRenderer = renderer;
+  const start = rendered.root
+    .findAllByType("button")
+    .find((candidate) => instanceText(candidate) === "Add your quote");
+  if (openForm && start !== undefined) {
+    await act(async () => {
+      start.props.onClick();
+    });
+  }
+  return rendered;
 }
 
 function enterQuote(
@@ -570,7 +581,10 @@ describe("ConvexQuotabungaSubmission round window", () => {
     const text = renderedText(rendered);
     expect(text).toContain("Hold on to ya");
     expect(text).toContain("This episode has aired");
-    expect(text).not.toContain("Submit to Quotabunga");
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(
+      rendered.root.findAllByType("button").map((b) => instanceText(b).trim())
+    ).not.toContain("Edit");
     expect(
       rendered.root.findAllByType("button").map((b) => instanceText(b))
     ).not.toContain("Withdraw");
@@ -1455,6 +1469,154 @@ describe("ConvexQuotabungaSubmission writes", () => {
       await findButton(rendered, "Withdraw").props.onClick();
     });
     expect(mocks.withdraw).not.toHaveBeenCalled();
+    expect(renderedText(rendered)).toContain("Hold on to ya");
+  });
+
+  test("a listener without an entry starts from Add your quote, and Cancel keeps the draft", async () => {
+    const rendered = await renderSubmission("next", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    await act(async () => {
+      findButton(rendered, "Add your quote").props.onClick();
+    });
+    expect(rendered.root.findAllByType("form")).toHaveLength(1);
+    expect(
+      rendered.root
+        .findAllByType("button")
+        .filter((candidate) => instanceText(candidate) === "Add your quote")
+    ).toHaveLength(0);
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    await act(async () => {
+      findButton(rendered, "Cancel").props.onClick();
+    });
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    await act(async () => {
+      findButton(rendered, "Add your quote").props.onClick();
+    });
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("Hold on to ya");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("focus follows the listener into the form and back, and never moves on load", async () => {
+    const focused: string[] = [];
+    const mounted: string[] = [];
+    const nodes = (element: {
+      type: unknown;
+      props: Record<string, unknown>;
+    }) => {
+      const name = String(element.props.id ?? element.type);
+      mounted.push(name);
+      return { focus: () => focused.push(name) };
+    };
+    const press = async (rendered: ReactTestRenderer, label: string) => {
+      const target = rendered.root
+        .findAllByType("button")
+        .find((candidate) => instanceText(candidate).trim() === label);
+      if (target === undefined) throw new Error(`No ${label} button rendered.`);
+      await act(async () => {
+        await target.props.onClick();
+      });
+    };
+
+    // A saved entry loads read-only: its form never mounts and nothing is focused.
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    let rendered = await renderSubmission("next", nodes);
+    expect(mounted).not.toContain("convex-quotabunga-quote");
+    expect(focused).toEqual([]);
+    await press(rendered, "Edit");
+    expect(focused).toEqual(["convex-quotabunga-quote"]);
+    await press(rendered, "Cancel");
+    expect(focused).toEqual(["convex-quotabunga-quote", "button"]);
+    act(() => rendered.unmount());
+    renderer = null;
+
+    // A first entry: Add opens the form on the quote, Cancel returns to Add.
+    focused.length = 0;
+    mocks.load.mockResolvedValue(openRound);
+    rendered = await renderSubmission("next", nodes, false);
+    expect(focused).toEqual([]);
+    await press(rendered, "Add your quote");
+    expect(focused).toEqual(["convex-quotabunga-quote"]);
+    await press(rendered, "Cancel");
+    expect(focused).toEqual(["convex-quotabunga-quote", "button"]);
+    expect(instanceText(findButton(rendered, "Add your quote"))).toBe(
+      "Add your quote"
+    );
+  });
+
+  test("a locked round offers no way to start an entry", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, isOpen: false });
+    const rendered = await renderSubmission("recording", undefined, false);
+    expect(renderedText(rendered)).toContain("are locked");
+    expect(rendered.root.findAllByType("button")).toHaveLength(0);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+  });
+
+  test("withdrawing leaves the form open for a replacement entry", async () => {
+    mocks.load.mockResolvedValueOnce({ ...openRound, submission: savedEntry });
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true)
+    );
+    const rendered = await renderSubmission();
+    await act(async () => {
+      await findButton(rendered, "Withdraw").props.onClick();
+    });
+    expect(rendered.root.findAllByType("form")).toHaveLength(1);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("");
+  });
+
+  test("a save in flight keeps its button focusable, ignores a second press and survives a failure", async () => {
+    const request = deferred<void>();
+    mocks.submit.mockReturnValueOnce(request.promise);
+    const rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    const save = () => findButton(rendered, "Submit quote");
+    await act(async () => {
+      void rendered.root
+        .findByType("form")
+        .props.onSubmit({ preventDefault: vi.fn() });
+    });
+    expect(save().props["aria-disabled"]).toBe(true);
+    expect(save().props.disabled).toBe(false);
+    await submitForm(rendered);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      request.reject(new Error("offline"));
+    });
+    expect(save().props["aria-disabled"]).toBe(false);
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-quote" }).props.value
+    ).toBe("Hold on to ya");
+  });
+
+  test("a withdrawal in flight keeps its button focusable, ignores a second press and survives a failure", async () => {
+    const request = deferred<void>();
+    mocks.withdraw.mockReturnValueOnce(request.promise);
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const rendered = await renderSubmission();
+    const withdraw = () => findButton(rendered, "Withdraw");
+    await act(async () => {
+      void withdraw().props.onClick();
+    });
+    expect(withdraw().props["aria-disabled"]).toBe(true);
+    expect(withdraw().props.disabled).toBeUndefined();
+    await act(async () => {
+      await withdraw().props.onClick();
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(mocks.withdraw).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      request.reject(new Error("offline"));
+    });
+    expect(withdraw().props["aria-disabled"]).toBe(false);
     expect(renderedText(rendered)).toContain("Hold on to ya");
   });
 });

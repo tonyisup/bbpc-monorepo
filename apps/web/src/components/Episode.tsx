@@ -85,7 +85,7 @@ export const Episode: FC<EpisodeProps> = ({
     );
 
   return (
-    <section className="bbpc-panel flex w-full min-w-0 flex-col justify-between gap-3 overflow-hidden p-3 sm:p-5">
+    <section className="bbpc-panel flex w-full min-w-0 flex-col justify-between gap-3 overflow-hidden p-3 supports-[overflow:clip]:overflow-clip sm:p-5">
       <div className="min-w-0">
         <div className="grid min-w-0 grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 font-bold sm:grid-cols-[auto_1fr_auto]">
           <div className="sm:text-md whitespace-nowrap p-1 text-sm sm:p-2">

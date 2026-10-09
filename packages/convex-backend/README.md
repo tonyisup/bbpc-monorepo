@@ -29,7 +29,27 @@ details never belong in this repository.
 
 The staging workflow requires S4 after the development backup restore. Restores copy
 the lifecycle state and identity mappings; verify both before testing sign-in.
-It uses a deployment-scoped key named
+
+A restore from production copies production's sign-in links, so a staging sign-in
+for an already linked member fails with `IDENTITY_CONFLICT`. After such a restore,
+run the internal `identity/maintenance:resetStagingAuth` with the restored
+`systemState` run ID and API version and a batch ID for the audit trail:
+
+```sh
+npx convex run --deployment merry-shepherd-928 identity/maintenance:resetStagingAuth \
+  '{"cutoverRunId":"<run ID>","clientApiVersion":"<API version>","batchId":"restore-YYYYMMDD"}'
+```
+
+It deletes the `authIdentities` and `servicePrincipals` rows that staging's own
+`CLERK_JWT_ISSUER_DOMAIN` did not issue and every `impersonationSessions` row, up to
+500 rows per run; repeat it until it returns `done: true`. Members, roles and role
+memberships stay, so the next staging sign-in links by verified email and keeps its
+roles. It refuses every deployment but staging, and a repeat run changes nothing.
+The reset removes pipeline principals copied from production but preserves those
+issued by staging's issuer. Provision a staging pipeline principal afterwards only
+if staging did not already have one.
+
+The workflow uses a deployment-scoped key named
 `github-actions-staging`; the key value belongs in the GitHub `staging` environment as
 `CONVEX_STAGING_DEPLOY_KEY`. All Vercel Preview deployments target this staging
 deployment; Vercel Production deployments retain the separate production selector.

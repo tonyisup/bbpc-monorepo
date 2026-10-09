@@ -53,7 +53,6 @@ import {
   getPredictionRoundState,
 } from "@/lib/predictionRound.mjs";
 import { getEpisodePath } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 
 const QUOTE_DUPLICATE_CHECK_DELAY_MS = 500;
 const QUOTE_DUPLICATE_REFRESH_INTERVAL_MS = 30_000;
@@ -176,6 +175,27 @@ export function ConvexQuotabungaSubmission({
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  // A listener without an entry opens the form from the row's button.
+  const [isComposing, setIsComposing] = useState(false);
+  // Focus follows the listener's own action into the form and back out to
+  // the button that opens it. It never moves when the entry loads.
+  const quoteRef = useRef<HTMLTextAreaElement>(null);
+  const startButtonRef = useRef<HTMLButtonElement>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
+  const pendingFocusRef = useRef<"quote" | "start" | "edit" | null>(null);
+  useEffect(() => {
+    const target =
+      pendingFocusRef.current === "quote"
+        ? quoteRef.current
+        : pendingFocusRef.current === "start"
+        ? startButtonRef.current
+        : pendingFocusRef.current === "edit"
+        ? editButtonRef.current
+        : null;
+    if (target === null) return;
+    pendingFocusRef.current = null;
+    target.focus();
+  });
   const [quoteText, setQuoteText] = useState("");
   const [sourceTitle, setSourceTitle] = useState("");
   const [sourceType, setSourceType] = useState<ConvexQuoteSourceType>("MOVIE");
@@ -198,6 +218,7 @@ export function ConvexQuotabungaSubmission({
     useAdminCollapse(isAdmin);
 
   const submission = current?.submission ?? null;
+  const isFirstEntry = submission === null;
 
   // Quotes lock on the same deadline as predictions, so watch the episode's
   // window live instead of trusting the open flag from the initial load.
@@ -239,17 +260,14 @@ export function ConvexQuotabungaSubmission({
   const currentRoundLink = hasAired ? (
     <Link
       href="/game"
-      className="inline-flex items-center gap-1 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
+      className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-red-300 transition-colors hover:text-red-200"
     >
       Submit to the current round
     </Link>
   ) : null;
   const closingNotice =
     closingCountdown === null ? null : (
-      <p
-        className="text-center text-sm font-medium text-amber-400"
-        role="status"
-      >
+      <p className="text-sm font-medium text-amber-400" role="status">
         {`Entries lock with the picks in ${closingCountdown}.`}
       </p>
     );
@@ -293,6 +311,9 @@ export function ConvexQuotabungaSubmission({
     try {
       const result = await loadConvexQuotabunga(convex, episodeId);
       if (loadGenerationRef.current === generation) {
+        // A saved entry opens read-only. Set first, so its form never mounts
+        // on load even where the two updates are not batched.
+        setIsEditing(result.submission === null);
         setCurrent(result);
       }
     } catch {
@@ -336,6 +357,8 @@ export function ConvexQuotabungaSubmission({
     const normalizedSource = sourceTitle.trim();
     if (
       !isEditing ||
+      // A first entry's form is hidden until the listener opens it.
+      (isFirstEntry && !isComposing) ||
       !isOpen ||
       normalizedQuote.length < MIN_QUOTE_DUPLICATE_CHECK_LENGTH
     ) {
@@ -381,7 +404,16 @@ export function ConvexQuotabungaSubmission({
       window.clearTimeout(timeout);
       window.clearInterval(interval);
     };
-  }, [convex, episodeId, isOpen, isEditing, quoteText, sourceTitle]);
+  }, [
+    convex,
+    episodeId,
+    isOpen,
+    isEditing,
+    isComposing,
+    isFirstEntry,
+    quoteText,
+    sourceTitle,
+  ]);
 
   // Switching to another YouTube video resets its times; typing, other hosts
   // and returning to the same video keep what the listener entered. The time
@@ -405,8 +437,11 @@ export function ConvexQuotabungaSubmission({
     setClipUrl(nextUrl);
   };
 
+  // Save and Withdraw stay focusable while their request is in flight and
+  // ignore a second press, so the keyboard keeps its place if it fails.
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSaving) return;
     const normalizedQuote = quoteText.trim();
     const normalizedSource = sourceTitle.trim();
     const normalizedClipUrl = clipUrl.trim();
@@ -454,6 +489,9 @@ export function ConvexQuotabungaSubmission({
           : { clipEndSeconds: parsedClipEnd }),
         listenerNotes: normalizedNotes || null,
       });
+      // Set before the reload renders the saved entry, so focus lands on its
+      // Edit button in that same render and never later.
+      pendingFocusRef.current = "edit";
       await reload();
       setIsEditing(false);
       toast.success("Your Quotabunga entry is in!");
@@ -470,6 +508,7 @@ export function ConvexQuotabungaSubmission({
   };
 
   const withdraw = async () => {
+    if (isWithdrawing) return;
     if (!window.confirm("Withdraw this Quotabunga entry?")) {
       return;
     }
@@ -478,8 +517,10 @@ export function ConvexQuotabungaSubmission({
     try {
       await withdrawConvexQuotabunga(convex, episodeId);
       resetForm();
+      pendingFocusRef.current = "quote";
       await reload();
       setIsEditing(true);
+      setIsComposing(true);
       toast.success("Submission withdrawn");
     } catch (error) {
       const message = operationError(error);
@@ -494,33 +535,50 @@ export function ConvexQuotabungaSubmission({
   };
 
   return (
-    <section id="quotabunga-submit" className="bbpc-panel p-4 sm:p-5">
-      <AdminCollapsibleHeader
-        isAdmin={isAdmin}
-        isAdminCollapsed={isAdminCollapsed}
-        className={cn(
-          "gap-1",
-          isContentVisible && "mb-5",
-          !isAdmin && "text-center"
-        )}
-        titleWrapperClassName={cn(!isAdmin && "w-full text-center")}
-        title={
-          <h2 className="text-2xl font-black text-foreground">
-            {isOpen ? "Submit to Quotabunga" : "Quotabunga"}
-          </h2>
-        }
-        description={
-          isContentVisible ? (
-            <p className="mt-1 text-sm text-gray-400">
-              One quote per listener, per episode.
-            </p>
-          ) : undefined
-        }
-        {...headerProps}
-      />
+    <section
+      id="quotabunga-submit"
+      className="border-t border-white/10 px-4 py-4 first:border-t-0 sm:px-6 sm:py-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <AdminCollapsibleHeader
+          isAdmin={isAdmin}
+          isAdminCollapsed={isAdminCollapsed}
+          className="min-w-0 flex-1"
+          titleWrapperClassName="gap-0.5"
+          title={
+            <h3 className="text-[1.0625rem] font-extrabold leading-tight text-white">
+              Quotabunga
+            </h3>
+          }
+          description={
+            isContentVisible ? (
+              <p className="text-sm text-zinc-400">
+                One quote per listener, per episode.
+              </p>
+            ) : undefined
+          }
+          {...headerProps}
+        />
+        {isContentVisible &&
+        current !== null &&
+        isOpen &&
+        submission === null &&
+        !isComposing ? (
+          <Button
+            ref={startButtonRef}
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => {
+              pendingFocusRef.current = "quote";
+              setIsComposing(true);
+            }}
+          >
+            Add your quote
+          </Button>
+        ) : null}
+      </div>
 
       {isContentVisible ? (
-        <>
+        <div className="mt-4 empty:hidden">
           {errorMessage ? (
             <div
               className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"
@@ -532,6 +590,7 @@ export function ConvexQuotabungaSubmission({
                   <Button
                     size="sm"
                     variant="outline"
+                    className="min-h-11"
                     onClick={() => void reload()}
                   >
                     Try again
@@ -546,8 +605,8 @@ export function ConvexQuotabungaSubmission({
               <Loader2 className="animate-spin" aria-label="Loading entry" />
             </div>
           ) : current !== null && !isOpen && submission === null ? (
-            <div className="space-y-3 text-center">
-              <p className="text-gray-300">
+            <div className="space-y-2">
+              <p className="text-sm text-zinc-300">
                 {hasAired
                   ? `Quotabunga entries for episode ${current.episode?.number} are closed.`
                   : `Submissions for episode ${current.episode?.number} are locked.`}
@@ -555,59 +614,71 @@ export function ConvexQuotabungaSubmission({
               {currentRoundLink}
             </div>
           ) : submission !== null && !isEditing ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {closingNotice}
-              <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-                <div className="mb-3 flex items-center gap-2 text-green-400">
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span className="font-semibold">
-                    Submitted for episode {current?.episode?.number}
-                  </span>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 text-[0.8125rem] font-bold text-emerald-300">
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    <span>
+                      Submitted for episode {current?.episode?.number}
+                    </span>
+                  </p>
+                  <blockquote className="mt-1.5 whitespace-pre-wrap text-[1.0625rem] font-semibold leading-snug text-white">
+                    &ldquo;{submission.quoteText}&rdquo;
+                  </blockquote>
+                  <p className="mt-1 text-[0.8125rem] text-zinc-400">
+                    {submission.sourceTitle} ·{" "}
+                    {sourceTypeLabel(submission.sourceType)}
+                  </p>
+                  {submission.clipUrl ? (
+                    <a
+                      href={submission.clipUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="mt-1 inline-flex min-h-11 items-center gap-1 text-[0.8125rem] font-semibold text-zinc-300 underline underline-offset-4 hover:text-white"
+                    >
+                      View submitted clip
+                      {submission.clipStartSeconds !== null &&
+                        ` · ${formatClipTime(submission.clipStartSeconds)}`}
+                      {submission.clipEndSeconds != null &&
+                        ` – ${formatClipTime(submission.clipEndSeconds)}`}
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null}
                 </div>
-                <blockquote className="whitespace-pre-wrap text-lg text-white">
-                  &ldquo;{submission.quoteText}&rdquo;
-                </blockquote>
-                <p className="mt-2 text-sm text-gray-400">
-                  {submission.sourceTitle} ·{" "}
-                  {sourceTypeLabel(submission.sourceType)}
-                </p>
-                {submission.clipUrl ? (
-                  <a
-                    href={submission.clipUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline"
-                  >
-                    View submitted clip
-                    {submission.clipStartSeconds !== null &&
-                      ` · ${formatClipTime(submission.clipStartSeconds)}`}
-                    {submission.clipEndSeconds != null &&
-                      ` – ${formatClipTime(submission.clipEndSeconds)}`}
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
+                {isOpen && !submission.scored ? (
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      className="min-h-11 flex-1 sm:flex-none"
+                      variant="outline"
+                      ref={editButtonRef}
+                      onClick={() => {
+                        pendingFocusRef.current = "quote";
+                        setIsEditing(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" /> Edit
+                    </Button>
+                    <Button
+                      className="min-h-11 flex-1 aria-disabled:opacity-50 sm:flex-none"
+                      variant="outline"
+                      aria-disabled={isWithdrawing}
+                      onClick={() => void withdraw()}
+                    >
+                      {isWithdrawing ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      Withdraw
+                    </Button>
+                  </div>
                 ) : null}
               </div>
 
-              {isOpen && !submission.scored ? (
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsEditing(true)}>
-                    <Pencil className="h-4 w-4" /> Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    disabled={isWithdrawing}
-                    onClick={() => void withdraw()}
-                  >
-                    {isWithdrawing ? (
-                      <Loader2 className="animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                    Withdraw
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2 text-center">
+              {isOpen && !submission.scored ? null : (
+                <div className="space-y-2">
                   <p className="text-sm font-medium text-amber-400">
                     {submission.scored
                       ? "This entry has been scored and can no longer be changed."
@@ -619,7 +690,7 @@ export function ConvexQuotabungaSubmission({
                 </div>
               )}
             </div>
-          ) : current !== null ? (
+          ) : current !== null && (submission !== null || isComposing) ? (
             <form
               className="space-y-4"
               onSubmit={(event) => void handleSubmit(event)}
@@ -634,6 +705,7 @@ export function ConvexQuotabungaSubmission({
                 </label>
                 <Textarea
                   id="convex-quotabunga-quote"
+                  ref={quoteRef}
                   required
                   maxLength={MAX_QUOTE_TEXT_LENGTH}
                   value={quoteText}
@@ -752,19 +824,27 @@ export function ConvexQuotabungaSubmission({
               </div>
 
               <div className="flex flex-wrap justify-end gap-2">
-                {submission ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsEditing(false)}
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11"
+                  onClick={() => {
+                    if (submission) {
+                      pendingFocusRef.current = "edit";
+                      setIsEditing(false);
+                    } else {
+                      pendingFocusRef.current = "start";
+                      setIsComposing(false);
+                    }
+                  }}
+                >
+                  Cancel
+                </Button>
                 <Button
                   type="submit"
+                  className="min-h-11 aria-disabled:opacity-50"
+                  aria-disabled={isSaving}
                   disabled={
-                    isSaving ||
                     quoteText.trim().length === 0 ||
                     sourceTitle.trim().length === 0
                   }
@@ -775,7 +855,7 @@ export function ConvexQuotabungaSubmission({
               </div>
             </form>
           ) : null}
-        </>
+        </div>
       ) : null}
     </section>
   );

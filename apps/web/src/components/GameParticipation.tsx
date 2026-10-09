@@ -2,6 +2,11 @@
 
 import { ConvexPredictionGame } from "@/components/ConvexPredictionGame";
 import { ConvexQuotabungaSubmission } from "@/components/ConvexQuotabungaSubmission";
+import {
+  GameSheet,
+  GameSheetHeader,
+  GameSheetRow,
+} from "@/components/GameSheet";
 import { Button } from "@/components/ui/button";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import type { PredictionGameAssignment } from "@/types/prediction";
@@ -46,17 +51,20 @@ export function GameParticipation({
 
   if (!user) {
     return (
-      <section className="mt-5 rounded-lg border border-red-500/20 bg-red-500/[0.06] p-5 text-center">
-        <h3 className="text-lg font-bold text-white">
-          Make your picks and submit a quote
-        </h3>
-        <p className="mx-auto mt-1 max-w-lg text-sm text-zinc-300">
-          One account unlocks both parts of this week&apos;s listener game.
-        </p>
-        <Button className="mt-4 whitespace-nowrap" onClick={signIn}>
-          Sign in to play
-        </Button>
-      </section>
+      <GameSheet className="mt-5" aria-label="Listener game">
+        <GameSheetHeader title="Make your picks and submit a quote" />
+        <GameSheetRow className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <p className="text-zinc-300">
+            One account covers your picks, wagers and Quotabunga quote.
+          </p>
+          <Button
+            className="min-h-11 w-full whitespace-nowrap sm:w-auto"
+            onClick={signIn}
+          >
+            Sign in to play
+          </Button>
+        </GameSheetRow>
+      </GameSheet>
     );
   }
 
@@ -82,25 +90,31 @@ export function GameParticipation({
         : "Your game account could not be resolved.";
 
     return (
-      <section className="mt-5 rounded-lg border border-red-500/20 bg-red-500/[0.06] p-5 text-center">
-        <h3 className="text-lg font-bold text-white">
-          Game account needs attention
-        </h3>
-        <p className="mx-auto mt-1 max-w-lg text-sm text-zinc-300">{message}</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <Button variant="outline" onClick={refreshAccount}>
-            Try again
-          </Button>
-          <Button variant="ghost" onClick={signOut}>
-            Sign out
-          </Button>
-        </div>
-      </section>
+      <GameSheet className="mt-5" aria-label="Listener game">
+        <GameSheetHeader title="Game account needs attention" />
+        <GameSheetRow className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <p className="text-zinc-300">{message}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={refreshAccount}
+            >
+              Try again
+            </Button>
+            <Button variant="ghost" className="min-h-11" onClick={signOut}>
+              Sign out
+            </Button>
+          </div>
+        </GameSheetRow>
+      </GameSheet>
     );
   }
 
+  // Quotabunga is the last row of the game's sheet, and a sheet of its own
+  // when the episode has no movies to rate.
   return (
-    <div className="mt-5 space-y-5">
+    <div className="mt-5">
       {assignments.length > 0 ? (
         <ConvexPredictionGame
           episodeId={episodeId}
@@ -108,14 +122,24 @@ export function GameParticipation({
           assignments={assignments}
           searchQuery={searchQuery}
           episodeStatus={episodeStatus}
-        />
-      ) : null}
-      <ConvexQuotabungaSubmission
-        key={`${user.appUserId}:${episodeId}`}
-        isAdmin={user.isAdmin}
-        episodeId={episodeId}
-        episodeStatus={episodeStatus}
-      />
+        >
+          <ConvexQuotabungaSubmission
+            key={`${user.appUserId}:${episodeId}`}
+            isAdmin={user.isAdmin}
+            episodeId={episodeId}
+            episodeStatus={episodeStatus}
+          />
+        </ConvexPredictionGame>
+      ) : (
+        <GameSheet aria-label="Listener game">
+          <ConvexQuotabungaSubmission
+            key={`${user.appUserId}:${episodeId}`}
+            isAdmin={user.isAdmin}
+            episodeId={episodeId}
+            episodeStatus={episodeStatus}
+          />
+        </GameSheet>
+      )}
     </div>
   );
 }
