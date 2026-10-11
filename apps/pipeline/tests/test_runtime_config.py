@@ -41,6 +41,18 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(config["paths"]["episodes_dir"], str(data_root / "episodes"))
         self.assertEqual(config["settings"]["clip_duration"], 60)
 
+    def test_default_data_dir_sits_beside_the_repo_checkout(self):
+        # Every worktree must share one data directory, so the default is a fixed
+        # path (~/src/bbpc/bbpc-pipeline-data, next to ~/src/bbpc/repo), never
+        # one derived from wherever this checkout happens to live.
+        from lib.data_dir import data_dir
+
+        os.environ.pop("BBPC_PIPELINE_DATA_DIR", None)
+
+        self.assertEqual(
+            data_dir(), (Path.home() / "src" / "bbpc" / "bbpc-pipeline-data").resolve()
+        )
+
     def test_load_config_keeps_absolute_paths_and_anchors_cowork_outputs(self):
         from lib.runtime_config import load_config
 

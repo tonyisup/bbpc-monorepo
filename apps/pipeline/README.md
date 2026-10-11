@@ -30,8 +30,8 @@ cd apps/pipeline
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt -c constraints.txt   # the versions the pipeline is known to work with
-mkdir -p ~/bbpc-pipeline-data
-cp .env.example ~/bbpc-pipeline-data/.env   # then fill in the values
+mkdir -p ~/src/bbpc/bbpc-pipeline-data
+cp .env.example ~/src/bbpc/bbpc-pipeline-data/.env   # then fill in the values
 ```
 
 Run every command below from `apps/pipeline`.
@@ -39,7 +39,7 @@ Run every command below from `apps/pipeline`.
 ### Data directory
 
 Episodes, transcripts, and output live outside the checkout, in
-`BBPC_PIPELINE_DATA_DIR` (default `~/bbpc-pipeline-data`), so every worktree
+`BBPC_PIPELINE_DATA_DIR` (default `~/src/bbpc/bbpc-pipeline-data`), so every worktree
 shares them and no git command can delete them. Relative entries under `paths`
 in `config.json`, and `settings.cowork_outputs_dir`, resolve against that
 directory; `episodes/20260405.mp3` in the examples means that file inside it.
@@ -159,7 +159,7 @@ consumed by hidden reasoning before the model emits any JSON.
 
 | Variable | Purpose |
 |----------|---------|
-| `BBPC_PIPELINE_DATA_DIR` | Directory holding `episodes/`, `transcripts/`, and `output/`; defaults to `~/bbpc-pipeline-data` |
+| `BBPC_PIPELINE_DATA_DIR` | Directory holding `episodes/`, `transcripts/`, and `output/`; defaults to `~/src/bbpc/bbpc-pipeline-data` |
 | `AZURE_STORAGE_CONNECTION_STRING` | Azure Blob Storage |
 | `CONVEX_URL` | Convex deployment Functions API URL |
 | `CONVEX_PIPELINE_TOKEN` | Pre-minted Clerk M2M JWT for a one-off local probe; mutually exclusive with the machine secret |

@@ -11,7 +11,7 @@ run ─► pipeline.py ─► (resumes --from movies) ─► review_clip … pub
 ```
 
 `output/` and the transcripts are in the pipeline data directory
-(`BBPC_PIPELINE_DATA_DIR`, default `~/bbpc-pipeline-data`), not in the checkout.
+(`BBPC_PIPELINE_DATA_DIR`, default `~/src/bbpc/bbpc-pipeline-data`), not in the checkout.
 
 ## Modes (`settings.cowork_mode`, or `--cowork-mode` per run)
 
