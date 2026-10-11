@@ -142,6 +142,16 @@ class ValidationTests(CoworkHandoffTestCase):
         problems = cowork_handoff.validate_movies(_movies_payload(movie), segments=SEGMENTS)
         self.assertIn("movies[0].evidence[0] starts at 12.00s, not on a transcript segment start", problems)
 
+    def test_host_ratings_use_site_host_and_rating_names(self):
+        good = _movie("Sketch", 2025, hostRatings={"Fonso": "Slater", "Harley": "Goldblum", "Tony": "Waste"})
+        self.assertEqual(cowork_handoff.validate_movies(_movies_payload(good)), [])
+        bad = _movie("Sketch", 2025, hostRatings={"MCB": "Dollar", "Fonzo": "Dollar", "Tony": "Pile of Shit"})
+        problems = cowork_handoff.validate_movies(_movies_payload(bad))
+        self.assertIn("movies[0].hostRatings has unknown host 'MCB' (use Fonso, Harley, Tony)", problems)
+        self.assertIn("movies[0].hostRatings has unknown host 'Fonzo' (use Fonso, Harley, Tony)", problems)
+        self.assertIn(
+            "movies[0].hostRatings['Tony'] is 'Pile of Shit' (use Slater, Dollar, Waste, Goldblum)", problems)
+
     # -- soft rules (warnings never block) --
 
     def test_soft_seo_rules_warn_without_failing(self):
@@ -214,7 +224,7 @@ class MovieStageTests(CoworkHandoffTestCase):
 
     def test_uses_cowork_file_and_resolves_ids_from_assignments(self):
         self.write("20260101.movies.json", _movies_payload(
-            _movie("Sketch", 2025, hostRatings={"Fonzo": "Dollar"}),
+            _movie("Sketch", 2025, hostRatings={"Fonso": "Dollar"}),
             _movie("Dellamorte Dellamore", 1994, originalTitle="Cemetery Man"),
         ))
         context = self.context()
@@ -222,7 +232,7 @@ class MovieStageTests(CoworkHandoffTestCase):
         payload = json.loads(Path(context["movie_extraction_path"]).read_text())
         by_title = {m["title"]: m for m in payload["movies"]}
         self.assertEqual(by_title["Sketch"]["matchedMovieId"], "movie-1")
-        self.assertEqual(by_title["Sketch"]["hostRatings"], {"Fonzo": "Dollar"})
+        self.assertEqual(by_title["Sketch"]["hostRatings"], {"Fonso": "Dollar"})
         self.assertEqual(by_title["Dellamorte Dellamore"]["matchedMovieId"], "movie-2")
         # Convex-assigned movie Cowork did not list is kept for the thumbnail.
         self.assertEqual(by_title["Mystery Road"]["status"], "db_assigned")

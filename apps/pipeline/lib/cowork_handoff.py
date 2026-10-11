@@ -45,6 +45,9 @@ BOUNDARY_TOLERANCE_SECONDS = 0.01  # transcript times have two decimals
 SEO_STRING_KEYS = ("title", "metaDescription", "callToAction")
 SEO_LIST_KEYS = ("keywords", "highlights", "clipAnalysis", "candidateClips", "notableWorks")
 MOVIE_STATUSES = {"accepted", "maybe", "rejected", "db_assigned"}
+# Names as the site spells them (apps/web About and Game pages); see docs/show-format.md.
+HOSTS = ("Fonso", "Harley", "Tony")
+RATINGS = ("Slater", "Dollar", "Waste", "Goldblum")  # best to worst, site values 4..1
 
 
 class AwaitingCowork(Exception):
@@ -225,7 +228,22 @@ def validate_movies(payload: Any, segments: Optional[Sequence[Dict[str, Any]]] =
             problems.append(f"{label} has unknown status {movie.get('status')!r}")
         for j, ev in enumerate(movie.get("evidence") or []):
             _check_window(f"{label}.evidence[{j}]", ev, None, problems, boundaries)
+        _check_host_ratings(label, movie, problems)
     return problems
+
+
+def _check_host_ratings(label: str, movie: Dict[str, Any], problems: List[str]) -> None:
+    ratings = movie.get("hostRatings")
+    if ratings is None:
+        return
+    if not isinstance(ratings, dict):
+        problems.append(f"{label}.hostRatings must be an object")
+        return
+    for host, rating in ratings.items():
+        if host not in HOSTS:
+            problems.append(f"{label}.hostRatings has unknown host {host!r} (use {', '.join(HOSTS)})")
+        elif rating not in RATINGS:
+            problems.append(f"{label}.hostRatings[{host!r}] is {rating!r} (use {', '.join(RATINGS)})")
 
 
 def validate_seo(

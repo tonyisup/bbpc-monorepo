@@ -10,9 +10,9 @@ icons) and from 2026 transcripts. Where they disagree, both are recorded.
 
 ## Hosts
 
-- **Fonzo**, a.k.a. **Mike Lowry** (Lowrey in the film): opens every episode ("I am your host,
-  Fonzo, a.k.a. Mike Lowry"). The site spells it **Fonso**.
-- **Harley**, a.k.a. **Marcus Burnett**: Fonzo's friend since the 1990s.
+- **Fonso**, a.k.a. **Mike Lowry** (Lowrey in the film): opens every episode ("I am your host,
+  Fonso, a.k.a. Mike Lowry"). Transcripts usually spell it **Fonzo**.
+- **Harley**, a.k.a. **Marcus Burnett**: Fonso's friend since the 1990s.
   The alias is often garbled ("Marcus Brunette").
 - **Tony**, a.k.a. **MCP**: joined after building the show's website. The
   alias is often transcribed **MCB** or **MZP**.
@@ -21,8 +21,8 @@ The aliases are the two detectives from *Bad Boys*, hence the show's name.
 Speakers are not labelled in transcripts: infer them from context, the intro
 roll call, and who is addressed by name.
 
-In `hostRatings` and `pickedBy`, use `Fonzo`, `Harley` and `Tony`. Files
-written before this reference used `MCB` for Tony.
+In `hostRatings` and `pickedBy`, use `Fonso`, `Harley` and `Tony`, spelled as
+on the site. The validator rejects any other host name.
 
 ## Episode structure
 
@@ -51,10 +51,11 @@ Best to worst. The site stores the value; hosts say the on-air name.
 | 4 | Slater | "a Slater" |
 | 3 | Dollar | "a dollar", "a high dollar" ("I'd buy that for a dollar", *RoboCop*) |
 | 2 | Waste | "a waste of time", "a waste" |
-| 1 | Goldblum (admin: "Goldbloom") | "a pile of shit", "the Goldblum" |
+| 1 | Goldblum | "a pile of shit", "the Goldblum" |
 
-In `hostRatings`, keep using the on-air names Cowork already writes:
-`Slater`, `Dollar`, `Waste of Time`, `Pile of Shit`.
+In `hostRatings`, use the site names: `Slater`, `Dollar`, `Waste`,
+`Goldblum`. The validator rejects anything else, including the on-air
+"Waste of Time" and "Pile of Shit".
 
 ## Listener game
 
@@ -91,8 +92,8 @@ These mention movies but are not reviews. In the movie file, list them as
 Parakeet transcripts are unpunctuated speech with no speaker labels. Common
 mishearings:
 
-- Ratings: "a palace" or "the gold bloom" = Pile of Shit / Goldblum.
-- Tony's alias: MCB, MZP = MCP.
+- Ratings: "a palace" (a pile of shit) or "the gold bloom" = Goldblum.
+- Hosts: Fonzo = Fonso; Tony's alias MCB, MZP = MCP.
 - Harley's alias: Marcus Brunette = Marcus Burnett.
 - Quotabunga: "quarter bunga", "quota bunga".
 - Listener names vary between mentions (Raina, Reina, Reyna). Use the most

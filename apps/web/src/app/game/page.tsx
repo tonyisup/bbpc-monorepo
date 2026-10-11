@@ -139,7 +139,7 @@ export default async function GamePage() {
                   { value: 4, label: "Slater", note: "the best" },
                   { value: 3, label: "Dollar", note: "ok" },
                   { value: 2, label: "Waste", note: "not ok" },
-                  { value: 1, label: "Goldbloom", note: "the worst" },
+                  { value: 1, label: "Goldblum", note: "the worst" },
                 ].map((rating) => (
                   <div
                     key={rating.value}

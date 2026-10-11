@@ -55,6 +55,7 @@ exact transcript and output paths to use.
 | `candidateClips`: exactly 20 | FAIL |
 | `clipAnalysis`: exactly 3 distinct picks, each with the same `start`, `end` and `headline` as a candidate (`why` may add the selection reason) | FAIL |
 | Every clip and evidence window starts on a segment `start` and ends on a segment `end` | FAIL |
+| `hostRatings` keys are `Fonso`, `Harley`, `Tony`; values are `Slater`, `Dollar`, `Waste`, `Goldblum` | FAIL |
 | Clip length 20–90 s | warning |
 | Evidence window length 60–180 s | warning |
 | `title` ≤ 60 characters; `metaDescription` about 160 (120–170); `highlights` 3–5 | warning |
@@ -82,8 +83,8 @@ knowledge; this one covers the file formats.
     "matchedMovieId": null,
     "title": "Cemetery Man", "originalTitle": "Dellamorte Dellamore", "year": 1994,
     "confidence": 0.97, "status": "accepted",
-    "reviewType": "homework | extra_credit | extra_review", "pickedBy": "Fonzo",
-    "hostRatings": {"Fonzo": "Slater", "Harley": "Waste of Time", "Tony": "Dollar"},
+    "reviewType": "homework | extra_credit | extra_review", "pickedBy": "Fonso",
+    "hostRatings": {"Fonso": "Slater", "Harley": "Waste", "Tony": "Dollar"},
     "ratingSource": "how the ratings were confirmed",
     "signals": ["exact_title", "strong_review_context", "host_ratings_scored"],
     "evidence": [{"windowIndex": 4801, "start": 5613.3, "end": 5698.1,
