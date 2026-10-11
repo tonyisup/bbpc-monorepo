@@ -171,7 +171,8 @@ no fallback: a new episode stops after `import_transcript` with exit code 75
 (`awaiting_cowork` in `output/cowork/state.json`), and the next unattended run
 resumes with `--from movies` once both files exist. Details and the authoring
 rules Cowork follows:
-[`docs/cowork-handoff.md`](docs/cowork-handoff.md).
+[`docs/cowork-handoff.md`](docs/cowork-handoff.md). Show knowledge (hosts, rating
+scale, segments, what Tony publishes) lives in [`docs/show-format.md`](docs/show-format.md).
 
 ```bash
 python pipeline.py episodes/20260914.mp3 --from movies      # resume after Cowork

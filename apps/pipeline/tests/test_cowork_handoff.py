@@ -325,3 +325,21 @@ class PipelineStageSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShowFormatReferenceTests(unittest.TestCase):
+    """docs/show-format.md is the one place show knowledge lives; Cowork is pointed at it."""
+
+    DOCS = Path(__file__).resolve().parents[1] / "docs"
+
+    def test_handoff_instructions_send_cowork_to_the_show_format_reference(self):
+        handoff = (self.DOCS / "cowork-handoff.md").read_text(encoding="utf-8")
+        self.assertIn("show-format.md", handoff)
+        # The show knowledge itself must not be duplicated in the hand-off doc.
+        self.assertNotIn("Rating scale, best to worst", handoff)
+
+    def test_show_format_reference_covers_what_cowork_needs(self):
+        text = (self.DOCS / "show-format.md").read_text(encoding="utf-8")
+        for heading in ("## Hosts", "## Episode structure", "## Rating scale", "## Listener game",
+                        "## Not reviews", "## Transcription garbles", "## What gets published"):
+            self.assertIn(heading, text)
