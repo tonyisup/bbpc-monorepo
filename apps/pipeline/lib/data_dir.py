@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 ENV_VAR = "BBPC_PIPELINE_DATA_DIR"
-DEFAULT_DATA_DIR = "~/bbpc-pipeline-data"
+# Beside the repo checkout (~/src/bbpc/repo), never inside it.
+DEFAULT_DATA_DIR = "~/src/bbpc/bbpc-pipeline-data"
 
 
 def data_dir() -> Path:

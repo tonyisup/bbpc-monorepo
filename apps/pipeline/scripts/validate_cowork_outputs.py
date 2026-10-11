@@ -6,7 +6,7 @@ Standard library only, so it runs outside the pipeline venv:
     python3 scripts/validate_cowork_outputs.py --pending        # what needs Cowork
     python3 scripts/validate_cowork_outputs.py 20260914         # validate one episode
 
-Set BBPC_PIPELINE_DATA_DIR when the data directory is not ~/bbpc-pipeline-data,
+Set BBPC_PIPELINE_DATA_DIR when the data directory is not ~/src/bbpc/bbpc-pipeline-data,
 as in Cowork's Linux environment.
 """
 from __future__ import annotations
