@@ -8,15 +8,27 @@ import pipeline
 from lib import cowork_handoff, movie_extractor, parser
 
 
+# Transcript fixture: 30 ten-second segments (0-300 s). Valid clips sit on these boundaries.
+SEGMENTS = [{"start": float(t), "end": float(t + 10), "text": f"segment {t}"} for t in range(0, 300, 10)]
+
+
+def _clip(i, **extra):
+    row = {"start": 10.0 * i, "end": 10.0 * i + 30.0, "headline": f"Hook {i}",
+           "imagePrompt": "A cracked film reel in fog", "why": "Funny"}
+    row.update(extra)
+    return row
+
+
 def _seo_payload(**overrides):
-    clip = {"start": 10.0, "end": 40.0, "headline": "Hook", "imagePrompt": "A cracked film reel in fog", "why": "Funny"}
+    candidates = [_clip(i) for i in range(1, 21)]
     payload = {
         "title": "Episode title",
-        "metaDescription": "Description",
+        "metaDescription": "D" * 155,
         "keywords": ["movie podcast"],
-        "highlights": [{"start": "00:00:10", "end": "00:00:40", "headline": "H", "summary": "S"}],
-        "candidateClips": [dict(clip)],
-        "clipAnalysis": [dict(clip)],
+        "highlights": [{"start": f"00:00:{s}0", "end": f"00:00:{s}5", "headline": "H", "summary": "S"} for s in (1, 2, 3)],
+        "candidateClips": candidates,
+        # Picks copy a candidate; Cowork may append its selection reason to `why`.
+        "clipAnalysis": [dict(candidates[i], why="Funny. Selected: best hook") for i in (0, 4, 9)],
         "notableWorks": ["Sketch"],
         "callToAction": "Follow us",
         "_generator": "cowork_v1",
@@ -54,10 +66,7 @@ class CoworkHandoffTestCase(unittest.TestCase):
         self.cowork = self.root / "cowork"
         self.cowork.mkdir()
         self.transcript = self.root / "20260101.json"
-        self.transcript.write_text(json.dumps([
-            {"start": 0.0, "end": 10.0, "text": "welcome back"},
-            {"start": 10.0, "end": 120.0, "text": "my homework was sketch and i give it a dollar"},
-        ]))
+        self.transcript.write_text(json.dumps(SEGMENTS))
         self.config = {
             "paths": {
                 "output_dir": str(self.root / "output"),
@@ -75,7 +84,8 @@ class CoworkHandoffTestCase(unittest.TestCase):
 
 class ValidationTests(CoworkHandoffTestCase):
     def test_valid_seo_has_no_problems(self):
-        self.assertEqual(cowork_handoff.validate_seo(_seo_payload(), transcript_duration=120.0), [])
+        self.assertEqual(cowork_handoff.validate_seo(_seo_payload(), segments=SEGMENTS), [])
+        self.assertEqual(cowork_handoff.seo_warnings(_seo_payload()), [])
 
     def test_seo_rejects_missing_sections_and_bad_windows(self):
         bad_clip = {"start": 50.0, "end": 40.0, "headline": "x", "imagePrompt": "y"}
@@ -84,9 +94,84 @@ class ValidationTests(CoworkHandoffTestCase):
         self.assertTrue(any("invalid window" in p for p in problems))
 
     def test_seo_rejects_clip_past_transcript_end(self):
-        clip = {"start": 100.0, "end": 150.0, "headline": "x", "imagePrompt": "y"}
-        problems = cowork_handoff.validate_seo(_seo_payload(candidateClips=[clip]), transcript_duration=120.0)
+        clip = {"start": 280.0, "end": 330.0, "headline": "x", "imagePrompt": "y"}
+        problems = cowork_handoff.validate_seo(_seo_payload(candidateClips=[clip]), transcript_duration=300.0)
         self.assertTrue(any("past the transcript end" in p for p in problems))
+
+    # -- hand-off rules from docs/cowork-handoff.md (errors block the run) --
+
+    def test_seo_requires_exactly_twenty_candidates(self):
+        payload = _seo_payload()
+        payload["candidateClips"] = payload["candidateClips"][:19]
+        problems = cowork_handoff.validate_seo(payload)
+        self.assertIn("'candidateClips' must have exactly 20 clips (found 19)", problems)
+
+    def test_seo_requires_exactly_three_picks(self):
+        payload = _seo_payload()
+        payload["clipAnalysis"] = payload["clipAnalysis"][:2]
+        self.assertIn("'clipAnalysis' must have exactly 3 clips (found 2)", cowork_handoff.validate_seo(payload))
+
+    def test_picks_must_copy_a_candidate_window_and_headline(self):
+        payload = _seo_payload()
+        payload["clipAnalysis"][1] = dict(payload["clipAnalysis"][1], start=55.0)
+        payload["clipAnalysis"][2] = dict(payload["clipAnalysis"][2], headline="Renamed")
+        problems = cowork_handoff.validate_seo(payload)
+        self.assertIn("clipAnalysis[1] is not one of the candidateClips (same start, end and headline)", problems)
+        self.assertIn("clipAnalysis[2] is not one of the candidateClips (same start, end and headline)", problems)
+
+    def test_picks_must_be_distinct(self):
+        payload = _seo_payload()
+        payload["clipAnalysis"][2] = dict(payload["clipAnalysis"][0])
+        self.assertIn("clipAnalysis[2] repeats an earlier pick", cowork_handoff.validate_seo(payload))
+
+    def test_clips_must_start_and_end_on_segment_boundaries(self):
+        payload = _seo_payload()
+        payload["candidateClips"][3] = dict(payload["candidateClips"][3], start=41.5)
+        payload["candidateClips"][5] = dict(payload["candidateClips"][5], end=88.0)
+        problems = cowork_handoff.validate_seo(payload, segments=SEGMENTS)
+        self.assertIn("candidateClips[3] starts at 41.50s, not on a transcript segment start", problems)
+        self.assertIn("candidateClips[5] ends at 88.00s, not on a transcript segment end", problems)
+
+    def test_boundary_check_is_skipped_without_segments(self):
+        payload = _seo_payload()
+        payload["candidateClips"][3] = dict(payload["candidateClips"][3], start=41.5)
+        self.assertEqual(cowork_handoff.validate_seo(payload), [])
+
+    def test_movie_evidence_must_sit_on_segment_boundaries(self):
+        movie = _movie("Sketch", 2025, evidence=[{"start": 12.0, "end": 80.0, "text": "review"}])
+        problems = cowork_handoff.validate_movies(_movies_payload(movie), segments=SEGMENTS)
+        self.assertIn("movies[0].evidence[0] starts at 12.00s, not on a transcript segment start", problems)
+
+    def test_host_ratings_use_site_host_and_rating_names(self):
+        good = _movie("Sketch", 2025, hostRatings={"Fonso": "Slater", "Harley": "Goldblum", "Tony": "Waste"})
+        self.assertEqual(cowork_handoff.validate_movies(_movies_payload(good)), [])
+        bad = _movie("Sketch", 2025, hostRatings={"MCB": "Dollar", "Fonzo": "Dollar", "Tony": "Pile of Shit"})
+        problems = cowork_handoff.validate_movies(_movies_payload(bad))
+        self.assertIn("movies[0].hostRatings has unknown host 'MCB' (use Fonso, Harley, Tony)", problems)
+        self.assertIn("movies[0].hostRatings has unknown host 'Fonzo' (use Fonso, Harley, Tony)", problems)
+        self.assertIn(
+            "movies[0].hostRatings['Tony'] is 'Pile of Shit' (use Slater, Dollar, Waste, Goldblum)", problems)
+
+    # -- soft rules (warnings never block) --
+
+    def test_soft_seo_rules_warn_without_failing(self):
+        payload = _seo_payload(title="T" * 61, metaDescription="Too short", highlights=[
+            {"start": "00:00:10", "end": "00:00:20", "headline": "H", "summary": "S"}])
+        self.assertEqual(cowork_handoff.validate_seo(payload, segments=SEGMENTS), [])
+        warnings = cowork_handoff.seo_warnings(payload)
+        self.assertIn("title is 61 characters (keep it to 60)", warnings)
+        self.assertIn("metaDescription is 9 characters (aim for about 160)", warnings)
+        self.assertIn("highlights has 1 entries (expected 3-5)", warnings)
+
+    def test_evidence_window_length_outside_60_to_180_seconds_warns(self):
+        movie = _movie("Sketch", 2025, evidence=[
+            {"start": 10.0, "end": 60.0, "text": "short"}, {"start": 0.0, "end": 190.0, "text": "long"}])
+        payload = _movies_payload(movie)
+        self.assertEqual(cowork_handoff.validate_movies(payload, segments=SEGMENTS), [])
+        self.assertEqual(cowork_handoff.movies_warnings(payload), [
+            "movies[0].evidence[0] is 50s (expected 60-180s)",
+            "movies[0].evidence[1] is 190s (expected 60-180s)",
+        ])
 
     def test_movies_rejects_unknown_status_and_year(self):
         problems = cowork_handoff.validate_movies(_movies_payload(_movie("Sketch", 25, status="liked")))
@@ -139,7 +224,7 @@ class MovieStageTests(CoworkHandoffTestCase):
 
     def test_uses_cowork_file_and_resolves_ids_from_assignments(self):
         self.write("20260101.movies.json", _movies_payload(
-            _movie("Sketch", 2025, hostRatings={"Fonzo": "Dollar"}),
+            _movie("Sketch", 2025, hostRatings={"Fonso": "Dollar"}),
             _movie("Dellamorte Dellamore", 1994, originalTitle="Cemetery Man"),
         ))
         context = self.context()
@@ -147,13 +232,20 @@ class MovieStageTests(CoworkHandoffTestCase):
         payload = json.loads(Path(context["movie_extraction_path"]).read_text())
         by_title = {m["title"]: m for m in payload["movies"]}
         self.assertEqual(by_title["Sketch"]["matchedMovieId"], "movie-1")
-        self.assertEqual(by_title["Sketch"]["hostRatings"], {"Fonzo": "Dollar"})
+        self.assertEqual(by_title["Sketch"]["hostRatings"], {"Fonso": "Dollar"})
         self.assertEqual(by_title["Dellamorte Dellamore"]["matchedMovieId"], "movie-2")
         # Convex-assigned movie Cowork did not list is kept for the thumbnail.
         self.assertEqual(by_title["Mystery Road"]["status"], "db_assigned")
         self.assertEqual(payload["extractor"]["mode"], "cowork")
         self.assertEqual(payload["episode"]["dbEpisodeId"], "episode-1")
         self.assertEqual(payload["extractor"]["dbMovieCount"], 3)
+
+    def test_movies_stage_rejects_evidence_off_segment_boundary(self):
+        self.write("20260101.movies.json", _movies_payload(
+            _movie("Sketch", 2025, evidence=[{"start": 10.0, "end": 75.5, "text": "review"}])))
+        with self.assertRaises(cowork_handoff.CoworkOutputInvalid) as ctx:
+            movie_extractor.run(self.context())
+        self.assertIn("movies[0].evidence[0] ends at 75.50s", str(ctx.exception))
 
     def test_unassigned_movie_resolved_from_full_catalog_only_on_year_match(self):
         self.write("20260101.movies.json", _movies_payload(
@@ -207,6 +299,14 @@ class ParseStageTests(CoworkHandoffTestCase):
         with self.assertRaises(cowork_handoff.CoworkOutputInvalid):
             parser.run(self.context())
 
+    def test_parse_rejects_clip_off_segment_boundary(self):
+        payload = _seo_payload()
+        payload["candidateClips"][0] = dict(payload["candidateClips"][0], end=37.0)
+        self.write("20260101.seo.json", payload)
+        with self.assertRaises(cowork_handoff.CoworkOutputInvalid) as ctx:
+            parser.run(self.context())
+        self.assertIn("candidateClips[0] ends at 37.00s", str(ctx.exception))
+
     def test_without_file_waits_for_cowork_even_when_config_says_off(self):
         self.config["settings"]["cowork_mode"] = "off"
         with self.assertRaises(cowork_handoff.AwaitingCowork) as ctx:
@@ -235,3 +335,21 @@ class PipelineStageSelectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShowFormatReferenceTests(unittest.TestCase):
+    """docs/show-format.md is the one place show knowledge lives; Cowork is pointed at it."""
+
+    DOCS = Path(__file__).resolve().parents[1] / "docs"
+
+    def test_handoff_instructions_send_cowork_to_the_show_format_reference(self):
+        handoff = (self.DOCS / "cowork-handoff.md").read_text(encoding="utf-8")
+        self.assertIn("show-format.md", handoff)
+        # The show knowledge itself must not be duplicated in the hand-off doc.
+        self.assertNotIn("Rating scale, best to worst", handoff)
+
+    def test_show_format_reference_covers_what_cowork_needs(self):
+        text = (self.DOCS / "show-format.md").read_text(encoding="utf-8")
+        for heading in ("## Hosts", "## Episode structure", "## Rating scale", "## Listener game",
+                        "## Not reviews", "## Transcription garbles", "## What gets published"):
+            self.assertIn(heading, text)

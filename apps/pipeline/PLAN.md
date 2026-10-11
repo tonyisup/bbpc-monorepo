@@ -40,6 +40,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 
 ## Next Steps / Backlog
 - [x] Retire the heuristic/LLM fallback and the diarize placeholder; Cowork is the only judgment path.
+- [x] Record publish decisions (`scripts/publish_decisions.py`), seeded with the Shorts published through ep 794.
 - [ ] **Laughter → Cowork:** Write laughter timestamps where Cowork reads them.
 - [ ] **Advanced Captions:** Move to word-level timestamps for more dynamic "pop-in" caption styles.
 - [ ] **Social Upload:** Integrate automated upload to TikTok/Instagram/YouTube APIs.

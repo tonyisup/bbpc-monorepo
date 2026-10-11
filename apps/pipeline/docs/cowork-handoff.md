@@ -44,23 +44,32 @@ exact transcript and output paths to use.
    `python3 scripts/validate_cowork_outputs.py <stem>` and fix anything it
    reports. Never edit `state.json`.
 
+### What the validator enforces
+
+`FAIL` lines block the pipeline (exit 75, the reason lands in `lastError`);
+`warning` lines are printed but never block. With the transcript available:
+
+| Rule | Level |
+|---|---|
+| Required keys present and non-empty; clip and evidence windows numeric, ordered, inside the transcript | FAIL |
+| `candidateClips`: exactly 20 | FAIL |
+| `clipAnalysis`: exactly 3 distinct picks, each with the same `start`, `end` and `headline` as a candidate (`why` may add the selection reason) | FAIL |
+| Every clip and evidence window starts on a segment `start` and ends on a segment `end` | FAIL |
+| `hostRatings` keys are `Fonso`, `Harley`, `Tony`; values are `Slater`, `Dollar`, `Waste`, `Goldblum` | FAIL |
+| Clip length 20–90 s | warning |
+| Evidence window length 60–180 s | warning |
+| `title` ≤ 60 characters; `metaDescription` about 160 (120–170); `highlights` 3–5 | warning |
+
+The same checks run inside the `movies` and `parse` stages, so a file the
+validator passes is a file the pipeline accepts.
+
 ### Show format (what to look for)
 
-- Hosts: **Fonzo** (Mike Lowry), **Tony** (a.k.a. MCB/MCP), **Harley**.
-- Structure: intro banter → extras (movies a host watched on their own) →
-  games (Mount Rushmore, **Quotabunga** quote bracket) → **Homework**
-  (the assigned movie) → listener rating predictions → **Extra credit** →
-  predictions → the wheel spin picks next week's homework/extra credit →
-  weekends → outro.
-- Rating scale, best to worst: **Slater**, **Dollar** ("I'd buy that for a
-  dollar"), **Waste of Time**, **Pile of Shit**. Transcription often garbles
-  these ("a palace" = a pile of shit).
-- Ratings are best confirmed from the prediction scoring that follows each
-  review: each correct guess is 10 points and "pain train" means every guess
-  was wrong. Use that arithmetic to confirm who gave what.
-- **Not reviews:** Quotabunga quote clips, studio logos, next week's
-  assignments, comparisons ("feels like Evil Dead"). List them as
-  `rejected` candidates with a `note`.
+Read [`show-format.md`](show-format.md) first: hosts and their aliases, the
+episode structure, the rating scale, how prediction scoring confirms ratings,
+what is *not* a review, common transcription garbles, and which kinds of bits
+Tony has actually published as Shorts. That file is the only copy of show
+knowledge; this one covers the file formats.
 
 ### `<stem>.movies.json`
 
@@ -74,8 +83,8 @@ exact transcript and output paths to use.
     "matchedMovieId": null,
     "title": "Cemetery Man", "originalTitle": "Dellamorte Dellamore", "year": 1994,
     "confidence": 0.97, "status": "accepted",
-    "reviewType": "homework | extra_credit | extra_review", "pickedBy": "Fonzo",
-    "hostRatings": {"Fonzo": "Slater", "Harley": "Waste of Time", "MCB": "Dollar"},
+    "reviewType": "homework | extra_credit | extra_review", "pickedBy": "Fonso",
+    "hostRatings": {"Fonso": "Slater", "Harley": "Waste", "Tony": "Dollar"},
     "ratingSource": "how the ratings were confirmed",
     "signals": ["exact_title", "strong_review_context", "host_ratings_scored"],
     "evidence": [{"windowIndex": 4801, "start": 5613.3, "end": 5698.1,
@@ -106,8 +115,9 @@ Clips (`start`/`end` in float seconds, on segment boundaries):
   clip must end before the trailing silence.
 - 20–90 s, self-contained, with a hook in the first few seconds and a payoff.
   Roughly 5 per quarter of the runtime.
-- Favour hot takes on new releases, bits that work without knowing the show,
-  and genuine laughs. Avoid stretches that are mostly copyrighted movie or
+- Favour single bits that work without knowing the show, genuine laughs, and
+  hot takes on new releases. See "What gets published" in `show-format.md`
+  for the bits Tony actually posted. Avoid stretches that are mostly copyrighted movie or
   music audio playing, and anything about people outside the show.
 - `imagePrompt`: an abstract cinematic metaphor for what is being said:
   symbolic objects, surreal setting, light and palette. Never people

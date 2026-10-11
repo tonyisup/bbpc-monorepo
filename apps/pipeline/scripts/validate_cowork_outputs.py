@@ -58,17 +58,16 @@ def _pending(config: dict) -> int:
 
 def _validate(config: dict, stem: str) -> int:
     transcript = _transcript_path(config, stem)
-    duration = None
+    segments = None
     if transcript.is_file():
         segments = json.loads(transcript.read_text(encoding="utf-8"))
-        duration = max((float(s.get("end", 0.0)) for s in segments), default=None)
     else:
-        print(f"note: transcript not found at {transcript}; skipping duration checks")
+        print(f"note: transcript not found at {transcript}; skipping duration and segment-boundary checks")
 
     ok = True
     for label, loader in (
-        ("movies", lambda: cowork_handoff.load_movies(config, stem)),
-        ("seo", lambda: cowork_handoff.load_seo(config, stem, duration)),
+        ("movies", lambda: cowork_handoff.load_movies(config, stem, segments)),
+        ("seo", lambda: cowork_handoff.load_seo(config, stem, segments=segments)),
     ):
         try:
             payload = loader()
@@ -82,12 +81,14 @@ def _validate(config: dict, stem: str) -> int:
             continue
         print(f"OK {label}")
         if label == "seo":
-            for warning in cowork_handoff.clip_duration_warnings(payload):
-                print(f"  warning: {warning}")
+            warnings = cowork_handoff.seo_warnings(payload)
             print(f"  {len(payload['candidateClips'])} candidate clips, {len(payload['clipAnalysis'])} selected")
         else:
+            warnings = cowork_handoff.movies_warnings(payload)
             accepted = [m.get("title") for m in payload["movies"] if m.get("status", "accepted") == "accepted"]
             print(f"  accepted: {', '.join(accepted) or '(none)'}")
+        for warning in warnings:
+            print(f"  warning: {warning}")
     return 0 if ok else 1
 
 

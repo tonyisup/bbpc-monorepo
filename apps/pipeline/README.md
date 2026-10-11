@@ -171,12 +171,32 @@ no fallback: a new episode stops after `import_transcript` with exit code 75
 (`awaiting_cowork` in `output/cowork/state.json`), and the next unattended run
 resumes with `--from movies` once both files exist. Details and the authoring
 rules Cowork follows:
-[`docs/cowork-handoff.md`](docs/cowork-handoff.md).
+[`docs/cowork-handoff.md`](docs/cowork-handoff.md). Show knowledge (hosts, rating
+scale, segments, what Tony publishes) lives in [`docs/show-format.md`](docs/show-format.md).
 
 ```bash
 python pipeline.py episodes/20260914.mp3 --from movies      # resume after Cowork
 python3 scripts/validate_cowork_outputs.py --pending        # what is waiting on Cowork
+python3 scripts/validate_cowork_outputs.py 20260914         # check one episode's files (hard rules + warnings)
 ```
+
+## Publish decisions
+
+After reviewing an episode's rendered clips, record what happened to each one.
+Decisions go to `output/publish-decisions.json` in the data directory and are
+the record of which picks became Shorts; the clip-picking review and any
+future rubric read them. Standard library only, no venv needed:
+
+```bash
+python3 scripts/publish_decisions.py list 20261005                     # rendered clips + candidates
+python3 scripts/publish_decisions.py publish 20261005 2 https://youtube.com/shorts/ID
+python3 scripts/publish_decisions.py skip 20261005 rest --reason "too long"
+python3 scripts/publish_decisions.py publish 20261005 c7 https://youtu.be/ID   # a candidate that wasn't rendered
+python3 scripts/publish_decisions.py report
+```
+
+Clip numbers are the `NN-` prefix of the rendered file. Decisions copy the
+clip's window and headline, so they survive deleting the rendered files.
 
 ## Movies without a transcript
 
@@ -246,6 +266,7 @@ output/
 ├── visuals/<episode>/        # AI-generated background images
 ├── movies/<episode>.movies.json  # Extracted movie data
 ├── seo/<episode>.seo.json    # SEO metadata
+├── publish-decisions.json    # published/skipped per rendered clip (scripts/publish_decisions.py)
 ├── review-clips/<episode>/   # Audio clips from review segments
 ├── laughter/                 # laughter_autotune.py results
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)
