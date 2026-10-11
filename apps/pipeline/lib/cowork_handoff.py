@@ -1,17 +1,13 @@
 """Hand-off between the pipeline and Claude Cowork for the judgment stages.
 
-Cowork reads a finished transcript and writes two files the pipeline consumes
-in place of its own LLM calls:
+Cowork reads a finished transcript and writes the two files the judgment
+stages consume; there is no model or heuristic fallback:
 
     <cowork_dir>/<stem>.movies.json   -> used by the ``movies`` stage
     <cowork_dir>/<stem>.seo.json      -> used by the ``parse`` stage
 
-``settings.cowork_mode`` (or ``--cowork-mode``) controls the behaviour:
-
-    off      never read Cowork files; use the heuristic/LLM stages
-    prefer   use Cowork files when present, otherwise fall back (default)
-    require  use Cowork files; when missing, stop with AwaitingCowork so the
-             run can resume later with ``--from movies``
+When a file is missing the stage raises ``AwaitingCowork`` so the run can
+resume later with ``--from movies``.
 
 Progress is tracked in ``<cowork_dir>/state.json`` so unattended runs neither
 reprocess finished episodes nor start the expensive stages early. The
@@ -30,8 +26,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-MODES = ("off", "prefer", "require")
-DEFAULT_MODE = "prefer"
 EXIT_AWAITING_COWORK = 75  # EX_TEMPFAIL: not a failure, try again later
 
 STATUS_AWAITING = "awaiting_cowork"
@@ -81,16 +75,6 @@ def movies_path(config: Dict[str, Any], stem: str) -> Path:
 
 def seo_path(config: Dict[str, Any], stem: str) -> Path:
     return cowork_dir(config) / f"{stem}.seo.json"
-
-
-def resolve_mode(config: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> str:
-    override = (context or {}).get("cowork_mode")
-    settings = config.get("settings", {}) if isinstance(config, dict) else {}
-    raw = override or (settings.get("cowork_mode") if isinstance(settings, dict) else None) or DEFAULT_MODE
-    mode = str(raw).strip().lower()
-    if mode not in MODES:
-        raise ValueError(f"cowork_mode must be one of {MODES}, got {raw!r}")
-    return mode
 
 
 def outputs_ready(config: Dict[str, Any], stem: str) -> bool:

@@ -97,11 +97,10 @@ class ValidationTests(CoworkHandoffTestCase):
         with self.assertRaises(cowork_handoff.CoworkOutputInvalid):
             cowork_handoff.load_seo(self.config, "20260101")
 
-    def test_mode_resolution(self):
-        self.assertEqual(cowork_handoff.resolve_mode(self.config), "prefer")
-        self.assertEqual(cowork_handoff.resolve_mode(self.config, {"cowork_mode": "off"}), "off")
-        with self.assertRaises(ValueError):
-            cowork_handoff.resolve_mode({"settings": {"cowork_mode": "sometimes"}})
+    def test_cowork_mode_setting_no_longer_exists(self):
+        # Cowork is the only judgment path; there is no mode to switch it off.
+        self.assertFalse(hasattr(cowork_handoff, "resolve_mode"))
+        self.assertFalse(hasattr(cowork_handoff, "MODES"))
 
 
 class StateTests(CoworkHandoffTestCase):
@@ -144,9 +143,7 @@ class MovieStageTests(CoworkHandoffTestCase):
             _movie("Dellamorte Dellamore", 1994, originalTitle="Cemetery Man"),
         ))
         context = self.context()
-        with mock.patch.object(movie_extractor, "_extract_with_transcript") as legacy:
-            movie_extractor.run(context)
-        legacy.assert_not_called()
+        movie_extractor.run(context)
         payload = json.loads(Path(context["movie_extraction_path"]).read_text())
         by_title = {m["title"]: m for m in payload["movies"]}
         self.assertEqual(by_title["Sketch"]["matchedMovieId"], "movie-1")
@@ -173,22 +170,19 @@ class MovieStageTests(CoworkHandoffTestCase):
         self.assertEqual(by_title["The End of Oak Street"]["matchedMovieId"], "movie-9")
         self.assertIsNone(by_title["Heat"]["matchedMovieId"])
 
-    def test_require_mode_without_file_raises_awaiting(self):
-        self.config["settings"]["cowork_mode"] = "require"
+    def test_without_file_waits_for_cowork_even_when_config_says_off(self):
+        # A stale "cowork_mode" in an old config must not resurrect a fallback.
+        self.config["settings"]["cowork_mode"] = "off"
         with self.assertRaises(cowork_handoff.AwaitingCowork) as ctx:
-            movie_extractor.run(self.context())
+            movie_extractor.run(self.context(cowork_mode="off"))
         self.assertEqual(ctx.exception.stage, "movies")
 
-    def test_prefer_mode_without_file_falls_back(self):
-        with mock.patch.object(movie_extractor, "_extract_with_transcript", return_value=_movies_payload()) as legacy:
-            movie_extractor.run(self.context())
-        legacy.assert_called_once()
-
-    def test_off_mode_ignores_file(self):
-        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
-        with mock.patch.object(movie_extractor, "_extract_with_transcript", return_value=_movies_payload()) as legacy:
-            movie_extractor.run(self.context(cowork_mode="off"))
-        legacy.assert_called_once()
+    def test_without_file_waits_before_any_convex_lookup(self):
+        context = self.context(db_episode=None, db_episode_movies=[])
+        with mock.patch.object(movie_extractor.ConvexPipelineClient, "from_environment",
+                               side_effect=AssertionError("no Convex call while waiting")):
+            with self.assertRaises(cowork_handoff.AwaitingCowork):
+                movie_extractor.run(context)
 
 
 class ParseStageTests(CoworkHandoffTestCase):
@@ -198,11 +192,10 @@ class ParseStageTests(CoworkHandoffTestCase):
         context.update(overrides)
         return context
 
-    def test_uses_cowork_seo_without_calling_model_or_laughter(self):
+    def test_uses_cowork_seo_without_calling_laughter_detection(self):
         self.write("20260101.seo.json", _seo_payload())
         context = self.context()
-        with mock.patch.object(parser, "_build_client", side_effect=AssertionError("no LLM")), \
-             mock.patch("lib.laughter_detector.detect_laughter", side_effect=AssertionError("no audio")):
+        with mock.patch("lib.laughter_detector.detect_laughter", side_effect=AssertionError("no audio")):
             parser.run(context)
         written = json.loads(Path(context["seo_path"]).read_text())
         self.assertEqual(written["title"], "Episode title")
@@ -214,10 +207,15 @@ class ParseStageTests(CoworkHandoffTestCase):
         with self.assertRaises(cowork_handoff.CoworkOutputInvalid):
             parser.run(self.context())
 
-    def test_require_mode_without_file_raises_awaiting(self):
+    def test_without_file_waits_for_cowork_even_when_config_says_off(self):
+        self.config["settings"]["cowork_mode"] = "off"
         with self.assertRaises(cowork_handoff.AwaitingCowork) as ctx:
-            parser.run(self.context(cowork_mode="require"))
+            parser.run(self.context(cowork_mode="off"))
         self.assertEqual(ctx.exception.stage, "parse")
+
+    def test_parser_has_no_model_client(self):
+        self.assertFalse(hasattr(parser, "_build_client"))
+        self.assertFalse(hasattr(parser, "_call_model"))
 
 
 class PipelineStageSelectionTests(unittest.TestCase):
@@ -230,6 +228,9 @@ class PipelineStageSelectionTests(unittest.TestCase):
 
     def test_only_still_selects_single_stage(self):
         self.assertEqual([s for s in pipeline.STAGES if pipeline._should_run(s, "clip")], ["clip"])
+
+    def test_placeholder_diarize_stage_is_gone(self):
+        self.assertNotIn("diarize", pipeline.STAGES)
 
 
 if __name__ == "__main__":

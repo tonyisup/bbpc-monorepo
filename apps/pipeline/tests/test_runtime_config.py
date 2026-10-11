@@ -82,14 +82,12 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(get_openai_api_key(), "test-openai-key")
 
     def test_get_openrouter_reads_from_environment(self):
-        from lib.runtime_config import get_openrouter_api_key, get_openrouter_api_url, get_openrouter_model
+        from lib.runtime_config import get_openrouter_api_key, get_openrouter_api_url
 
         os.environ["OPENROUTER_API_KEY"] = "test-or-key"
-        os.environ["OPENROUTER_MODEL"] = "test/model"
         os.environ["OPENROUTER_API_URL"] = "https://example.com/v1"
 
         self.assertEqual(get_openrouter_api_key(), "test-or-key")
-        self.assertEqual(get_openrouter_model(), "test/model")
         self.assertEqual(get_openrouter_api_url(), "https://example.com/v1")
 
     def test_get_openrouter_api_url_defaults_when_unset(self):
@@ -99,56 +97,20 @@ class RuntimeConfigTests(unittest.TestCase):
 
         self.assertEqual(get_openrouter_api_url(), "https://openrouter.ai/api/v1")
 
-    def test_normalize_ollama_openai_base_url(self):
-        from lib.runtime_config import normalize_ollama_openai_base_url
-
-        self.assertEqual(
-            normalize_ollama_openai_base_url("http://127.0.0.1:11434"),
-            "http://127.0.0.1:11434/v1",
-        )
-        self.assertEqual(
-            normalize_ollama_openai_base_url("http://127.0.0.1:11434/v1"),
-            "http://127.0.0.1:11434/v1",
-        )
-
-    def test_resolve_pipeline_llm_endpoints_ollama(self):
-        from lib.runtime_config import resolve_pipeline_llm_endpoints
-
-        os.environ.pop("OLLAMA_BASE_URL", None)
-        os.environ.pop("OLLAMA_API_KEY", None)
-
-        base, key = resolve_pipeline_llm_endpoints(
-            {
-                "llm_provider": "ollama",
-                "ollama_base_url": "http://127.0.0.1:11434",
-                "ollama_api_key": "ollama-local",
-            }
-        )
-        self.assertEqual(base, "http://127.0.0.1:11434/v1")
-        self.assertEqual(key, "ollama-local")
-
-    def test_resolve_seo_llm_model_name_ollama_fallback(self):
-        from lib.runtime_config import resolve_seo_llm_model_name
-
-        os.environ["OLLAMA_MODEL"] = "my-local"
-        name = resolve_seo_llm_model_name({"llm_provider": "ollama"})
-        self.assertEqual(name, "my-local")
-
     def test_resolve_llm_request_timeout_prefers_operation_specific_setting(self):
         from lib.runtime_config import resolve_llm_request_timeout
 
         timeout = resolve_llm_request_timeout(
-            {"llm_provider": "ollama", "llm_timeout_seconds": 45, "seo_timeout_seconds": 120},
-            operation="seo",
+            {"llm_timeout_seconds": 45, "visual_timeout_seconds": 120},
+            operation="visual",
         )
 
         self.assertEqual(timeout, 120.0)
 
-    def test_resolve_llm_request_timeout_uses_provider_default(self):
+    def test_resolve_llm_request_timeout_defaults_to_300_seconds(self):
         from lib.runtime_config import resolve_llm_request_timeout
 
-        self.assertEqual(resolve_llm_request_timeout({"llm_provider": "ollama"}), 900.0)
-        self.assertEqual(resolve_llm_request_timeout({"llm_provider": "openrouter"}), 300.0)
+        self.assertEqual(resolve_llm_request_timeout({}), 300.0)
 
     def test_convex_settings_read_and_validate_environment(self):
         from lib.runtime_config import (

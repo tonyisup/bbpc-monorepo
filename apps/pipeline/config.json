@@ -7,28 +7,11 @@
     "seo_dir": "./output/seo"
   },
   "settings": {
-    "llm_provider": "openrouter",
-    "llm_provider_ollama": "ollama",
-    "ollama_base_url": "http://127.0.0.1:8666/v1",
-    "ollama_api_key": "ollama-local",
     "transcription_engine": "parakeet",
     "parakeet_model": "mlx-community/parakeet-tdt-0.6b-v2",
     "whisper_model": "large-v3-turbo",
     "clip_duration": 60,
     "clip_audio_fade_out_seconds": 0.8,
-    "seo_max_output_tokens": 65536,
-    "seo_reasoning_effort": "low",
-    "seo_model": "inclusionai/ling-3.0-flash-fin:free",
-    "seo_model_local": "gemma-4-12B-it-8bit",
-    "movie_extractor_llm_enabled": true,
-    "movie_extractor_mode": "heuristic",
-    "movie_extractor_db_fallback_catalog": true,
-    "movie_extractor_model": "inclusionai/ling-3.0-flash-fin:free",
-    "movie_extractor_model_local": "gemma-4-12B-it-8bit",
-    "movie_extractor_candidate_limit": 25,
-    "movie_extractor_max_movies": 8,
-    "movie_extractor_accept_threshold": 1.15,
-    "movie_extractor_maybe_threshold": 0.85,
     "visuals_provider": "openrouter",
     "openrouter_visual_model": "google/gemini-3.1-flash-image",
     "openai_visual_model": "gpt-image-1",
@@ -51,7 +34,6 @@
     "thumbnail_logo_max_height_fraction": 0.12,
     "thumbnail_logo_margin_px": 40,
     "thumbnail_logo_position": "top_right",
-    "cowork_mode": "require",
     "cowork_outputs_dir": "./output/cowork"
   }
 }

@@ -186,7 +186,7 @@ def run_dry_run(tasks, db_dates):
                 "create Convex episode (number/title from MP3 tags, date from filename)"
             )
         if not has_tr:
-            actions.append("run pipeline.py (all stages: transcribe → movies → diarize → parse → clip → publish)")
+            actions.append("run pipeline.py (all stages: transcribe → movies → parse → clip → publish; stops for Cowork after import)")
 
         print(f"  {filename}")
         print(

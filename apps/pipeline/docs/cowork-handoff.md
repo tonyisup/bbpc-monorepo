@@ -13,15 +13,12 @@ run ─► pipeline.py ─► (resumes --from movies) ─► review_clip … pub
 `output/` and the transcripts are in the pipeline data directory
 (`BBPC_PIPELINE_DATA_DIR`, default `~/src/bbpc/bbpc-pipeline-data`), not in the checkout.
 
-## Modes (`settings.cowork_mode`, or `--cowork-mode` per run)
+## No fallback
 
-| mode | behaviour |
-|---|---|
-| `require` (shipped) | `movies`/`parse` use Cowork files; if missing, stop with exit 75 and mark the episode `awaiting_cowork` |
-| `prefer` | use Cowork files when present, otherwise the heuristic/LLM stages |
-| `off` | ignore Cowork files entirely (old behaviour) |
-
-To process an episode without Cowork: `python pipeline.py episodes/X.mp3 --cowork-mode off`.
+Cowork is the only source of judgment. If a Cowork file is missing, `movies`
+or `parse` stops with exit 75 and marks the episode `awaiting_cowork`; there is
+no heuristic or model-based path to fall back to. (Older configs may still
+carry `settings.cowork_mode`; it is ignored.)
 
 `output/cowork/state.json` is owned by the pipeline. On first use it treats
 every episode that already has `output/seo/<stem>.seo.json` as `done`.

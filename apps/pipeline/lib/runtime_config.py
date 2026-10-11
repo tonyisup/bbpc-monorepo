@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 from dotenv import load_dotenv
 
@@ -75,31 +75,6 @@ def get_openrouter_api_url() -> str:
     return url if url else "https://openrouter.ai/api/v1"
 
 
-def get_openrouter_model() -> str:
-    return get_required_env("OPENROUTER_MODEL")
-
-
-def normalize_ollama_openai_base_url(url: str) -> str:
-    """Ollama exposes an OpenAI-compatible API under .../v1 (e.g. http://127.0.0.1:11434/v1)."""
-    u = str(url).strip().rstrip("/")
-    if u.endswith("/v1"):
-        return u
-    return f"{u}/v1"
-
-
-def get_llm_provider_from_settings(settings: Dict[str, Any] | None) -> str:
-    """Pipeline LLM backend: 'openrouter' (default) or 'ollama'."""
-    _ensure_env_loaded()
-    if settings and settings.get("llm_provider"):
-        p = str(settings["llm_provider"]).strip().lower()
-        if p:
-            return p
-    env_p = (os.environ.get("LLM_PROVIDER") or "").strip().lower()
-    if env_p:
-        return env_p
-    return "openrouter"
-
-
 def _coerce_positive_float(value: Any, *, label: str) -> float:
     try:
         parsed = float(value)
@@ -110,47 +85,20 @@ def _coerce_positive_float(value: Any, *, label: str) -> float:
     return parsed
 
 
-def resolve_pipeline_llm_endpoints(settings: Dict[str, Any] | None) -> Tuple[str, str]:
-    """
-    Return (base_url, api_key) for OpenAI-compatible chat completions.
-
-    - openrouter: OPENROUTER_API_URL + OPENROUTER_API_KEY
-    - ollama: OLLAMA_BASE_URL (default http://127.0.0.1:11434) + optional OLLAMA_API_KEY (dummy ok)
-    """
-    provider = get_llm_provider_from_settings(settings)
-    if provider == "ollama":
-        base = ""
-        if settings and settings.get("ollama_base_url"):
-            base = str(settings["ollama_base_url"]).strip()
-        if not base:
-            base = (os.environ.get("OLLAMA_BASE_URL") or "http://127.0.0.1:11434").strip()
-        api_key = ""
-        if settings and settings.get("ollama_api_key") is not None:
-            api_key = str(settings["ollama_api_key"]).strip()
-        if not api_key:
-            api_key = (os.environ.get("OLLAMA_API_KEY") or "ollama-local").strip()
-        return normalize_ollama_openai_base_url(base), api_key
-    if provider != "openrouter":
-        raise ValueError(
-            f"Unknown llm_provider {provider!r}; use 'openrouter' or 'ollama' (or set LLM_PROVIDER)."
-        )
-    return get_openrouter_api_url(), get_openrouter_api_key()
-
-
 def resolve_llm_request_timeout(
     settings: Dict[str, Any] | None,
     *,
     operation: str | None = None,
 ) -> float:
     """
-    Resolve request timeout for OpenAI-compatible calls.
+    Resolve request timeout for hosted image-model calls.
 
     Precedence:
     1. settings["<operation>_timeout_seconds"] or settings["<operation>_timeout"]
     2. settings["llm_timeout_seconds"] or settings["llm_timeout"]
     3. env "<OPERATION>_TIMEOUT_SECONDS"/"<OPERATION>_TIMEOUT"
     4. env "LLM_TIMEOUT_SECONDS"/"LLM_TIMEOUT"
-    5. provider-aware default: ollama=900s, openrouter=300s
+    5. 300 seconds
     """
     _ensure_env_loaded()
     s = settings or {}
@@ -174,19 +122,8 @@ def resolve_llm_request_timeout(
         if value not in (None, ""):
             return _coerce_positive_float(value, label=key)
 
-    provider = get_llm_provider_from_settings(s)
-    return 900.0 if provider == "ollama" else 300.0
+    return 300.0
 
-
-def resolve_seo_llm_model_name(settings: Dict[str, Any] | None) -> str:
-    """Model id for parser/SEO: seo_model, then ollama_model / OLLAMA_MODEL, then OPENROUTER_MODEL."""
-    s = settings or {}
-    name = (s.get("seo_model") or s.get("ollama_model") or "").strip()
-    if name:
-        return name
-    if get_llm_provider_from_settings(s) == "ollama":
-        return (os.environ.get("OLLAMA_MODEL") or "gemma4").strip()
-    return get_openrouter_model()
 
 def get_azure_connection_string() -> str:
     return get_required_env("AZURE_STORAGE_CONNECTION_STRING")
