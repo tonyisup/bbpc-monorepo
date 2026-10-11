@@ -16,6 +16,7 @@ from typing import Any, Dict, List, cast
 
 from PIL import Image
 
+from lib import clip_files
 from lib.visual_prompts import (
     ABSTRACT_VISUAL_GUARDRAIL,
     normalize_clip_image_prompt,
@@ -106,13 +107,6 @@ DEFAULT_STYLE_SUFFIX = (
     "Purely visual scene: no text, letters, numbers, typography, logos, captions, "
     "titles, watermarks, fake UI, or media player chrome. Subtitles are added separately."
 )
-
-
-def _slugify(value: str) -> str:
-    cleaned = "".join(ch.lower() if ch.isalnum() else "-" for ch in value)
-    while "--" in cleaned:
-        cleaned = cleaned.replace("--", "-")
-    return cleaned.strip("-") or "clip"
 
 
 def _build_visual_prompt(
@@ -702,7 +696,7 @@ def run(context: dict) -> None:
         print(f"No clipAnalysis found in {seo_path}")
         return
 
-    MIN_CLIP_DURATION = float(config.get("settings", {}).get("min_clip_duration_seconds", 20.0))
+    MIN_CLIP_DURATION = clip_files.min_clip_duration(config)
 
     transcript_path = Path(context.get("transcript_path", ""))
     segments = _load_json(transcript_path) if transcript_path.is_file() else []
@@ -733,23 +727,12 @@ def run(context: dict) -> None:
         )
 
     # Filter out clips shorter than the minimum duration
-    valid_clips: List[Dict[str, Any]] = []
-    skipped_count = 0
-    for clip in clips_data:
-        start = clip.get("start")
-        end = clip.get("end")
-        if start is None or end is None or float(end) <= float(start):
-            continue
-        if float(end) - float(start) < MIN_CLIP_DURATION:
-            headline = clip.get("headline", "unknown")
-            duration = float(end) - float(start)
-            print(f"  Skipping clip '{headline}' ({duration:.1f}s < {MIN_CLIP_DURATION:.0f}s minimum)")
-            skipped_count += 1
-            continue
-        valid_clips.append(clip)
-    
-    if skipped_count:
-        print(f"  {skipped_count} clip(s) skipped for being under {int(MIN_CLIP_DURATION)}s")
+    valid_clips, too_short = clip_files.renderable_clips(clips_data, MIN_CLIP_DURATION)
+    for clip in too_short:
+        duration = float(clip["end"]) - float(clip["start"])
+        print(f"  Skipping clip '{clip.get('headline', 'unknown')}' ({duration:.1f}s < {MIN_CLIP_DURATION:.0f}s minimum)")
+    if too_short:
+        print(f"  {len(too_short)} clip(s) skipped for being under {int(MIN_CLIP_DURATION)}s")
 
     if not valid_clips:
         print(f"No valid clips (all under {int(MIN_CLIP_DURATION)}s minimum)")
@@ -759,9 +742,9 @@ def run(context: dict) -> None:
         start = float(clip.get("start"))
         end = float(clip.get("end"))
 
-        clip_slug = _slugify(clip.get("headline") or f"clip-{index:02d}")
-        clip_name = f"{index:02d}-{clip_slug}"
-        clip_output = output_dir / f"{clip_name}.mp4"
+        clip_file = clip_files.clip_file_name(index, clip)
+        clip_name = clip_file[: -len(".mp4")]
+        clip_output = output_dir / clip_file
         if clip_output.exists():
             print(f"Clip {clip_name} already exists, skipping.")
             continue

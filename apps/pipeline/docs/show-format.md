@@ -131,7 +131,9 @@ Patterns so far (eight Shorts, too few to be rules):
   published.
 
 Views on these Shorts (3–140) are too low to say which bits perform. Treat
-the list as Tony's taste, not as performance data.
+the list as Tony's taste, not as performance data. The full record, including
+which rendered clips were skipped, is `output/publish-decisions.json`
+(`python3 scripts/publish_decisions.py report`).
 
 Tony titles published Shorts for organization (`Bad Boys Podcast - <ep#> -
 <ep title> - <bit>`). Keep clip `headline`s descriptive, as Cowork writes
