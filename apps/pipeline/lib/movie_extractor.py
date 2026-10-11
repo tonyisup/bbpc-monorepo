@@ -425,6 +425,12 @@ def _episode_meta(db_episode: dict | None) -> EpisodeMetadata | None:
     )
 
 
+def _load_segments(transcript_file: Path) -> list:
+    with transcript_file.open(encoding="utf-8") as f:
+        segments = json.load(f)
+    return segments if isinstance(segments, list) else []
+
+
 def run(context: dict) -> None:
     transcript_path = context.get("transcript_path")
     if not transcript_path:
@@ -438,7 +444,9 @@ def run(context: dict) -> None:
     output_path = _movie_output_path(config, stem)
 
     # Check for Cowork's file before any Convex traffic: waiting is the common case.
-    cowork_payload = cowork_handoff.load_movies(config, stem) if has_transcript else None
+    cowork_payload = (
+        cowork_handoff.load_movies(config, stem, _load_segments(transcript_file)) if has_transcript else None
+    )
     if has_transcript and cowork_payload is None:
         raise cowork_handoff.AwaitingCowork(stem, "movies", cowork_handoff.movies_path(config, stem))
 
@@ -470,4 +478,7 @@ def run(context: dict) -> None:
     context["extracted_movies"] = payload["movies"]
     context["db_episode"] = db_episode
     context["db_episode_movies"] = db_movies
+    if cowork_payload is not None:
+        for warning in cowork_handoff.movies_warnings(cowork_payload):
+            print(f"Warning (Cowork movies): {warning}")
     print(f"Movie extraction JSON written to {output_path}")

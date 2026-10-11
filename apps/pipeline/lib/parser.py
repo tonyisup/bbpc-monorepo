@@ -203,7 +203,7 @@ def _prepare_cowork_seo(cowork: Dict[str, Any], segments: List[Dict[str, Any]]) 
     parsed = _filter_invalid_clip_windows(parsed)
     parsed = _pick_random_clips(parsed)
     parsed = _refresh_clip_visual_prompts(parsed, segments)
-    for warning in cowork_handoff.clip_duration_warnings(parsed):
+    for warning in cowork_handoff.seo_warnings(parsed):
         print(f"Warning (Cowork SEO): {warning}")
     return parsed
 
@@ -221,8 +221,7 @@ def run(context: dict) -> None:
     episode_name = Path(context.get("episode_path", transcript_file.stem)).stem
     config = context.get("config", {})
 
-    duration = max((float(seg.get("end", 0.0)) for seg in segments), default=None)
-    cowork_seo = cowork_handoff.load_seo(config, episode_name, duration)
+    cowork_seo = cowork_handoff.load_seo(config, episode_name, segments=segments)
     if cowork_seo is None:
         raise cowork_handoff.AwaitingCowork(
             episode_name, "parse", cowork_handoff.seo_path(config, episode_name)

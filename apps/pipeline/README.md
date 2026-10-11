@@ -176,6 +176,7 @@ rules Cowork follows:
 ```bash
 python pipeline.py episodes/20260914.mp3 --from movies      # resume after Cowork
 python3 scripts/validate_cowork_outputs.py --pending        # what is waiting on Cowork
+python3 scripts/validate_cowork_outputs.py 20260914         # check one episode's files (hard rules + warnings)
 ```
 
 ## Movies without a transcript

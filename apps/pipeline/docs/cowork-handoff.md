@@ -44,6 +44,24 @@ exact transcript and output paths to use.
    `python3 scripts/validate_cowork_outputs.py <stem>` and fix anything it
    reports. Never edit `state.json`.
 
+### What the validator enforces
+
+`FAIL` lines block the pipeline (exit 75, the reason lands in `lastError`);
+`warning` lines are printed but never block. With the transcript available:
+
+| Rule | Level |
+|---|---|
+| Required keys present and non-empty; clip and evidence windows numeric, ordered, inside the transcript | FAIL |
+| `candidateClips`: exactly 20 | FAIL |
+| `clipAnalysis`: exactly 3 distinct picks, each with the same `start`, `end` and `headline` as a candidate (`why` may add the selection reason) | FAIL |
+| Every clip and evidence window starts on a segment `start` and ends on a segment `end` | FAIL |
+| Clip length 20–90 s | warning |
+| Evidence window length 60–180 s | warning |
+| `title` ≤ 60 characters; `metaDescription` about 160 (120–170); `highlights` 3–5 | warning |
+
+The same checks run inside the `movies` and `parse` stages, so a file the
+validator passes is a file the pipeline accepts.
+
 ### Show format (what to look for)
 
 - Hosts: **Fonzo** (Mike Lowry), **Tony** (a.k.a. MCB/MCP), **Harley**.

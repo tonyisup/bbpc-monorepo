@@ -18,13 +18,14 @@ This module deliberately uses only the standard library so the validator
 """
 from __future__ import annotations
 
+import bisect
 import datetime as _dt
 import json
 import math
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 EXIT_AWAITING_COWORK = 75  # EX_TEMPFAIL: not a failure, try again later
 
@@ -33,6 +34,14 @@ STATUS_DONE = "done"
 
 CLIP_MIN_SECONDS = 20.0
 CLIP_MAX_SECONDS = 90.0
+CANDIDATE_CLIP_COUNT = 20
+PICKED_CLIP_COUNT = 3
+EVIDENCE_MIN_SECONDS = 60.0
+EVIDENCE_MAX_SECONDS = 180.0
+TITLE_MAX_CHARS = 60
+META_DESCRIPTION_CHARS = (120, 170)  # "about 160"; search results cut off near 160
+HIGHLIGHT_COUNT = (3, 5)
+BOUNDARY_TOLERANCE_SECONDS = 0.01  # transcript times have two decimals
 SEO_STRING_KEYS = ("title", "metaDescription", "callToAction")
 SEO_LIST_KEYS = ("keywords", "highlights", "clipAnalysis", "candidateClips", "notableWorks")
 MOVIE_STATUSES = {"accepted", "maybe", "rejected", "db_assigned"}
@@ -91,13 +100,20 @@ def _read_json(path: Path) -> Any:
         raise CoworkOutputInvalid(path, [f"not valid JSON: {exc}"]) from None
 
 
-def load_movies(config: Dict[str, Any], stem: str) -> Optional[Dict[str, Any]]:
-    """Return the validated Cowork movie payload, or None when it does not exist."""
+def load_movies(
+    config: Dict[str, Any],
+    stem: str,
+    segments: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return the validated Cowork movie payload, or None when it does not exist.
+
+    Pass the transcript ``segments`` to enforce segment-boundary snapping.
+    """
     path = movies_path(config, stem)
     if not path.is_file():
         return None
     payload = _read_json(path)
-    problems = validate_movies(payload)
+    problems = validate_movies(payload, segments)
     if problems:
         raise CoworkOutputInvalid(path, problems)
     return payload
@@ -107,13 +123,17 @@ def load_seo(
     config: Dict[str, Any],
     stem: str,
     transcript_duration: Optional[float] = None,
+    segments: Optional[Sequence[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Return the validated Cowork SEO payload, or None when it does not exist."""
+    """Return the validated Cowork SEO payload, or None when it does not exist.
+
+    Pass the transcript ``segments`` to enforce segment-boundary snapping.
+    """
     path = seo_path(config, stem)
     if not path.is_file():
         return None
     payload = _read_json(path)
-    problems = validate_seo(payload, transcript_duration)
+    problems = validate_seo(payload, transcript_duration, segments)
     if problems:
         raise CoworkOutputInvalid(path, problems)
     return payload
@@ -129,7 +149,35 @@ def _finite(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
-def _check_window(label: str, row: Any, duration: Optional[float], problems: List[str]) -> None:
+class _Boundaries:
+    """Sorted segment start/end times, for checking that windows are snapped."""
+
+    def __init__(self, segments: Sequence[Dict[str, Any]]):
+        self.starts = sorted(t for t in (_finite(seg.get("start")) for seg in segments) if t is not None)
+        self.ends = sorted(t for t in (_finite(seg.get("end")) for seg in segments) if t is not None)
+        self.duration = self.ends[-1] if self.ends else None
+
+    @staticmethod
+    def _on(value: float, times: List[float]) -> bool:
+        i = bisect.bisect_left(times, value - BOUNDARY_TOLERANCE_SECONDS)
+        return i < len(times) and times[i] <= value + BOUNDARY_TOLERANCE_SECONDS
+
+    def problems(self, label: str, start: float, end: float) -> List[str]:
+        found = []
+        if not self._on(start, self.starts):
+            found.append(f"{label} starts at {start:.2f}s, not on a transcript segment start")
+        if not self._on(end, self.ends):
+            found.append(f"{label} ends at {end:.2f}s, not on a transcript segment end")
+        return found
+
+
+def _check_window(
+    label: str,
+    row: Any,
+    duration: Optional[float],
+    problems: List[str],
+    boundaries: Optional[_Boundaries] = None,
+) -> None:
     if not isinstance(row, dict):
         problems.append(f"{label} is not an object")
         return
@@ -141,9 +189,20 @@ def _check_window(label: str, row: Any, duration: Optional[float], problems: Lis
         problems.append(f"{label} has an invalid window {start}-{end}")
     if duration is not None and end > duration + 1.0:
         problems.append(f"{label} ends at {end:.1f}s, past the transcript end ({duration:.1f}s)")
+    if boundaries is not None:
+        problems.extend(boundaries.problems(label, start, end))
 
 
-def validate_movies(payload: Any) -> List[str]:
+def _window_length(row: Any) -> Optional[float]:
+    if not isinstance(row, dict):
+        return None
+    start, end = _finite(row.get("start")), _finite(row.get("end"))
+    return None if start is None or end is None else end - start
+
+
+def validate_movies(payload: Any, segments: Optional[Sequence[Dict[str, Any]]] = None) -> List[str]:
+    """Return blocking problems with a Cowork movie file (empty list when valid)."""
+    boundaries = _Boundaries(segments) if segments else None
     problems: List[str] = []
     if not isinstance(payload, dict):
         return ["top level must be an object"]
@@ -165,11 +224,24 @@ def validate_movies(payload: Any) -> List[str]:
         if movie.get("status", "accepted") not in MOVIE_STATUSES:
             problems.append(f"{label} has unknown status {movie.get('status')!r}")
         for j, ev in enumerate(movie.get("evidence") or []):
-            _check_window(f"{label}.evidence[{j}]", ev, None, problems)
+            _check_window(f"{label}.evidence[{j}]", ev, None, problems, boundaries)
     return problems
 
 
-def validate_seo(payload: Any, transcript_duration: Optional[float] = None) -> List[str]:
+def validate_seo(
+    payload: Any,
+    transcript_duration: Optional[float] = None,
+    segments: Optional[Sequence[Dict[str, Any]]] = None,
+) -> List[str]:
+    """Return blocking problems with a Cowork SEO file (empty list when valid).
+
+    Hard rules from docs/cowork-handoff.md: exactly 20 candidate clips, exactly
+    3 picks each copied from a candidate, and (when ``segments`` is given) every
+    clip starting and ending on transcript segment boundaries.
+    """
+    boundaries = _Boundaries(segments) if segments else None
+    if transcript_duration is None and boundaries is not None:
+        transcript_duration = boundaries.duration
     problems: List[str] = []
     if not isinstance(payload, dict):
         return ["top level must be an object"]
@@ -182,16 +254,46 @@ def validate_seo(payload: Any, transcript_duration: Optional[float] = None) -> L
     for key in ("candidateClips", "clipAnalysis"):
         for i, clip in enumerate(payload.get(key) or []):
             label = f"{key}[{i}]"
-            _check_window(label, clip, transcript_duration, problems)
+            _check_window(label, clip, transcript_duration, problems, boundaries)
             if isinstance(clip, dict):
                 if not str(clip.get("headline") or "").strip():
                     problems.append(f"{label} needs a headline")
                 if not str(clip.get("imagePrompt") or "").strip():
                     problems.append(f"{label} needs an imagePrompt")
+    _check_clip_counts_and_picks(payload, problems)
     for i, row in enumerate(payload.get("highlights") or []):
         if not isinstance(row, dict) or not all(isinstance(row.get(k), str) for k in ("start", "end")):
             problems.append(f"highlights[{i}] needs HH:MM:SS string start/end")
     return problems
+
+
+def _clip_key(clip: Dict[str, Any]) -> tuple:
+    return (_finite(clip.get("start")), _finite(clip.get("end")), str(clip.get("headline") or "").strip())
+
+
+def _check_clip_counts_and_picks(payload: Dict[str, Any], problems: List[str]) -> None:
+    candidates = payload.get("candidateClips")
+    picks = payload.get("clipAnalysis")
+    if isinstance(candidates, list) and candidates and len(candidates) != CANDIDATE_CLIP_COUNT:
+        problems.append(
+            f"'candidateClips' must have exactly {CANDIDATE_CLIP_COUNT} clips (found {len(candidates)})"
+        )
+    if not isinstance(picks, list) or not picks:
+        return  # reported above as an empty/missing list
+    if len(picks) != PICKED_CLIP_COUNT:
+        problems.append(f"'clipAnalysis' must have exactly {PICKED_CLIP_COUNT} clips (found {len(picks)})")
+    # A pick must copy a candidate's window and headline; `why` may add the selection reason.
+    candidate_keys = {_clip_key(c) for c in candidates or [] if isinstance(c, dict)}
+    seen: set = set()
+    for i, pick in enumerate(picks):
+        if not isinstance(pick, dict):
+            continue
+        key = _clip_key(pick)
+        if key not in candidate_keys:
+            problems.append(f"clipAnalysis[{i}] is not one of the candidateClips (same start, end and headline)")
+        elif key in seen:
+            problems.append(f"clipAnalysis[{i}] repeats an earlier pick")
+        seen.add(key)
 
 
 def clip_duration_warnings(payload: Dict[str, Any]) -> List[str]:
@@ -204,6 +306,39 @@ def clip_duration_warnings(payload: Dict[str, Any]) -> List[str]:
             length = end - start
             if length < CLIP_MIN_SECONDS or length > CLIP_MAX_SECONDS:
                 warnings.append(f"{key}[{i}] is {length:.0f}s (expected {CLIP_MIN_SECONDS:.0f}-{CLIP_MAX_SECONDS:.0f}s)")
+    return warnings
+
+
+def seo_warnings(payload: Dict[str, Any]) -> List[str]:
+    """Soft SEO rules: reported to the operator and to Cowork, never blocking."""
+    warnings = clip_duration_warnings(payload)
+    title = payload.get("title")
+    if isinstance(title, str) and len(title) > TITLE_MAX_CHARS:
+        warnings.append(f"title is {len(title)} characters (keep it to {TITLE_MAX_CHARS})")
+    meta = payload.get("metaDescription")
+    low, high = META_DESCRIPTION_CHARS
+    if isinstance(meta, str) and not low <= len(meta) <= high:
+        warnings.append(f"metaDescription is {len(meta)} characters (aim for about 160)")
+    highlights = payload.get("highlights")
+    low, high = HIGHLIGHT_COUNT
+    if isinstance(highlights, list) and not low <= len(highlights) <= high:
+        warnings.append(f"highlights has {len(highlights)} entries (expected {low}-{high})")
+    return warnings
+
+
+def movies_warnings(payload: Dict[str, Any]) -> List[str]:
+    """Soft movie rules: evidence windows should cover a whole review (60-180 s)."""
+    warnings: List[str] = []
+    for i, movie in enumerate(payload.get("movies") or []):
+        if not isinstance(movie, dict):
+            continue
+        for j, ev in enumerate(movie.get("evidence") or []):
+            length = _window_length(ev)
+            if length is not None and not EVIDENCE_MIN_SECONDS <= length <= EVIDENCE_MAX_SECONDS:
+                warnings.append(
+                    f"movies[{i}].evidence[{j}] is {length:.0f}s "
+                    f"(expected {EVIDENCE_MIN_SECONDS:.0f}-{EVIDENCE_MAX_SECONDS:.0f}s)"
+                )
     return warnings
 
 
