@@ -5,7 +5,6 @@ from lib.convex_client import (
     PipelineEpisode,
     PipelineEpisodeMovie,
     PipelineEpisodeShow,
-    PipelineMovie,
 )
 
 
@@ -135,31 +134,3 @@ def test_resolves_show_extras_by_stem() -> None:
     assert shows == [_episode_show()]
     assert episode_db.get_episode_shows_by_stem(client, "not-a-date") == []
     assert client.dates == ["2026-07-24"]
-
-
-def test_fallback_catalog_only_applies_without_relationships() -> None:
-    class EmptyClient(FakeEpisodeClient):
-        def get_episode_context_by_id(
-            self, episode_id: str
-        ) -> tuple[PipelineEpisode, tuple[PipelineEpisodeMovie, ...]] | None:
-            self.ids.append(episode_id)
-            return _episode(), ()
-
-    fallback = [
-        PipelineMovie(
-            movie_id="movie-2",
-            title="Moon",
-            year=2009,
-            poster=None,
-        ),
-        {"id": "movie-3", "title": "Heat", "year": 1995},
-    ]
-
-    movies = episode_db.get_episode_movies_with_fallback(
-        EmptyClient(),
-        "episode-1",
-        fallback,
-    )
-
-    assert [movie.movie_id for movie in movies] == ["movie-2", "movie-3"]
-    assert {movie.source for movie in movies} == {"catalog_fallback"}

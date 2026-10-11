@@ -8,20 +8,19 @@ Podcast content-factory pipeline for BBPC (cult-classic movie podcast). Ingests 
 ## Pipeline Stages
 
 ```
-transcribe → import_transcript → movies → review_clip → diarize → parse → clip → thumbnail → publish
+transcribe → import_transcript → movies → review_clip → parse → clip → thumbnail → publish
 ```
 
 | # | Stage | Module | Description |
 |-------|--------|--------|-------------|
 | 1 | `transcribe` | `lib/transcriber.py` | Parakeet (default) or faster-whisper transcription with resume support and progress tracking |
 | 2 | `import_transcript` | `lib/transcript_importer.py` | Imports completed transcripts into Convex search using the guarded monorepo CLI |
-| 3 | `movies` | `lib/movie_extractor.py` | Heuristic + LLM movie extraction from transcript evidence windows |
+| 3 | `movies` | `lib/movie_extractor.py` | Adopts Cowork's reviewed movies and matches them to Convex movie IDs |
 | 4 | `review_clip` | `lib/review_clipper.py` | Cuts audio clips around movie-review evidence windows |
-| 5 | `diarize` | `lib/diarizer.py` | Speaker identification (placeholder) |
-| 6 | `parse` | `lib/parser.py` | LLM SEO analysis (`settings.seo_model`): titles, descriptions, keywords, clip candidates |
-| 7 | `clip` | `lib/clipper.py` | Renders vertical 9:16 video with AI backgrounds, Ken Burns zoom, ASS subtitles |
-| 8 | `thumbnail` | `lib/thumbnail.py` | Generates 1920x1920 episode thumbnail from reviewed movie and TV show extra posters + BBPC logo |
-| 9 | `publish` | `lib/publisher.py` | Idempotently publishes SEO metadata to Convex |
+| 5 | `parse` | `lib/parser.py` | Adopts Cowork's SEO metadata and clip candidates |
+| 6 | `clip` | `lib/clipper.py` | Renders vertical 9:16 video with AI backgrounds, Ken Burns zoom, ASS subtitles |
+| 7 | `thumbnail` | `lib/thumbnail.py` | Generates 1920x1920 episode thumbnail from reviewed movie and TV show extra posters + BBPC logo |
+| 8 | `publish` | `lib/publisher.py` | Idempotently publishes SEO metadata to Convex |
 
 ## Quick Start
 
@@ -145,17 +144,9 @@ python backfill.py --date-after 20260401
 
 `config.json` controls paths, models, and thresholds. Environment variables (`.env`) store secrets:
 
-The hosted LLM stages use OpenRouter:
-`settings.seo_model` drives SEO/clip analysis and
-`settings.movie_extractor_model` drives LLM-assisted movie extraction. Image
-generation remains separately configured through `settings.visuals_provider`.
-
-For reasoning-capable SEO models, `settings.seo_max_output_tokens` reserves a
-completion budget for the full SEO/clip JSON payload (the shipped value is
-`65536`), and `settings.seo_reasoning_effort` is forwarded to OpenRouter (the
-shipped value is `low`). Keep the larger budget when the response includes
-`candidateClips`, `clipAnalysis`, or `highlights`; a too-small budget can be
-consumed by hidden reasoning before the model emits any JSON.
+Judgment (reviewed movies, SEO, clip choice) comes only from Cowork; the
+pipeline makes no text-model calls. The only hosted model is the clip-background
+image model, configured through `settings.visuals_provider`.
 
 | Variable | Purpose |
 |----------|---------|
@@ -169,19 +160,17 @@ consumed by hidden reasoning before the model emits any JSON.
 | `CLERK_M2M_REFRESH_MARGIN_SECONDS` | Refresh lead time; defaults to 60 seconds and must be below the TTL |
 | `CONVEX_TIMEOUT_SECONDS` | Functions API timeout; defaults to 30 seconds |
 | `CONVEX_MAX_ATTEMPTS` | Bounded query/idempotent-write attempts; defaults to 3, maximum 5 |
-| `OPENROUTER_API_KEY` | OpenRouter LLM API |
+| `OPENROUTER_API_KEY` | OpenRouter image generation when `visuals_provider` is `openrouter` |
 | `OPENAI_API_KEY` | Direct OpenAI image generation when `visuals_provider` is `openai` (optional) |
-| `OLLAMA_BASE_URL` | Local Ollama (optional) |
 
 ## Cowork hand-off (movies + SEO)
 
-With `settings.cowork_mode = "require"` (the shipped setting), Claude Cowork
-writes `output/cowork/<stem>.movies.json` and `<stem>.seo.json` from the full
-transcript, and the `movies`/`parse` stages consume them instead of calling
-OpenRouter. A new episode stops after `import_transcript` with exit code 75
-(`awaiting_cowork` in `output/cowork/state.json`); the next unattended run
-resumes with `--from movies` once both files exist. Use `--cowork-mode off` to
-run the old LLM stages. Details and the authoring rules Cowork follows:
+Claude Cowork writes `output/cowork/<stem>.movies.json` and `<stem>.seo.json`
+from the full transcript, and the `movies`/`parse` stages consume them. There is
+no fallback: a new episode stops after `import_transcript` with exit code 75
+(`awaiting_cowork` in `output/cowork/state.json`), and the next unattended run
+resumes with `--from movies` once both files exist. Details and the authoring
+rules Cowork follows:
 [`docs/cowork-handoff.md`](docs/cowork-handoff.md).
 
 ```bash
@@ -189,13 +178,7 @@ python pipeline.py episodes/20260914.mp3 --from movies      # resume after Cowor
 python3 scripts/validate_cowork_outputs.py --pending        # what is waiting on Cowork
 ```
 
-## Movie Extraction Modes
-
-Configurable via `settings.movie_extractor_mode`:
-
-- **`heuristic`** (default) — Rule-based scoring with keyword/pattern evidence windows
-- **`llm_only`** — Full transcript sent to LLM for extraction
-- **`hybrid_full_transcript`** — Heuristic scoring augmented by LLM full-transcript pass
+## Movies without a transcript
 
 If the transcript file is missing, the `movies` stage writes the episode's
 Convex assignment and extra-review movies as `db_assigned` rows (extractor mode
@@ -225,8 +208,8 @@ Brand logo overlay is composited onto clip backgrounds when `settings.brand_logo
 python -m pytest tests/ -v
 ```
 
-The suite covers movie extraction (heuristic + LLM), parser resilience, clip
-rendering, review clipping, laughter detection, runtime config, dependency
+The suite covers the Cowork hand-off (validation, state, movies and parse
+stages), clip rendering, review clipping, laughter detection, runtime config, dependency
 declarations, the Clerk M2M/Convex boundary, visual-prompt safety, and backfill
 error handling.
 
@@ -264,15 +247,15 @@ output/
 ├── movies/<episode>.movies.json  # Extracted movie data
 ├── seo/<episode>.seo.json    # SEO metadata
 ├── review-clips/<episode>/   # Audio clips from review segments
-├── laughter/<episode>/       # Laughter detection results
+├── laughter/                 # laughter_autotune.py results
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)
 ```
 
 ## Architecture Notes
 
 - **Transcriber** uses Parakeet (MLX) by default or `faster-whisper` with int8 quantization, with resume support and a trailing-silence-aware coverage gate
-- **Movie extractor** builds multi-size evidence windows (1-5 segment merges) and scores candidates via keyword/pattern matching with configurable thresholds
-- **Parser** uses stratified sampling (4 quartiles) to distribute LLM attention across full episode runtime
+- **Movie extractor** matches Cowork's titles (and original titles) to the Convex catalog, preferring the episode's assigned movies
+- **Laughter detector** (`lib/laughter_detector.py`) is not called by any stage today; it is kept so its timestamps can be handed to Cowork as audio evidence
 - **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in Arial Bold, 32 characters max) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments
 - **Convex client** uses the documented Functions API with bearer authentication, runtime response validation, typed errors, bounded retries, and cached Clerk M2M JWT refresh
 - **Pipeline identity** must be pre-provisioned with `pipeline:publish`; the Clerk pipeline machine must be scoped to the receiver machine configured as `CLERK_M2M_AUDIENCE`

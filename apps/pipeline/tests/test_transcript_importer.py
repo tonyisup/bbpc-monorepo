@@ -128,7 +128,7 @@ def test_pipeline_orders_import_after_completion_and_stops_on_partial(tmp_path, 
 
     monkeypatch.setattr(pipeline.transcriber, "run", transcribe)
     monkeypatch.setattr(pipeline.transcript_importer, "run", imported)
-    for name in ["movie_extractor", "review_clipper", "diarizer", "parser", "clipper", "thumbnail", "publisher"]:
+    for name in ["movie_extractor", "review_clipper", "parser", "clipper", "thumbnail", "publisher"]:
         monkeypatch.setattr(getattr(pipeline, name), "run", lambda context, name=name: events.append(name))
     pipeline.main()
     assert events[:2] == ["transcribe", "import_transcript"]
