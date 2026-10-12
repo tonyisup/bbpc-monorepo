@@ -5,7 +5,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 
 ## Tech Stack
 - **Transcription:** `faster-whisper-large-v3-turbo` with resume support.
-- **Analysis:** Claude Cowork reads the full transcript and writes reviewed movies, SEO, and clip choices (`docs/cowork-handoff.md`); the pipeline makes no text-model calls.
+- **Analysis:** Claude Cowork reads the full transcript and writes reviewed movies, SEO, clip choices, and T-shirt phrases (`docs/cowork-handoff.md`); the pipeline makes no text-model calls.
 - **Visuals:** Gemini Flash Image via OpenRouter by default; direct OpenAI and local SDXL-Turbo remain supported alternatives.
 - **Rendering:** Python (Pillow) for caption burn-in and FFMPEG for final encoding.
 - **Storage:** Azure Blob Storage for raw episodes.
@@ -42,7 +42,8 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] Retire the heuristic/LLM fallback and the diarize placeholder; Cowork is the only judgment path.
 - [x] Record publish decisions (`scripts/publish_decisions.py`), seeded with the Shorts published through ep 794.
 - [x] Recurring-phrase scanner across all transcripts (`scripts/scan_phrases.py`), re-run after backfills.
-- [ ] **T-shirt finder:** per-episode Cowork phrases with original/quote flags, informed by the scan.
+- [x] **T-shirt finder:** per-episode Cowork phrases with original/quote flags (`output/cowork/<stem>.shirts.json`, checked by the validator, never gates the pipeline).
+- [ ] **T-shirt report:** cross-episode shirt list joined with the recurring-phrase scan; shirts files for past episodes.
 - [ ] **Laughter → Cowork:** Write laughter timestamps where Cowork reads them.
 - [ ] **Advanced Captions:** Move to word-level timestamps for more dynamic "pop-in" caption styles.
 - [ ] **Social Upload:** Integrate automated upload to TikTok/Instagram/YouTube APIs.

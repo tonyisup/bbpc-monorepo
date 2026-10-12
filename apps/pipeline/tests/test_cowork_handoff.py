@@ -1,6 +1,9 @@
+import contextlib
+import io
 import json
 import tempfile
 import unittest
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from unittest import mock
 
@@ -57,6 +60,35 @@ def _movie(title, year, **extra):
 def _episode_movie(movie_id, title, year, source="assignment"):
     return mock.Mock(movie_id=movie_id, title=title, year=year, source=source,
                      assignment_type="HOMEWORK" if source == "assignment" else None)
+
+
+# Same boundaries as SEGMENTS, with invented lines for the T-shirt phrase checks.
+SHIRT_SEGMENTS = [dict(seg) for seg in SEGMENTS]
+SHIRT_SEGMENTS[1]["text"] = "And that's why you never, ever lend a sandwich to a wizard."   # 10-20 s
+SHIRT_SEGMENTS[2]["text"] = "Like the man said: nobody outruns the gravy!"                  # 20-30 s
+SHIRT_SEGMENTS[3]["text"] = "Honestly, I only came here for the free parking."              # 30-40 s
+
+
+def _shirt(**extra):
+    row = {"phrase": "Never lend a sandwich to a wizard", "start": 10.0, "end": 20.0,
+           "speaker": "Harley", "origin": "original", "source": None, "why": "Funny with no context"}
+    row.update(extra)
+    return row
+
+
+def _shirts_payload(*phrases, **overrides):
+    payload = {"episode": {"stem": "20260101"}, "generatedAt": "2026-01-02T03:04:05+00:00",
+               "phrases": list(phrases)}
+    payload.update(overrides)
+    return payload
+
+
+def _load_validator_script():
+    path = Path(__file__).resolve().parents[1] / "scripts" / "validate_cowork_outputs.py"
+    spec = spec_from_file_location("validate_cowork_outputs", path)
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 class CoworkHandoffTestCase(unittest.TestCase):
@@ -333,6 +365,250 @@ class PipelineStageSelectionTests(unittest.TestCase):
         self.assertNotIn("diarize", pipeline.STAGES)
 
 
+class ShirtsValidationTests(unittest.TestCase):
+    """<stem>.shirts.json rules from docs/cowork-handoff.md."""
+
+    def problems(self, *phrases, segments=SHIRT_SEGMENTS, **overrides):
+        return cowork_handoff.validate_shirts(_shirts_payload(*phrases, **overrides), segments)
+
+    def test_valid_shirts_has_no_problems_or_warnings(self):
+        payload = _shirts_payload(
+            _shirt(),
+            _shirt(phrase="Nobody outruns the gravy", start=20.0, end=30.0, speaker="Drop",
+                   origin="quote", source="The Long Lunch"),
+            _shirt(phrase="I only came here for the free parking", start=30.0, end=40.0,
+                   speaker="Unknown", origin="unsure"),
+        )
+        self.assertEqual(cowork_handoff.validate_shirts(payload, SHIRT_SEGMENTS), [])
+        self.assertEqual(cowork_handoff.shirts_warnings(payload), [])
+        for speaker in ("Fonso", "Harley", "Tony", "Drop", "Unknown"):
+            with self.subTest(speaker=speaker):
+                self.assertEqual(self.problems(_shirt(speaker=speaker)), [])
+
+    # -- FAIL rules --
+
+    def test_shirts_requires_episode_stem_generated_at_and_phrases(self):
+        self.assertEqual(cowork_handoff.validate_shirts([]), ["top level must be an object"])
+        self.assertIn("'phrases' must be a list", cowork_handoff.validate_shirts({"episode": {"stem": "20260101"}}))
+        for episode in (None, "20260101", {}, {"stem": 20260101}, {"stem": " "}):
+            with self.subTest(episode=episode):
+                self.assertIn("'episode' must be an object with a non-empty string 'stem'",
+                              self.problems(_shirt(), episode=episode))
+        for generated_at in (None, 1767323045, ""):
+            with self.subTest(generatedAt=generated_at):
+                self.assertIn("'generatedAt' must be a non-empty string",
+                              self.problems(_shirt(), generatedAt=generated_at))
+        payload = _shirts_payload(_shirt())
+        del payload["generatedAt"]
+        self.assertEqual(cowork_handoff.validate_shirts(payload, SHIRT_SEGMENTS),
+                         ["'generatedAt' must be a non-empty string"])
+
+    def test_shirt_phrase_rows_need_every_key_with_the_right_type(self):
+        self.assertEqual(self.problems("Never lend a sandwich to a wizard"), ["phrases[0] is not an object"])
+        expected = {
+            "phrase": "phrases[0] needs a non-empty string 'phrase'",
+            "start": "phrases[0] needs numeric start/end seconds",
+            "end": "phrases[0] needs numeric start/end seconds",
+            "speaker": "phrases[0] has unknown speaker None (use Fonso, Harley, Tony, Drop, Unknown)",
+            "origin": "phrases[0] has unknown origin None (use original, quote, unsure)",
+            "source": "phrases[0] is missing 'source' (null unless origin is 'quote')",
+            "why": "phrases[0] needs a non-empty string 'why'",
+        }
+        for key, problem in expected.items():
+            with self.subTest(missing=key):
+                row = _shirt()
+                del row[key]
+                self.assertEqual(self.problems(row), [problem])
+        wrong_types = {
+            "phrase": (7, ["Never", "lend"], "", "   "),
+            "start": ("soon", None),
+            "end": ("later", [20.0]),
+            "why": (None, 3, "  "),
+        }
+        for key, values in wrong_types.items():
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    self.assertEqual(self.problems(_shirt(**{key: value})), [expected[key]])
+        self.assertEqual(self.problems(_shirt(phrase="?!")), ["phrases[0] phrase has no words"])
+
+    def test_shirt_speaker_must_be_a_host_drop_or_unknown(self):
+        for speaker in ("MCB", "Fonzo", "harley", "Listener", ["Tony"]):
+            with self.subTest(speaker=speaker):
+                self.assertEqual(self.problems(_shirt(speaker=speaker)), [
+                    f"phrases[0] has unknown speaker {speaker!r} (use Fonso, Harley, Tony, Drop, Unknown)"])
+
+    def test_shirt_origin_must_be_original_quote_or_unsure(self):
+        for origin in ("homage", "Original", True):
+            with self.subTest(origin=origin):
+                self.assertEqual(self.problems(_shirt(origin=origin)), [
+                    f"phrases[0] has unknown origin {origin!r} (use original, quote, unsure)"])
+
+    def test_quote_must_name_its_source_and_other_origins_must_not(self):
+        for source in (None, "", "   ", 1987):
+            with self.subTest(origin="quote", source=source):
+                self.assertEqual(self.problems(_shirt(origin="quote", source=source)), [
+                    "phrases[0] is a quote, so 'source' must name the work it comes from"])
+        for origin in ("original", "unsure"):
+            for source in ("The Long Lunch", "", 0):
+                with self.subTest(origin=origin, source=source):
+                    self.assertEqual(self.problems(_shirt(origin=origin, source=source)), [
+                        f"phrases[0] has origin {origin!r}, so 'source' must be null"])
+
+    def test_more_than_ten_phrases_fails(self):
+        rows = [_shirt(phrase=f"Phrase number {i}") for i in range(11)]
+        self.assertEqual(self.problems(*rows[:10], segments=None), [])
+        self.assertEqual(self.problems(*rows, segments=None),
+                         ["'phrases' must have at most 10 phrases (found 11)"])
+
+    def test_duplicate_phrase_ignoring_case_fails(self):
+        problems = self.problems(
+            _shirt(),
+            _shirt(phrase="Nobody outruns the gravy", start=20.0, end=30.0),
+            _shirt(phrase="  NEVER lend a  sandwich to a WIZARD "),
+        )
+        self.assertEqual(problems, ["phrases[2] repeats phrases[0] (phrases must differ, ignoring case)"])
+
+    def test_shirt_window_follows_the_clip_window_rules(self):
+        self.assertEqual(self.problems(_shirt(start=20.0, end=10.0), segments=None),
+                         ["phrases[0] has an invalid window 20.0-10.0"])
+        self.assertIn("phrases[0] ends at 330.0s, past the transcript end (300.0s)",
+                      self.problems(_shirt(end=330.0)))
+        self.assertEqual(self.problems(_shirt(start=12.0)),
+                         ["phrases[0] starts at 12.00s, not on a transcript segment start"])
+        self.assertEqual(self.problems(_shirt(end=18.5)),
+                         ["phrases[0] ends at 18.50s, not on a transcript segment end"])
+
+    def test_phrase_words_must_appear_in_order_in_the_window_text(self):
+        def message(word, start=10.0, end=20.0):
+            return (f"phrases[0] words do not appear in order in the transcript between "
+                    f"{start:.2f}s and {end:.2f}s (no match for {word!r})")
+
+        # Case, punctuation and apostrophes are ignored; skipped words in between are fine.
+        for phrase in ("THAT'S WHY... you never lend a sandwich!", "thats why you never, ever lend",
+                       "That\u2019s why you never lend a sandwich to a wizard"):
+            with self.subTest(phrase=phrase):
+                self.assertEqual(self.problems(_shirt(phrase=phrase)), [])
+        # A window of several segments is read as one text.
+        self.assertEqual(self.problems(_shirt(phrase="A sandwich to a wizard; nobody outruns the gravy", end=30.0)), [])
+        # Misheard or invented word.
+        self.assertEqual(self.problems(_shirt(phrase="Never lend a sandwich to a lizard")), [message("lizard")])
+        # Right words, wrong order.
+        self.assertEqual(self.problems(_shirt(phrase="A wizard never lends a sandwich")), [message("never")])
+        # Spoken in the episode, but not inside this window.
+        self.assertEqual(self.problems(_shirt(phrase="Nobody outruns the gravy")), [message("nobody")])
+        self.assertEqual(self.problems(_shirt(start=30.0, end=40.0)), [message("never", 30.0, 40.0)])
+
+    def test_phrase_text_check_is_skipped_without_segments(self):
+        self.assertEqual(self.problems(_shirt(phrase="Never lend a sandwich to a lizard"), segments=None), [])
+
+    # -- soft rules (warnings) --
+
+    def test_soft_shirt_rules_warn_without_failing(self):
+        long_phrase = "Never " * 9 + "lend it"                 # 61 characters
+        payload = _shirts_payload(
+            _shirt(phrase=long_phrase, end=50.0),                # 40 s window
+            _shirt(phrase="N" * 60, start=20.0, end=50.0),       # exactly at both limits
+        )
+        self.assertEqual(len(long_phrase), 61)
+        self.assertEqual(cowork_handoff.validate_shirts(payload), [])
+        self.assertEqual(cowork_handoff.shirts_warnings(payload), [
+            "phrases[0] phrase is 61 characters (keep it to 60)",
+            "phrases[0] window is 40s (keep it to 30s)",
+        ])
+
+
+class ShirtsValidatorScriptTests(CoworkHandoffTestCase):
+    """scripts/validate_cowork_outputs.py reports the optional shirts file beside movies and SEO."""
+
+    def setUp(self):
+        super().setUp()
+        self.config["paths"]["transcripts_dir"] = str(self.root)
+        self.transcript.write_text(json.dumps(SHIRT_SEGMENTS))
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", _seo_payload())
+        self.validator = _load_validator_script()
+
+    def validate(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = self.validator._validate(self.config, "20260101")
+        return code, out.getvalue()
+
+    def test_invalid_shirts_file_makes_the_validator_exit_1(self):
+        self.write("20260101.shirts.json", _shirts_payload(phrases="none this week"))
+        code, out = self.validate()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL shirts", out)
+        self.assertIn("OK movies", out)
+        self.assertIn("OK seo", out)
+
+    def test_missing_shirts_file_is_reported_as_optional_and_passes(self):
+        code, out = self.validate()
+        self.assertEqual(code, 0)
+        self.assertIn("shirts: not written (optional)", out)
+
+    def test_valid_shirts_file_is_reported_ok_with_origin_counts(self):
+        self.write("20260101.shirts.json", _shirts_payload(
+            _shirt(),
+            _shirt(phrase="Nobody outruns the gravy", start=20.0, end=30.0, speaker="Drop",
+                   origin="quote", source="The Long Lunch"),
+        ))
+        code, out = self.validate()
+        self.assertEqual(code, 0)
+        self.assertIn("OK shirts\n  2 phrases (1 original, 1 quote, 0 unsure)\n", out)
+
+    def test_empty_phrase_list_is_a_valid_answer(self):
+        self.write("20260101.shirts.json", _shirts_payload())
+        code, out = self.validate()
+        self.assertEqual(code, 0)
+        self.assertIn("OK shirts\n  0 phrases (0 original, 0 quote, 0 unsure)\n", out)
+
+    def test_validator_checks_shirt_phrases_against_the_transcript(self):
+        self.write("20260101.shirts.json", _shirts_payload(_shirt(phrase="Never lend a sandwich to a lizard")))
+        code, out = self.validate()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL shirts", out)
+        self.assertIn("phrases[0] words do not appear in order in the transcript between 10.00s and 20.00s "
+                      "(no match for 'lizard')", out)
+
+    def test_shirt_warnings_are_printed_without_failing(self):
+        self.write("20260101.shirts.json", _shirts_payload(_shirt(end=50.0)))
+        code, out = self.validate()
+        self.assertEqual(code, 0)
+        self.assertIn("OK shirts\n  1 phrases (1 original, 0 quote, 0 unsure)\n"
+                      "  warning: phrases[0] window is 40s (keep it to 30s)\n", out)
+
+    def test_pending_rows_include_the_shirts_output_path(self):
+        cowork_handoff.mark_episode(self.config, "20260101", cowork_handoff.STATUS_AWAITING)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = self.validator._pending(self.config)
+        self.assertEqual(code, 0)
+        rows = json.loads(out.getvalue())
+        self.assertEqual([row["stem"] for row in rows], ["20260101"])
+        self.assertEqual(rows[0].get("shirtsOut"), str(self.cowork.resolve() / "20260101.shirts.json"))
+        # The optional file never changes whether the episode is ready to resume.
+        self.assertIs(rows[0]["outputsPresent"], True)
+
+
+class ShirtsDoNotGateThePipelineTests(CoworkHandoffTestCase):
+    def test_episode_without_shirts_file_still_counts_as_ready(self):
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", _seo_payload())
+        self.assertFalse((self.cowork / "20260101.shirts.json").exists())
+        self.assertTrue(cowork_handoff.outputs_ready(self.config, "20260101"))
+
+    def test_invalid_shirts_file_does_not_change_readiness(self):
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", _seo_payload())
+        (self.cowork / "20260101.shirts.json").write_text("{not json")
+        self.assertTrue(cowork_handoff.outputs_ready(self.config, "20260101"))
+
+    def test_shirts_file_alone_does_not_make_an_episode_ready(self):
+        self.write("20260101.shirts.json", _shirts_payload())
+        self.assertFalse(cowork_handoff.outputs_ready(self.config, "20260101"))
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -347,6 +623,21 @@ class ShowFormatReferenceTests(unittest.TestCase):
         self.assertIn("show-format.md", handoff)
         # The show knowledge itself must not be duplicated in the hand-off doc.
         self.assertNotIn("Rating scale, best to worst", handoff)
+
+    def test_shirt_worthiness_guidance_lives_in_the_show_format_reference(self):
+        handoff = (self.DOCS / "cowork-handoff.md").read_text(encoding="utf-8")
+        show_format = (self.DOCS / "show-format.md").read_text(encoding="utf-8")
+        # The hand-off doc holds the file format and points at the guidance.
+        self.assertIn("### `<stem>.shirts.json`", handoff)
+        self.assertIn("show-format.md#t-shirt-phrases", handoff)
+        self.assertIn("## T-shirt phrases", show_format)
+        guidance = show_format.split("## T-shirt phrases", 1)[1]
+        for marker in ("eight words", "no context", "own voice", "recurring-phrases.md", "`quote`", "`unsure`",
+                       "outside the show"):
+            self.assertIn(marker, guidance)
+        # What makes a line shirt-worthy must not be copied into the hand-off doc.
+        for marker in ("eight words", "own voice"):
+            self.assertNotIn(marker, handoff)
 
     def test_show_format_reference_covers_what_cowork_needs(self):
         text = (self.DOCS / "show-format.md").read_text(encoding="utf-8")

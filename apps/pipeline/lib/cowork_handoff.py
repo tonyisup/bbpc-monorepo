@@ -9,6 +9,10 @@ stages consume; there is no model or heuristic fallback:
 When a file is missing the stage raises ``AwaitingCowork`` so the run can
 resume later with ``--from movies``.
 
+Cowork may also write ``<cowork_dir>/<stem>.shirts.json`` (T-shirt phrases).
+That file is information for Tony: only the validator reads it, and it never
+affects readiness, the stages or ``state.json``.
+
 Progress is tracked in ``<cowork_dir>/state.json`` so unattended runs neither
 reprocess finished episodes nor start the expensive stages early. The
 pipeline owns that file; Cowork only reads it and writes the two outputs.
@@ -41,6 +45,9 @@ EVIDENCE_MAX_SECONDS = 180.0
 TITLE_MAX_CHARS = 60
 META_DESCRIPTION_CHARS = (120, 170)  # "about 160"; search results cut off near 160
 HIGHLIGHT_COUNT = (3, 5)
+SHIRT_PHRASE_MAX_COUNT = 10
+SHIRT_PHRASE_MAX_CHARS = 60
+SHIRT_WINDOW_MAX_SECONDS = 30.0
 BOUNDARY_TOLERANCE_SECONDS = 0.01  # transcript times have two decimals
 SEO_STRING_KEYS = ("title", "metaDescription", "callToAction")
 SEO_LIST_KEYS = ("keywords", "highlights", "clipAnalysis", "candidateClips", "notableWorks")
@@ -48,6 +55,8 @@ MOVIE_STATUSES = {"accepted", "maybe", "rejected", "db_assigned"}
 # Names as the site spells them (apps/web About and Game pages); see docs/show-format.md.
 HOSTS = ("Fonso", "Harley", "Tony")
 RATINGS = ("Slater", "Dollar", "Waste", "Goldblum")  # best to worst, site values 4..1
+SHIRT_SPEAKERS = HOSTS + ("Drop", "Unknown")  # Drop: a pre-recorded drop
+SHIRT_ORIGINS = ("original", "quote", "unsure")
 
 
 class AwaitingCowork(Exception):
@@ -89,7 +98,12 @@ def seo_path(config: Dict[str, Any], stem: str) -> Path:
     return cowork_dir(config) / f"{stem}.seo.json"
 
 
+def shirts_path(config: Dict[str, Any], stem: str) -> Path:
+    return cowork_dir(config) / f"{stem}.shirts.json"
+
+
 def outputs_ready(config: Dict[str, Any], stem: str) -> bool:
+    # The shirts file is optional and never part of readiness.
     return movies_path(config, stem).is_file() and seo_path(config, stem).is_file()
 
 
@@ -137,6 +151,26 @@ def load_seo(
         return None
     payload = _read_json(path)
     problems = validate_seo(payload, transcript_duration, segments)
+    if problems:
+        raise CoworkOutputInvalid(path, problems)
+    return payload
+
+
+def load_shirts(
+    config: Dict[str, Any],
+    stem: str,
+    segments: Optional[Sequence[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Return the validated Cowork T-shirt phrase payload, or None when it does not exist.
+
+    Pass the transcript ``segments`` to enforce segment-boundary snapping and to
+    check each phrase against the words spoken in its window.
+    """
+    path = shirts_path(config, stem)
+    if not path.is_file():
+        return None
+    payload = _read_json(path)
+    problems = validate_shirts(payload, segments)
     if problems:
         raise CoworkOutputInvalid(path, problems)
     return payload
@@ -357,6 +391,139 @@ def movies_warnings(payload: Dict[str, Any]) -> List[str]:
                     f"movies[{i}].evidence[{j}] is {length:.0f}s "
                     f"(expected {EVIDENCE_MIN_SECONDS:.0f}-{EVIDENCE_MAX_SECONDS:.0f}s)"
                 )
+    return warnings
+
+
+def _is_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+_APOSTROPHES = str.maketrans("", "", "'\u2019")
+
+
+def _spoken_words(text: Any) -> List[str]:
+    """Lowercased words with punctuation ignored ("that's" and "thats" are the same word)."""
+    lowered = str(text or "").lower().translate(_APOSTROPHES)
+    return "".join(ch if ch.isalnum() else " " for ch in lowered).split()
+
+
+def _window_words(segments: Sequence[Dict[str, Any]], start: float, end: float) -> List[str]:
+    """Words of every transcript segment lying inside the window, in time order."""
+    inside = []
+    for seg in segments:
+        seg_start, seg_end = _finite(seg.get("start")), _finite(seg.get("end"))
+        if seg_start is None or seg_end is None:
+            continue
+        if seg_start >= start - BOUNDARY_TOLERANCE_SECONDS and seg_end <= end + BOUNDARY_TOLERANCE_SECONDS:
+            inside.append((seg_start, seg_end, seg.get("text")))
+    inside.sort(key=lambda item: item[:2])
+    return [word for _, _, text in inside for word in _spoken_words(text)]
+
+
+def _first_missing_word(wanted: Sequence[str], spoken: Sequence[str]) -> Optional[str]:
+    """Return the first word of ``wanted`` that ``spoken`` lacks, reading both in order."""
+    rest = iter(spoken)
+    for word in wanted:
+        if word not in rest:  # consumes ``rest`` up to and including the match
+            return word
+    return None
+
+
+def validate_shirts(payload: Any, segments: Optional[Sequence[Dict[str, Any]]] = None) -> List[str]:
+    """Return problems with a Cowork T-shirt phrase file (empty list when valid).
+
+    Rules from docs/cowork-handoff.md: at most 10 distinct phrases, each with a
+    known speaker and origin, and a source only for quotes. When ``segments``
+    is given, every window sits on transcript segment boundaries and the
+    phrase's words are spoken, in order, inside it.
+    """
+    boundaries = _Boundaries(segments) if segments else None
+    duration = boundaries.duration if boundaries is not None else None
+    if not isinstance(payload, dict):
+        return ["top level must be an object"]
+    problems: List[str] = []
+    episode = payload.get("episode")
+    if not (isinstance(episode, dict) and _is_text(episode.get("stem"))):
+        problems.append("'episode' must be an object with a non-empty string 'stem'")
+    if not _is_text(payload.get("generatedAt")):
+        problems.append("'generatedAt' must be a non-empty string")
+    phrases = payload.get("phrases")
+    if not isinstance(phrases, list):
+        problems.append("'phrases' must be a list")
+        return problems
+    if len(phrases) > SHIRT_PHRASE_MAX_COUNT:
+        problems.append(f"'phrases' must have at most {SHIRT_PHRASE_MAX_COUNT} phrases (found {len(phrases)})")
+    first_seen: Dict[str, int] = {}
+    for i, row in enumerate(phrases):
+        label = f"phrases[{i}]"
+        if not isinstance(row, dict):
+            problems.append(f"{label} is not an object")
+            continue
+        words = _check_shirt_phrase(label, row, first_seen, i, problems)
+        _check_shirt_labels(label, row, problems)
+        window_problems: List[str] = []
+        _check_window(label, row, duration, window_problems, boundaries)
+        problems.extend(window_problems)
+        if segments and words and not window_problems:
+            start, end = float(row["start"]), float(row["end"])
+            missing = _first_missing_word(words, _window_words(segments, start, end))
+            if missing is not None:
+                problems.append(
+                    f"{label} words do not appear in order in the transcript between "
+                    f"{start:.2f}s and {end:.2f}s (no match for {missing!r})"
+                )
+    return problems
+
+
+def _check_shirt_phrase(
+    label: str, row: Dict[str, Any], first_seen: Dict[str, int], index: int, problems: List[str]
+) -> List[str]:
+    """Check the phrase text and return its words (empty when it cannot be checked further)."""
+    phrase = row.get("phrase")
+    if not _is_text(phrase):
+        problems.append(f"{label} needs a non-empty string 'phrase'")
+        return []
+    words = _spoken_words(phrase)
+    if not words:
+        problems.append(f"{label} phrase has no words")
+        return []
+    key = " ".join(phrase.split()).casefold()
+    if key in first_seen:
+        problems.append(f"{label} repeats phrases[{first_seen[key]}] (phrases must differ, ignoring case)")
+    else:
+        first_seen[key] = index
+    return words
+
+
+def _check_shirt_labels(label: str, row: Dict[str, Any], problems: List[str]) -> None:
+    speaker, origin = row.get("speaker"), row.get("origin")
+    if speaker not in SHIRT_SPEAKERS:
+        problems.append(f"{label} has unknown speaker {speaker!r} (use {', '.join(SHIRT_SPEAKERS)})")
+    if origin not in SHIRT_ORIGINS:
+        problems.append(f"{label} has unknown origin {origin!r} (use {', '.join(SHIRT_ORIGINS)})")
+    if "source" not in row:
+        problems.append(f"{label} is missing 'source' (null unless origin is 'quote')")
+    elif origin == "quote":
+        if not _is_text(row["source"]):
+            problems.append(f"{label} is a quote, so 'source' must name the work it comes from")
+    elif origin in SHIRT_ORIGINS and row["source"] is not None:
+        problems.append(f"{label} has origin {origin!r}, so 'source' must be null")
+    if not _is_text(row.get("why")):
+        problems.append(f"{label} needs a non-empty string 'why'")
+
+
+def shirts_warnings(payload: Dict[str, Any]) -> List[str]:
+    """Soft T-shirt phrase rules: printed by the validator, never a failure."""
+    warnings: List[str] = []
+    for i, row in enumerate(payload.get("phrases") or []):
+        if not isinstance(row, dict):
+            continue
+        phrase = row.get("phrase")
+        if isinstance(phrase, str) and len(phrase) > SHIRT_PHRASE_MAX_CHARS:
+            warnings.append(f"phrases[{i}] phrase is {len(phrase)} characters (keep it to {SHIRT_PHRASE_MAX_CHARS})")
+        length = _window_length(row)
+        if length is not None and length > SHIRT_WINDOW_MAX_SECONDS:
+            warnings.append(f"phrases[{i}] window is {length:.0f}s (keep it to {SHIRT_WINDOW_MAX_SECONDS:.0f}s)")
     return warnings
 
 

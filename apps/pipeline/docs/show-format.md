@@ -1,8 +1,8 @@
 # BBPC show format
 
 What anyone judging a BBPC episode needs to know about the show. Cowork reads
-it before writing the movie and SEO files (`docs/cowork-handoff.md`); later
-judgment outputs (T-shirt phrases, clip rubric) read it too. Keep show
+it before writing the movie, SEO and T-shirt phrase files
+(`docs/cowork-handoff.md`); later judgment outputs (clip rubric) read it too. Keep show
 knowledge here, not in prompts or hand-off instructions, so there is one copy.
 
 Facts are taken from the public site (`apps/web`: About, Game rules, rating
@@ -138,3 +138,31 @@ which rendered clips were skipped, is `output/publish-decisions.json`
 Tony titles published Shorts for organization (`Bad Boys Podcast - <ep#> -
 <ep title> - <bit>`). Keep clip `headline`s descriptive, as Cowork writes
 them now; don't rewrite them as catchphrases or for virality.
+
+## T-shirt phrases
+
+A T-shirt phrase is a short line a fan would wear. Cowork lists each
+episode's candidates in `<stem>.shirts.json` (format in
+`docs/cowork-handoff.md`) for Tony to read. An episode with nothing
+shirt-worthy gets an empty list.
+
+What makes a line shirt-worthy:
+
+- **Short.** About eight words or fewer.
+- **Funny with no context.** It has to land for someone who never heard the
+  episode.
+- **In the hosts' own voice.** A line Fonso, Harley or Tony said, as they
+  said it.
+- **Recurring.** A phrase listed in `output/phrases/recurring-phrases.md`
+  (`scripts/scan_phrases.py`) is a strong signal. Mention it in `why`.
+
+Each phrase is flagged as the hosts' own words or someone else's, because
+quotes carry licensing risk:
+
+- `original`: the hosts' own words.
+- `quote`: a line from a movie, song or show. Use it only when you can name
+  the work, and name it in `source`.
+- `unsure`: the line sounds borrowed but you can't place it. Don't guess a
+  source.
+
+Leave out any line that names or is about a real person outside the show.

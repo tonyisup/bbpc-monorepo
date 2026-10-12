@@ -49,6 +49,7 @@ def _pending(config: dict) -> int:
             "transcript": str(_transcript_path(config, stem)),
             "moviesOut": str(cowork_handoff.movies_path(config, stem)),
             "seoOut": str(cowork_handoff.seo_path(config, stem)),
+            "shirtsOut": str(cowork_handoff.shirts_path(config, stem)),
             "outputsPresent": cowork_handoff.outputs_ready(config, stem),
             "lastError": entry.get("lastError"),
         })
@@ -62,12 +63,13 @@ def _validate(config: dict, stem: str) -> int:
     if transcript.is_file():
         segments = json.loads(transcript.read_text(encoding="utf-8"))
     else:
-        print(f"note: transcript not found at {transcript}; skipping duration and segment-boundary checks")
+        print(f"note: transcript not found at {transcript}; skipping duration, segment-boundary and phrase-text checks")
 
     ok = True
     for label, loader in (
         ("movies", lambda: cowork_handoff.load_movies(config, stem, segments)),
         ("seo", lambda: cowork_handoff.load_seo(config, stem, segments=segments)),
+        ("shirts", lambda: cowork_handoff.load_shirts(config, stem, segments)),
     ):
         try:
             payload = loader()
@@ -76,6 +78,9 @@ def _validate(config: dict, stem: str) -> int:
             print(f"FAIL {label}: {exc}")
             continue
         if payload is None:
+            if label == "shirts":  # information for Tony; the pipeline never waits for it
+                print(f"{label}: not written (optional)")
+                continue
             ok = False
             print(f"MISSING {label}")
             continue
@@ -83,6 +88,11 @@ def _validate(config: dict, stem: str) -> int:
         if label == "seo":
             warnings = cowork_handoff.seo_warnings(payload)
             print(f"  {len(payload['candidateClips'])} candidate clips, {len(payload['clipAnalysis'])} selected")
+        elif label == "shirts":
+            warnings = cowork_handoff.shirts_warnings(payload)
+            origins = [row.get("origin") for row in payload["phrases"]]
+            counts = ", ".join(f"{origins.count(origin)} {origin}" for origin in cowork_handoff.SHIRT_ORIGINS)
+            print(f"  {len(origins)} phrases ({counts})")
         else:
             warnings = cowork_handoff.movies_warnings(payload)
             accepted = [m.get("title") for m in payload["movies"] if m.get("status", "accepted") == "accepted"]
