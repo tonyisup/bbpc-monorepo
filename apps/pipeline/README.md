@@ -216,7 +216,8 @@ It writes `output/phrases/recurring-phrases.md` (readable lists, plus what is
 new since the previous scan) and `recurring-phrases.json` (every phrase with
 its episodes and timestamped examples). Ordinary English that slips through
 (the scan has no outside English baseline) goes in `output/phrases/ignore.txt`,
-one phrase per line; later scans skip it. The "Staples" section is where the
+one phrase per line; later scans skip it. A passage is skipped when a line
+matches its whole text (case and punctuation don't matter). The "Staples" section is where the
 show's biggest catchphrases and everyday English look alike, so review it once.
 
 ## Movies without a transcript

@@ -14,6 +14,8 @@ How it works:
    sub-phrases were frequent, which keeps memory bounded as the archive grows.
 3. Phrases still frequent at ``max_words`` are pre-recorded drops or rituals
    (intros, disclaimers); overlapping ones are stitched into one *passage*.
+   Each passage is the text its episodes share, credited only to episodes
+   that contain it, so versions of a drop with different endings stay apart.
 4. Shorter phrases are kept only in their longest form, and only if they are
    distinctive: *fixed* (the phrase accounts for a large share of the episodes
    its rarest content word appears in, and that word is not in most episodes)
@@ -238,7 +240,7 @@ def scan(transcripts_dir: Path, options: Optional[ScanOptions] = None) -> Dict[s
         candidates[gram] = {"phrase": phrase, "rarest": rarest,
                             "fixed": typical and not everywhere, "staple": typical and everywhere}
 
-    occurrences, passages = _locate(files, episodes, ok, candidates, options)
+    occurrences, passages = _locate(files, episodes, ok, candidates, options, ignored)
 
     phrases = []
     for gram, info in candidates.items():
@@ -293,14 +295,14 @@ def _burst(eps: Sequence[int], n_eps: int, options: ScanOptions):
     return None
 
 
-def _locate(files, episodes, ok, candidates, options):
+def _locate(files, episodes, ok, candidates, options, ignored=frozenset()):
     """Second pass: where each candidate occurs, its casing, and the recurring passages."""
     by_len: Dict[int, Set[tuple]] = defaultdict(set)
     for gram in candidates:
         by_len[len(gram)].add(gram)
     top = options.max_words
     occurrences: Dict[tuple, Dict[str, Any]] = {}
-    runs = []  # (episode, text, top-length grams in the run)
+    runs = []  # one per stretch of consecutive recurring top-length phrases
     for e, ((_, path), ids) in enumerate(zip(files, episodes)):
         toks = _tokens(path)
         covered = bytearray(len(ids))
@@ -315,8 +317,14 @@ def _locate(files, episodes, ok, candidates, options):
                 i += 1
             end = i - 1 + top
             covered[first:end] = b"\x01" * (end - first)
-            grams = [tuple(ids[k:k + top]) for k in range(first, i)]
-            runs.append((e, toks.text[toks.spans[first][0]:toks.spans[end - 1][1]], grams))
+            base = toks.spans[first][0]
+            runs.append({
+                "e": e,
+                "ids": tuple(ids[first:end]),
+                "words": toks.words[first:end],
+                "text": toks.text[base:toks.spans[end - 1][1]],
+                "spans": [(a - base, b - base) for a, b in toks.spans[first:end]],
+            })
         for n, grams in by_len.items():
             level = ok[n][e]
             for i in range(len(level)):
@@ -331,11 +339,17 @@ def _locate(files, episodes, ok, candidates, options):
                 occ["titleCase"] += all(o[:1].isupper() for o, w in zip(toks.original[i:i + n], toks.words[i:i + n])
                                         if w not in STOPWORDS)
                 occ["first"].setdefault(e, i)
-    return occurrences, _group_passages(runs)
+    return occurrences, _group_passages(runs, top, options.min_episodes, ignored)
 
 
-def _group_passages(runs) -> List[Dict[str, Any]]:
-    """Runs that share a top-length phrase are the same passage."""
+def _group_passages(runs, top: int, min_episodes: int, ignored=frozenset()) -> List[Dict[str, Any]]:
+    """Turn runs of recurring text into passages, each with the episodes that contain it.
+
+    Runs that share a top-length phrase are versions of the same drop, but
+    versions can differ (a shared opening, different endings). So each group
+    reports the text its episodes share, and only the episodes whose run
+    contains that exact text; the rest of the group is grouped again.
+    """
     parent: Dict[tuple, tuple] = {}
 
     def find(g):
@@ -345,20 +359,65 @@ def _group_passages(runs) -> List[Dict[str, Any]]:
             g = parent[g]
         return g
 
-    for _, _, grams in runs:
-        for g in grams[1:]:
-            parent[find(g)] = find(grams[0])
+    def grams(run):
+        ids = run["ids"]
+        return [ids[k:k + top] for k in range(len(ids) - top + 1)]
+
+    for run in runs:
+        gs = grams(run)
+        for g in gs[1:]:
+            parent[find(g)] = find(gs[0])
     groups: Dict[tuple, List] = defaultdict(list)
     for run in runs:
-        groups[find(run[2][0])].append(run)
+        groups[find(grams(run)[0])].append(run)
+
     passages = []
     for members in groups.values():
-        latest = max(members, key=lambda r: (r[0], len(r[1])))
-        if sum(_normalize(t) not in STOPWORDS for t in _TOKEN.findall(latest[1])) < 2:
-            continue  # filler such as "you know what I mean, yeah yeah"
-        passages.append({"text": " ".join(latest[1].split()), "eps": sorted({e for e, _, _ in members})})
+        while len({r["e"] for r in members}) >= min_episodes:
+            passage, members = _shared_passage(members, grams)
+            if passage is None:
+                break
+            words = passage["words"]
+            if " ".join(words) in ignored:
+                continue
+            if sum(w not in STOPWORDS for w in words) < 2:
+                continue  # filler such as "you know what I mean, yeah yeah"
+            passages.append(passage)
     passages.sort(key=lambda p: (-len(p["eps"]), p["text"]))
     return passages
+
+
+def _contains(seq: tuple, sub: tuple) -> bool:
+    n = len(sub)
+    return any(seq[i:i + n] == sub for i in range(len(seq) - n + 1))
+
+
+def _shared_passage(members, grams):
+    """The text most of ``members`` share, the episodes containing it, and the leftover runs."""
+    eps_of: Dict[tuple, Set[int]] = defaultdict(set)
+    for run in members:
+        for g in grams(run):
+            eps_of[g].add(run["e"])
+    best = max(len(v) for v in eps_of.values())
+    # Display from the latest episode's version that has a most-shared phrase.
+    rep = max((r for r in members if any(len(eps_of[g]) == best for g in grams(r))),
+              key=lambda r: (r["e"], len(r["ids"])))
+    rep_grams = grams(rep)
+    core = next(k for k, g in enumerate(rep_grams) if len(eps_of[g]) == best)
+    shared = eps_of[rep_grams[core]]
+    lo = hi = core
+    while lo > 0 and eps_of[rep_grams[lo - 1]] >= shared:
+        lo -= 1
+    while hi + 1 < len(rep_grams) and eps_of[rep_grams[hi + 1]] >= shared:
+        hi += 1
+    top = len(rep_grams[0])
+    first, last = lo, hi + top - 1
+    ids = rep["ids"][first:last + 1]
+    inside = [r for r in members if _contains(r["ids"], ids)]
+    rest = [r for r in members if not _contains(r["ids"], ids)]
+    text = rep["text"][rep["spans"][first][0]:rep["spans"][last][1]]
+    return ({"text": " ".join(text.split()), "eps": sorted({r["e"] for r in inside}),
+             "words": rep["words"][first:last + 1]}, rest)
 
 
 def _pick_examples(first_by_episode: Dict[int, int], count: int) -> List[Tuple[int, int]]:

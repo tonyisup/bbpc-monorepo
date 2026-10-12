@@ -100,6 +100,9 @@ class CatchphraseTests(ScanTestCase):
         self.assertNotIn("pain train", self.phrases(self.scan()))
 
 
+PREFIX = "for your poor sensitive ass you have been warned"
+
+
 class PassageTests(ScanTestCase):
     def test_recurring_passage_is_one_drop_not_many_fragments(self):
         self.corpus({i: [DROP] for i in (0, 3, 6, 9)})
@@ -108,6 +111,25 @@ class PassageTests(ScanTestCase):
         self.assertEqual(passage["text"], DROP)
         self.assertEqual(passage["episodes"], 4)
         self.assertFalse(any("sensitive ass" in p["phrase"] for p in result["phrases"]))
+
+
+class PassageAttributionTests(ScanTestCase):
+    def test_shared_opening_with_different_endings_is_reported_as_the_shared_text(self):
+        # Two versions of a drop: the ending of one must not be credited to all six episodes.
+        self.corpus({**{i: [PREFIX + " so buckle up buttercup"] for i in (0, 2, 4)},
+                     **{i: [PREFIX + " now hold on very tight"] for i in (6, 8, 10)}})
+        passages = self.scan()["passages"]
+        shared = [p for p in passages if p["episodes"] == 6]
+        self.assertEqual([p["text"] for p in shared], [PREFIX])
+        for p in passages:
+            if "buckle" in p["text"] or "tight" in p["text"]:
+                self.assertLessEqual(p["episodes"], 3)
+
+    def test_ignored_passage_is_omitted(self):
+        self.corpus({i: [DROP] for i in (0, 3, 6, 9)})
+        (self.dir / "ignore.txt").write_text(DROP.upper() + "\n", encoding="utf-8")
+        self.options.ignore_file = self.dir / "ignore.txt"
+        self.assertEqual(self.scan()["passages"], [])
 
 
 class FillerPassageTests(ScanTestCase):
@@ -141,9 +163,9 @@ class InputAndRerunTests(ScanTestCase):
         self.write("20120101", "all aboard the pain train")
         changes = phrase_scan.write_outputs(out, self.scan())
         self.assertEqual(changes["grown"]["all aboard the pain train"], [3, 4])
-        saved = json.loads((out / "recurring-phrases.json").read_text())
+        saved = json.loads((out / "recurring-phrases.json").read_text(encoding="utf-8"))
         self.assertEqual(saved["transcripts"], 13)
-        self.assertIn("all aboard the pain train", (out / "recurring-phrases.md").read_text())
+        self.assertIn("all aboard the pain train", (out / "recurring-phrases.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
