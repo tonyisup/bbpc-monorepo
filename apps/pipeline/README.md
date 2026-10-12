@@ -198,6 +198,27 @@ python3 scripts/publish_decisions.py report
 Clip numbers are the `NN-` prefix of the rendered file. Decisions copy the
 clip's window and headline, so they survive deleting the rendered files.
 
+## Recurring phrases
+
+`scripts/scan_phrases.py` scans every `transcripts/<YYYYMMDD>.json` for phrases
+that recur across episodes: catchphrases, running gags (a burst over
+consecutive episodes), and pre-recorded drops and rituals (long identical
+passages). It is the starting list for T-shirt ideas; deciding what is
+original versus a movie quote, and what belongs on a shirt, stays a human or
+Cowork call. Standard library only; about 20 s and 550 MB for 340 transcripts.
+
+```bash
+python3 scripts/scan_phrases.py               # rescan everything after a backfill
+python3 scripts/scan_phrases.py --top 200     # longer lists in the report
+```
+
+It writes `output/phrases/recurring-phrases.md` (readable lists, plus what is
+new since the previous scan) and `recurring-phrases.json` (every phrase with
+its episodes and timestamped examples). Ordinary English that slips through
+(the scan has no outside English baseline) goes in `output/phrases/ignore.txt`,
+one phrase per line; later scans skip it. The "Staples" section is where the
+show's biggest catchphrases and everyday English look alike, so review it once.
+
 ## Movies without a transcript
 
 If the transcript file is missing, the `movies` stage writes the episode's
@@ -267,6 +288,7 @@ output/
 ├── movies/<episode>.movies.json  # Extracted movie data
 ├── seo/<episode>.seo.json    # SEO metadata
 ├── publish-decisions.json    # published/skipped per rendered clip (scripts/publish_decisions.py)
+├── phrases/                  # recurring-phrases.{md,json} + ignore.txt (scripts/scan_phrases.py)
 ├── review-clips/<episode>/   # Audio clips from review segments
 ├── laughter/                 # laughter_autotune.py results
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)
