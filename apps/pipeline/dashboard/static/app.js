@@ -81,6 +81,8 @@ function needRow(need) {
       h('div', {class: 'mut sm'}, coworkSummary(need.files)),
       ready && h('div', {class: 'mut sm'}, 'Resume with ',
         h('code', {}, `python pipeline.py episodes/${need.stem}.mp3 --from movies`)),
+      !ready && need.headless && h('div', {class: 'mut sm'},
+        'Headless Cowork is on, so its session failed or was skipped. Run the pipeline again to retry it, or write the files in Cowork.'),
       need.lastError && h('pre', {}, `Last error: ${need.lastError}`)),
       h('a', {class: 'btn', href: `#episode/${need.stem}`}, 'Open episode'));
   }

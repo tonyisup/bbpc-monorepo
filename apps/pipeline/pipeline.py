@@ -5,7 +5,7 @@ from pathlib import Path
 
 from azure.storage.blob import BlobServiceClient
 
-from lib import clipper, cowork_handoff, movie_extractor, parser, publisher, review_clipper, thumbnail, transcriber, transcript_importer
+from lib import clipper, cowork_handoff, cowork_headless, movie_extractor, parser, publisher, review_clipper, thumbnail, transcriber, transcript_importer
 from lib.data_dir import require_data_dir
 from lib.runtime_config import get_azure_connection_string, load_config
 from lib.stage_status import STAGES
@@ -67,6 +67,7 @@ def main() -> None:
     parser_obj.add_argument("--confirm-complete", action="store_true", help="Confirm an existing transcript is complete for --only import_transcript")
     parser_obj.add_argument("--dry-run", action="store_true", help="Validate and inspect without writes; requires --only import_transcript")
     parser_obj.add_argument("--from", dest="from_stage", choices=STAGES, help="Run this stage and every stage after it")
+    parser_obj.add_argument("--no-cowork-headless", action="store_true", help="Stop for Cowork (exit 75) even when settings.cowork_headless is on")
     args = parser_obj.parse_args()
     if args.only and args.from_stage:
         parser_obj.error("--only and --from are mutually exclusive")
@@ -78,6 +79,8 @@ def main() -> None:
     config_path = Path(args.config)
     config = load_config(config_path)
     require_data_dir()
+    if args.no_cowork_headless:
+        config.setdefault("settings", {})["cowork_headless"] = False
 
     episodes_dir = Path(config.get("paths", {}).get("episodes_dir", "./episodes")).expanduser().resolve()
     if args.episode:
@@ -90,10 +93,13 @@ def main() -> None:
             print(f"{episode_path.stem} is already processed; pass the episode explicitly to rerun it.")
             return
         if status == cowork_handoff.STATUS_AWAITING and not (args.only or args.from_stage):
-            if not cowork_handoff.outputs_ready(config, episode_path.stem):
+            if cowork_handoff.outputs_ready(config, episode_path.stem):
+                print(f"Cowork outputs ready for {episode_path.stem}; resuming from the movies stage.")
+            elif cowork_headless.enabled(config):
+                print(f"{episode_path.stem} is waiting for Cowork; resuming from the movies stage to run it headlessly.")
+            else:
                 print(f"{episode_path.stem} is waiting for Cowork; nothing to do yet.")
                 sys.exit(cowork_handoff.EXIT_AWAITING_COWORK)
-            print(f"Cowork outputs ready for {episode_path.stem}; resuming from the movies stage.")
             args.from_stage = "movies"
 
     if _should_run("import_transcript", args.only, args.from_stage):
@@ -112,6 +118,7 @@ def main() -> None:
 
     context: dict = {
         "config": config,
+        "config_path": config_path.resolve(),
         "episode_path": str(episode_path),
         "transcript_path": str(transcript_output_path),
         "seo_path": str(seo_output_path),
@@ -144,6 +151,23 @@ def main() -> None:
     print("Pipeline complete.")
 
 
+def _ensure_cowork_outputs(context: dict, episode_path: Path, stage: str) -> None:
+    """With settings.cowork_headless on, write missing Cowork files before the stage that reads them."""
+    config, stem = context["config"], episode_path.stem
+    if cowork_handoff.outputs_ready(config, stem) or not cowork_headless.enabled(config):
+        return
+    if not Path(context["transcript_path"]).is_file():
+        return  # nothing for Cowork to read; the stage decides what that means
+    # Recorded first: the validator finds the transcript through state.json, and
+    # an interrupted run stays resumable.
+    cowork_handoff.mark_episode(
+        config, stem, cowork_handoff.STATUS_AWAITING,
+        episodePath=str(episode_path), transcriptPath=context["transcript_path"],
+        waitingOn=stage,
+    )
+    cowork_headless.run(config, stem, context["transcript_path"], context.get("config_path"))
+
+
 def _run_stages(args, context: dict, episode_path: Path, transcript_output_path: Path) -> None:
 
     if _should_run("transcribe", args.only, args.from_stage):
@@ -169,6 +193,7 @@ def _run_stages(args, context: dict, episode_path: Path, transcript_output_path:
 
     if _should_run("movies", args.only, args.from_stage):
         print(f"[3/8] Extracting reviewed movies from {episode_path.name}...")
+        _ensure_cowork_outputs(context, episode_path, "movies")
         movie_extractor.run(context)
 
     if _should_run("review_clip", args.only, args.from_stage):
@@ -177,6 +202,7 @@ def _run_stages(args, context: dict, episode_path: Path, transcript_output_path:
 
     if _should_run("parse", args.only, args.from_stage):
         print(f"[5/8] Parsing {episode_path.name}...")
+        _ensure_cowork_outputs(context, episode_path, "parse")
         parser.run(context)
 
     if _should_run("clip", args.only, args.from_stage):

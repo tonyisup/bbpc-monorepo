@@ -44,6 +44,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] Record publish decisions (`scripts/publish_decisions.py`), seeded with the Shorts published through ep 794.
 - [x] Recurring-phrase scanner across all transcripts (`scripts/scan_phrases.py`), re-run after backfills.
 - [x] **T-shirt finder:** per-episode Cowork phrases with original/quote flags (`output/cowork/<stem>.shirts.json`, checked by the validator, never gates the pipeline).
+- [x] **Headless Cowork:** with `settings.cowork_headless` on, the pipeline runs the hand-off itself through `claude -p` (`lib/cowork_headless.py`) instead of stopping with exit 75.
 - [x] **Dashboard, change 1:** read-only server, Today, Episode and Settings tabs; settings schema (`lib/settings_schema.py`) and stage status from local files (`lib/stage_status.py`).
 - [ ] **Dashboard, change 2 (Lab):** settings drafts and one-clip test renders under `output/lab/`; caption and zoom constants become settings.
 - [ ] **Dashboard, change 3 (Shirts):** shortlist file and board over the phrase scan and the per-episode shirts files.

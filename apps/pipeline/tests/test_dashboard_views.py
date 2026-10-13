@@ -43,8 +43,11 @@ class TodayTests(ViewsTestCase):
         clips, cowork, phrases, unprocessed = needs
         self.assertEqual(clips, {"kind": "clips", "stem": "20260112", "date": "2026-01-12", "number": 802,
                                  "title": "Beta", "count": 3})
-        self.assertEqual({k: cowork[k] for k in ("stem", "date", "number", "ready", "ok")},
-                         {"stem": "20260119", "date": "2026-01-19", "number": None, "ready": False, "ok": False})
+        self.assertEqual({k: cowork.get(k) for k in ("stem", "date", "number", "ready", "ok", "headless")},
+                         {"stem": "20260119", "date": "2026-01-19", "number": None, "ready": False, "ok": False,
+                          "headless": False})
+        self.config["settings"]["cowork_headless"] = True
+        self.assertIs(views.today(self.config)["needs"][1]["headless"], True)
         self.assertEqual({row["label"]: row["status"] for row in cowork["files"]},
                          {"movies": "missing", "seo": "invalid", "shirts": "not_written"})
         self.assertEqual(cowork["files"][1]["problems"], ["'candidateClips' must have exactly 20 clips (found 19)"])
@@ -238,7 +241,7 @@ class SettingsTests(ViewsTestCase):
 
     def test_config_check_and_an_out_of_range_value(self):
         self.assertEqual(self.view["check"], settings_schema.config_check(self.raw["settings"]))
-        self.assertEqual(len(self.view["check"]["notInConfig"]), 13)
+        self.assertEqual(len(self.view["check"]["notInConfig"]), 15)
         self.raw["settings"]["review_clip_max_per_movie"] = 0
         view = views.settings(self.raw)
         rows = {row["key"]: row for group in view["groups"] for row in group["settings"]}

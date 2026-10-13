@@ -183,8 +183,10 @@ reads it; the stages take their defaults from there. Environment variables
 (`.env`) store secrets:
 
 Judgment (reviewed movies, SEO, clip choice) comes only from Cowork; the
-pipeline makes no text-model calls. The only hosted model is the clip-background
-image model, configured through `settings.visuals_provider`.
+pipeline makes no text-model calls of its own. With `settings.cowork_headless`
+on it starts that Cowork job itself through the Claude Code CLI (see below).
+The only hosted model the pipeline calls is the clip-background image model,
+configured through `settings.visuals_provider`.
 
 | Variable | Purpose |
 |----------|---------|
@@ -212,7 +214,15 @@ resumes with `--from movies` once both files exist. Cowork also writes
 hosts' own words or a quote. That file is information for Tony: the validator
 checks it, no stage reads it, and the pipeline never waits for it. Details and the authoring
 rules Cowork follows:
-[`docs/cowork-handoff.md`](docs/cowork-handoff.md). Show knowledge (hosts, rating
+[`docs/cowork-handoff.md`](docs/cowork-handoff.md).
+
+`settings.cowork_headless` (on in `config.json`) makes the pipeline write those
+files itself instead of stopping: before `movies` it runs `claude -p` with the
+same instructions, limited to writing in `output/cowork/` and running the
+validator, and continues when the files are there. It needs the Claude Code
+CLI on `PATH`, signed in, and prints nothing while it works (the limit is
+`settings.cowork_headless_timeout_seconds`). If the session fails, the run ends
+with exit 75 as before. Show knowledge (hosts, rating
 scale, segments, what Tony publishes) lives in [`docs/show-format.md`](docs/show-format.md).
 
 ```bash

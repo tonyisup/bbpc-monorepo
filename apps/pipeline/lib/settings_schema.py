@@ -41,6 +41,7 @@ _REVIEW = ("review_clip",)
 _CLIP = ("clip",)
 _THUMBNAIL = ("thumbnail",)
 _LOGO = ("clip", "thumbnail")
+_COWORK = ("movies", "parse")
 
 SETTINGS: Tuple[Setting, ...] = (
     Setting("transcription_engine", "choice", "parakeet", "Transcription", _TRANSCRIBE,
@@ -140,8 +141,16 @@ SETTINGS: Tuple[Setting, ...] = (
             "Prompts", _CLIP,
             "House style added after each clip's image prompt."),
 
-    Setting("cowork_outputs_dir", "path", None, "Cowork instructions", ("movies", "parse"),
+    Setting("cowork_outputs_dir", "path", None, "Cowork instructions", _COWORK,
             "Folder Cowork writes its files to, relative to the data directory. Unset: <output_dir>/cowork."),
+    Setting("cowork_headless", "bool", False, "Cowork instructions", _COWORK,
+            "Start the Cowork hand-off from the pipeline with the Claude Code CLI instead of stopping with exit 75."),
+    Setting("cowork_headless_timeout_seconds", "float", 3600.0, "Cowork instructions", _COWORK,
+            "Longest a headless Cowork session may run before it is stopped.", 1, 86400),
+    Setting("cowork_headless_model", "str", None, "Cowork instructions", _COWORK,
+            "Model for the headless session. Unset: the CLI's default."),
+    Setting("cowork_headless_command", "path", "claude", "Cowork instructions", _COWORK,
+            "The Claude Code CLI that runs the headless session, found on PATH."),
 )
 
 BY_KEY: Dict[str, Setting] = {setting.key: setting for setting in SETTINGS}

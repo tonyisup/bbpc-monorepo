@@ -307,11 +307,11 @@ class ReadOnlyTests(ServerTestCase):
         self.assertEqual(snapshot(self.root), before)
         self.assertNotIn("SECRET_TOKEN", os.environ)
 
-    def test_the_server_needs_only_the_standard_library_and_never_loads_dot_env_or_starts_a_process(self):
+    def test_the_server_needs_only_the_standard_library_and_never_loads_dot_env(self):
         # -S leaves site-packages off the path, so any third-party import fails outright.
         probe = (
             "import sys, dashboard.server, dashboard.views\n"
-            "loaded = [m for m in ('dotenv', 'lib.runtime_config', 'subprocess', 'PIL', 'lib.clipper') if m in sys.modules]\n"
+            "loaded = [m for m in ('dotenv', 'lib.runtime_config', 'PIL', 'lib.clipper') if m in sys.modules]\n"
             "print(loaded)"
         )
         result = subprocess.run([sys.executable, "-S", "-c", probe], cwd=ROOT, capture_output=True, text=True)

@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from lib import clip_files, clipper, settings_schema, stage_status, thumbnail, transcriber
+from lib import clip_files, clipper, cowork_headless, settings_schema, stage_status, thumbnail, transcriber
 
 ROOT = Path(__file__).resolve().parents[1]
 # Every file that can read a setting. The schema itself looks keys up by variable.
@@ -22,9 +22,11 @@ DYNAMIC_READS = {
 
 
 def _is_settings(node: ast.AST, rel: str = "") -> bool:
-    """``settings``, ``<config>.get("settings", ...)``, or runtime_config's local name ``s``."""
+    """``settings``, ``<config>.get("settings", ...)``, ``_settings(config)``, or runtime_config's ``s``."""
     if isinstance(node, ast.Name):
         return node.id == "settings" or (node.id == "s" and rel == "lib/runtime_config.py")
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        return node.func.id == "_settings"  # lib/cowork_headless.py
     return (
         isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get"
         and bool(node.args) and isinstance(node.args[0], ast.Constant) and node.args[0].value == "settings"
@@ -161,11 +163,11 @@ class ConfigCheckTests(unittest.TestCase):
             "problems": ["review_clip_max_per_movie must be between 1 and 20, not 0"],
         }])
 
-    def test_the_checked_in_config_lacks_thirteen_settings_and_carries_one_unread_key(self):
+    def test_the_checked_in_config_lacks_fifteen_settings_and_carries_one_unread_key(self):
         config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
         check = settings_schema.config_check(config["settings"])
         self.assertEqual(check["notInConfig"], [
-            "llm_timeout", "llm_timeout_seconds", "local_visual_python", "local_visual_reuse_cached_still",
+            "cowork_headless_command", "cowork_headless_model", "llm_timeout", "llm_timeout_seconds", "local_visual_python", "local_visual_reuse_cached_still",
             "min_clip_duration_seconds", "review_clip_max_per_movie", "review_clip_max_seconds",
             "review_clip_merge_gap_seconds", "review_clip_min_seconds", "review_clip_postroll_seconds",
             "review_clip_preroll_seconds", "visual_timeout", "visual_timeout_seconds",
@@ -192,6 +194,13 @@ class StageDefaultsTests(unittest.TestCase):
             "faster-whisper": settings_schema.default("whisper_model"),
         })
         self.assertEqual(transcriber.DEFAULT_MODELS["faster-whisper"], "large-v3-turbo")
+        self.assertEqual((cowork_headless.DEFAULT_COMMAND, cowork_headless.DEFAULT_TIMEOUT_SECONDS), ("claude", 3600.0))
+        self.assertIs(cowork_headless.DEFAULT_COMMAND, settings_schema.default("cowork_headless_command"))
+        self.assertIs(cowork_headless.DEFAULT_TIMEOUT_SECONDS,
+                      settings_schema.default("cowork_headless_timeout_seconds"))
+        # Headless is off unless config.json turns it on.
+        self.assertIs(settings_schema.default("cowork_headless"), False)
+        self.assertFalse(cowork_headless.enabled({"settings": {}}))
 
     def test_choices_match_what_the_stages_accept(self):
         def choices(key):

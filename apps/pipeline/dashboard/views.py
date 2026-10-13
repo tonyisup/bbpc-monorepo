@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-from lib import cowork_handoff, phrase_scan, publish_log, settings_schema, stage_status, visual_prompts
+from lib import cowork_handoff, cowork_headless, phrase_scan, publish_log, settings_schema, stage_status, visual_prompts
 from lib.data_dir import data_dir, resolve_data_paths
 
 RECENT_EPISODES = 12
@@ -115,6 +115,8 @@ def _needs(config, state, reports, transcript_stems, phrases) -> List[Dict[str, 
         needs.append({
             "kind": "cowork", "stem": stem, "date": _date(stem), "number": number, "title": title,
             "ready": cowork_handoff.outputs_ready(config, stem), "ok": check["ok"],
+            # With headless on, an episode is only left waiting when its session failed or was skipped.
+            "headless": cowork_headless.enabled(config),
             "files": check["files"], "lastError": episodes[stem].get("lastError"),
         })
     if phrases["stale"]:

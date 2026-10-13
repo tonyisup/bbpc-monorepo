@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 import pipeline
-from lib import cowork_handoff, movie_extractor, parser
+from lib import cowork_handoff, cowork_headless, movie_extractor, parser
 
 
 # Transcript fixture: 30 ten-second segments (0-300 s). Valid clips sit on these boundaries.
@@ -718,3 +718,191 @@ class ShowFormatReferenceTests(unittest.TestCase):
         for heading in ("## Hosts", "## Episode structure", "## Rating scale", "## Listener game",
                         "## Not reviews", "## Transcription garbles", "## What gets published"):
             self.assertIn(heading, text)
+
+
+class HeadlessCoworkTests(CoworkHandoffTestCase):
+    """settings.cowork_headless: the pipeline starts the hand-off itself with `claude -p`."""
+
+    def setUp(self):
+        super().setUp()
+        self.config["settings"]["cowork_headless"] = True
+
+    def run_headless(self, returncode=0, writes=(), side_effect=None):
+        """Run the hand-off with a fake CLI that writes ``writes`` and exits ``returncode``."""
+        def fake_cli(command, **kwargs):
+            self.reading_copy = Path(command[command.index("--add-dir") + 2]) / "20260101.transcript.tsv"
+            self.reading_copy_text = self.reading_copy.read_text()
+            for name in writes:
+                self.write(name, {})
+            return mock.Mock(returncode=returncode)
+
+        with mock.patch.object(cowork_headless.shutil, "which", return_value="/usr/local/bin/claude"), \
+             mock.patch.object(cowork_headless.subprocess, "run", side_effect=side_effect or fake_cli) as cli, \
+             contextlib.redirect_stdout(io.StringIO()) as out:
+            ok = cowork_headless.run(self.config, "20260101", self.transcript)
+        return ok, cli, out.getvalue()
+
+    def test_off_unless_the_setting_is_true(self):
+        self.assertTrue(cowork_headless.enabled(self.config))
+        for value in (None, False, "true", 1):
+            with self.subTest(value=value):
+                self.assertFalse(cowork_headless.enabled({"settings": {"cowork_headless": value}}))
+        self.assertFalse(cowork_headless.enabled({}))
+
+    def test_reading_copy_keeps_exact_segment_boundaries_and_drops_words(self):
+        segments = [{"start": 1.6, "end": 4.64, "text": " I don't\ncare. ", "words": [{"word": "I", "start": 1.6}]},
+                    {"start": 4.64, "end": 15.0, "text": "Next"}]
+        self.transcript.write_text(json.dumps(segments))
+        dest = cowork_headless.write_reading_copy(self.transcript, self.root / "copy.tsv")
+        self.assertEqual(dest.read_text(), "1.6\t4.64\tI don't care.\n4.64\t15.0\tNext\n")
+
+    def test_runs_claude_print_mode_from_the_pipeline_directory_with_a_narrow_allowlist(self):
+        ok, cli, _ = self.run_headless(writes=("20260101.movies.json", "20260101.seo.json"))
+        self.assertTrue(ok)
+        command, kwargs = cli.call_args.args[0], cli.call_args.kwargs
+        self.assertEqual(command[:2], ["claude", "-p"])
+        self.assertEqual(kwargs["cwd"], str(cowork_headless.PIPELINE_ROOT))
+        self.assertEqual(command[command.index("--add-dir") + 1], str(self.cowork.resolve()))
+        self.assertEqual(command[command.index("--permission-mode") + 1], "acceptEdits")
+        start = command.index("--allowedTools") + 1
+        self.assertEqual(command[start:start + 4],
+                         ["Read", "Write", "Edit", "Bash(python3 scripts/validate_cowork_outputs.py:*)"])
+        self.assertNotIn("--dangerously-skip-permissions", command)
+        self.assertNotIn("--model", command)
+
+    def test_prompt_names_the_episode_files_the_reading_copy_and_the_validator(self):
+        _, cli, _ = self.run_headless(writes=("20260101.movies.json", "20260101.seo.json"))
+        prompt = cli.call_args.kwargs["input"]
+        for needed in ("docs/cowork-handoff.md", "docs/show-format.md", str(self.reading_copy),
+                       str(self.cowork.resolve() / "20260101.movies.json"),
+                       str(self.cowork.resolve() / "20260101.seo.json"),
+                       str(self.cowork.resolve() / "20260101.shirts.json"),
+                       "python3 scripts/validate_cowork_outputs.py 20260101", "Never edit state.json"):
+            self.assertIn(needed, prompt)
+        self.assertEqual(self.reading_copy_text.splitlines()[1], "10.0\t20.0\tsegment 10")
+        self.assertFalse(self.reading_copy.exists())  # removed once the session ends
+
+    def test_model_and_config_path_are_passed_through_when_set(self):
+        self.config["settings"]["cowork_headless_model"] = "opus"
+        command = cowork_headless.build_command(self.config, [self.cowork])
+        self.assertEqual(command[command.index("--model") + 1], "opus")
+        prompt = cowork_headless.build_prompt(self.config, "20260101", self.root / "t.tsv", Path("/x/lab.json"))
+        self.assertIn("python3 scripts/validate_cowork_outputs.py 20260101 --config /x/lab.json", prompt)
+
+    def test_session_environment_leaves_out_the_pipeline_env_file_values(self):
+        (self.root / ".env").write_text(
+            "# pipeline credentials\nCLERK_MACHINE_SECRET_KEY=sk_test\nexport AZURE_STORAGE_CONNECTION_STRING = abc\n"
+            f"BBPC_PIPELINE_DATA_DIR={self.root}\n\n")
+        environ = {"CLERK_MACHINE_SECRET_KEY": "sk_test", "AZURE_STORAGE_CONNECTION_STRING": "abc",
+                   "BBPC_PIPELINE_DATA_DIR": str(self.root), "PATH": "/usr/bin", "HOME": "/Users/tony"}
+        with mock.patch.dict(cowork_headless.os.environ, environ, clear=True), \
+             mock.patch.object(cowork_headless, "PIPELINE_ROOT", self.root / "no-checkout-env"):
+            env = cowork_headless.session_env()
+            _, cli, _ = self.run_headless(writes=("20260101.movies.json", "20260101.seo.json"))
+        self.assertEqual(env, {"BBPC_PIPELINE_DATA_DIR": str(self.root), "PATH": "/usr/bin", "HOME": "/Users/tony"})
+        self.assertNotIn("CLERK_MACHINE_SECRET_KEY", cli.call_args.kwargs["env"])
+
+    def test_a_run_that_did_not_work_out_returns_false_instead_of_raising(self):
+        both = ("20260101.movies.json", "20260101.seo.json")
+        cases = {
+            "exited with status 1": dict(returncode=1, writes=both),
+            "without writing both files": dict(writes=both[:1]),
+            "without finishing": dict(side_effect=cowork_headless.subprocess.TimeoutExpired("claude", 5)),
+            "could not start": dict(side_effect=OSError("exec format error")),
+        }
+        for message, kwargs in cases.items():
+            with self.subTest(message=message):
+                for path in self.cowork.glob("20260101.*"):
+                    path.unlink()
+                ok, _, out = self.run_headless(**kwargs)
+                self.assertFalse(ok)
+                self.assertIn(message, out)
+
+    def test_skipped_without_the_cli_or_a_transcript(self):
+        with mock.patch.object(cowork_headless.shutil, "which", return_value=None), \
+             mock.patch.object(cowork_headless.subprocess, "run", side_effect=AssertionError("not started")), \
+             contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertFalse(cowork_headless.run(self.config, "20260101", self.transcript))
+            self.assertFalse(cowork_headless.run(self.config, "20260101", self.root / "missing.json"))
+        self.assertIn("'claude' is not on PATH", out.getvalue())
+        self.assertIn("no transcript", out.getvalue())
+
+
+class PipelineHeadlessHandoffTests(CoworkHandoffTestCase):
+    """pipeline.py runs the hand-off before the stage that reads a missing Cowork file."""
+
+    def setUp(self):
+        super().setUp()
+        self.episode = self.root / "20260101.mp3"
+        self.context = {"config": self.config, "transcript_path": str(self.transcript), "config_path": Path("/x/c.json")}
+
+    def ensure(self, stage="movies"):
+        with mock.patch.object(pipeline.cowork_headless, "run", return_value=True) as run:
+            pipeline._ensure_cowork_outputs(self.context, self.episode, stage)
+        return run
+
+    def test_default_config_never_starts_a_headless_run(self):
+        self.ensure().assert_not_called()
+        self.assertEqual(cowork_handoff.awaiting(self.config), [])
+
+    def test_missing_files_start_one_and_record_the_episode_as_awaiting_first(self):
+        self.config["settings"]["cowork_headless"] = True
+        run = self.ensure("parse")
+        run.assert_called_once_with(self.config, "20260101", str(self.transcript), Path("/x/c.json"))
+        entry = cowork_handoff.load_state(self.config)["episodes"]["20260101"]
+        self.assertEqual(entry["status"], cowork_handoff.STATUS_AWAITING)
+        self.assertEqual(entry["transcriptPath"], str(self.transcript))
+        self.assertEqual(entry["waitingOn"], "parse")
+
+    def test_files_already_written_or_no_transcript_start_nothing(self):
+        self.config["settings"]["cowork_headless"] = True
+        self.context["transcript_path"] = str(self.root / "missing.json")
+        self.ensure().assert_not_called()
+        self.assertEqual(cowork_handoff.awaiting(self.config), [])
+        self.context["transcript_path"] = str(self.transcript)
+        self.write("20260101.movies.json", _movies_payload())
+        self.write("20260101.seo.json", _seo_payload())
+        self.ensure().assert_not_called()
+
+    def test_a_failed_headless_run_still_ends_in_the_exit_75_hand_off(self):
+        self.config["settings"]["cowork_headless"] = True
+        args = mock.Mock(only="movies", from_stage=None)
+        with mock.patch.object(pipeline.cowork_headless, "run", return_value=False) as run, \
+             contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(cowork_handoff.AwaitingCowork):
+                pipeline._run_stages(args, self.context, self.episode, self.transcript)
+        run.assert_called_once()
+
+    def test_repo_config_turns_the_headless_hand_off_on(self):
+        config = json.loads((Path(pipeline.__file__).resolve().parent / "config.json").read_text())
+        self.assertTrue(cowork_headless.enabled(config))
+
+    def run_main_unattended(self, *flags):
+        """`pipeline.py` with no episode argument, the latest episode already waiting on Cowork."""
+        cowork_handoff.mark_episode(self.config, "20260101", cowork_handoff.STATUS_AWAITING, waitingOn="movies")
+        with mock.patch.object(pipeline.sys, "argv", ["pipeline.py", *flags]), \
+             mock.patch.object(pipeline, "load_config", return_value=self.config), \
+             mock.patch.object(pipeline, "require_data_dir"), \
+             mock.patch.object(pipeline, "_resolve_latest_episode_from_azure", return_value=self.episode), \
+             mock.patch.object(pipeline, "_run_stages") as run_stages, \
+             mock.patch.object(pipeline.cowork_handoff, "mark_episode"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            pipeline.main()
+        return run_stages
+
+    def test_unattended_run_resumes_a_waiting_episode_to_run_the_hand_off(self):
+        self.config["settings"]["cowork_headless"] = True
+        args = self.run_main_unattended().call_args.args[0]
+        self.assertEqual(args.from_stage, "movies")
+
+    def test_unattended_run_still_stops_with_exit_75_when_headless_is_off(self):
+        with self.assertRaises(SystemExit) as ctx:
+            self.run_main_unattended()
+        self.assertEqual(ctx.exception.code, cowork_handoff.EXIT_AWAITING_COWORK)
+
+    def test_no_cowork_headless_flag_overrides_the_setting(self):
+        self.config["settings"]["cowork_headless"] = True
+        with self.assertRaises(SystemExit) as ctx:
+            self.run_main_unattended("--no-cowork-headless")
+        self.assertEqual(ctx.exception.code, cowork_handoff.EXIT_AWAITING_COWORK)
+        self.assertFalse(cowork_headless.enabled(self.config))
