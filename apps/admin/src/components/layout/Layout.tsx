@@ -1,6 +1,10 @@
 import { Menu, PanelLeft, PanelLeftClose } from "lucide-react";
 import React, { useState } from "react";
 
+import {
+  AdminAccountIssueCard,
+  AdminSignInCard,
+} from "../auth/AdminAccessCards";
 import { useBbpcAdminAuth } from "../auth/BbpcAdminAuthContext";
 import { Button } from "../ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "../ui/sheet";
@@ -18,10 +22,12 @@ const Layout = ({ children }: LayoutProps) => {
     return null;
   }
 
+  // Sign-out and session expiry leave the browser on the current route, so
+  // the way back in has to render here rather than on the dashboard alone.
   if (user === null || accountStatus !== "ready") {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background">
-        {children}
+        {user === null ? <AdminSignInCard /> : <AdminAccountIssueCard />}
       </div>
     );
   }
