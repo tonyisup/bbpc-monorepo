@@ -117,7 +117,23 @@ class DecisionTests(PublishLogTestCase):
         publish_log.mark_rendered(self.config, "20260101", 2, "skipped")
         (row,) = publish_log.report(self.config, ["20260101"])
         self.assertEqual(row, {"stem": "20260101", "rendered": 3, "published": 1, "skipped": 1,
-                               "undecided": 1, "publishedNotPicked": 1, "untracked": 0})
+                               "undecided": 1, "toReview": 0, "publishedNotPicked": 1, "untracked": 0})
+
+    def test_to_review_counts_undecided_picks_whose_file_is_on_disk(self):
+        clips_dir = self.log_path.parent / "clips" / "20260101"
+        (clips_dir / "02-bit-5.mp4").write_bytes(b"")
+        (row,) = publish_log.report(self.config, ["20260101"])
+        self.assertEqual((row["rendered"], row["undecided"], row.get("toReview")), (3, 3, 2))
+        publish_log.mark_rendered(self.config, "20260101", 1, "skipped")
+        (row,) = publish_log.report(self.config, ["20260101"])
+        self.assertEqual((row["undecided"], row.get("toReview")), (2, 1))
+
+    def test_tracked_stems_are_episodes_with_a_clips_folder_or_a_decision(self):
+        clips_root = self.log_path.parent / "clips"
+        (clips_root / "20260108").mkdir()
+        (clips_root / ".DS_Store").write_bytes(b"")
+        publish_log.mark_untracked(self.config, "20251225", "Bingo Card", youtube="U7w5VheXhAc")
+        self.assertEqual(publish_log.tracked_stems(self.config), ["20251225", "20260101", "20260108"])
 
 
 if __name__ == "__main__":

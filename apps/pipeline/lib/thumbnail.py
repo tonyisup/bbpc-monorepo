@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
+from lib import settings_schema
 from lib.convex_client import ConvexPipelineClient, PipelineEpisodeShow
 from lib.episode_db import get_episode_shows_by_stem
 
@@ -24,11 +25,9 @@ THUMB_HEIGHT = 1920
 BG_COLOR = (12, 12, 18)
 POSTER_SPACING = 20
 POSTER_BOTTOM_MARGIN = 140  # clears the title bar
-LOGO_MAX_WIDTH_FRAC = 0.22
-LOGO_MAX_HEIGHT_FRAC = 0.12
-LOGO_MARGIN = 40
-LOGO_POSITION = "top_left"
-LOGO_POSITIONS = frozenset({"top_left", "top_right", "bottom_left", "bottom_right"})
+LOGO_MARGIN = settings_schema.default("thumbnail_logo_margin_px")
+LOGO_POSITION = settings_schema.default("thumbnail_logo_position")
+LOGO_POSITIONS = frozenset(settings_schema.BY_KEY["thumbnail_logo_position"].choices)
 CORNER_RADIUS = 16
 SHADOW_OFFSET = 6
 SHADOW_BLUR = 18
@@ -230,25 +229,20 @@ def _logo_corner_position(
 def _load_logo(config: Dict[str, Any]) -> Optional[Tuple[Image.Image, int, str]]:
     """Return (scaled_logo, margin, position), or None when no logo is drawn."""
     settings = config.get("settings", {})
-    if not settings.get("brand_logo_enabled", True):
+    if not settings_schema.value(settings, "brand_logo_enabled"):
         return None
 
-    rel = settings.get("brand_logo_path", "assets/logo-short.png")
+    rel = settings_schema.value(settings, "brand_logo_path")
     logo_path = (_pipeline_root() / rel).expanduser().resolve()
     if not logo_path.is_file():
         logger.info("Thumbnail: brand logo not found at %s, skipping", logo_path)
         return None
 
-    max_w = int(
-        THUMB_WIDTH
-        * float(settings.get("thumbnail_logo_max_width_fraction", settings.get("brand_logo_max_width_fraction", LOGO_MAX_WIDTH_FRAC)))
-    )
-    max_h = int(
-        THUMB_HEIGHT
-        * float(settings.get("thumbnail_logo_max_height_fraction", settings.get("brand_logo_max_height_fraction", LOGO_MAX_HEIGHT_FRAC)))
-    )
-    margin = int(settings.get("thumbnail_logo_margin_px", settings.get("brand_logo_margin_px", LOGO_MARGIN)))
-    position = settings.get("thumbnail_logo_position", LOGO_POSITION)
+    # Each thumbnail_logo_* setting falls back to its brand_logo_* setting, then to its default.
+    max_w = int(THUMB_WIDTH * float(settings_schema.value(settings, "thumbnail_logo_max_width_fraction")))
+    max_h = int(THUMB_HEIGHT * float(settings_schema.value(settings, "thumbnail_logo_max_height_fraction")))
+    margin = int(settings_schema.value(settings, "thumbnail_logo_margin_px"))
+    position = settings_schema.value(settings, "thumbnail_logo_position")
 
     with Image.open(logo_path) as logo_im:
         logo = logo_im.convert("RGBA")
@@ -425,7 +419,7 @@ def run(context: dict) -> None:
     """
     config = context.get("config", {})
     settings = config.get("settings", {})
-    if not settings.get("thumbnail_enabled", True):
+    if not settings_schema.value(settings, "thumbnail_enabled"):
         print("Thumbnail stage disabled in config, skipping.")
         return
 

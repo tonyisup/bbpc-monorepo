@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -166,6 +167,36 @@ class InputAndRerunTests(ScanTestCase):
         saved = json.loads((out / "recurring-phrases.json").read_text(encoding="utf-8"))
         self.assertEqual(saved["transcripts"], 13)
         self.assertIn("all aboard the pain train", (out / "recurring-phrases.md").read_text(encoding="utf-8"))
+
+    def test_report_status_before_any_scan(self):
+        self.assertEqual(phrase_scan.report_status(self.dir / "out"), {
+            "scanned": False, "scannedAt": None, "transcripts": 0, "firstStem": None, "lastStem": None,
+            "phrases": 0, "passages": 0, "reportSavedAt": None, "ignoreSavedAt": None, "stale": False,
+        })
+
+    def test_report_status_counts_the_report_and_goes_stale_when_ignore_txt_is_newer(self):
+        self.corpus({i: ["all aboard the pain train"] for i in (1, 5, 9)})
+        out = self.dir / "out"
+        result = self.scan()
+        phrase_scan.write_outputs(out, result)
+        report, ignore = out / "recurring-phrases.json", out / "ignore.txt"
+        os.utime(report, (1_800_000_000, 1_800_000_000))
+        status = phrase_scan.report_status(out)
+        self.assertEqual(status, {
+            "scanned": True, "scannedAt": result["scannedAt"], "transcripts": 12,
+            "firstStem": "20110101", "lastStem": "20111201",
+            "phrases": len(result["phrases"]), "passages": len(result["passages"]),
+            "reportSavedAt": "2027-01-15T08:00:00+00:00", "ignoreSavedAt": None, "stale": False,
+        })
+        self.assertGreater(status["phrases"], 0)
+
+        ignore.write_text("pain train\n", encoding="utf-8")
+        os.utime(ignore, (1_800_000_000 - 60, 1_800_000_000 - 60))
+        status = phrase_scan.report_status(out)
+        self.assertEqual((status["ignoreSavedAt"], status["stale"]), ("2027-01-15T07:59:00+00:00", False))
+        os.utime(ignore, (1_800_000_000 + 60, 1_800_000_000 + 60))
+        status = phrase_scan.report_status(out)
+        self.assertEqual((status["ignoreSavedAt"], status["stale"]), ("2027-01-15T08:01:00+00:00", True))
 
 
 if __name__ == "__main__":

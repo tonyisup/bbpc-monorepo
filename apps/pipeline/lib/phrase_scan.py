@@ -531,3 +531,34 @@ def render_markdown(result: Dict[str, Any], top: int = 100) -> str:
     out += [_line(p) for p in staples[:top]] + [""]
     out += ["## Likely titles and names", ""] + [_line(p) for p in titles[:top]] + [""]
     return "\n".join(out)
+
+
+def _saved_at(path: Path) -> Optional[str]:
+    if not path.is_file():
+        return None
+    saved = _dt.datetime.fromtimestamp(path.stat().st_mtime, _dt.timezone.utc)
+    return saved.replace(microsecond=0).isoformat()
+
+
+def report_status(out_dir: Path) -> Dict[str, Any]:
+    """What the last scan found, and whether ``ignore.txt`` has been saved since.
+
+    A scan honours ``ignore.txt`` as it was when the scan ran, so a report
+    older than the ignore file still lists phrases that are now ignored.
+    """
+    out_dir = Path(out_dir)
+    json_path, ignore_path = out_dir / "recurring-phrases.json", out_dir / "ignore.txt"
+    result = json.loads(json_path.read_text(encoding="utf-8")) if json_path.is_file() else {}
+    return {
+        "scanned": bool(result),
+        "scannedAt": result.get("scannedAt"),
+        "transcripts": result.get("transcripts", 0),
+        "firstStem": result.get("firstStem"),
+        "lastStem": result.get("lastStem"),
+        "phrases": len(result.get("phrases", [])),
+        "passages": len(result.get("passages", [])),
+        "reportSavedAt": _saved_at(json_path),
+        "ignoreSavedAt": _saved_at(ignore_path),
+        "stale": bool(result) and ignore_path.is_file()
+        and ignore_path.stat().st_mtime > json_path.stat().st_mtime,
+    }

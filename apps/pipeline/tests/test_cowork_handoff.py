@@ -517,6 +517,80 @@ class ShirtsValidationTests(unittest.TestCase):
         ])
 
 
+class CheckEpisodeTests(CoworkHandoffTestCase):
+    """cowork_handoff.check_episode: what the validator script prints and the dashboard shows."""
+
+    def setUp(self):
+        super().setUp()
+        self.config["paths"]["transcripts_dir"] = str(self.root)
+        self.transcript.write_text(json.dumps(SHIRT_SEGMENTS))
+
+    def check(self):
+        result = cowork_handoff.check_episode(self.config, "20260101")
+        self.assertEqual([row["label"] for row in result["files"]], ["movies", "seo", "shirts"])
+        return result, {row["label"]: row for row in result["files"]}
+
+    def test_valid_files_are_ok_with_a_summary_and_their_warnings(self):
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", _seo_payload(title="T" * 61))
+        self.write("20260101.shirts.json", _shirts_payload(_shirt()))
+        result, rows = self.check()
+        self.assertEqual((result["ok"], result["transcriptFound"]), (True, True))
+        self.assertEqual(result["transcript"], str(self.transcript.resolve()))
+        self.assertEqual(rows["movies"], {
+            "label": "movies", "path": str(self.cowork.resolve() / "20260101.movies.json"), "status": "ok",
+            "problems": [], "summary": "accepted: Sketch", "warnings": [],
+        })
+        self.assertEqual((rows["seo"]["status"], rows["seo"]["summary"], rows["seo"]["warnings"]),
+                         ("ok", "20 candidate clips, 3 selected", ["title is 61 characters (keep it to 60)"]))
+        self.assertEqual((rows["shirts"]["status"], rows["shirts"]["summary"]),
+                         ("ok", "1 phrases (1 original, 0 quote, 0 unsure)"))
+
+    def test_missing_movies_or_seo_fails_and_missing_shirts_does_not(self):
+        result, rows = self.check()
+        self.assertEqual({label: row["status"] for label, row in rows.items()},
+                         {"movies": "missing", "seo": "missing", "shirts": "not_written"})
+        self.assertFalse(result["ok"])
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", _seo_payload())
+        result, rows = self.check()
+        self.assertEqual({label: row["status"] for label, row in rows.items()},
+                         {"movies": "ok", "seo": "ok", "shirts": "not_written"})
+        self.assertTrue(result["ok"])
+
+    def test_an_invalid_file_lists_its_problems(self):
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", _seo_payload(candidateClips=[_clip(i) for i in range(1, 20)]))
+        result, rows = self.check()
+        self.assertFalse(result["ok"])
+        self.assertEqual((rows["seo"]["status"], rows["seo"]["summary"], rows["seo"]["warnings"]), ("invalid", None, []))
+        self.assertIn("'candidateClips' must have exactly 20 clips (found 19)", rows["seo"]["problems"])
+
+    def test_without_a_transcript_the_boundary_checks_are_skipped(self):
+        off_boundary = _seo_payload()
+        off_boundary["candidateClips"][0]["start"] = 11.0
+        off_boundary["clipAnalysis"][0]["start"] = 11.0
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        self.write("20260101.seo.json", off_boundary)
+        self.assertEqual(self.check()[1]["seo"]["problems"], [
+            "candidateClips[0] starts at 11.00s, not on a transcript segment start",
+            "clipAnalysis[0] starts at 11.00s, not on a transcript segment start",
+        ])
+        self.transcript.unlink()
+        result, rows = self.check()
+        self.assertEqual((result["transcriptFound"], rows["seo"]["status"]), (False, "ok"))
+
+    def test_transcript_path_uses_the_recorded_path_only_while_it_exists(self):
+        in_data_dir = self.transcript.resolve()
+        self.assertEqual(cowork_handoff.transcript_path(self.config, "20260101"), in_data_dir)
+        recorded = self.root / "elsewhere.json"
+        cowork_handoff.mark_episode(self.config, "20260101", cowork_handoff.STATUS_AWAITING,
+                                    transcriptPath=str(recorded))
+        self.assertEqual(cowork_handoff.transcript_path(self.config, "20260101"), in_data_dir)
+        recorded.write_text("[]")
+        self.assertEqual(cowork_handoff.transcript_path(self.config, "20260101"), recorded)
+
+
 class ShirtsValidatorScriptTests(CoworkHandoffTestCase):
     """scripts/validate_cowork_outputs.py reports the optional shirts file beside movies and SEO."""
 

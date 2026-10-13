@@ -23,6 +23,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - ✅ **Brand Logo:** Composited onto clip backgrounds.
 - ⏸ **Laughter Detection:** Detector kept but not called by any stage; next step is handing its timestamps to Cowork.
 - ✅ **Thumbnail Generation:** 1920x1920 episode thumbnails from reviewed movie posters + BBPC logo.
+- 🚧 **Dashboard:** Local read-only page (`python3 -m dashboard`) with Today, Episode and Settings; Lab, Shirts, Clips and Runs to follow.
 
 ## Completed Tasks
 - [x] Implement `lib/transcriber.py` with resume support.
@@ -43,6 +44,12 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] Record publish decisions (`scripts/publish_decisions.py`), seeded with the Shorts published through ep 794.
 - [x] Recurring-phrase scanner across all transcripts (`scripts/scan_phrases.py`), re-run after backfills.
 - [x] **T-shirt finder:** per-episode Cowork phrases with original/quote flags (`output/cowork/<stem>.shirts.json`, checked by the validator, never gates the pipeline).
+- [x] **Dashboard, change 1:** read-only server, Today, Episode and Settings tabs; settings schema (`lib/settings_schema.py`) and stage status from local files (`lib/stage_status.py`).
+- [ ] **Dashboard, change 2 (Lab):** settings drafts and one-clip test renders under `output/lab/`; caption and zoom constants become settings.
+- [ ] **Dashboard, change 3 (Shirts):** shortlist file and board over the phrase scan and the per-episode shirts files.
+- [ ] **Dashboard, change 4 (Clips):** review rendered clips and record publish decisions.
+- [ ] **Dashboard, change 5 (Runs):** start and watch pipeline runs; the only part that can write to Convex.
+- [ ] **Stage journal:** have `pipeline.py` record each stage it runs, so `import_transcript` and `publish` status is known rather than inferred from `state.json`.
 - [ ] **T-shirt report:** cross-episode shirt list joined with the recurring-phrase scan; shirts files for past episodes.
 - [ ] **Laughter → Cowork:** Write laughter timestamps where Cowork reads them.
 - [ ] **Advanced Captions:** Move to word-level timestamps for more dynamic "pop-in" caption styles.

@@ -16,14 +16,16 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Iterable, List, Mapping, Optional, Tuple, Union
 
+from lib import settings_schema
+
 logger = logging.getLogger(__name__)
 
 ENGINE_PARAKEET = "parakeet"
 ENGINE_FASTER_WHISPER = "faster-whisper"
-DEFAULT_ENGINE = ENGINE_PARAKEET
+DEFAULT_ENGINE = settings_schema.default("transcription_engine")
 DEFAULT_MODELS = {
-    ENGINE_PARAKEET: "mlx-community/parakeet-tdt-0.6b-v2",
-    ENGINE_FASTER_WHISPER: "large-v3-turbo",
+    ENGINE_PARAKEET: settings_schema.default("parakeet_model"),
+    ENGINE_FASTER_WHISPER: settings_schema.default("whisper_model"),
 }
 _MODEL_SETTING_KEYS = {ENGINE_PARAKEET: "parakeet_model", ENGINE_FASTER_WHISPER: "whisper_model"}
 # Parakeet transcribes long audio in overlapping chunks that it merges itself.

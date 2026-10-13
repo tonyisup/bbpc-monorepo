@@ -4,11 +4,9 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import shlex
 import subprocess
 import sys
-import tempfile
 import urllib.request
 from pathlib import Path
 from functools import lru_cache
@@ -16,7 +14,7 @@ from typing import Any, Dict, List, cast
 
 from PIL import Image
 
-from lib import clip_files
+from lib import clip_files, settings_schema
 from lib.visual_prompts import (
     ABSTRACT_VISUAL_GUARDRAIL,
     normalize_clip_image_prompt,
@@ -32,7 +30,7 @@ VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 CLIP_FPS = 30  # Must match zoompan fps and ffmpeg -r for still→video clips
 ZOOMPAN_WORK_SCALE = 4  # Higher working resolution reduces visible x/y stepping from zoompan integer crop math.
-DEFAULT_AUDIO_FADE_OUT_SECONDS = 0.8
+DEFAULT_AUDIO_FADE_OUT_SECONDS = settings_schema.default("clip_audio_fade_out_seconds")
 # Captions: at most CAPTION_MAX_LINES lines, measured in the caption font.
 # Uppercase Arial Bold 84 px fits ~17-20 characters per line, but wide letters
 # (M, W) need fewer, so the character cap alone does not guarantee two lines.
@@ -65,17 +63,17 @@ def _apply_brand_logo(vertical_path: Path, config: Dict[str, Any]) -> Path:
     Returns ``vertical_path`` unchanged if branding is disabled or the logo file is missing.
     """
     settings = config.get("settings", {})
-    if not settings.get("brand_logo_enabled", True):
+    if not settings_schema.value(settings, "brand_logo_enabled"):
         return vertical_path
-    rel = settings.get("brand_logo_path", "assets/logo-short.png")
+    rel = settings_schema.value(settings, "brand_logo_path")
     logo_path = (_pipeline_root() / rel).expanduser().resolve()
     if not logo_path.is_file():
         logger.info("Brand logo not found at %s, skipping overlay", logo_path)
         return vertical_path
 
-    margin = int(settings.get("brand_logo_margin_px", 48))
-    max_w = int(VIDEO_WIDTH * float(settings.get("brand_logo_max_width_fraction", 0.38)))
-    max_h = int(VIDEO_HEIGHT * float(settings.get("brand_logo_max_height_fraction", 0.14)))
+    margin = int(settings_schema.value(settings, "brand_logo_margin_px"))
+    max_w = int(VIDEO_WIDTH * float(settings_schema.value(settings, "brand_logo_max_width_fraction")))
+    max_h = int(VIDEO_HEIGHT * float(settings_schema.value(settings, "brand_logo_max_height_fraction")))
 
     out_path = vertical_path.with_name(f"{vertical_path.stem}_logo{vertical_path.suffix}")
 
@@ -102,11 +100,7 @@ def _apply_brand_logo(vertical_path: Path, config: Dict[str, Any]) -> Path:
     base.convert("RGB").save(out_path, format="PNG", optimize=True)
     logger.info("Wrote branded still: %s", out_path.name)
     return out_path
-DEFAULT_STYLE_SUFFIX = (
-    "Vertical 9:16 cinematic poster art, bold contrast, dramatic composition. "
-    "Purely visual scene: no text, letters, numbers, typography, logos, captions, "
-    "titles, watermarks, fake UI, or media player chrome. Subtitles are added separately."
-)
+DEFAULT_STYLE_SUFFIX = settings_schema.default("visual_style_suffix")
 
 
 def _build_visual_prompt(
@@ -314,10 +308,10 @@ def _prepare_vertical_background(image_path: Path) -> Path:
 
 def _generate_background_image_local(prompt: str, path: Path, config: Dict[str, Any]) -> bool:
     settings = config.get("settings", {})
-    script_path = Path(settings.get("local_visual_script", "./scripts/generate_local_visual.py")).expanduser().resolve()
-    model_name = settings.get("local_visual_model", "stabilityai/sdxl-turbo")
-    steps = str(settings.get("local_visual_steps", 8))
-    seed = str(settings.get("local_visual_seed", 42))
+    script_path = Path(settings_schema.value(settings, "local_visual_script")).expanduser().resolve()
+    model_name = settings_schema.value(settings, "local_visual_model")
+    steps = str(settings_schema.value(settings, "local_visual_steps"))
+    seed = str(settings_schema.value(settings, "local_visual_seed"))
     if not script_path.is_file():
         logger.error("Local visual generation script not found: %s", script_path)
         return False
@@ -329,8 +323,8 @@ def _generate_background_image_local(prompt: str, path: Path, config: Dict[str, 
         python_exe = str(override_path.resolve()) if override_path.is_file() else str(override)
     else:
         python_exe = sys.executable
-    lw = int(settings.get("local_visual_width", VIDEO_WIDTH))
-    lh = int(settings.get("local_visual_height", VIDEO_HEIGHT))
+    lw = int(settings_schema.value(settings, "local_visual_width"))
+    lh = int(settings_schema.value(settings, "local_visual_height"))
     cmd = [
         python_exe,
         str(script_path),
@@ -433,9 +427,9 @@ def _generate_background_image_openai(prompt: str, path: Path, config: Dict[str,
     from lib.runtime_config import get_openai_api_key, get_openai_base_url
 
     settings = config.get("settings", {})
-    model = settings.get("openai_visual_model", "gpt-image-1")
-    size = settings.get("openai_image_size", "1024x1536")
-    quality = settings.get("openai_image_quality", "high")
+    model = settings_schema.value(settings, "openai_visual_model")
+    size = settings_schema.value(settings, "openai_image_size")
+    quality = settings_schema.value(settings, "openai_image_quality")
 
     try:
         client_kwargs: Dict[str, Any] = {"api_key": get_openai_api_key()}
@@ -497,7 +491,7 @@ def _generate_background_image_openrouter(prompt: str, path: Path, config: Dict[
     )
 
     settings = config.get("settings", {})
-    model = settings.get("openrouter_visual_model", "google/gemini-3.1-flash-image")
+    model = settings_schema.value(settings, "openrouter_visual_model")
     try:
         client = OpenAI(
             base_url=get_openrouter_api_url(),
@@ -709,12 +703,11 @@ def run(context: dict) -> None:
     visuals_dir = output_root / "visuals" / episode_stem
     visuals_dir.mkdir(parents=True, exist_ok=True)
 
-    visuals_provider = config.get("settings", {}).get("visuals_provider", "local")
-    style_suffix = config.get("settings", {}).get("visual_style_suffix", DEFAULT_STYLE_SUFFIX)
+    settings = config.get("settings", {})
+    visuals_provider = settings_schema.value(settings, "visuals_provider")
+    style_suffix = settings_schema.value(settings, "visual_style_suffix")
     audio_fade_out_seconds = _resolve_audio_fade_out_seconds(
-        config.get("settings", {}).get(
-            "clip_audio_fade_out_seconds", DEFAULT_AUDIO_FADE_OUT_SECONDS
-        )
+        settings_schema.value(settings, "clip_audio_fade_out_seconds")
     )
     episode_audio = context.get("episode_audio") or context.get("episode_path")
 
@@ -760,7 +753,7 @@ def run(context: dict) -> None:
 
         print(f"Generating clip {index}/{len(valid_clips)}: {clip.get('headline', clip_name)}")
 
-        reuse_still = bool(config.get("settings", {}).get("local_visual_reuse_cached_still", False))
+        reuse_still = bool(settings_schema.value(settings, "local_visual_reuse_cached_still"))
         if reuse_still and image_path.exists():
             print(f"  Reusing cached still {image_path.name}")
         else:

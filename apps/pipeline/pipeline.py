@@ -8,8 +8,7 @@ from azure.storage.blob import BlobServiceClient
 from lib import clipper, cowork_handoff, movie_extractor, parser, publisher, review_clipper, thumbnail, transcriber, transcript_importer
 from lib.data_dir import require_data_dir
 from lib.runtime_config import get_azure_connection_string, load_config
-
-STAGES = ["transcribe", "import_transcript", "movies", "review_clip", "parse", "clip", "thumbnail", "publish"]
+from lib.stage_status import STAGES
 
 def _resolve_episode(path_arg: str, episodes_dir: Path) -> Path:
     candidate = Path(path_arg).expanduser()

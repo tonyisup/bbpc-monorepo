@@ -100,10 +100,7 @@ def _decide(config: dict, args: argparse.Namespace, decision: str) -> int:
 
 
 def _report(config: dict) -> int:
-    clips_root = Path(config["paths"]["output_dir"]) / "clips"
-    stems = {p.name for p in clips_root.iterdir() if p.is_dir()} if clips_root.is_dir() else set()
-    stems |= {d["stem"] for d in publish_log.load(config)["decisions"]}
-    print(json.dumps(publish_log.report(config, sorted(stems)), indent=2))
+    print(json.dumps(publish_log.report(config, publish_log.tracked_stems(config)), indent=2))
     return 0
 
 

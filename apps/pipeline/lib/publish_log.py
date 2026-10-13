@@ -198,6 +198,14 @@ def mark_rest(config: Dict[str, Any], stem: str, decision: str,
 
 # --------------------------------------------------------------------------- reporting
 
+def tracked_stems(config: Dict[str, Any]) -> List[str]:
+    """Every episode with a clips folder or a recorded decision, oldest first."""
+    clips_root = Path(config.get("paths", {}).get("output_dir", "./output")) / "clips"
+    stems = {p.name for p in clips_root.iterdir() if p.is_dir()} if clips_root.is_dir() else set()
+    stems |= {d["stem"] for d in load(config)["decisions"]}
+    return sorted(stems)
+
+
 def report(config: Dict[str, Any], stems: Sequence[str]) -> List[Dict[str, Any]]:
     decisions = load(config)["decisions"]
     rows = []
@@ -212,6 +220,8 @@ def report(config: Dict[str, Any], stems: Sequence[str]) -> List[Dict[str, Any]]
             "published": sum(1 for d in picked if d and d["decision"] == "published"),
             "skipped": sum(1 for d in picked if d and d["decision"] == "skipped"),
             "undecided": sum(1 for d in picked if d is None),
+            # Undecided picks whose rendered file is still on disk: the clips left to review.
+            "toReview": sum(1 for r, d in zip(rendered, picked) if d is None and r["fileExists"]),
             "publishedNotPicked": sum(1 for d in mine if d["source"] == "candidate" and d["decision"] == "published"),
             "untracked": sum(1 for d in mine if d["source"] == "untracked"),
         })

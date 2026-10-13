@@ -140,9 +140,47 @@ python backfill.py --dry-run
 python backfill.py --date-after 20260401
 ```
 
+## Dashboard
+
+One local page over the data directory: what needs you, each episode's stages
+and Cowork files, and every setting. It is read-only. It answers GET requests
+only, writes no file, starts no process, and does not read `.env`. Standard
+library only, no venv needed:
+
+```bash
+python3 -m dashboard                # then open http://127.0.0.1:8765/
+python3 -m dashboard --port 9000
+```
+
+It listens on `127.0.0.1` only and refuses any request not addressed to
+`127.0.0.1` or `localhost` on its own port. `config.json` and the data directory
+are read again on every page load, so a reload shows the current state.
+
+- **Today**: what needs you (rendered clips with no publish decision, episodes
+  waiting on Cowork with their validation result and last error, a phrase report
+  older than `ignore.txt`, transcripts with no SEO file or state entry), archive
+  figures, and the twelve most recent episodes with a bar per stage.
+- **Episode**: the stage strip, the three Cowork files with the validator's
+  result and warnings, the SEO title against its 60-character limit, and the
+  movies with each host's rating. The episode's mp3 plays when it is in
+  `episodes/`.
+- **Settings**: every setting with its value, default, where the value comes
+  from, and the stage that reads it; a config check listing settings the code
+  reads that `config.json` leaves out and keys nothing reads; and, read-only,
+  the constants in `lib/clipper.py` that fix how a rendered clip looks.
+
+The pipeline keeps no record of the stages it ran, so stage status is worked
+out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
+and `publish` leave no local file: they are inferred from `state.json` and drawn
+outlined rather than solid. The Convex target is shown as not checked. Clips,
+Shirts, Lab and Runs are not built yet.
+
 ## Configuration
 
-`config.json` controls paths, models, and thresholds. Environment variables (`.env`) store secrets:
+`config.json` controls paths, models, and thresholds. Every setting is declared
+in `lib/settings_schema.py` with its type, default, limits, and the stage that
+reads it; the stages take their defaults from there. Environment variables
+(`.env`) store secrets:
 
 Judgment (reviewed movies, SEO, clip choice) comes only from Cowork; the
 pipeline makes no text-model calls. The only hosted model is the clip-background
@@ -200,7 +238,9 @@ python3 scripts/publish_decisions.py report
 ```
 
 Clip numbers are the `NN-` prefix of the rendered file. Decisions copy the
-clip's window and headline, so they survive deleting the rendered files.
+clip's window and headline, so they survive deleting the rendered files. In
+`report`, `undecided` counts every pick with no decision and `toReview` counts
+only those whose rendered file is still on disk.
 
 ## Recurring phrases
 
@@ -257,8 +297,9 @@ python -m pytest tests/ -v
 
 The suite covers the Cowork hand-off (validation, state, movies and parse
 stages), clip rendering, review clipping, laughter detection, runtime config, dependency
-declarations, the Clerk M2M/Convex boundary, visual-prompt safety, and backfill
-error handling.
+declarations, the Clerk M2M/Convex boundary, visual-prompt safety, backfill
+error handling, the settings schema (every key the code reads is declared), stage
+status, and the dashboard's views and server.
 
 ## Read-only pipeline identity probe
 
