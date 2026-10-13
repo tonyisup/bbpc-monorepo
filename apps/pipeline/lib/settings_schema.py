@@ -10,10 +10,9 @@ pipeline venv.
 """
 from __future__ import annotations
 
-import ast
 import math
+import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 GROUPS = (
@@ -34,6 +33,9 @@ class Setting:
     maximum: Optional[float] = None
     choices: Tuple[str, ...] = ()
     fallback: Optional[str] = None  # another setting used when this one is not in config.json
+    pattern: Optional[str] = None   # a text value must match this in full...
+    pattern_words: str = ""         # ...described in these words when it does not
+    draft: bool = False             # a Lab draft may change it: the clip stage reads it and it names no program
 
 
 _TRANSCRIBE = ("transcribe",)
@@ -42,6 +44,8 @@ _CLIP = ("clip",)
 _THUMBNAIL = ("thumbnail",)
 _LOGO = ("clip", "thumbnail")
 _COWORK = ("movies", "parse")
+_COLOUR = {"pattern": r"#[0-9A-Fa-f]{6}", "pattern_words": "a colour like #FFFF00"}
+_FONT_NAME = {"pattern": r"[^,\n]+", "pattern_words": "a font name with no comma"}
 
 SETTINGS: Tuple[Setting, ...] = (
     Setting("transcription_engine", "choice", "parakeet", "Transcription", _TRANSCRIBE,
@@ -66,37 +70,71 @@ SETTINGS: Tuple[Setting, ...] = (
             "At most this many audio clips per reviewed movie.", 1, 20),
 
     Setting("min_clip_duration_seconds", "float", 20.0, "Clips and captions", _CLIP,
-            "Picks shorter than this are not rendered. Rendered clips are numbered after it is applied.", 0, 600),
+            "Picks shorter than this are not rendered. Rendered clips are numbered after it is applied.", 0, 600,
+            draft=True),
     Setting("clip_audio_fade_out_seconds", "float", 0.8, "Clips and captions", _CLIP,
-            "Length of the audio fade at the end of each rendered clip. 0 turns it off.", 0, 10),
+            "Length of the audio fade at the end of each rendered clip. 0 turns it off.", 0, 10, draft=True),
+    Setting("clip_zoom_amount", "float", 0.12, "Clips and captions", _CLIP,
+            "How far the background zooms in over the clip. 0.12 ends at 112%; 0 holds it still.", 0, 1,
+            draft=True),
+    Setting("caption_font_name", "str", "Arial Bold", "Clips and captions", _CLIP,
+            "Font the captions are drawn in, by name.", draft=True, **_FONT_NAME),
+    Setting("caption_font_path", "path", "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+            "Clips and captions", _CLIP,
+            "File of that same font. Captions are measured in it so lines break where they will on screen.",
+            draft=True),
+    Setting("caption_font_size", "int", 84, "Clips and captions", _CLIP,
+            "Caption font size in pixels, on the 1080x1920 frame.", 20, 240, draft=True),
+    Setting("caption_color", "str", "#FFFF00", "Clips and captions", _CLIP,
+            "Caption text colour.", draft=True, **_COLOUR),
+    Setting("caption_outline_color", "str", "#000000", "Clips and captions", _CLIP,
+            "Colour of the outline around caption text.", draft=True, **_COLOUR),
+    Setting("caption_outline_px", "int", 4, "Clips and captions", _CLIP,
+            "Width of that outline.", 0, 20, draft=True),
+    Setting("caption_margin_bottom_px", "int", 220, "Clips and captions", _CLIP,
+            "Gap between the bottom of the frame and the captions.", 0, 1800, draft=True),
+    Setting("caption_margin_side_px", "int", 80, "Clips and captions", _CLIP,
+            "Gap between each side of the frame and the captions.", 0, 400, draft=True),
+    Setting("caption_max_chars", "int", 32, "Clips and captions", _CLIP,
+            "Most characters in one caption.", 8, 80, draft=True),
+    Setting("caption_max_lines", "int", 2, "Clips and captions", _CLIP,
+            "Most lines one caption may wrap onto.", 1, 4, draft=True),
+    Setting("caption_pause_seconds", "float", 0.5, "Clips and captions", _CLIP,
+            "A pause longer than this between words starts a new caption.", 0, 5, draft=True),
+    Setting("caption_max_word_seconds", "float", 1.5, "Clips and captions", _CLIP,
+            "Longest one word stays on screen. Parakeet sometimes stretches a word over music.", 0.2, 10,
+            draft=True),
+    Setting("caption_bridge_seconds", "float", 0.3, "Clips and captions", _CLIP,
+            "A caption holds until the next one when the gap between them is shorter than this.", 0, 5,
+            draft=True),
     Setting("clip_duration", "int", None, "Clips and captions", (),
             "Nothing reads this. It can be removed from config.json.", 1, 600),
 
     Setting("visuals_provider", "choice", "local", "Visuals", _CLIP,
             "Where a clip's background still comes from. openrouter and openai are paid requests.",
-            choices=("openrouter", "openai", "local")),
+            choices=("openrouter", "openai", "local"), draft=True),
     Setting("openrouter_visual_model", "str", "google/gemini-3.1-flash-image", "Visuals", _CLIP,
-            "Image model when the provider is openrouter."),
+            "Image model when the provider is openrouter.", draft=True),
     Setting("openai_visual_model", "str", "gpt-image-1", "Visuals", _CLIP,
-            "Image model when the provider is openai."),
+            "Image model when the provider is openai.", draft=True),
     Setting("openai_image_size", "str", "1024x1536", "Visuals", _CLIP,
-            "Image size requested from openai."),
+            "Image size requested from openai.", draft=True),
     Setting("openai_image_quality", "str", "high", "Visuals", _CLIP,
-            "Image quality requested from openai."),
+            "Image quality requested from openai.", draft=True),
     Setting("local_visual_model", "str", "stabilityai/sdxl-turbo", "Visuals", _CLIP,
-            "Model when the provider is local."),
+            "Model when the provider is local.", draft=True),
     Setting("local_visual_script", "path", "./scripts/generate_local_visual.py", "Visuals", _CLIP,
             "Script that generates a still when the provider is local."),
     Setting("local_visual_python", "path", None, "Visuals", _CLIP,
             "Python that runs the local script. Unset: the interpreter running the pipeline."),
     Setting("local_visual_steps", "int", 8, "Visuals", _CLIP,
-            "Diffusion steps for a local still.", 1, 100),
+            "Diffusion steps for a local still.", 1, 100, draft=True),
     Setting("local_visual_seed", "int", 42, "Visuals", _CLIP,
-            "Seed for a local still.", 0, 2**32 - 1),
+            "Seed for a local still.", 0, 2**32 - 1, draft=True),
     Setting("local_visual_width", "int", 1080, "Visuals", _CLIP,
-            "Width of a local still before it is fitted to the 1080x1920 frame.", 64, 4096),
+            "Width of a local still before it is fitted to the 1080x1920 frame.", 64, 4096, draft=True),
     Setting("local_visual_height", "int", 1920, "Visuals", _CLIP,
-            "Height of a local still before it is fitted to the 1080x1920 frame.", 64, 4096),
+            "Height of a local still before it is fitted to the 1080x1920 frame.", 64, 4096, draft=True),
     Setting("local_visual_reuse_cached_still", "bool", False, "Visuals", _CLIP,
             "Reuse a still already in output/visuals/<episode>/ and make no image request."),
     Setting("visual_timeout_seconds", "float", None, "Visuals", _CLIP,
@@ -109,15 +147,15 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("llm_timeout", "float", None, "Visuals", _CLIP,
             "Older name for llm_timeout_seconds, read after it.", 1, 3600),
     Setting("brand_logo_enabled", "bool", True, "Visuals", _LOGO,
-            "Put the show logo on clip backgrounds and thumbnails."),
+            "Put the show logo on clip backgrounds and thumbnails.", draft=True),
     Setting("brand_logo_path", "path", "assets/logo-short.png", "Visuals", _LOGO,
-            "Logo file, relative to apps/pipeline."),
+            "Logo file, relative to apps/pipeline.", draft=True),
     Setting("brand_logo_margin_px", "int", 48, "Visuals", _LOGO,
-            "Gap between the logo and the edge of a clip.", 0, 540),
+            "Gap between the logo and the edge of a clip.", 0, 540, draft=True),
     Setting("brand_logo_max_width_fraction", "float", 0.38, "Visuals", _LOGO,
-            "Widest the logo may be, as a share of the clip's width.", 0.01, 1),
+            "Widest the logo may be, as a share of the clip's width.", 0.01, 1, draft=True),
     Setting("brand_logo_max_height_fraction", "float", 0.14, "Visuals", _LOGO,
-            "Tallest the logo may be, as a share of the clip's height.", 0.01, 1),
+            "Tallest the logo may be, as a share of the clip's height.", 0.01, 1, draft=True),
 
     Setting("thumbnail_enabled", "bool", True, "Thumbnail", _THUMBNAIL,
             "Run the thumbnail stage."),
@@ -139,7 +177,7 @@ SETTINGS: Tuple[Setting, ...] = (
             "Purely visual scene: no text, letters, numbers, typography, logos, captions, "
             "titles, watermarks, fake UI, or media player chrome. Subtitles are added separately.",
             "Prompts", _CLIP,
-            "House style added after each clip's image prompt."),
+            "House style added after each clip's image prompt.", draft=True),
 
     Setting("cowork_outputs_dir", "path", None, "Cowork instructions", _COWORK,
             "Folder Cowork writes its files to, relative to the data directory. Unset: <output_dir>/cowork."),
@@ -197,7 +235,11 @@ def problems(key: str, candidate: Any) -> List[str]:
             return []
         return [f"{key} must be one of {', '.join(setting.choices)}, not {candidate!r}"]
     if setting.type in ("str", "text", "path"):
-        return [] if isinstance(candidate, str) else [f"{key} must be text, not {candidate!r}"]
+        if not isinstance(candidate, str):
+            return [f"{key} must be text, not {candidate!r}"]
+        if setting.pattern and not re.fullmatch(setting.pattern, candidate):
+            return [f"{key} must be {setting.pattern_words}, not {candidate!r}"]
+        return []
     if setting.type == "int":
         if not isinstance(candidate, int) or isinstance(candidate, bool):
             return [f"{key} must be a whole number, not {candidate!r}"]
@@ -220,63 +262,4 @@ def config_check(settings: Mapping[str, Any]) -> Dict[str, Any]:
         "unread": sorted(key for key in settings if key in BY_KEY and not BY_KEY[key].stages),
         "undeclared": sorted(key for key in settings if key not in BY_KEY),
         "invalid": invalid,
-    }
-
-
-# --------------------------------------------------------------------------- the clip's look
-#
-# How a rendered clip looks is still constants in lib/clipper.py. They are read
-# from its source rather than imported, because the clipper needs Pillow.
-
-CLIP_LOOK_CONSTANTS: Tuple[Tuple[str, str], ...] = (
-    ("VIDEO_WIDTH", "Frame width in pixels."),
-    ("VIDEO_HEIGHT", "Frame height in pixels."),
-    ("CLIP_FPS", "Frames per second."),
-    ("ZOOMPAN_WORK_SCALE", "The zoom is computed at this multiple of the frame size, which smooths its steps."),
-    ("CAPTION_FONT_PATH", "Font file captions are measured in."),
-    ("CAPTION_FONT_SIZE", "Caption font size in pixels."),
-    ("CAPTION_MAX_CHARS", "Most characters in one caption."),
-    ("CAPTION_MAX_LINES", "Most lines in one caption."),
-    ("CAPTION_LINE_WIDTH", "Usable caption line width in pixels: the frame less the side margins and outline."),
-    ("CAPTION_PAUSE_SECONDS", "A pause longer than this between words starts a new caption."),
-    ("CAPTION_MAX_WORD_SECONDS", "Longest one word stays on screen."),
-    ("CAPTION_BRIDGE_SECONDS", "A caption holds until the next one when the gap is shorter than this."),
-)
-_CLIPPER_SOURCE = Path(__file__).resolve().parent / "clipper.py"
-_ARITHMETIC = {ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b, ast.Mult: lambda a, b: a * b}
-
-
-def _constant_value(node: ast.AST, known: Mapping[str, Any]) -> Any:
-    """Evaluate a literal, or arithmetic over literals and constants already read."""
-    if isinstance(node, ast.Constant):
-        return node.value
-    if isinstance(node, ast.Name):
-        return known[node.id]
-    if isinstance(node, ast.BinOp) and type(node.op) in _ARITHMETIC:
-        return _ARITHMETIC[type(node.op)](_constant_value(node.left, known), _constant_value(node.right, known))
-    raise ValueError("not a constant expression")
-
-
-def clip_look() -> Dict[str, Any]:
-    """The clipper's look, quoted from its source: constants, the zoom, and the caption style line."""
-    source_text = _CLIPPER_SOURCE.read_text(encoding="utf-8")
-    tree = ast.parse(source_text)
-    values: Dict[str, Any] = {}
-    zoom = ""
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            try:
-                values[node.targets[0].id] = _constant_value(node.value, values)
-            except (ValueError, KeyError):
-                continue
-        elif isinstance(node, ast.FunctionDef) and node.name == "_build_zoompan_filter":
-            zoom = (ast.get_docstring(node) or "").splitlines()[0]
-    style = next((line for line in source_text.splitlines() if line.startswith("Style: Caption,")), "")
-    return {
-        "constants": [
-            {"name": name, "value": values[name], "description": description}
-            for name, description in CLIP_LOOK_CONSTANTS if name in values
-        ],
-        "zoom": zoom,
-        "captionStyle": style,
     }

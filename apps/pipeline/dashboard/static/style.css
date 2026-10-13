@@ -140,8 +140,35 @@ table.cols th:nth-child(1), table.cols td.k { width: 44%; }
 table.cols th:nth-child(2) { width: 24%; }
 table.cols th:nth-child(3) { width: 18%; }
 
+.was { font-size: 11px; color: var(--muted-foreground); text-decoration: line-through; margin-right: 6px; overflow-wrap: anywhere; }
+.draftbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px dashed var(--border); border-radius: calc(var(--radius) - 2px); padding: 8px 12px; background: var(--background); }
+.btn.p { background: var(--foreground); color: var(--card); border-color: transparent; }
+.btn.s { padding: 1px 7px; }
+.btn:disabled { opacity: .45; cursor: default; }
+input.inp, select.inp, textarea.inp { font: inherit; color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; background: var(--card); max-width: 100%; }
+input.inp[type=number] { width: 92px; font-variant-numeric: tabular-nums; }
+input.inp[type=text], textarea.inp { width: 100%; }
+textarea.inp { font-size: 12px; line-height: 1.5; resize: vertical; }
+.inp.ch { border-color: var(--foreground); font-weight: 600; }
+textarea.inp.ch { font-weight: 400; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 12px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 99px; color: var(--muted-foreground); }
+.chip.on { background: var(--secondary); color: var(--foreground); font-weight: 600; }
+.chip.off { opacity: .55; }
+.lab { display: grid; grid-template-columns: 320px 1fr; gap: 12px; margin-top: 12px; align-items: start; }
+.lab label { display: block; color: var(--muted-foreground); font-size: 12px; margin: 10px 0 4px; }
+.lab label:first-child { margin-top: 0; }
+.lab select.inp { width: 100%; }
+.knobs { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: baseline; font-size: 12px; }
+.pair { display: flex; gap: 8px; align-items: center; }
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.compare video, .compare .novid { width: 100%; max-width: 300px; aspect-ratio: 9 / 16; border-radius: 6px; background: #000; display: block; }
+.compare .novid { background: var(--secondary); color: var(--muted-foreground); display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; font-size: 12px; }
+details > summary { cursor: pointer; }
+
 @media (max-width: 860px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
-  .two, .set { grid-template-columns: 1fr; }
+  .two, .set, .lab { grid-template-columns: 1fr; }
   .stages { grid-template-columns: repeat(4, 1fr); }
 }

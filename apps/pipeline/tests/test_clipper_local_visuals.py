@@ -316,7 +316,7 @@ class ClipperLocalVisualsTests(unittest.TestCase):
                 ("0:00:03.10", "0:00:03.40", "RIGHT."),
             ],
         )
-        self.assertTrue(all(len(text) <= clipper.CAPTION_MAX_CHARS for _, _, text in captions))
+        self.assertTrue(all(len(text) <= clipper.DEFAULT_LOOK.max_chars for _, _, text in captions))
 
     def test_captions_without_words_split_long_segment_proportionally(self):
         text = "and then he just walks into the bar with a whole wheel of cheese under his arm like nothing happened"
@@ -325,7 +325,7 @@ class ClipperLocalVisualsTests(unittest.TestCase):
         captions = self._dialogues(clipper._build_ass_subtitles([segment], start=0.0, end=20.0))
 
         self.assertGreater(len(captions), 3)
-        self.assertTrue(all(len(caption) <= clipper.CAPTION_MAX_CHARS for _, _, caption in captions))
+        self.assertTrue(all(len(caption) <= clipper.DEFAULT_LOOK.max_chars for _, _, caption in captions))
         self.assertEqual(" ".join(caption for _, _, caption in captions), text.upper())
         self.assertEqual(captions[0][0], "0:00:00.00")
         self.assertEqual(captions[-1][1], "0:00:20.00")
@@ -386,6 +386,88 @@ class ClipperLocalVisualsTests(unittest.TestCase):
 
             with Image.open(prepared) as crop:
                 self.assertEqual(crop.convert("RGB").getpixel((0, 0)), (0, 0, 255))
+
+
+class ClipLookSettingsTests(unittest.TestCase):
+    """The caption rules and the zoom are settings; a draft changes them for a Lab render."""
+
+    SEGMENT = {"start": 0.0, "end": 12.0, "text": "one two three four five six seven eight nine ten eleven twelve"}
+
+    def test_no_settings_means_the_pinned_look(self):
+        self.assertEqual(clipper._caption_look({}), clipper.DEFAULT_LOOK)
+        self.assertEqual(clipper.DEFAULT_LOOK.line_width, 912)
+        self.assertEqual(clipper.DEFAULT_ZOOM_AMOUNT, 0.12)
+
+    def test_caption_settings_reach_the_style_line(self):
+        look = clipper._caption_look({
+            "caption_font_name": "Helvetica Neue", "caption_font_size": 60, "caption_color": "#12ab9f",
+            "caption_outline_color": "#ffffff", "caption_outline_px": 6,
+            "caption_margin_bottom_px": 400, "caption_margin_side_px": 120,
+        })
+        self.assertEqual(look.line_width, 1080 - 240 - 12)
+        self.assertIn(
+            "Style: Caption,Helvetica Neue,60,&H009FAB12,&H009FAB12,&H00FFFFFF,&H64000000,"
+            "-1,0,0,0,100,100,0,0,1,6,0,2,120,120,400,1\n",
+            clipper._build_ass_subtitles([self.SEGMENT], 0.0, 12.0, look),
+        )
+
+    def test_caption_settings_change_how_words_are_grouped(self):
+        def captions(settings):
+            text = clipper._build_ass_subtitles([self.SEGMENT], 0.0, 12.0, clipper._caption_look(settings))
+            return [line.split(",,", 2)[-1].split(",,")[-1] for line in text.splitlines() if line.startswith("Dialogue")]
+
+        self.assertEqual(captions({}), ["ONE TWO THREE FOUR FIVE SIX", "SEVEN EIGHT NINE TEN ELEVEN", "TWELVE"])
+        short = captions({"caption_max_chars": 14})
+        self.assertGreater(len(short), 3)
+        self.assertTrue(all(len(caption) <= 14 for caption in short))
+        one_line = captions({"caption_max_lines": 1})
+        self.assertGreater(len(one_line), len(captions({})))
+
+    def test_timing_settings_change_caption_ends(self):
+        segment = {"start": 0.0, "end": 9.0, "text": "Wait. What?", "words": [
+            {"start": 0.0, "end": 0.4, "text": "Wait."}, {"start": 0.8, "end": 8.0, "text": "What?"},
+        ]}
+
+        def ends(settings):
+            text = clipper._build_ass_subtitles([segment], 0.0, 9.0, clipper._caption_look(settings))
+            return [line.split(",")[2] for line in text.splitlines() if line.startswith("Dialogue")]
+
+        self.assertEqual(ends({}), ["0:00:00.40", "0:00:02.30"])
+        self.assertEqual(ends({"caption_max_word_seconds": 4, "caption_bridge_seconds": 0.5}), ["0:00:00.80", "0:00:04.80"])
+
+    def test_zoom_amount_reaches_the_filter(self):
+        self.assertIn("zoompan=z='1+0.3*on/539'", clipper._build_zoompan_filter(18.0, None, 0.3))
+        with mock.patch("lib.clipper.subprocess.run") as run_mock:
+            clipper._render_clip_video(Path("bg.png"), Path("c.ass"), "ep.mp3", Path("out.mp4"),
+                                       0.0, 18.0, False, zoom_amount=0.0)
+        self.assertIn("zoompan=z='1+0.0*on/539'", run_mock.call_args.args[0][run_mock.call_args.args[0].index("-vf") + 1])
+
+    def test_the_clip_stage_renders_with_the_configured_look(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            seo = root / "seo" / "20260101.seo.json"
+            seo.parent.mkdir()
+            seo.write_text('{"clipAnalysis": [{"start": 0.0, "end": 30.0, "headline": "Bit", "imagePrompt": "p"}]}')
+            transcript = root / "20260101.json"
+            transcript.write_text('[{"start": 0.0, "end": 12.0, "text": "one two three four five six"}]')
+            still = root / "output" / "visuals" / "20260101" / "01-bit.png"
+            still.parent.mkdir(parents=True)
+            Image.new("RGB", (540, 960), (20, 40, 60)).save(still)
+            context = {
+                "config": {"paths": {"output_dir": str(root / "output")}, "settings": {
+                    "local_visual_reuse_cached_still": True, "brand_logo_enabled": False,
+                    "caption_font_size": 60, "clip_zoom_amount": 0.25,
+                }},
+                "seo_path": str(seo), "transcript_path": str(transcript),
+                "episode_path": str(root / "20260101.mp3"),
+            }
+            with mock.patch.object(clipper, "_ffmpeg_has_subtitles_filter", return_value=True), \
+                    mock.patch.object(clipper, "_generate_background_image",
+                                      side_effect=AssertionError("no image request with a cached still")), \
+                    mock.patch.object(clipper, "_render_clip_video") as render:
+                clipper.run(context)
+            self.assertEqual(render.call_args.kwargs.get("zoom_amount"), 0.25)
+            self.assertIn("Style: Caption,Arial Bold,60,", (still.parent / "01-bit.ass").read_text())
 
 
 if __name__ == "__main__":

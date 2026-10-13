@@ -143,18 +143,24 @@ python backfill.py --date-after 20260401
 ## Dashboard
 
 One local page over the data directory: what needs you, each episode's stages
-and Cowork files, and every setting. It is read-only. It answers GET requests
-only, writes no file, starts no process, and does not read `.env`. Standard
-library only, no venv needed:
+and Cowork files, every setting, and a Lab for trying a change to how clips
+look on one clip. Standard library only, no venv needed to start it:
 
 ```bash
 python3 -m dashboard                # then open http://127.0.0.1:8765/
 python3 -m dashboard --port 9000
+python3 -m dashboard --pipeline-python /path/to/venv/bin/python   # for the Lab, when ./venv is elsewhere
 ```
 
 It listens on `127.0.0.1` only and refuses any request not addressed to
 `127.0.0.1` or `localhost` on its own port. `config.json` and the data directory
-are read again on every page load, so a reload shows the current state.
+are read again on every page load, so a reload shows the current state. It does
+not read `.env`.
+
+Looking never writes. The only things the dashboard changes are the Lab's:
+test renders and drafts under `output/lab/` in the data directory, and
+`config.json` when you apply a draft. Those requests need a token made when
+the server starts and must come from the dashboard's own page.
 
 - **Today**: what needs you (rendered clips with no publish decision, episodes
   waiting on Cowork with their validation result and last error, a phrase report
@@ -166,21 +172,42 @@ are read again on every page load, so a reload shows the current state.
   `episodes/`.
 - **Settings**: every setting with its value, default, where the value comes
   from, and the stage that reads it; a config check listing settings the code
-  reads that `config.json` leaves out and keys nothing reads; and, read-only,
-  the constants in `lib/clipper.py` that fix how a rendered clip looks.
+  reads that `config.json` leaves out and keys nothing reads. Settings are
+  changed in a **draft**: a named set of overrides that only the Lab uses.
+  "Apply to config.json" writes a draft's values into `config.json` and shows
+  `git diff -- config.json`; it never commits. A draft can hold only settings
+  the clip stage reads, and never one that names a program to run.
+- **Lab**: renders one clip with a draft and plays it beside the real clip.
+  Pick an episode that has its mp3, a clip, and a draft. The render reuses the
+  clip's real still, so it makes no image request and costs nothing; it takes
+  about as long as the clip is short. The window can be changed for the test.
+  "New background" asks the image model for a new still with the prompt you
+  give it. With the `openrouter` or `openai` provider that is one paid request,
+  and you are asked before it is sent. Past renders are listed with the draft
+  that made them and can be deleted.
+
+A Lab render is the pipeline's own clip stage: `pipeline.py <episode> --config
+<run config> --only clip`, where the run config is `config.json` plus the draft
+with every output path pointed at `output/lab/<run id>/`. That folder also
+holds a one-clip SEO file, so the episode's real clip, SEO file and
+`state.json` are never touched. Only the clip stage runs in the Lab;
+`import_transcript` and `publish` are refused by the server.
 
 The pipeline keeps no record of the stages it ran, so stage status is worked
 out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
 and `publish` leave no local file: they are inferred from `state.json` and drawn
 outlined rather than solid. The Convex target is shown as not checked. Clips,
-Shirts, Lab and Runs are not built yet.
+Shirts and Runs are not built yet.
 
 ## Configuration
 
 `config.json` controls paths, models, and thresholds. Every setting is declared
 in `lib/settings_schema.py` with its type, default, limits, and the stage that
-reads it; the stages take their defaults from there. Environment variables
-(`.env`) store secrets:
+reads it; the stages take their defaults from there. How a rendered clip looks
+is settings too: the `caption_*` settings (font, size, colour, outline,
+margins, how words are grouped and timed) and `clip_zoom_amount`. Their
+defaults are what the clipper always did. Environment variables (`.env`) store
+secrets:
 
 Judgment (reviewed movies, SEO, clip choice) comes only from Cowork; the
 pipeline makes no text-model calls of its own. With `settings.cowork_headless`
@@ -309,7 +336,8 @@ The suite covers the Cowork hand-off (validation, state, movies and parse
 stages), clip rendering, review clipping, laughter detection, runtime config, dependency
 declarations, the Clerk M2M/Convex boundary, visual-prompt safety, backfill
 error handling, the settings schema (every key the code reads is declared), stage
-status, and the dashboard's views and server.
+status, the Lab (drafts, run folders, what it refuses), a pinned copy of the
+default caption file and ffmpeg command, and the dashboard's views and server.
 
 ## Read-only pipeline identity probe
 
@@ -348,6 +376,7 @@ output/
 ├── phrases/                  # recurring-phrases.{md,json} + ignore.txt (scripts/scan_phrases.py)
 ├── review-clips/<episode>/   # Audio clips from review segments
 ├── laughter/                 # laughter_autotune.py results
+├── lab/                      # dashboard Lab: drafts/ and one folder per test render
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)
 ```
 
@@ -356,7 +385,7 @@ output/
 - **Transcriber** uses Parakeet (MLX) by default or `faster-whisper` with int8 quantization, with resume support and a trailing-silence-aware coverage gate
 - **Movie extractor** matches Cowork's titles (and original titles) to the Convex catalog, preferring the episode's assigned movies
 - **Laughter detector** (`lib/laughter_detector.py`) is not called by any stage today; it is kept so its timestamps can be handed to Cowork as audio evidence
-- **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in Arial Bold, 32 characters max) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments
+- **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in the caption font, 32 characters max; all `caption_*` settings) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments
 - **Convex client** uses the documented Functions API with bearer authentication, runtime response validation, typed errors, bounded retries, and cached Clerk M2M JWT refresh
 - **Pipeline identity** must be pre-provisioned with `pipeline:publish`; the Clerk pipeline machine must be scoped to the receiver machine configured as `CLERK_M2M_AUDIENCE`
 - **Backfill** processes Azure Blob episodes with a Rich dashboard and idempotent Convex episode creation from MP3 ID3 tags

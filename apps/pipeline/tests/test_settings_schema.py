@@ -18,6 +18,8 @@ DYNAMIC_READS = {
         f"{op}_timeout{suffix}" for op in ops | {"llm"} for suffix in ("_seconds", "")
     },
     "dashboard/views.py": lambda ops: set(),  # the Settings tab lists the schema; it reads no key of its own
+    # The Lab compares a draft's keys with config.json, and names the paid provider's model.
+    "lib/lab.py": lambda ops: {"openrouter_visual_model", "openai_visual_model"},
 }
 
 
@@ -163,15 +165,14 @@ class ConfigCheckTests(unittest.TestCase):
             "problems": ["review_clip_max_per_movie must be between 1 and 20, not 0"],
         }])
 
-    def test_the_checked_in_config_lacks_fifteen_settings_and_carries_one_unread_key(self):
+    def test_the_checked_in_config_leaves_most_settings_to_their_defaults_and_carries_one_unread_key(self):
         config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
         check = settings_schema.config_check(config["settings"])
-        self.assertEqual(check["notInConfig"], [
-            "cowork_headless_command", "cowork_headless_model", "llm_timeout", "llm_timeout_seconds", "local_visual_python", "local_visual_reuse_cached_still",
-            "min_clip_duration_seconds", "review_clip_max_per_movie", "review_clip_max_seconds",
-            "review_clip_merge_gap_seconds", "review_clip_min_seconds", "review_clip_postroll_seconds",
-            "review_clip_preroll_seconds", "visual_timeout", "visual_timeout_seconds",
-        ])
+        self.assertEqual(len(check["notInConfig"]), 29)
+        for key in ("review_clip_max_seconds", "min_clip_duration_seconds", "visual_timeout_seconds",
+                    "cowork_headless_model", "caption_font_size", "clip_zoom_amount"):
+            self.assertIn(key, check["notInConfig"])
+        self.assertNotIn("cowork_headless", check["notInConfig"])
         self.assertEqual(check["unread"], ["clip_duration"])
         self.assertEqual(check["undeclared"], [])
         self.assertEqual(check["invalid"], [])
@@ -224,37 +225,75 @@ class StageDefaultsTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
 
-class ClipLookTests(unittest.TestCase):
-    """The clip's look is still code constants; the schema reads them without importing Pillow."""
+class ClipLookSettingsTests(unittest.TestCase):
+    """The look of a rendered clip is settings whose defaults are what the clipper always did."""
 
-    def test_constants_are_read_from_the_clipper_source(self):
-        look = settings_schema.clip_look()
-        values = {row["name"]: row["value"] for row in look["constants"]}
-        self.assertGreater(len(values), 8)
-        for name, shown in values.items():
-            with self.subTest(name):
-                self.assertEqual(shown, getattr(clipper, name))
-        self.assertEqual(values["CAPTION_LINE_WIDTH"], 912)
-        self.assertEqual(values["CAPTION_FONT_SIZE"], 84)
-        for row in look["constants"]:
-            self.assertTrue(row["description"].strip(), row["name"])
+    DEFAULTS = {
+        "caption_font_path": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+        "caption_font_name": "Arial Bold", "caption_font_size": 84,
+        "caption_color": "#FFFF00", "caption_outline_color": "#000000", "caption_outline_px": 4,
+        "caption_margin_bottom_px": 220, "caption_margin_side_px": 80,
+        "caption_max_chars": 32, "caption_max_lines": 2,
+        "caption_pause_seconds": 0.5, "caption_max_word_seconds": 1.5, "caption_bridge_seconds": 0.3,
+        "clip_zoom_amount": 0.12,
+    }
 
-    def test_every_caption_constant_in_the_clipper_is_listed(self):
-        listed = {row["name"] for row in settings_schema.clip_look()["constants"]}
-        in_code = {name for name in vars(clipper) if name.startswith("CAPTION_")}
-        self.assertGreater(len(in_code), 6)
-        self.assertEqual(in_code - listed, set())
+    def test_look_settings_default_to_the_values_that_were_constants(self):
+        declared = {key: getattr(settings_schema.BY_KEY.get(key), "default", "undeclared") for key in self.DEFAULTS}
+        self.assertEqual(declared, self.DEFAULTS)
+        for key in self.DEFAULTS:
+            setting = settings_schema.BY_KEY[key]
+            self.assertEqual((setting.group, setting.stages), ("Clips and captions", ("clip",)), key)
 
-    def test_zoom_and_caption_style_are_quoted_from_the_code(self):
-        look = settings_schema.clip_look()
-        self.assertEqual(look["zoom"], clipper._build_zoompan_filter.__doc__.strip().splitlines()[0])
-        self.assertIn("1.0→1.12", look["zoom"])
-        self.assertEqual(
-            look["captionStyle"],
-            "Style: Caption,Arial Bold,84,&H0000FFFF,&H0000FFFF,&H00000000,&H64000000,"
-            "-1,0,0,0,100,100,0,0,1,4,0,2,80,80,220,1",
-        )
-        self.assertIn(look["captionStyle"], clipper._build_ass_subtitles([], 0.0, 1.0))
+    def test_the_clipper_takes_its_look_from_the_schema(self):
+        look = clipper.DEFAULT_LOOK
+        self.assertEqual({
+            "caption_font_path": look.font_path, "caption_font_name": look.font_name,
+            "caption_font_size": look.font_size, "caption_color": look.color,
+            "caption_outline_color": look.outline_color, "caption_outline_px": look.outline_px,
+            "caption_margin_bottom_px": look.margin_bottom_px, "caption_margin_side_px": look.margin_side_px,
+            "caption_max_chars": look.max_chars, "caption_max_lines": look.max_lines,
+            "caption_pause_seconds": look.pause_seconds, "caption_max_word_seconds": look.max_word_seconds,
+            "caption_bridge_seconds": look.bridge_seconds, "clip_zoom_amount": clipper.DEFAULT_ZOOM_AMOUNT,
+        }, {key: settings_schema.default(key) if key in settings_schema.BY_KEY else "undeclared" for key in self.DEFAULTS})
+        # Nothing about the look is left as a literal in the clipper.
+        source = (ROOT / "lib" / "clipper.py").read_text(encoding="utf-8")
+        for literal in ("Arial Bold", "0.12", "#FFFF00", "= 84", "= 220"):
+            self.assertNotIn(literal, source)
+
+    def test_colours_and_font_names_are_checked_by_shape(self):
+        cases = [
+            ("caption_color", "#12ab9f", []),
+            ("caption_color", "yellow", ["caption_color must be a colour like #FFFF00, not 'yellow'"]),
+            ("caption_outline_color", "#FFF", ["caption_outline_color must be a colour like #FFFF00, not '#FFF'"]),
+            ("caption_font_name", "Helvetica Neue", []),
+            ("caption_font_name", "Arial, Bold", ["caption_font_name must be a font name with no comma, not 'Arial, Bold'"]),
+            ("caption_font_name", "", ["caption_font_name must be a font name with no comma, not ''"]),
+            ("clip_zoom_amount", 1.5, ["clip_zoom_amount must be between 0 and 1, not 1.5"]),
+            ("caption_font_size", 500, ["caption_font_size must be between 20 and 240, not 500"]),
+        ]
+        for key, candidate, expected in cases:
+            with self.subTest(key=key, candidate=candidate):
+                self.assertEqual(settings_schema.problems(key, candidate), expected)
+
+
+class DraftableTests(unittest.TestCase):
+    def test_a_draft_may_hold_only_what_a_lab_clip_run_reads_and_never_a_program_to_run(self):
+        draftable = {s.key for s in settings_schema.SETTINGS if s.draft}
+        self.assertEqual(draftable, set(ClipLookSettingsTests.DEFAULTS) | {
+            "min_clip_duration_seconds", "clip_audio_fade_out_seconds", "visual_style_suffix",
+            "visuals_provider", "openrouter_visual_model", "openai_visual_model", "openai_image_size",
+            "openai_image_quality", "local_visual_model", "local_visual_steps", "local_visual_seed",
+            "local_visual_width", "local_visual_height",
+            "brand_logo_enabled", "brand_logo_path", "brand_logo_margin_px",
+            "brand_logo_max_width_fraction", "brand_logo_max_height_fraction",
+        })
+        for setting in settings_schema.SETTINGS:
+            if setting.draft:
+                self.assertIn("clip", setting.stages, setting.key)
+        for key in ("local_visual_script", "local_visual_python", "cowork_headless_command",
+                    "local_visual_reuse_cached_still", "cowork_headless", "cowork_outputs_dir"):
+            self.assertFalse(settings_schema.BY_KEY[key].draft, key)
 
 
 if __name__ == "__main__":

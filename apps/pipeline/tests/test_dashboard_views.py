@@ -8,7 +8,7 @@ from unittest import mock
 import dashboard_fixture
 from dashboard import views
 from dashboard_fixture import snapshot
-from lib import cowork_handoff, data_dir, settings_schema, stage_status, visual_prompts
+from lib import cowork_handoff, data_dir, lab, settings_schema, stage_status, visual_prompts
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -224,8 +224,11 @@ class SettingsTests(ViewsTestCase):
             "key": "visuals_provider", "type": "choice", "value": "openrouter", "default": "local",
             "source": "config", "stages": ["clip"], "minimum": None, "maximum": None,
             "choices": ["openrouter", "openai", "local"], "problems": [],
-            "description": settings_schema.BY_KEY["visuals_provider"].description,
+            "description": settings_schema.BY_KEY["visuals_provider"].description, "draft": True,
         })
+        self.assertEqual({key for key, row in self.rows.items() if row["draft"]},
+                         {s.key for s in settings_schema.SETTINGS if s.draft})
+        self.assertFalse(self.rows["cowork_headless_command"]["draft"])
         row = self.rows["review_clip_max_seconds"]
         self.assertEqual((row["value"], row["default"], row["source"], row["minimum"], row["maximum"]),
                          (180.0, 180.0, "default", 1, 3600))
@@ -241,7 +244,7 @@ class SettingsTests(ViewsTestCase):
 
     def test_config_check_and_an_out_of_range_value(self):
         self.assertEqual(self.view["check"], settings_schema.config_check(self.raw["settings"]))
-        self.assertEqual(len(self.view["check"]["notInConfig"]), 15)
+        self.assertEqual(len(self.view["check"]["notInConfig"]), 29)
         self.raw["settings"]["review_clip_max_per_movie"] = 0
         view = views.settings(self.raw)
         rows = {row["key"]: row for group in view["groups"] for row in group["settings"]}
@@ -249,13 +252,47 @@ class SettingsTests(ViewsTestCase):
                          ["review_clip_max_per_movie must be between 1 and 20, not 0"])
         self.assertEqual(view["check"]["invalid"][0]["key"], "review_clip_max_per_movie")
 
-    def test_the_clip_look_guardrail_and_cowork_docs_are_shown_read_only(self):
-        self.assertEqual(self.view["look"], settings_schema.clip_look())
+    def test_the_guardrail_and_cowork_docs_are_shown_read_only(self):
+        self.assertNotIn("look", self.view)  # the clip's look is settings now, listed with the rest
+        self.assertEqual(self.rows["caption_font_size"]["value"], 84)
         self.assertEqual(self.view["guardrail"], visual_prompts.ABSTRACT_VISUAL_GUARDRAIL)
         self.assertEqual(self.view["docs"], [
             {"name": "docs/cowork-handoff.md", "url": "/docs/cowork-handoff.md"},
             {"name": "docs/show-format.md", "url": "/docs/show-format.md"},
         ])
+
+
+class LabViewTests(ViewsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.raw = {"paths": {}, "settings": {"visuals_provider": "openrouter", "min_clip_duration_seconds": 15}}
+
+    def test_settings_lists_the_drafts_with_their_changes(self):
+        self.assertEqual(views.settings(self.raw)["drafts"], [])
+        lab.save_draft(self.config, self.raw, "Tight", {"caption_font_size": 60})
+        self.assertEqual(views.settings(self.raw, self.config)["drafts"], lab.list_drafts(self.config, self.raw))
+        self.assertEqual(views.settings(self.raw, self.config)["drafts"][0]["changes"],
+                         [{"key": "caption_font_size", "from": 84, "to": 60}])
+
+    def test_the_lab_names_the_provider_a_new_background_would_use_and_whether_it_costs_money(self):
+        view = views.lab_view(self.config, self.raw, python=Path("/venv/bin/python"), python_found=True)
+        self.assertEqual(view["provider"], {"name": "openrouter", "model": "google/gemini-3.1-flash-image", "paid": True})
+        self.assertEqual(view["limits"], {"minSeconds": 15.0, "maxSeconds": 180.0})
+        self.assertEqual(view["python"], {"path": "/venv/bin/python", "found": True})
+        self.assertEqual([e["stem"] for e in view["episodes"]], ["20260105"])
+
+    def test_a_run_is_shown_with_its_clip_once_rendered_beside_the_real_clip(self):
+        run = lab.create_run(self.config, self.raw, stem="20260105", clip="pick-2")
+        shown = views.lab_run(self.config, run)
+        self.assertEqual((shown["clipUrl"], shown["realClipUrl"]), (None, "/media/output/clips/20260105/02-bit-5.mp4"))
+        dashboard_fixture.write(lab.lab_dir(self.config) / run["id"] / run["clipFile"], data=b"v")
+        self.assertEqual(views.lab_run(self.config, run)["clipUrl"],
+                         f"/media/output/lab/{run['id']}/clips/20260105/01-bit-5.mp4")
+        (self.root / "output/clips/20260105/02-bit-5.mp4").unlink()
+        self.assertIsNone(views.lab_run(self.config, run)["realClipUrl"])
+        view = views.lab_view(self.config, self.raw, active=run["id"])
+        self.assertEqual([(r["id"], r["status"]) for r in view["runs"]], [(run["id"], "ready")])
+        self.assertEqual(views.lab_view(self.config, self.raw)["runs"][0]["status"], "interrupted")
 
 
 class HeaderTests(ViewsTestCase):

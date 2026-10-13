@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
-from lib import cowork_handoff, cowork_headless, phrase_scan, publish_log, settings_schema, stage_status, visual_prompts
+from lib import (
+    cowork_handoff, cowork_headless, lab, phrase_scan, publish_log, settings_schema, stage_status, visual_prompts,
+)
 from lib.data_dir import data_dir, resolve_data_paths
 
 RECENT_EPISODES = 12
@@ -258,8 +260,11 @@ def episode(config: Dict[str, Any], stem: str) -> Optional[Dict[str, Any]]:
 
 # --------------------------------------------------------------------------- Settings
 
-def settings(raw_config: Dict[str, Any]) -> Dict[str, Any]:
-    """The Settings tab, from ``config.json`` as written (paths not anchored)."""
+def settings(raw_config: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """The Settings tab, from ``config.json`` as written (paths not anchored).
+
+    Pass the anchored ``config`` as well to list the Lab's drafts, which live in the data directory.
+    """
     configured = raw_config.get("settings") if isinstance(raw_config.get("settings"), dict) else {}
 
     def row(setting: settings_schema.Setting) -> Dict[str, Any]:
@@ -272,6 +277,7 @@ def settings(raw_config: Dict[str, Any]) -> Dict[str, Any]:
             "minimum": setting.minimum, "maximum": setting.maximum, "choices": list(setting.choices),
             "problems": settings_schema.problems(key, configured[key]) if key in configured else [],
             "description": setting.description,
+            "draft": setting.draft,  # a Lab draft may change it
         }
 
     return {
@@ -280,7 +286,64 @@ def settings(raw_config: Dict[str, Any]) -> Dict[str, Any]:
             for group in settings_schema.GROUPS
         ],
         "check": settings_schema.config_check(configured),
-        "look": settings_schema.clip_look(),
         "guardrail": visual_prompts.ABSTRACT_VISUAL_GUARDRAIL,
         "docs": [{"name": f"docs/{name}", "url": f"/docs/{name}"} for name in DOCS],
+        "drafts": lab.list_drafts(config, raw_config) if config is not None else [],
+    }
+
+
+# --------------------------------------------------------------------------- Lab
+
+def lab_run(config: Dict[str, Any], run: Dict[str, Any]) -> Dict[str, Any]:
+    """A run record plus the URLs of its clip and of the real clip it is compared with."""
+    output = Path(config.get("paths", {}).get("output_dir", "./output"))
+    rendered = lab.lab_dir(config) / run["id"] / run["clipFile"]
+    real = output / "clips" / run["stem"] / run["realClipFile"] if run.get("realClipFile") else None
+    return {
+        **run,
+        "clipUrl": media_url(config, rendered) if rendered.is_file() else None,
+        "realClipUrl": media_url(config, real) if real is not None and real.is_file() else None,
+    }
+
+
+def lab_view(
+    config: Dict[str, Any],
+    raw_config: Dict[str, Any],
+    active: Optional[str] = None,
+    python: Optional[Path] = None,
+    python_found: bool = False,
+) -> Dict[str, Any]:
+    """The Lab tab: what can be rendered, the drafts, and past runs. ``active`` is the run in progress."""
+    configured = raw_config.get("settings") if isinstance(raw_config.get("settings"), dict) else {}
+    provider = settings_schema.value(configured, "visuals_provider")
+    model_key = f"{provider}_visual_model"
+    episodes_ = []
+    for stem in reversed(lab.lab_episodes(config)):
+        number, title = _identity(config, stem)
+        episodes_.append({
+            "stem": stem, "date": _date(stem), "number": number, "title": title,
+            "clips": [
+                {key: choice[key] for key in ("id", "source", "index", "headline", "start", "end", "imagePrompt")}
+                | {"hasStill": choice["still"] is not None,
+                   "realClip": media_url(config, choice["realClip"]) if choice["realClip"] else None}
+                for choice in lab.clip_choices(config, stem)
+            ],
+        })
+    return {
+        "stages": list(lab.LAB_STAGES),
+        "neverInLab": list(lab.NEVER_IN_LAB),
+        "python": {"path": str(python) if python else None, "found": python_found},
+        "provider": {
+            "name": provider,
+            "model": settings_schema.value(configured, model_key) if model_key in settings_schema.BY_KEY else None,
+            "paid": provider in lab.PAID_PROVIDERS,
+        },
+        "limits": {
+            "minSeconds": float(settings_schema.value(configured, "min_clip_duration_seconds")),
+            "maxSeconds": lab.MAX_CLIP_SECONDS,
+        },
+        "episodes": episodes_,
+        "drafts": lab.list_drafts(config, raw_config),
+        "runs": [lab_run(config, run) for run in lab.list_runs(config, active)],
+        "active": active,
     }

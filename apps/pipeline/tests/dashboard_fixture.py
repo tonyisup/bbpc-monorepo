@@ -70,6 +70,8 @@ def _finished(root: Path, stem: str, movie_payload, seo_payload):
     write(root / f"output/seo/{stem}.seo.json", seo_payload)
     for i, n in enumerate((1, 5, 10), start=1):
         write(root / f"output/clips/{stem}/{i:02d}-bit-{n}.mp4", data=b"video" * i)
+        write(root / f"output/visuals/{stem}/{i:02d}-bit-{n}.png", data=b"\x89PNG still %d" % n)
+        write(root / f"output/visuals/{stem}/{i:02d}-bit-{n}_vertical_logo.png", data=b"\x89PNG branded")
     write(root / f"output/thumbnails/{stem}.png", data=b"\x89PNG fake")
 
 

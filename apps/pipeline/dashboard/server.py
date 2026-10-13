@@ -1,18 +1,25 @@
-"""The dashboard's HTTP layer: loopback only, GET only, read-only.
+"""The dashboard's HTTP layer: loopback only.
 
     python3 -m dashboard              # from apps/pipeline; then open http://127.0.0.1:8765/
     python3 -m dashboard --port 9000
 
 Standard library only, so it runs without the pipeline venv. What each tab
 shows is in ``dashboard/views.py``; this module only routes requests, checks
-them, and serves files. It does not read ``.env``, write a file, or start a
-process.
+them, and serves files. It does not read ``.env``.
+
+A GET never writes. The only POSTs are the Lab's (``/api/lab/...``): they
+write under the data directory's ``output/lab/``, start the pipeline's clip
+stage on a run folder there, and rewrite ``config.json`` when a draft is
+applied. Each needs the token made when the server started and this server's
+own Origin, because any web page open in the browser can post to localhost.
 """
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import re
+import secrets
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,11 +27,14 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from dashboard import views
+from dashboard.lab_runner import DEFAULT_TIMEOUT_SECONDS, LabBusy, LabRunner
+from lib import lab
 from lib.data_dir import data_dir, require_data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_PORT = 8765
+DEFAULT_PIPELINE_PYTHON = ROOT / "venv" / "bin" / "python"
 BIND_ADDRESS = "127.0.0.1"
 HOST_NAMES = ("127.0.0.1", "localhost")
 STATIC_FILES = {
@@ -43,6 +53,8 @@ CONTENT_POLICY = (
     "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 CHUNK_BYTES = 64 * 1024
+MAX_POST_BYTES = 64 * 1024
+TOKEN_HEADER = "X-Dashboard-Token"
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 
 
@@ -105,9 +117,13 @@ def media_file(config: Dict[str, Any], parts: Sequence[str]) -> Optional[Path]:
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, port: int, config_path: Path):
+    def __init__(self, port: int, config_path: Path, runner: LabRunner):
         super().__init__((BIND_ADDRESS, port), Handler)
         self.config_path = Path(config_path)
+        self.runner = runner
+        # Sent to the page with /api/header and required back on every POST. Another site's
+        # page cannot read it (no CORS), and a rebound domain is refused by the Host check.
+        self.token = secrets.token_urlsafe(32)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -135,16 +151,65 @@ class Handler(BaseHTTPRequestHandler):
 
     def _refuse_method(self) -> None:
         self.close_connection = True  # any request body is left unread
-        body = b"" if self.command == "HEAD" else json.dumps({"error": "this dashboard is read-only: GET only"}).encode()
+        body = b"" if self.command == "HEAD" else json.dumps({"error": "only the Lab takes anything but GET"}).encode()
         self._send(405, JSON_TYPE, body, {"Allow": "GET"})
 
-    do_POST = do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = _refuse_method
+    do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = _refuse_method
+
+    def do_POST(self) -> None:
+        self.close_connection = True  # a refused request's body is left unread
+        path = urlsplit(self.path).path
+        if not path.startswith("/api/lab/"):
+            self._refuse_method()
+            return
+        refusal = self._post_refusal()
+        if refusal:
+            self._json(refusal[0], {"error": refusal[1]})
+            return
+        try:
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])).decode("utf-8"))
+        except ValueError:
+            payload = None
+        if not isinstance(payload, dict):
+            self._json(400, {"error": "the body must be a JSON object"})
+            return
+        self._started = False
+        try:
+            self._lab_post(path[len("/api/lab/"):], payload)
+        except lab.LabError as exc:
+            self._json(400, {"error": str(exc), "problems": exc.problems, "code": exc.code})
+        except LabBusy as exc:
+            self._json(409, {"error": "A render is already running. One at a time.", "active": exc.active})
+        except Exception as exc:
+            traceback.print_exc()
+            if not self._started:
+                self._json(500, {"error": f"{type(exc).__name__}: {exc}"})
+
+    def _post_refusal(self) -> Optional[Tuple[int, str]]:
+        """Why this POST is refused before its body is read, or None."""
+        if not self._host_allowed():
+            return 403, "this dashboard answers only as 127.0.0.1 or localhost on its own port"
+        if (self.headers.get("Origin") or "").lower() not in {f"http://{host}" for host in self._host_names()}:
+            return 403, "a POST must come from this dashboard's own page"
+        if not hmac.compare_digest((self.headers.get(TOKEN_HEADER) or "").encode(), self.server.token.encode()):
+            return 403, "missing or wrong dashboard token; reload the page"
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+            return 415, "the body must be application/json"
+        length = self.headers.get("Content-Length") or ""
+        if not length.isdigit():
+            return 411, "Content-Length is required"
+        if int(length) > MAX_POST_BYTES:
+            return 413, "the body is too large"
+        return None
+
+    def _host_names(self) -> set:
+        port = self.server.server_address[1]
+        return {f"{name}:{port}" for name in HOST_NAMES}
 
     def _host_allowed(self) -> bool:
         """Refuse a request addressed to any other name: a web page cannot then reach
         this server by pointing its own domain at 127.0.0.1 (DNS rebinding)."""
-        port = self.server.server_address[1]
-        return (self.headers.get("Host") or "").lower() in {f"{name}:{port}" for name in HOST_NAMES}
+        return (self.headers.get("Host") or "").lower() in self._host_names()
 
     def _route(self, path: str, query: Dict[str, Any]) -> None:
         if path == "/":
@@ -170,14 +235,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def _api(self, name: str, query: Dict[str, Any]) -> None:
         raw, config = views.load_config(self.server.config_path)  # read per request: edits show on reload
+        runner = self.server.runner
         if name == "header":
-            self._json(200, views.header(config))
+            self._json(200, {**views.header(config), "token": self.server.token})
+        elif name == "lab":
+            self._json(200, views.lab_view(config, raw, runner.active, runner.python, self._can_render()))
+        elif name == "lab/run":
+            run = lab.load_run(config, (query.get("id") or [""])[0])
+            if run is None:
+                self._not_found()
+            else:
+                (run,) = [r for r in lab.list_runs(config, runner.active) if r["id"] == run["id"]]
+                self._json(200, {"run": views.lab_run(config, run), "log": lab.log_tail(config, run["id"])})
         elif name == "today":
             self._json(200, views.today(config))
         elif name == "episodes":
             self._json(200, views.episodes(config))
         elif name == "settings":
-            self._json(200, views.settings(raw))
+            self._json(200, views.settings(raw, config))
         elif name == "episode":
             page = views.episode(config, (query.get("stem") or [""])[0])
             if page is None:
@@ -186,6 +261,55 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, page)
         else:
             self._not_found()
+
+    # ----------------------------------------------------------------------- the Lab's writes
+
+    def _can_render(self) -> bool:
+        runner = self.server.runner
+        return runner.custom_command or runner.python_found()
+
+    def _lab_post(self, name: str, payload: Dict[str, Any]) -> None:
+        raw, config = views.load_config(self.server.config_path)
+        runner = self.server.runner
+        if name == "drafts":
+            draft = lab.save_draft(config, raw, payload.get("title"), payload.get("overrides"), payload.get("name"))
+            self._json(200, {"draft": draft})
+        elif name == "drafts/delete":
+            self._json(200, {"deleted": lab.delete_draft(config, payload.get("name"))})
+        elif name == "drafts/apply":
+            applied = lab.apply_draft(self.server.config_path, config, payload.get("name"))
+            self._json(200, {**applied, "gitDiff": lab.git_diff(self.server.config_path)})
+        elif name == "runs":
+            self._lab_render(config, raw, payload)
+        elif name == "runs/delete":
+            if payload.get("id") == runner.active and runner.active is not None:
+                self._json(409, {"error": "This render is still running.", "active": runner.active})
+            else:
+                self._json(200, {"deleted": lab.delete_run(config, payload.get("id"))})
+        else:
+            self._not_found()
+
+    def _lab_render(self, config: Dict[str, Any], raw: Dict[str, Any], payload: Dict[str, Any]) -> None:
+        runner = self.server.runner
+        if not self._can_render():
+            raise lab.LabError(
+                f"The pipeline's Python was not found at {runner.python}. "
+                "Start the dashboard with --pipeline-python pointing at the venv's python."
+            )
+        runner.reserve()
+        try:
+            run = lab.create_run(
+                config, raw,
+                stem=payload.get("stem"), clip=payload.get("clip"), stage=payload.get("stage"),
+                draft=payload.get("draft"), edits=payload.get("edits"),
+                new_background=payload.get("newBackground") is True,
+                # Only a literal true confirms spending money.
+                confirm_paid=payload.get("confirmPaid") is True,
+            )
+        except BaseException:
+            runner.release()
+            raise
+        self._json(202, {"run": views.lab_run(config, runner.start(config, run))})
 
     def _media(self, parts: Sequence[str]) -> None:
         _, config = views.load_config(self.server.config_path)
@@ -237,20 +361,31 @@ class Handler(BaseHTTPRequestHandler):
             "X-Content-Type-Options": "nosniff",
             "Referrer-Policy": "no-referrer",
             "Content-Security-Policy": CONTENT_POLICY,
+            "Cross-Origin-Resource-Policy": "same-origin",
             **(headers or {}),
         }.items():
             self.send_header(name, value)
         self.end_headers()
 
 
-def make_server(config_path: Path, port: int = DEFAULT_PORT) -> DashboardServer:
-    return DashboardServer(port, config_path)
+def make_server(
+    config_path: Path,
+    port: int = DEFAULT_PORT,
+    pipeline_python: Optional[Path] = None,
+    lab_command: Any = None,
+    lab_timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> DashboardServer:
+    """``lab_command`` replaces the pipeline command a Lab render runs; tests pass a stand-in."""
+    runner = LabRunner(Path(pipeline_python or DEFAULT_PIPELINE_PYTHON), lab_command, lab_timeout)
+    return DashboardServer(port, config_path, runner)
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    ap = argparse.ArgumentParser(prog="python3 -m dashboard", description="Local, read-only pipeline dashboard.")
+    ap = argparse.ArgumentParser(prog="python3 -m dashboard", description="Local pipeline dashboard.")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port on {BIND_ADDRESS} (default {DEFAULT_PORT})")
     ap.add_argument("--config", default=str(ROOT / "config.json"))
+    ap.add_argument("--pipeline-python", default=str(DEFAULT_PIPELINE_PYTHON),
+                    help="python of the pipeline's venv, which runs the Lab's test renders (default: venv/bin/python)")
     return ap.parse_args(argv)
 
 
@@ -258,9 +393,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     require_data_dir()
     views.load_config(Path(args.config))  # stop now, not on the first request, if config.json is unreadable
-    server = make_server(Path(args.config), args.port)
+    server = make_server(Path(args.config), args.port, Path(args.pipeline_python).expanduser())
     print(f"Pipeline dashboard: http://{BIND_ADDRESS}:{server.server_address[1]}/")
-    print(f"  data directory {data_dir()} (read-only); Ctrl-C to stop")
+    print(f"  data directory {data_dir()}; the Lab writes only under output/lab/; Ctrl-C to stop")
+    if not server.runner.python_found():
+        print(f"  no pipeline python at {server.runner.python}: the Lab cannot render (see --pipeline-python)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
