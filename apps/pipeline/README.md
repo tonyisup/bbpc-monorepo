@@ -169,7 +169,10 @@ Claude Cowork writes `output/cowork/<stem>.movies.json` and `<stem>.seo.json`
 from the full transcript, and the `movies`/`parse` stages consume them. There is
 no fallback: a new episode stops after `import_transcript` with exit code 75
 (`awaiting_cowork` in `output/cowork/state.json`), and the next unattended run
-resumes with `--from movies` once both files exist. Details and the authoring
+resumes with `--from movies` once both files exist. Cowork also writes
+`<stem>.shirts.json`, the episode's T-shirt phrases, each flagged as the
+hosts' own words or a quote. That file is information for Tony: the validator
+checks it, no stage reads it, and the pipeline never waits for it. Details and the authoring
 rules Cowork follows:
 [`docs/cowork-handoff.md`](docs/cowork-handoff.md). Show knowledge (hosts, rating
 scale, segments, what Tony publishes) lives in [`docs/show-format.md`](docs/show-format.md).
@@ -178,6 +181,7 @@ scale, segments, what Tony publishes) lives in [`docs/show-format.md`](docs/show
 python pipeline.py episodes/20260914.mp3 --from movies      # resume after Cowork
 python3 scripts/validate_cowork_outputs.py --pending        # what is waiting on Cowork
 python3 scripts/validate_cowork_outputs.py 20260914         # check one episode's files (hard rules + warnings)
+                                                            # shirts: OK, FAIL, or "not written (optional)"
 ```
 
 ## Publish decisions
@@ -205,7 +209,8 @@ that recur across episodes: catchphrases, running gags (a burst over
 consecutive episodes), and pre-recorded drops and rituals (long identical
 passages). It is the starting list for T-shirt ideas; deciding what is
 original versus a movie quote, and what belongs on a shirt, stays a human or
-Cowork call. Standard library only; about 20 s and 550 MB for 340 transcripts.
+Cowork call (Cowork's per-episode picks go in `output/cowork/<stem>.shirts.json`).
+Standard library only; about 20 s and 550 MB for 340 transcripts.
 
 ```bash
 python3 scripts/scan_phrases.py               # rescan everything after a backfill
