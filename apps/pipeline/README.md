@@ -157,10 +157,16 @@ It listens on `127.0.0.1` only and refuses any request not addressed to
 are read again on every page load, so a reload shows the current state. It does
 not read `.env`.
 
-Looking never writes. The only things the dashboard changes are the Lab's:
-test renders and drafts under `output/lab/` in the data directory, and
-`config.json` when you apply a draft. Those requests need a token made when
-the server starts and must come from the dashboard's own page.
+Looking never writes. The dashboard changes only these, all but one in the
+data directory:
+
+- the Lab's test renders and drafts under `output/lab/`, and `config.json`
+  when you apply a draft;
+- the T-shirt shortlist, `output/tshirt/ideas.json`;
+- the phrase report under `output/phrases/`, when you press Rescan.
+
+Those requests need a token made when the server starts and must come from
+the dashboard's own page.
 
 - **Today**: what needs you (rendered clips with no publish decision, episodes
   waiting on Cowork with their validation result and last error, a phrase report
@@ -170,6 +176,17 @@ the server starts and must come from the dashboard's own page.
   result and warnings, the SEO title against its 60-character limit, and the
   movies with each host's rating. The episode's mp3 plays when it is in
   `episodes/`.
+- **Shirts**: the T-shirt shortlist as a board (ideas, shortlisted, designing,
+  done; rejected ones folded away) and the three places a phrase can come
+  from: the recurring-phrase report by its lists, with each phrase's episode
+  count and span; Cowork's picks in each episode's shirts file; and your own
+  `output/tshirt/ideas.txt`, which is read and never changed. "Shortlist"
+  copies a phrase to the list. Each idea has the text to print, an origin
+  (original, quote, not checked), the work a quote is from, and notes.
+  Licensing flags are shown beside every phrase and idea; nothing is blocked
+  (see [T-shirt shortlist](#t-shirt-shortlist)). "Hear it" plays the phrase
+  when the episode's mp3 is in `episodes/`. "Rescan" runs
+  `scripts/scan_phrases.py` (about 20 s).
 - **Settings**: every setting with its value, default, where the value comes
   from, and the stage that reads it; a config check listing settings the code
   reads that `config.json` leaves out and keys nothing reads. Settings are
@@ -196,8 +213,8 @@ holds a one-clip SEO file, so the episode's real clip, SEO file and
 The pipeline keeps no record of the stages it ran, so stage status is worked
 out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
 and `publish` leave no local file: they are inferred from `state.json` and drawn
-outlined rather than solid. The Convex target is shown as not checked. Clips,
-Shirts and Runs are not built yet.
+outlined rather than solid. The Convex target is shown as not checked. Clips
+and Runs are not built yet.
 
 ## Configuration
 
@@ -302,6 +319,46 @@ one phrase per line; later scans skip it. A passage is skipped when a line
 matches its whole text (case and punctuation don't matter). The "Staples" section is where the
 show's biggest catchphrases and everyday English look alike, so review it once.
 
+## T-shirt shortlist
+
+`scripts/shirt_ideas.py` keeps the phrases Tony is considering for shirts in
+`output/tshirt/ideas.json`. The dashboard's Shirts tab is the same list; both
+go through `lib/shirt_ideas.py`. Standard library only.
+
+```bash
+python3 scripts/shirt_ideas.py list                         # every idea, with its flags
+python3 scripts/shirt_ideas.py add "Pain train" --print "PAIN TRAIN"
+python3 scripts/shirt_ideas.py scan staples --find dollar   # browse the phrase report by its lists
+python3 scripts/shirt_ideas.py add-scan "we ride together"  # shortlist a phrase from the report
+python3 scripts/shirt_ideas.py episode 20261012             # Cowork's picks for an episode
+python3 scripts/shirt_ideas.py add-episode 20261012 3       # shortlist pick 3
+python3 scripts/shirt_ideas.py notes                        # the lines of ideas.txt, by line number
+python3 scripts/shirt_ideas.py add-note 6                   # add one (ideas.txt is never changed)
+python3 scripts/shirt_ideas.py set 4 --status designing --origin quote --source "Bad Boys II"
+python3 scripts/shirt_ideas.py remove 4
+```
+
+Each idea has the phrase as spoken, the text to print, an origin (`original`,
+`quote`, or `unsure` until someone has checked), the work a quote is from, a
+status (`idea`, `shortlisted`, `designing`, `done`, `rejected`), notes, and
+where it came from (the phrase scan with its episode count and span, an
+episode's shirts file, a line of `ideas.txt`, or typed in). A phrase is listed
+once, whatever its case and punctuation, and an idea's number is never reused.
+
+Lines starting with `!` are licensing flags. They are information; nothing is
+blocked and the decision is Tony's:
+
+- **Quote**: the idea is recorded as someone else's line, with its source.
+- **Origin not checked**: nobody has looked yet. The scan cannot tell a
+  catchphrase from a movie quote, so everything promoted from it starts here.
+- **Known quote**: the words match a line `docs/show-format.md` credits to a
+  film ("I'd buy that for a dollar", *RoboCop*). The list is `KNOWN_QUOTES`
+  in `lib/shirt_ideas.py`.
+- **Names a real person**: the phrase or the text to print contains `Slater`
+  or `Goldblum` (also "gold bloom", as transcripts spell it). Both rating
+  names are real people's surnames.
+- **Likely title or name**: the scan filed the phrase under titles and names.
+
 ## Movies without a transcript
 
 If the transcript file is missing, the `movies` stage writes the episode's
@@ -337,7 +394,8 @@ stages), clip rendering, review clipping, laughter detection, runtime config, de
 declarations, the Clerk M2M/Convex boundary, visual-prompt safety, backfill
 error handling, the settings schema (every key the code reads is declared), stage
 status, the Lab (drafts, run folders, what it refuses), a pinned copy of the
-default caption file and ffmpeg command, and the dashboard's views and server.
+default caption file and ffmpeg command, the T-shirt shortlist and its script,
+and the dashboard's views and server.
 
 ## Read-only pipeline identity probe
 
@@ -374,6 +432,7 @@ output/
 ├── seo/<episode>.seo.json    # SEO metadata
 ├── publish-decisions.json    # published/skipped per rendered clip (scripts/publish_decisions.py)
 ├── phrases/                  # recurring-phrases.{md,json} + ignore.txt (scripts/scan_phrases.py)
+├── tshirt/                   # ideas.json, the shortlist (scripts/shirt_ideas.py); ideas.txt, Tony's notes
 ├── review-clips/<episode>/   # Audio clips from review segments
 ├── laughter/                 # laughter_autotune.py results
 ├── lab/                      # dashboard Lab: drafts/ and one folder per test render

@@ -7,11 +7,17 @@ Standard library only, so it runs without the pipeline venv. What each tab
 shows is in ``dashboard/views.py``; this module only routes requests, checks
 them, and serves files. It does not read ``.env``.
 
-A GET never writes. The only POSTs are the Lab's (``/api/lab/...``): they
-write under the data directory's ``output/lab/``, start the pipeline's clip
-stage on a run folder there, and rewrite ``config.json`` when a draft is
-applied. Each needs the token made when the server started and this server's
-own Origin, because any web page open in the browser can post to localhost.
+A GET never writes. The POSTs are:
+
+- the Lab's (``/api/lab/...``): they write under the data directory's
+  ``output/lab/``, start the pipeline's clip stage on a run folder there, and
+  rewrite ``config.json`` when a draft is applied;
+- the Shirts tab's (``/api/shirts/...``): they change the shortlist,
+  ``output/tshirt/ideas.json``, and Rescan runs ``scripts/scan_phrases.py``,
+  which rewrites the report under ``output/phrases/``.
+
+Each needs the token made when the server started and this server's own
+Origin, because any web page open in the browser can post to localhost.
 """
 from __future__ import annotations
 
@@ -20,6 +26,7 @@ import hmac
 import json
 import re
 import secrets
+import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,7 +35,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from dashboard import views
 from dashboard.lab_runner import DEFAULT_TIMEOUT_SECONDS, LabBusy, LabRunner
-from lib import lab
+from dashboard.scan_runner import DEFAULT_TIMEOUT_SECONDS as SCAN_TIMEOUT_SECONDS, ScanBusy, ScanRunner
+from lib import lab, shirt_ideas
 from lib.data_dir import data_dir, require_data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +63,11 @@ CONTENT_POLICY = (
 CHUNK_BYTES = 64 * 1024
 MAX_POST_BYTES = 64 * 1024
 TOKEN_HEADER = "X-Dashboard-Token"
+POST_PREFIXES = ("/api/lab/", "/api/shirts/")
+# What the page may send when it adds an idea, and the library's name for each.
+IDEA_FIELDS = (("printText", "print_text"), ("origin", "origin"), ("source", "source"), ("status", "status"),
+               ("notes", "notes"))
+IDEA_SOURCES = ("manual", "scan", "episode", "notes")
 _RANGE = re.compile(r"bytes=(\d*)-(\d*)")
 
 
@@ -117,10 +130,12 @@ def media_file(config: Dict[str, Any], parts: Sequence[str]) -> Optional[Path]:
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, port: int, config_path: Path, runner: LabRunner):
+    def __init__(self, port: int, config_path: Path, runner: LabRunner, scans: ScanRunner):
         super().__init__((BIND_ADDRESS, port), Handler)
         self.config_path = Path(config_path)
         self.runner = runner
+        self.scans = scans
+        self.ideas_lock = threading.Lock()  # one change to the shortlist at a time: each rewrites the file
         # Sent to the page with /api/header and required back on every POST. Another site's
         # page cannot read it (no CORS), and a rebound domain is refused by the Host check.
         self.token = secrets.token_urlsafe(32)
@@ -151,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _refuse_method(self) -> None:
         self.close_connection = True  # any request body is left unread
-        body = b"" if self.command == "HEAD" else json.dumps({"error": "only the Lab takes anything but GET"}).encode()
+        body = b"" if self.command == "HEAD" else json.dumps({"error": "this path takes only GET"}).encode()
         self._send(405, JSON_TYPE, body, {"Allow": "GET"})
 
     do_PUT = do_PATCH = do_DELETE = do_HEAD = do_OPTIONS = _refuse_method
@@ -159,7 +174,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         self.close_connection = True  # a refused request's body is left unread
         path = urlsplit(self.path).path
-        if not path.startswith("/api/lab/"):
+        prefix = next((prefix for prefix in POST_PREFIXES if path.startswith(prefix)), None)
+        if prefix is None:
             self._refuse_method()
             return
         refusal = self._post_refusal()
@@ -175,11 +191,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._started = False
         try:
-            self._lab_post(path[len("/api/lab/"):], payload)
+            if prefix == "/api/lab/":
+                self._lab_post(path[len(prefix):], payload)
+            else:
+                self._shirts_post(path[len(prefix):], payload)
         except lab.LabError as exc:
             self._json(400, {"error": str(exc), "problems": exc.problems, "code": exc.code})
         except LabBusy as exc:
             self._json(409, {"error": "A render is already running. One at a time.", "active": exc.active})
+        except ScanBusy:
+            self._json(409, {"error": "A rescan is already running."})
+        except ValueError as exc:  # what the shortlist library refuses, in its own words
+            self._json(400, {"error": str(exc)})
         except Exception as exc:
             traceback.print_exc()
             if not self._started:
@@ -247,6 +270,10 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 (run,) = [r for r in lab.list_runs(config, runner.active) if r["id"] == run["id"]]
                 self._json(200, {"run": views.lab_run(config, run), "log": lab.log_tail(config, run["id"])})
+        elif name == "shirts":
+            self._json(200, views.shirts(config, self.server.scans.state()))
+        elif name == "shirts/phrases":
+            self._shirt_phrases(config, query)
         elif name == "today":
             self._json(200, views.today(config))
         elif name == "episodes":
@@ -311,6 +338,55 @@ class Handler(BaseHTTPRequestHandler):
             raise
         self._json(202, {"run": views.lab_run(config, runner.start(config, run))})
 
+    # ----------------------------------------------------------------------- the Shirts tab
+
+    def _shirt_phrases(self, config: Dict[str, Any], query: Dict[str, Any]) -> None:
+        def one(name: str, default: str) -> str:
+            return (query.get(name) or [default])[0]
+        try:
+            page = views.shirt_phrases(config, one("section", ""), one("q", ""), int(one("offset", "0")),
+                                       int(one("limit", str(shirt_ideas.PAGE_ROWS))))
+        except ValueError as exc:
+            self._json(400, {"error": str(exc)})
+            return
+        self._json(200, page)
+
+    def _shirts_post(self, name: str, payload: Dict[str, Any]) -> None:
+        _, config = views.load_config(self.server.config_path)
+        if name == "ideas":
+            with self.server.ideas_lock:
+                idea = self._add_idea(config, payload)
+            self._json(200, {"idea": views.shirt_idea(config, idea)})
+        elif name == "ideas/update":
+            changes = {key: payload[key] for key in shirt_ideas.EDITABLE if key in payload}
+            with self.server.ideas_lock:
+                idea = shirt_ideas.update(config, payload.get("id"), **changes)
+            self._json(200, {"idea": views.shirt_idea(config, idea)})
+        elif name == "ideas/delete":
+            with self.server.ideas_lock:
+                removed = shirt_ideas.remove(config, payload.get("id"))
+            self._json(200, {"deleted": removed})
+        elif name == "rescan":
+            self._json(202, {"rescan": self.server.scans.start(self.server.config_path)})
+        else:
+            self._not_found()
+
+    def _add_idea(self, config: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Add an idea from whichever source the page names; where it came from is the library's to record."""
+        fields = {name: payload[key] for key, name in IDEA_FIELDS if payload.get(key) is not None}
+        source = payload.get("from", "manual")
+        if source == "manual":
+            return shirt_ideas.add(config, payload.get("phrase"), **fields)
+        if source == "scan":
+            return shirt_ideas.add_from_scan(config, payload.get("phrase"), **fields)
+        if source == "episode":
+            return shirt_ideas.add_from_episode(config, payload.get("stem"), payload.get("index"), **fields)
+        if source == "notes":
+            if payload.get("phrase") is not None:
+                fields["phrase"] = payload["phrase"]
+            return shirt_ideas.add_from_notes(config, payload.get("line"), **fields)
+        raise ValueError(f"from must be one of {', '.join(IDEA_SOURCES)}, not {source!r}")
+
     def _media(self, parts: Sequence[str]) -> None:
         _, config = views.load_config(self.server.config_path)
         path = media_file(config, parts)
@@ -374,10 +450,13 @@ def make_server(
     pipeline_python: Optional[Path] = None,
     lab_command: Any = None,
     lab_timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    scan_command: Any = None,
+    scan_timeout: float = SCAN_TIMEOUT_SECONDS,
 ) -> DashboardServer:
-    """``lab_command`` replaces the pipeline command a Lab render runs; tests pass a stand-in."""
+    """``lab_command`` replaces the pipeline command a Lab render runs, and ``scan_command``
+    the phrase scan a Rescan runs; tests pass stand-ins."""
     runner = LabRunner(Path(pipeline_python or DEFAULT_PIPELINE_PYTHON), lab_command, lab_timeout)
-    return DashboardServer(port, config_path, runner)
+    return DashboardServer(port, config_path, runner, ScanRunner(scan_command, scan_timeout))
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -395,7 +474,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     views.load_config(Path(args.config))  # stop now, not on the first request, if config.json is unreadable
     server = make_server(Path(args.config), args.port, Path(args.pipeline_python).expanduser())
     print(f"Pipeline dashboard: http://{BIND_ADDRESS}:{server.server_address[1]}/")
-    print(f"  data directory {data_dir()}; the Lab writes only under output/lab/; Ctrl-C to stop")
+    print(f"  data directory {data_dir()}; Ctrl-C to stop")
+    print("  writes only: output/lab/ (Lab), output/tshirt/ideas.json (Shirts), output/phrases/ (Rescan)")
     if not server.runner.python_found():
         print(f"  no pipeline python at {server.runner.python}: the Lab cannot render (see --pipeline-python)")
     try:

@@ -23,7 +23,8 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - ✅ **Brand Logo:** Composited onto clip backgrounds.
 - ⏸ **Laughter Detection:** Detector kept but not called by any stage; next step is handing its timestamps to Cowork.
 - ✅ **Thumbnail Generation:** 1920x1920 episode thumbnails from reviewed movie posters + BBPC logo.
-- 🚧 **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Settings and the clip Lab; Shirts, Clips and Runs to follow.
+- 🚧 **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Shirts, Settings and the clip Lab; Clips and Runs to follow.
+- ✅ **T-shirt shortlist:** `output/tshirt/ideas.json`, kept by `scripts/shirt_ideas.py` and the dashboard's Shirts tab, with licensing flags.
 
 ## Completed Tasks
 - [x] Implement `lib/transcriber.py` with resume support.
@@ -47,11 +48,12 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] **Headless Cowork:** with `settings.cowork_headless` on, the pipeline runs the hand-off itself through `claude -p` (`lib/cowork_headless.py`) instead of stopping with exit 75.
 - [x] **Dashboard, change 1:** read-only server, Today, Episode and Settings tabs; settings schema (`lib/settings_schema.py`) and stage status from local files (`lib/stage_status.py`).
 - [x] **Dashboard, change 2 (Lab):** settings drafts and one-clip test renders under `output/lab/`; the caption rules and the zoom are settings (`caption_*`, `clip_zoom_amount`).
-- [ ] **Dashboard, change 3 (Shirts):** shortlist file and board over the phrase scan and the per-episode shirts files.
+- [x] **Dashboard, change 3 (Shirts):** shortlist file (`lib/shirt_ideas.py`, `scripts/shirt_ideas.py`) and a board over the phrase scan, the per-episode shirts files and `ideas.txt`; Rescan button; licensing flags.
 - [ ] **Dashboard, change 4 (Clips):** review rendered clips and record publish decisions.
 - [ ] **Dashboard, change 5 (Runs):** start and watch pipeline runs; the only part that can write to Convex.
 - [ ] **Stage journal:** have `pipeline.py` record each stage it runs, so `import_transcript` and `publish` status is known rather than inferred from `state.json`.
-- [ ] **T-shirt report:** cross-episode shirt list joined with the recurring-phrase scan; shirts files for past episodes.
+- [ ] **T-shirt report:** shirts files for past episodes, so the Shirts tab has Cowork's picks for the back catalogue. (The cross-episode list joined with the phrase scan is the Shirts tab.)
+- [ ] **Shirts tab, ignore from the page:** add a phrase to `output/phrases/ignore.txt` from the board (today it is edited by hand, then Rescan).
 - [ ] **Laughter → Cowork:** Write laughter timestamps where Cowork reads them.
 - [ ] **Advanced Captions:** Move to word-level timestamps for more dynamic "pop-in" caption styles.
 - [ ] **Social Upload:** Integrate automated upload to TikTok/Instagram/YouTube APIs.

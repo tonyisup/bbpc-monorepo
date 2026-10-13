@@ -1,6 +1,6 @@
 // BBPC pipeline dashboard. Every figure is computed by the server (dashboard/views.py);
-// this file lays it out. Looking only sends GET requests. The Lab and its drafts send
-// POSTs, each carrying the token the server made when it started.
+// this file lays it out. Looking only sends GET requests. The Lab, its drafts and the
+// Shirts tab send POSTs, each carrying the token the server made when it started.
 'use strict';
 
 const view = document.getElementById('view');
@@ -107,7 +107,8 @@ function needRow(need) {
     return h('div', {}, dot('wa'), h('div', {class: 't'},
       h('b', {}, 'Phrase report is older than the ignore list'),
       h('div', {class: 'mut sm'}, `Report saved ${when(need.reportSavedAt)}, ignore.txt saved ${when(need.ignoreSavedAt)}. `,
-        'Rescan (about 20 s) with ', h('code', {}, 'python3 scripts/scan_phrases.py'))));
+        'Rescan (about 20 s) on the Shirts tab, or with ', h('code', {}, 'python3 scripts/scan_phrases.py'))),
+      h('a', {class: 'btn', href: '#shirts'}, 'Open Shirts'));
   }
   return h('div', {}, dot('in'), h('div', {class: 't'},
     h('b', {}, `${plural(need.episodes.length, 'transcript has', 'transcripts have')} no SEO file or state entry`),
@@ -673,6 +674,261 @@ async function showLab(current, runId) {
   if (shownRun && (shownRun.status === 'running' || shownRun.status === 'ready')) labPoll = setTimeout(watch, 1000);
 }
 
+// --------------------------------------------------------------------------- Shirts
+
+// What the tab is showing; it survives a redraw. `source` is a scan section, 'episodes' or 'notes'.
+const shirtsForm = {source: 'catchphrases', query: '', offset: 0, editing: null, error: null};
+let shirtsPoll = null;
+
+const STATUS_TITLES = {idea: 'Ideas', shortlisted: 'Shortlisted', designing: 'Designing', done: 'Done', rejected: 'Rejected'};
+const ORIGIN_WORDS = {original: 'Original', quote: 'Quote', unsure: 'Not checked'};
+const ORIGIN_TONES = {original: 'ok', quote: 'er', unsure: 'wa'};
+const FLAG_TONES = {quote: 'er', known_quote: 'er', unsure: 'wa', person: 'wa', title: 'in'};
+const span = row => `${row.firstStem.slice(0, 4)}–${row.lastStem.slice(0, 4)}`;
+const clock = s => `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(Math.floor(s) % 60).padStart(2, '0')}`;
+
+// The origin first, then every flag the origin pill has not already said.
+function originPills(origin, source, flags) {
+  return h('div', {class: 'pills'},
+    pill(ORIGIN_TONES[origin], origin === 'quote' ? `Quote · ${source}` : ORIGIN_WORDS[origin]),
+    flags.filter(flag => flag.kind !== 'quote' && flag.kind !== 'unsure').map(flag => pill(FLAG_TONES[flag.kind], flag.text)));
+}
+
+function hear(url, start) {
+  const player = document.getElementById('shirt-audio');
+  player.hidden = false;
+  player.src = `${url}#t=${Math.max(0, Math.floor(start) - 1)}`;
+  player.play();
+}
+
+const hearButton = (url, start) => url && h('button', {class: 'btn s', onclick: () => hear(url, start)}, '▶ Hear it');
+
+async function shirtsPost(path, payload) {
+  const answer = await post(path, payload);
+  shirtsForm.error = answer.ok ? null : answer.body.error;
+  route();
+  return answer.ok;
+}
+
+async function removeIdea(idea) {
+  if (!window.confirm(`Take this idea off the list for good?\n\n${idea.printText}\n\nTo keep a record that you turned it down, set it to Rejected instead.`)) return;
+  shirtsForm.editing = null;
+  shirtsPost('/api/shirts/ideas/delete', {id: idea.id});
+}
+
+function ideaEditor(data, idea) {
+  const print = h('textarea', {class: 'inp', rows: 2, 'aria-label': 'Text to print'}, idea.printText);
+  const origin = h('select', {class: 'inp', 'aria-label': 'Origin'},
+    data.origins.map(name => h('option', {value: name, selected: name === idea.origin}, ORIGIN_WORDS[name])));
+  const source = h('input', {class: 'inp', type: 'text', value: idea.source || '', placeholder: 'Film, show or song', 'aria-label': 'Source of the quote'});
+  const notes = h('textarea', {class: 'inp', rows: 2, 'aria-label': 'Notes'}, idea.notes);
+  const sourceRow = h('div', {hidden: idea.origin !== 'quote'}, h('label', {}, 'Quote from'), source);
+  origin.addEventListener('change', () => { sourceRow.hidden = origin.value !== 'quote'; });
+  // A refused save is shown here and the form is left as typed.
+  const problem = h('div', {class: 'sm problem', hidden: true});
+  const save = async () => {
+    const answer = await post('/api/shirts/ideas/update', {
+      id: idea.id, printText: print.value, origin: origin.value,
+      source: origin.value === 'quote' ? source.value : null, notes: notes.value});
+    if (!answer.ok) {
+      problem.textContent = answer.body.error;
+      problem.hidden = false;
+      return;
+    }
+    Object.assign(shirtsForm, {editing: null, error: null});
+    route();
+  };
+  return h('div', {class: 'edit'},
+    h('label', {}, 'Text to print'), print,
+    h('label', {}, 'Origin'), origin, sourceRow,
+    h('label', {}, 'Notes'), notes, problem,
+    h('div', {class: 'row'},
+      h('button', {class: 'btn p s', onclick: save}, 'Save'),
+      h('button', {class: 'btn s', onclick: () => { shirtsForm.editing = null; shirtsForm.error = null; route(); }}, 'Cancel'),
+      h('span', {class: 'sp'}),
+      h('button', {class: 'btn s', onclick: () => removeIdea(idea)}, 'Remove…')));
+}
+
+function ideaCard(data, idea) {
+  const status = h('select', {class: 'inp', 'aria-label': `Status of ${idea.printText}`},
+    data.statuses.map(name => h('option', {value: name, selected: name === idea.status}, STATUS_TITLES[name])));
+  status.addEventListener('change', () => shirtsPost('/api/shirts/ideas/update', {id: idea.id, status: status.value}));
+  const editing = shirtsForm.editing === idea.id;
+  return h('div', {class: 'card'},
+    h('div', {class: 'q'}, idea.printText),
+    idea.printText !== idea.phrase && h('div', {class: 'mut sm'}, `Said: ${idea.phrase}`),
+    originPills(idea.origin, idea.source, idea.flags),
+    h('div', {class: 'mut sm'}, `#${idea.id} · from ${idea.fromText}`),
+    idea.notes && !editing && h('div', {class: 'sm note'}, idea.notes),
+    editing ? ideaEditor(data, idea) : h('div', {class: 'row'}, status,
+      h('button', {class: 'btn s', onclick: () => { shirtsForm.editing = idea.id; shirtsForm.error = null; route(); }}, 'Edit'),
+      idea.hear && hearButton(idea.hear.url, idea.hear.start)));
+}
+
+function board(data) {
+  const columns = data.statuses.filter(name => name !== 'rejected');
+  const rejected = data.ideas.filter(idea => idea.status === 'rejected');
+  return [
+    h('div', {class: 'board'}, columns.map(name => {
+      const ideas = data.ideas.filter(idea => idea.status === name);
+      return h('div', {class: 'col'}, h('b', {}, STATUS_TITLES[name], ' ', h('span', {class: 'mut'}, ideas.length)),
+        ideas.length ? ideas.map(idea => ideaCard(data, idea)) : h('div', {class: 'mut sm'}, 'Nothing yet'));
+    })),
+    rejected.length ? h('details', {class: 'gap', open: rejected.some(idea => idea.id === shirtsForm.editing)},
+      h('summary', {class: 'mut sm'}, `Rejected (${rejected.length})`),
+      h('div', {class: 'board'}, rejected.map(idea => ideaCard(data, idea)))) : null,
+  ];
+}
+
+function addIdeaBox() {
+  const phrase = h('input', {class: 'inp', type: 'text', placeholder: 'A phrase, as it was said', 'aria-label': 'New idea'});
+  const add = () => { if (phrase.value.trim()) shirtsPost('/api/shirts/ideas', {from: 'manual', phrase: phrase.value}); };
+  phrase.addEventListener('keydown', event => { if (event.key === 'Enter') add(); });
+  return h('div', {class: 'pair gap'}, phrase, h('button', {class: 'btn', onclick: add}, 'Add an idea'));
+}
+
+const onList = id => h('span', {class: 'tag', title: 'Already on the list above'}, `on the list · #${id}`);
+
+function rescanBox(data) {
+  const scan = data.scan;
+  const rescan = data.rescan;
+  const failed = rescan.finishedAt && rescan.returncode !== 0;
+  return h('div', {class: 'box gap'},
+    h('div', {class: 'bar'},
+      dot(rescan.running ? 'in' : scan.stale || !scan.scanned ? 'wa' : 'ok'),
+      h('div', {class: 't'},
+        h('b', {}, rescan.running ? 'Rescanning… about 20 seconds'
+          : !scan.scanned ? 'No phrase report yet'
+          : scan.stale ? 'The phrase report is older than the ignore list' : 'The phrase report is up to date with the ignore list'),
+        scan.scanned && h('div', {class: 'mut sm'},
+          `${plural(scan.transcripts, 'transcript')} (${scan.firstStem}–${scan.lastStem}), scanned ${when(scan.scannedAt)}. `,
+          scan.stale && `ignore.txt was saved ${when(scan.ignoreSavedAt)}, so the lists below still show phrases it now hides.`)),
+      h('button', {class: 'btn', disabled: rescan.running, title: 'Runs scripts/scan_phrases.py, which rewrites output/phrases/recurring-phrases.json and .md',
+        onclick: () => shirtsPost('/api/shirts/rescan', {})}, 'Rescan (about 20 s)')),
+    rescan.finishedAt && h('div', {class: failed ? 'sm problem gap' : 'sm mut gap'},
+      failed ? (rescan.timedOut ? 'The rescan ran past its time limit and was stopped.' : `The rescan failed (exit ${rescan.returncode}).`)
+        : `Rescanned ${when(rescan.finishedAt)}.`),
+    rescan.finishedAt && rescan.output && h('pre', {}, rescan.output));
+}
+
+function phraseTable(page) {
+  const filter = h('input', {class: 'inp', type: 'text', value: shirtsForm.query, placeholder: `Find in ${page.title.toLowerCase()}`, 'aria-label': 'Find a phrase'});
+  filter.addEventListener('change', () => { shirtsForm.query = filter.value; shirtsForm.offset = 0; route(); });
+  const last = page.offset + page.rows.length;
+  const turn = by => () => { shirtsForm.offset = Math.max(0, page.offset + by); route(); };
+  return [
+    h('div', {class: 'pair gap'}, filter,
+      h('span', {class: 'mut sm nowrap'}, page.total ? `${(page.offset + 1).toLocaleString()}–${last.toLocaleString()} of ${page.total.toLocaleString()}` : 'None'),
+      h('button', {class: 'btn s', disabled: page.offset === 0, onclick: turn(-page.limit)}, '‹ Earlier'),
+      h('button', {class: 'btn s', disabled: last >= page.total, onclick: turn(page.limit)}, 'More ›')),
+    page.rows.length ? h('table', {class: 'phrases'},
+      h('tr', {}, ['Phrase', 'Episodes', 'Span', ''].map(name => h('th', {}, name))),
+      page.rows.map(row => {
+        const example = row.examples[row.examples.length - 1];
+        const heard = [...row.examples].reverse().find(ex => ex.audioUrl);
+        return h('tr', {},
+          h('td', {}, h('b', {}, row.text), ' ', row.flags.map(flag => pill(FLAG_TONES[flag.kind], flag.text)),
+            row.burst && h('div', {class: 'mut sm'}, `${row.burst.count} of ${row.burst.window} episodes in a row, ${row.burst.fromStem}–${row.burst.toStem}`),
+            example && h('div', {class: 'mut sm'}, `“${example.text}” `,
+              h('a', {href: `#episode/${example.stem}`}, example.stem), ` at ${clock(example.start)}`)),
+          h('td', {}, row.episodes.toLocaleString()),
+          h('td', {class: 'mut nowrap'}, span(row)),
+          h('td', {class: 'right nowrap'}, heard && hearButton(heard.audioUrl, heard.start), ' ',
+            row.ideaId ? onList(row.ideaId)
+              : h('button', {class: 'btn s', onclick: () => shirtsPost('/api/shirts/ideas', {from: 'scan', phrase: row.text})}, 'Shortlist')));
+      })) : h('div', {class: 'mut sm gap'}, shirtsForm.query
+        ? 'No phrase in this list contains that. The counts above show which lists do.' : 'Nothing in this list.'),
+  ];
+}
+
+function episodePicks(data) {
+  if (!data.episodes.length) {
+    return h('div', {class: 'mut sm gap'}, 'No episode has a shirts file yet. Cowork writes output/cowork/<stem>.shirts.json for each new episode.');
+  }
+  return data.episodes.map(ep => h('div', {class: 'box gap'},
+    h('div', {class: 'bar'}, h('b', {}, h('a', {href: `#episode/${ep.stem}`}, episodeName(ep)), ep.title ? ` · ${ep.title}` : ''),
+      h('span', {class: 'mut sm'}, ep.date || ep.stem), h('span', {class: 'sp'}),
+      h('span', {class: 'mut sm'}, ep.problems.length ? 'not valid' : plural(ep.phrases.length, 'phrase'))),
+    ep.problems.length ? h('div', {class: 'sm problem'}, `The shirts file is not valid, so nothing is offered from it: ${ep.problems[0]}`) : null,
+    ep.phrases.length ? h('table', {class: 'phrases'}, ep.phrases.map(row => h('tr', {},
+      h('td', {}, h('b', {}, row.phrase), h('div', {class: 'mut sm'}, `${row.speaker} at ${clock(row.start)} · ${row.why}`)),
+      h('td', {}, originPills(row.origin, row.source, row.flags)),
+      h('td', {class: 'right nowrap'}, hearButton(ep.audioUrl, row.start), ' ',
+        row.ideaId ? onList(row.ideaId)
+          : h('button', {class: 'btn s', onclick: () => shirtsPost('/api/shirts/ideas', {from: 'episode', stem: ep.stem, index: row.index})}, 'Shortlist'))))) : null));
+}
+
+function notesList(data) {
+  const lines = data.notes.lines;
+  if (!lines.length) return h('div', {class: 'mut sm gap'}, `No ideas in ${data.notes.file}.`);
+  const addLine = line => {
+    let phrase = null;
+    if (!line.text) {
+      phrase = (window.prompt(`This line has no phrase yet:\n\n${line.line}\n\nWhat is the idea?`) || '').trim();
+      if (!phrase) return;
+    }
+    shirtsPost('/api/shirts/ideas', {from: 'notes', line: line.number, phrase});
+  };
+  const headings = [...new Set(lines.map(line => line.heading))];
+  return [
+    h('div', {class: 'mut sm gap'}, 'Your own notes, from ', h('code', {}, data.notes.file), '. Adding a line copies it to the list; the file is never changed.'),
+    headings.map(heading => h('div', {class: 'box gap'},
+      heading && h('b', {}, heading),
+      h('table', {class: 'phrases'}, lines.filter(line => line.heading === heading).map(line => h('tr', {},
+        h('td', {}, line.text ? h('b', {}, line.text) : h('span', {class: 'mut'}, '(no phrase yet)'),
+          line.stem && h('span', {class: 'mut sm'}, ` · ${line.stem}`), ' ',
+          line.flags.map(flag => pill(FLAG_TONES[flag.kind], flag.text))),
+        h('td', {class: 'right nowrap'}, line.ideaId ? onList(line.ideaId)
+          : h('button', {class: 'btn s', onclick: () => addLine(line)}, line.text ? 'Add as an idea' : 'Add as an idea…'))))))),
+  ];
+}
+
+function renderShirts(data, page) {
+  // A search carries over from list to list; the counts beside each list are then its matches.
+  const choose = source => () => { location.hash = `#shirts/${source}`; };
+  const sections = page ? page.sections : data.scan.sections;
+  const chip = (source, title, count) => h('button', {class: `chip ${shirtsForm.source === source ? 'on' : ''}`, onclick: choose(source)},
+    title, ' ', h('span', {class: 'mut'}, count.toLocaleString()));
+  const listed = data.ideas.filter(idea => idea.status !== 'rejected').length;
+  return [
+    h('audio', {id: 'shirt-audio', controls: true, preload: 'none', hidden: true}),
+    h('div', {class: 'bar'}, h('h3', {}, 'Shortlist'), h('span', {class: 'sp'}),
+      h('span', {class: 'mut sm'}, `${plural(listed, 'idea')} · saved in `, h('code', {}, data.file), data.saved ? '' : ' (not written yet)')),
+    shirtsForm.error && h('div', {class: 'box problem'}, shirtsForm.error),
+    board(data),
+    addIdeaBox(),
+    h('div', {class: 'box gap sm'}, h('b', {}, 'Before printing. '),
+      'A quote is someone else’s line: the biggest catchphrases here are movie quotes. Slater and Goldblum are real people’s names. ',
+      '“Not checked” means nobody has looked yet. The flags are shown for you to decide on; nothing here stops a shirt.'),
+    h('h3', {}, 'Find phrases'),
+    h('div', {class: 'chips'},
+      sections.map(section => chip(section.id, section.title, section.count)),
+      chip('episodes', 'Episode picks', data.episodes.reduce((sum, ep) => sum + ep.phrases.length, 0)),
+      chip('notes', 'Your notes', data.notes.lines.length)),
+    shirtsForm.source === 'episodes' ? episodePicks(data)
+      : shirtsForm.source === 'notes' ? notesList(data)
+      : [rescanBox(data), phraseTable(page)],
+  ];
+}
+
+// `#shirts/<list>` opens the tab on that list: a scan section, `episodes` or `notes`.
+async function showShirts(current, source) {
+  if (shirtsPoll) clearTimeout(shirtsPoll);
+  const data = await api('/api/shirts');
+  const sources = [...data.scan.sections.map(row => row.id), 'episodes', 'notes'];
+  if (sources.includes(source) && source !== shirtsForm.source) Object.assign(shirtsForm, {source, offset: 0});
+  const section = data.scan.sections.find(row => row.id === shirtsForm.source);
+  const page = section ? await api(`/api/shirts/phrases?section=${section.id}&q=${encodeURIComponent(shirtsForm.query)}&offset=${shirtsForm.offset}`) : null;
+  current(renderShirts(data, page));
+  // A rescan takes about 20 s: look again until it has finished, then redraw with the new report.
+  const watch = async () => {
+    if ((location.hash.slice(1) || 'today').split('/')[0] !== 'shirts') return;
+    if ((await api('/api/shirts')).rescan.running) shirtsPoll = setTimeout(watch, 1000);
+    else route();
+  };
+  if (data.rescan.running) shirtsPoll = setTimeout(watch, 1000);
+}
+
 // --------------------------------------------------------------------------- routing
 
 function show(nodes) {
@@ -685,7 +941,7 @@ function setNeedsCount(count) {
   badge.hidden = !count;
 }
 
-const TABS = ['today', 'episode', 'lab', 'settings'];
+const TABS = ['today', 'episode', 'shirts', 'lab', 'settings'];
 let latestRoute = 0;
 let lastTab = null;
 
@@ -714,6 +970,8 @@ async function route() {
       current(renderSettings(await api('/api/settings')));
     } else if (known === 'lab') {
       await showLab(current, argument);
+    } else if (known === 'shirts') {
+      await showShirts(current, argument);
     } else {
       const list = await api('/api/episodes');
       const stem = argument || (list[0] && list[0].stem);

@@ -5,8 +5,12 @@ Four episodes:
 - 20100101: a transcript and nothing else (never processed).
 - 20260105: finished, ep 801 "Alpha"; three clips rendered, one published and two skipped.
 - 20260112: finished, ep 802 "Beta", from the retired heuristic (no host ratings);
-  three clips rendered, none decided.
+  three clips rendered, none decided. Cowork's T-shirt phrases file is there.
 - 20260119: handed to Cowork; Cowork's SEO file is there but invalid, movies is missing.
+
+The phrase report lists five phrases and two passages, one of each kind the
+scan sorts them into, and ``output/tshirt/ideas.txt`` holds notes in the shape
+of Tony's own.
 """
 from __future__ import annotations
 
@@ -52,6 +56,46 @@ def movie(title, year, **extra):
            "evidence": [{"start": 10.0, "end": 80.0, "text": "review", "windowType": "review"}]}
     row.update(extra)
     return row
+
+
+def scan_phrase(text, episodes, reasons, burst=None, title=False, first="20100101", last="20260105", examples=()):
+    return {"phrase": text, "words": len(text.split()), "episodes": episodes, "uses": episodes * 2,
+            "firstStem": first, "lastStem": last, "fixedShare": 0.5, "burst": burst, "looksLikeTitle": title,
+            "reasons": reasons, "stems": [first, last], "examples": list(examples)}
+
+
+def burst(count, lift, first="20250106", last="20260105"):
+    return {"count": count, "window": 20, "lift": lift, "fromStem": first, "toStem": last}
+
+
+SCAN_PHRASES = [
+    scan_phrase("first time", 300, ["staple"]),
+    scan_phrase("pain train", 40, ["fixed"], examples=[
+        {"stem": "20100101", "start": 20.0, "text": "All aboard the pain train."},
+        {"stem": "20260105", "start": 30.0, "text": "That is the pain train, baby."}]),
+    scan_phrase("give it a slater", 30, ["fixed", "burst"], burst(5, 3.5), first="20110416"),
+    scan_phrase("big booty", 12, ["burst"], burst(9, 6.0), first="20250106",
+                examples=[{"stem": "20260112", "start": 40.0, "text": "Big booty, big booty."}]),
+    scan_phrase("thomas crown", 9, ["fixed"], title=True),
+]
+SCAN_PASSAGES = [
+    {"text": "a dollar. I'd buy that for a dollar", "episodes": 135, "firstStem": "20110416",
+     "lastStem": "20260105", "stems": ["20110416", "20260105"]},
+    {"text": "one two three in the place to be", "episodes": 50, "firstStem": "20100101",
+     "lastStem": "20130707", "stems": ["20100101", "20130707"]},
+]
+SHIRT_LINES = {20: "Like the man said: nobody outruns the gravy!", 30: "I'd buy that for a dollar.",
+               40: "That right there is a certified Slater."}
+NOTES = "mt rushmores\n- 20260112 - Horror Icons\n- 20260105 - \n\nRatings as words\n Goldblum\n Dollar\n"
+
+
+def shirt(phrase, start, origin="original", source=None, speaker="Harley", why="Funny with no context"):
+    return {"phrase": phrase, "start": float(start), "end": float(start + 10), "speaker": speaker,
+            "origin": origin, "source": source, "why": why}
+
+
+def shirts(stem, *phrases):
+    return {"episode": {"stem": stem}, "generatedAt": "2026-01-13T12:00:00Z", "phrases": list(phrases)}
 
 
 def write(path: Path, payload=None, data: bytes = b""):
@@ -102,6 +146,16 @@ def build(root: Path) -> dict:
     _finished(root, "20260112", movies("20260112", 802, "Beta", [movie("Old Way", 1999)], mode="heuristic"),
               seo(title="Beta | BBPC Ep 802"))
 
+    write(root / "transcripts/20260112.json",
+          [dict(seg, text=SHIRT_LINES.get(int(seg["start"]), seg["text"])) for seg in SEGMENTS])
+    write(out / "cowork/20260112.shirts.json", shirts(
+        "20260112",
+        shirt("Nobody outruns the gravy", 20),
+        shirt("I'd buy that for a dollar", 30, origin="quote", source="RoboCop", speaker="Drop"),
+        shirt("Certified Slater", 40, origin="unsure", speaker="Fonso"),
+    ))
+    write(out / "tshirt/ideas.txt", data=NOTES.encode())
+
     write(root / "transcripts/20260119.json", SEGMENTS)
     write(root / "episodes/20260119.mp3", data=b"audio")
     write(out / "cowork/20260119.seo.json", seo(candidates=19))
@@ -128,7 +182,7 @@ def build(root: Path) -> dict:
     report = write(out / "phrases/recurring-phrases.json", {
         "version": 1, "scannedAt": "2026-01-20T08:22:00+00:00", "transcripts": 4,
         "firstStem": "20100101", "lastStem": "20260119",
-        "phrases": [{"phrase": "pain train"}, {"phrase": "big booty"}], "passages": [{"text": "one two three"}],
+        "phrases": SCAN_PHRASES, "passages": SCAN_PASSAGES,
     })
     ignore = write(out / "phrases/ignore.txt", data=b"pain train\n")
     os.utime(report, (1_800_000_000, 1_800_000_000))

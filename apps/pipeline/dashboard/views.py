@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from lib import (
-    cowork_handoff, cowork_headless, lab, phrase_scan, publish_log, settings_schema, stage_status, visual_prompts,
+    cowork_handoff, cowork_headless, lab, phrase_scan, publish_log, settings_schema, shirt_ideas, stage_status,
+    visual_prompts,
 )
 from lib.data_dir import data_dir, resolve_data_paths
 
@@ -347,3 +348,64 @@ def lab_view(
         "runs": [lab_run(config, run) for run in lab.list_runs(config, active)],
         "active": active,
     }
+
+
+# --------------------------------------------------------------------------- Shirts
+
+_NO_RESCAN = {"running": False, "startedAt": None, "finishedAt": None, "returncode": None, "timedOut": False,
+              "output": ""}
+
+
+def _audio_url(config: Dict[str, Any], stem: Optional[str]) -> Optional[str]:
+    audio = stage_status.episode_audio(config, stem) if stem else None
+    return media_url(config, audio) if audio else None
+
+
+def shirt_idea(config: Dict[str, Any], idea: Dict[str, Any]) -> Dict[str, Any]:
+    """An idea with its licensing flags, where it came from in words, and its audio when the episode's is here."""
+    came_from = idea.get("from") or {}
+    url = _audio_url(config, came_from.get("stem")) if came_from.get("kind") == "episode" else None
+    return {
+        **idea,
+        "flags": shirt_ideas.flags(idea),
+        "fromText": shirt_ideas.source_text(idea),
+        "hear": {"url": url, "start": came_from.get("start") or 0.0} if url else None,
+    }
+
+
+def shirts(config: Dict[str, Any], rescan: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """The Shirts tab: the shortlist and everything a phrase can be promoted from.
+
+    ``rescan`` is the Rescan button's state, from the server's scan runner.
+    """
+    episodes_ = []
+    for row in shirt_ideas.episode_phrases(config):
+        number, title = _identity(config, row["stem"])
+        episodes_.append({**row, "date": _date(row["stem"]), "number": number, "title": title,
+                          "audioUrl": _audio_url(config, row["stem"])})
+    path = shirt_ideas.ideas_path(config)
+    return {
+        "file": _label(path),
+        "saved": path.is_file(),
+        "statuses": list(shirt_ideas.STATUSES),
+        "origins": list(shirt_ideas.ORIGINS),
+        "ideas": [shirt_idea(config, idea) for idea in shirt_ideas.load(config)["ideas"]],
+        "scan": {
+            **phrase_scan.report_status(Path(config.get("paths", {}).get("output_dir", "./output")) / "phrases"),
+            "sections": shirt_ideas.scan_sections(config),
+        },
+        "rescan": dict(rescan or _NO_RESCAN),
+        "episodes": episodes_,
+        "notes": {"file": _label(shirt_ideas.notes_path(config)), "lines": shirt_ideas.notes(config)},
+    }
+
+
+def shirt_phrases(
+    config: Dict[str, Any], section: str, query: str = "", offset: int = 0, limit: int = shirt_ideas.PAGE_ROWS
+) -> Dict[str, Any]:
+    """A page of one section of the phrase report; an example can be heard when its episode's audio is here."""
+    page = shirt_ideas.scan_rows(config, section, query, offset, limit)
+    for row in page["rows"]:
+        for example in row["examples"]:
+            example["audioUrl"] = _audio_url(config, example["stem"])
+    return page

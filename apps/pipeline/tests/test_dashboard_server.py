@@ -392,7 +392,7 @@ class PostGuardTests(LabServerTestCase):
             with self.subTest(origin):
                 self.assertEqual(self.post("/api/lab/drafts", draft, origin=origin)[0], 200)
 
-    def test_only_the_lab_takes_posts(self):
+    def test_only_the_lab_and_shirts_paths_take_posts(self):
         for path in ("/api/today", "/api/settings", "/", "/media/episodes/20260105.mp3", "/api/lab"):
             with self.subTest(path):
                 response, _ = self.request(path, method="POST", body=b"{}", headers={
@@ -562,6 +562,7 @@ class ReadOnlyTests(ServerTestCase):
     PATHS = ("/", "/static/app.js", "/static/style.css", "/api/header", "/api/today", "/api/episodes", "/api/lab",
              "/api/episode?stem=20260105", "/api/episode?stem=20260112", "/api/episode?stem=20260119",
              "/api/episode?stem=20100101", "/api/settings", "/docs/show-format.md",
+             "/api/shirts", "/api/shirts/phrases?section=catchphrases",
              "/media/episodes/20260105.mp3", "/media/output/thumbnails/20260105.png")
 
     def test_serving_every_page_leaves_the_data_directory_untouched_and_never_shows_dot_env(self):

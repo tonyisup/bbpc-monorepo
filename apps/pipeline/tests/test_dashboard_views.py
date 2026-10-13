@@ -76,7 +76,7 @@ class TodayTests(ViewsTestCase):
             "transcripts": 4, "firstDate": "2010-01-01", "lastDate": "2026-01-19",
             "done": 2, "waiting": 1,
             "shortsPublished": 2, "decisions": 4,
-            "phrasesScanned": True, "phrases": 2, "passages": 1,
+            "phrasesScanned": True, "phrases": 5, "passages": 2,
         })
 
     def test_recent_episodes_are_newest_first_with_stages_status_and_shorts(self):
@@ -310,6 +310,8 @@ class ReadOnlyTests(ViewsTestCase):
         for stem in stage_status.known_stems(self.config):
             self.assertIsNotNone(views.episode(self.config, stem))
         views.settings({"settings": dict(self.config["settings"])})
+        views.shirts(self.config)
+        views.shirt_phrases(self.config, "catchphrases")
         self.assertEqual(snapshot(self.root), before)
         self.assertGreater(len(before), 30)
 
