@@ -15,12 +15,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 from lib import (
-    cowork_handoff, cowork_headless, lab, phrase_scan, publish_log, settings_schema, shirt_ideas, stage_status,
-    visual_prompts,
+    cowork_handoff, cowork_headless, lab, phrase_scan, pipeline_runs, publish_log, settings_schema, shirt_ideas,
+    stage_status, visual_prompts,
 )
 from lib.data_dir import data_dir, resolve_data_paths
 
 RECENT_EPISODES = 12
+RUNS_LISTED = 30
 DOCS = ("cowork-handoff.md", "show-format.md")  # under apps/pipeline/docs
 MEDIA_ROOTS = (("episodes", "episodes_dir"), ("output", "output_dir"))  # URL name, paths key
 _STATE_FIELDS = ("status", "updatedAt", "note", "waitingOn", "lastError")
@@ -81,12 +82,13 @@ def _identity(config: Dict[str, Any], stem: str) -> Tuple[Optional[int], Optiona
     return None, None
 
 
-def header(config: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "dataDir": str(data_dir()),
-        # The real check runs the Node importer (transcript_importer.check_configuration); it belongs to Runs.
-        "convex": "not checked",
-    }
+def header(config: Dict[str, Any], check: Optional[Dict[str, Any]] = None, checked_at: Optional[str] = None) -> Dict[str, Any]:
+    """The data directory, and the Convex target as the Runs tab's last check found it (none until one is made)."""
+    convex: Dict[str, Any] = {"checked": False}
+    found = next((row for row in (check or {}).get("checks") or [] if row.get("id") == "configuration"), None)
+    if found is not None:
+        convex = {"checked": True, "ok": bool(found.get("ok")), "at": checked_at, "detail": found.get("detail")}
+    return {"dataDir": str(data_dir()), "convex": convex}
 
 
 # --------------------------------------------------------------------------- Today
@@ -492,4 +494,40 @@ def clips(config: Dict[str, Any], stem: Optional[str] = None) -> Optional[Dict[s
         "untracked": [_decision(row) for row in listing["untracked"]],
         "lengths": lengths,
         "lab": in_lab,
+    }
+
+
+# --------------------------------------------------------------------------- Runs
+
+def runs(config: Dict[str, Any], active: Optional[str], python: Optional[Path]) -> Dict[str, Any]:
+    """The Runs tab: the episodes a run can name, the stages, and past runs, newest first.
+
+    ``active`` is the id of the run this dashboard has going; ``python`` the
+    venv python runs use.
+    """
+    state = cowork_handoff.load_state(config)["episodes"]
+    reports = {row["stem"]: row for row in publish_log.report(config, publish_log.tracked_stems(config))}
+    headless = cowork_headless.enabled(config)
+    episodes_ = []
+    for stem in reversed(stage_status.known_stems(config)):
+        if stage_status.episode_audio(config, stem) is None:
+            continue  # a run needs the mp3
+        number, title = _identity(config, stem)
+        status = _status(state.get(stem, {}), _shorts(reports, stem))
+        episodes_.append({"stem": stem, "date": _date(stem), "number": number, "title": title, "status": status,
+                          "resumable": status == "waiting" and (headless or cowork_handoff.outputs_ready(config, stem))})
+    listed = pipeline_runs.list_runs(config, active)
+    for run in listed:
+        run["outcome"] = pipeline_runs.OUTCOMES.get(run["status"], run["status"])
+    return {
+        "episodes": episodes_,
+        "stages": list(stage_status.STAGES),
+        "headless": headless,
+        "active": next((run for run in listed if run["id"] == active), None),
+        "elsewhere": pipeline_runs.running_elsewhere(config, active),
+        "runs": listed[:RUNS_LISTED],
+        "runCount": len(listed),
+        "runsDir": _label(pipeline_runs.runs_dir(config)),
+        "python": str(python) if python else None,
+        "pythonFound": bool(python) and Path(python).is_file(),
     }

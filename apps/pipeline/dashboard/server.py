@@ -16,7 +16,10 @@ A GET never writes. The POSTs are:
   ``output/tshirt/ideas.json``, and Rescan runs ``scripts/scan_phrases.py``,
   which rewrites the report under ``output/phrases/``;
 - the Clips tab's (``/api/clips/...``): they record a publish decision in
-  ``output/publish-decisions.json``.
+  ``output/publish-decisions.json``;
+- the Runs tab's (``/api/runs/...``): Check runs ``scripts/check_run.py``, and
+  Start runs ``pipeline.py`` itself, which writes to Convex and everywhere a
+  pipeline run writes. Each run is recorded under ``output/runs/``.
 
 Each needs the token made when the server started and this server's own
 Origin, because any web page open in the browser can post to localhost.
@@ -37,8 +40,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from dashboard import views
 from dashboard.lab_runner import DEFAULT_TIMEOUT_SECONDS, LabBusy, LabRunner
+from dashboard.run_runner import ChecksFailed, RunBusy, RunRunner
 from dashboard.scan_runner import DEFAULT_TIMEOUT_SECONDS as SCAN_TIMEOUT_SECONDS, ScanBusy, ScanRunner
-from lib import lab, publish_log, shirt_ideas
+from lib import lab, pipeline_runs, publish_log, shirt_ideas
 from lib.data_dir import data_dir, require_data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,7 +69,7 @@ CONTENT_POLICY = (
 CHUNK_BYTES = 64 * 1024
 MAX_POST_BYTES = 64 * 1024
 TOKEN_HEADER = "X-Dashboard-Token"
-POST_PREFIXES = ("/api/lab/", "/api/shirts/", "/api/clips/")
+POST_PREFIXES = ("/api/lab/", "/api/shirts/", "/api/clips/", "/api/runs/")
 # What the page may send when it adds an idea, and the library's name for each.
 IDEA_FIELDS = (("printText", "print_text"), ("origin", "origin"), ("source", "source"), ("status", "status"),
                ("notes", "notes"))
@@ -132,11 +136,12 @@ def media_file(config: Dict[str, Any], parts: Sequence[str]) -> Optional[Path]:
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, port: int, config_path: Path, runner: LabRunner, scans: ScanRunner):
+    def __init__(self, port: int, config_path: Path, runner: LabRunner, scans: ScanRunner, runs: RunRunner):
         super().__init__((BIND_ADDRESS, port), Handler)
         self.config_path = Path(config_path)
         self.runner = runner
         self.scans = scans
+        self.runs = runs
         # One change at a time to the shortlist and to the decisions log: each rewrites its whole file.
         self.ideas_lock = threading.Lock()
         self.decisions_lock = threading.Lock()
@@ -195,7 +200,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._started = False
         try:
-            post = {"/api/lab/": self._lab_post, "/api/shirts/": self._shirts_post, "/api/clips/": self._clips_post}
+            post = {"/api/lab/": self._lab_post, "/api/shirts/": self._shirts_post, "/api/clips/": self._clips_post,
+                    "/api/runs/": self._runs_post}
             post[prefix](path[len(prefix):], payload)
         except lab.LabError as exc:
             self._json(400, {"error": str(exc), "problems": exc.problems, "code": exc.code})
@@ -203,6 +209,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(409, {"error": "A render is already running. One at a time.", "active": exc.active})
         except ScanBusy:
             self._json(409, {"error": "A rescan is already running."})
+        except RunBusy as exc:
+            self._json(409, {"error": "A run is already going. One at a time.", "active": exc.active})
+        except ChecksFailed as exc:
+            self._json(400, {"error": str(exc), "checks": exc.result})
         except ValueError as exc:  # what the shortlist or the decisions library refuses, in its own words
             self._json(400, {"error": str(exc)})
         except Exception as exc:
@@ -262,7 +272,12 @@ class Handler(BaseHTTPRequestHandler):
         raw, config = views.load_config(self.server.config_path)  # read per request: edits show on reload
         runner = self.server.runner
         if name == "header":
-            self._json(200, {**views.header(config), "token": self.server.token})
+            runs = self.server.runs
+            self._json(200, {**views.header(config, runs.last_check, runs.last_check_at), "token": self.server.token})
+        elif name == "runs":
+            self._json(200, views.runs(config, self.server.runs.active, self.server.runs.python))
+        elif name == "runs/log":
+            self._run_log(config, query)
         elif name == "lab":
             self._json(200, views.lab_view(config, raw, runner.active, runner.python, self._can_render()))
         elif name == "lab/run":
@@ -345,6 +360,42 @@ class Handler(BaseHTTPRequestHandler):
             runner.release()
             raise
         self._json(202, {"run": views.lab_run(config, runner.start(config, run))})
+
+    # ----------------------------------------------------------------------- the Runs tab
+
+    def _run_log(self, config: Dict[str, Any], query: Dict[str, Any]) -> None:
+        run_id = (query.get("id") or [""])[0]
+        try:
+            offset = int((query.get("offset") or ["-1"])[0])
+        except ValueError:
+            self._json(400, {"error": "offset must be a whole number"})
+            return
+        log = pipeline_runs.read_log(config, run_id, offset)
+        if log is None:
+            self._json(404, {"error": "no such run"})
+            return
+        (run,) = [run for run in views.runs(config, self.server.runs.active, None)["runs"] if run["id"] == run_id] or [
+            pipeline_runs.load_run(config, run_id)]
+        self._json(200, {**log, "run": run})
+
+    def _runs_post(self, name: str, payload: Dict[str, Any]) -> None:
+        """Check or start a pipeline run, or stop the one going. A start writes to Convex: the page confirms it first."""
+        _, config = views.load_config(self.server.config_path)
+        runs = self.server.runs
+        if name == "stop":
+            runs.stop(payload.get("id"))
+            self._json(200, {"stopping": payload.get("id")})
+            return
+        if name not in ("check", "start"):
+            self._not_found()
+            return
+        planned = pipeline_runs.plan(config, payload.get("mode"), payload.get("stem"), payload.get("stage"))
+        if name == "check":
+            self._json(200, runs.check(config, planned, self.server.config_path))
+        elif payload.get("confirmed") is not True:  # only a literal true starts a run
+            self._json(400, {"error": "Confirm the run first: it writes to Convex."})
+        else:
+            self._json(202, {"run": runs.start(config, planned, self.server.config_path)})
 
     # ----------------------------------------------------------------------- the Clips tab
 
@@ -478,11 +529,16 @@ def make_server(
     lab_timeout: float = DEFAULT_TIMEOUT_SECONDS,
     scan_command: Any = None,
     scan_timeout: float = SCAN_TIMEOUT_SECONDS,
+    run_command: Any = None,
+    check_command: Any = None,
 ) -> DashboardServer:
-    """``lab_command`` replaces the pipeline command a Lab render runs, and ``scan_command``
-    the phrase scan a Rescan runs; tests pass stand-ins."""
-    runner = LabRunner(Path(pipeline_python or DEFAULT_PIPELINE_PYTHON), lab_command, lab_timeout)
-    return DashboardServer(port, config_path, runner, ScanRunner(scan_command, scan_timeout))
+    """``lab_command`` replaces the pipeline command a Lab render runs, ``scan_command`` the
+    phrase scan a Rescan runs, and ``run_command`` and ``check_command`` a pipeline run and
+    its checks; tests pass stand-ins."""
+    python = Path(pipeline_python or DEFAULT_PIPELINE_PYTHON)
+    runner = LabRunner(python, lab_command, lab_timeout)
+    runs = RunRunner(python, run_command, check_command)
+    return DashboardServer(port, config_path, runner, ScanRunner(scan_command, scan_timeout), runs)
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -490,7 +546,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port on {BIND_ADDRESS} (default {DEFAULT_PORT})")
     ap.add_argument("--config", default=str(ROOT / "config.json"))
     ap.add_argument("--pipeline-python", default=str(DEFAULT_PIPELINE_PYTHON),
-                    help="python of the pipeline's venv, which runs the Lab's test renders (default: venv/bin/python)")
+                    help="python of the pipeline's venv, which runs the Lab's test renders and the Runs tab's "
+                         "checks and runs (default: venv/bin/python)")
     return ap.parse_args(argv)
 
 
@@ -502,9 +559,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"Pipeline dashboard: http://{BIND_ADDRESS}:{server.server_address[1]}/")
     print(f"  data directory {data_dir()}; Ctrl-C to stop")
     print("  writes only: output/lab/ (Lab), output/tshirt/ideas.json (Shirts), output/phrases/ (Rescan), "
-          "output/publish-decisions.json (Clips)")
+          "output/publish-decisions.json (Clips), output/runs/ and a pipeline run's own writes (Runs, Convex included)")
     if not server.runner.python_found():
-        print(f"  no pipeline python at {server.runner.python}: the Lab cannot render (see --pipeline-python)")
+        print(f"  no pipeline python at {server.runner.python}: the Lab cannot render and Runs cannot start "
+              "(see --pipeline-python)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -297,7 +297,7 @@ class LabViewTests(ViewsTestCase):
 
 class HeaderTests(ViewsTestCase):
     def test_header_names_the_data_directory_and_leaves_convex_unchecked(self):
-        self.assertEqual(views.header(self.config), {"dataDir": str(self.root), "convex": "not checked"})
+        self.assertEqual(views.header(self.config), {"dataDir": str(self.root), "convex": {"checked": False}})
 
 
 class ReadOnlyTests(ViewsTestCase):

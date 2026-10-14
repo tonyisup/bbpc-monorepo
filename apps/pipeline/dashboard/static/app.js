@@ -1,6 +1,6 @@
 // BBPC pipeline dashboard. Every figure is computed by the server (dashboard/views.py);
-// this file lays it out. Looking only sends GET requests. The Lab, its drafts, the Clips
-// tab and the Shirts tab send POSTs, each carrying the token the server made when it started.
+// this file lays it out. Looking only sends GET requests. The Lab, its drafts, the Clips,
+// Shirts and Runs tabs send POSTs, each carrying the token the server made when it started.
 'use strict';
 
 const view = document.getElementById('view');
@@ -95,11 +95,12 @@ function needRow(need) {
     return h('div', {}, dot(ready ? 'in' : 'wa'), h('div', {class: 't'},
       h('b', {}, `${episodeName(need)} · ${ready ? "Cowork's files are ready" : 'waiting on Cowork'}`),
       h('div', {class: 'mut sm'}, coworkSummary(need.files)),
-      ready && h('div', {class: 'mut sm'}, 'Resume with ',
+      ready && h('div', {class: 'mut sm'}, 'Resume on the Runs tab, or with ',
         h('code', {}, `python pipeline.py episodes/${need.stem}.mp3 --from movies`)),
       !ready && need.headless && h('div', {class: 'mut sm'},
         'Headless Cowork is on, so its session failed or was skipped. Run the pipeline again to retry it, or write the files in Cowork.'),
       need.lastError && h('pre', {}, `Last error: ${need.lastError}`)),
+      ready && h('a', {class: 'btn p', href: `#runs/resume/${need.stem}`}, 'Resume…'),
       h('a', {class: 'btn', href: `#episode/${need.stem}`}, 'Open episode'));
   }
   if (need.kind === 'phrases') {
@@ -229,7 +230,8 @@ function renderEpisode(ep, list) {
     h('div', {class: 'bar'},
       h('b', {class: 'big'}, named || ep.date || ep.stem),
       h('span', {class: 'mut'}, [named && ep.date, ep.audio ? `${ep.audio.file} · ${megabytes(ep.audio.bytes)}` : 'no local mp3'].filter(Boolean).join(' · ')),
-      h('span', {class: 'sp'}), step(ep.prev, '← Older'), picker, step(ep.next, 'Newer →')),
+      h('span', {class: 'sp'}), step(ep.prev, '← Older'), picker, step(ep.next, 'Newer →'),
+      ep.audio && h('a', {class: 'btn', href: `#runs/from/${ep.stem}`}, 'Run from a stage…')),
     ep.audio
       ? h('audio', {controls: true, preload: 'none', src: ep.audio.url})
       : h('div', {class: 'mut sm gap'}, `No local mp3 for this episode, so there is nothing to play. ${plural(ep.audioEpisodes, 'episode has', 'episodes have')} one.`),
@@ -1058,6 +1060,232 @@ async function showShirts(current, source) {
   if (data.rescan.running) shirtsPoll = setTimeout(watch, 1000);
 }
 
+// --------------------------------------------------------------------------- Runs
+
+// The one part of the page that starts processes that write to Convex. Every start is checked by the
+// server first and confirmed here, showing the exact command.
+const runsForm = {mode: 'unattended', stem: null, stage: 'movies', check: null, checking: false, error: null, shown: null};
+let runsPoll = null;
+
+const RUN_OUTCOME_TONES = {done: 'ok', cowork: 'in', failed: 'er', stopped: 'wa', interrupted: 'wa', running: 'in', starting: 'in'};
+const MODE_WORDS = {
+  unattended: 'Unattended, as scheduled_pipeline.sh runs it',
+  from: 'One episode, from a stage',
+  resume: 'Resume after Cowork',
+};
+const runWhat = run => (run.mode === 'unattended' ? 'unattended (newest episode from Azure)'
+  : `${run.stem} from ${stageLabel(run.stage)}${run.mode === 'resume' ? ' (resume after Cowork)' : ''}`);
+const runPill = run => pill(RUN_OUTCOME_TONES[run.status] || 'no', run.outcome || run.status);
+
+function setConvexPill(convex) {
+  const holder = document.getElementById('convex-pill');
+  if (!holder || !convex) return;
+  const tone = !convex.checked ? 'no' : convex.ok ? 'ok' : 'er';
+  holder.replaceChildren(dot(tone), 'Convex target ',
+    !convex.checked ? 'not checked' : `${convex.ok ? 'passed' : 'failed'} · ${when(convex.at)}`);
+  holder.title = convex.checked ? `Last checked from the Runs tab: ${convex.detail}`
+    : 'Checked by the Runs tab before every run: check_configuration() runs the Node importer.';
+}
+
+function runRequest() {
+  const request = {mode: runsForm.mode};
+  if (runsForm.mode !== 'unattended') request.stem = runsForm.stem;
+  if (runsForm.mode === 'from') request.stage = runsForm.stage;
+  return request;
+}
+
+async function checkRun() {
+  Object.assign(runsForm, {checking: true, error: null});
+  route();
+  const answer = await post('/api/runs/check', runRequest());
+  Object.assign(runsForm, {checking: false, check: answer.ok ? answer.body : null, error: answer.ok ? null : answer.body.error});
+  if (answer.ok) setConvexPill(convexFrom(answer.body));
+  route();
+  return answer.ok ? answer.body : null;
+}
+
+const convexFrom = check => {
+  const row = check.checks.find(c => c.id === 'configuration');
+  return row ? {checked: true, ok: row.ok, at: new Date().toISOString(), detail: row.detail} : null;
+};
+
+async function startRun(data) {
+  const check = await checkRun();
+  if (!check || !check.ok) return; // the failed checks are on the page
+  const reaches = check.stages.map(stageLabel).join(', ');
+  const cowork = data.headless && check.stages.some(stage => stage === 'movies' || stage === 'parse')
+    ? '\n\nHeadless Cowork is on: if Cowork’s files are missing, this starts a claude -p session, which uses your Claude usage.'
+    : '';
+  const sure = window.confirm(`Start this pipeline run?\n\n${check.command}\n\nIt runs ${reaches}. ` +
+    `It writes to Convex${check.stages.includes('import_transcript') ? ' (import_transcript and publish)' : ' (publish)'}.${cowork}`);
+  if (!sure) return;
+  const answer = await post('/api/runs/start', {...runRequest(), confirmed: true});
+  if (!answer.ok) {
+    Object.assign(runsForm, {error: answer.body.error, check: answer.body.checks || runsForm.check});
+    route();
+    return;
+  }
+  runsForm.shown = answer.body.run.id;
+  location.hash = `#runs/${answer.body.run.id}`;
+}
+
+async function stopRun(run) {
+  if (!window.confirm(`Stop run ${run.id}?\n\nEverything it started is ended. A stop in the middle of import_transcript or publish can leave that write to Convex unfinished.`)) return;
+  const answer = await post('/api/runs/stop', {id: run.id});
+  if (!answer.ok) runsForm.error = answer.body.error;
+  route();
+}
+
+function checksBox(check) {
+  if (!check) {
+    return h('div', {class: 'box sm'}, h('ul', {class: 'checks'},
+      ['Data directory exists', 'check_configuration() passes (the Convex target matches its pins)',
+        'Credentials are present (names only, never values)', 'ffmpeg has libass', 'Node is 22.6 or newer',
+        'No other dashboard run is active'].map(text => h('li', {}, dot('no'), text))),
+      h('div', {class: 'mut gap'}, 'Made before every run. Check runs them now without starting anything.'));
+  }
+  return h('div', {class: 'box sm'},
+    h('ul', {class: 'checks'}, check.checks.map(row => h('li', {}, dot(row.ok ? 'ok' : 'er'),
+      h('div', {}, h('b', {}, row.label), h('div', {class: row.ok ? 'mut wrap' : 'problem wrap'}, row.detail))))),
+    check.credentials.length > 0 && [
+      h('h4', {}, 'Credentials'),
+      h('table', {}, check.credentials.map(row => h('tr', {class: row.needed ? '' : 'mut'},
+        h('td', {class: 'mono'}, row.name),
+        h('td', {class: 'nowrap'}, row.set ? pill('ok', 'set') : pill(row.needed ? 'er' : 'no', 'not set')),
+        h('td', {class: 'sm mut'}, row.needed ? row.use : `not needed for this run · ${row.use}`))))]);
+}
+
+function startBox(data) {
+  const busy = Boolean(data.active || data.elsewhere);
+  const resumable = data.episodes.filter(ep => ep.resumable);
+  const choices = runsForm.mode === 'resume' ? resumable : data.episodes;
+  if (runsForm.mode !== 'unattended' && !choices.some(ep => ep.stem === runsForm.stem)) {
+    runsForm.stem = choices.length ? choices[0].stem : null;
+  }
+  const select = (options, value, label, onPick) => {
+    const el = h('select', {class: 'inp', 'aria-label': label}, options.map(([id, text]) =>
+      h('option', {value: id, selected: id === value}, text)));
+    el.addEventListener('change', () => { onPick(el.value); runsForm.check = null; runsForm.error = null; route(); });
+    return el;
+  };
+  const episodeLabel = ep => [ep.number && `Ep ${ep.number}`, ep.title, ep.date].filter(Boolean).join(' · ')
+    + (ep.status === 'waiting' ? ' · waiting on Cowork' : '');
+  const missingEpisode = runsForm.mode !== 'unattended' && !runsForm.stem;
+  return h('div', {class: 'box runs-form'},
+    h('label', {}, 'Run'),
+    select(Object.entries(MODE_WORDS), runsForm.mode, 'Kind of run', value => { runsForm.mode = value; }),
+    runsForm.mode === 'unattended' && h('div', {class: 'mut sm gap'},
+      'Finds the newest episode in Azure, downloads it if it is not here, skips it if it is finished, and resumes it if Cowork has written its files. ',
+      h('code', {}, 'scheduled_pipeline.sh'), ' runs exactly this, but reports the hand-off to Cowork as exit 0; here it shows as handed to Cowork.'),
+    runsForm.mode !== 'unattended' && [
+      h('label', {}, 'Episode'),
+      choices.length
+        ? select(choices.map(ep => [ep.stem, episodeLabel(ep)]), runsForm.stem, 'Episode', value => { runsForm.stem = value; })
+        : h('div', {class: 'mut sm'}, runsForm.mode === 'resume'
+          ? 'No episode is waiting on Cowork with its files written.' : 'No episode has a local mp3.')],
+    runsForm.mode === 'from' && [
+      h('label', {}, 'From stage (it runs every stage after it too)'),
+      select(data.stages.map(stage => [stage, stageLabel(stage)]), runsForm.stage, 'Stage', value => { runsForm.stage = value; })],
+    runsForm.mode === 'resume' && h('div', {class: 'mut sm gap'}, 'Runs from movies to publish with Cowork’s files.'),
+    runsForm.check && h('div', {class: 'gap'}, h('label', {}, 'Command'), h('pre', {}, runsForm.check.command)),
+    h('div', {class: 'mut sm gap'}, 'Every run reaches publish, which writes to Convex. You are asked before it starts.'),
+    data.headless && h('div', {class: 'sm warning gap'},
+      'Headless Cowork is on (settings.cowork_headless): a run that needs Cowork’s files starts a claude -p session.'),
+    !data.pythonFound && h('div', {class: 'sm problem gap'},
+      `No pipeline Python at ${data.python}. Start the dashboard with --pipeline-python pointing at the venv's python.`),
+    runsForm.error && h('div', {class: 'sm problem gap'}, runsForm.error),
+    h('div', {class: 'bar gap'},
+      h('button', {class: 'btn p', disabled: busy || missingEpisode || runsForm.checking || !data.pythonFound,
+        onclick: () => startRun(data)}, busy ? 'A run is going' : 'Run…'),
+      h('button', {class: 'btn', disabled: missingEpisode || runsForm.checking || !data.pythonFound, onclick: checkRun},
+        runsForm.checking ? 'Checking…' : 'Check')));
+}
+
+function logBox(data, shown) {
+  if (!shown) {
+    return h('div', {class: 'box mut'}, 'No run yet. Its log will show here as it runs, and stays in ', h('code', {}, `${data.runsDir}/`), '.');
+  }
+  const run = shown.run;
+  const going = run.status === 'running' || run.status === 'starting';
+  return h('div', {class: 'box'},
+    h('div', {class: 'bar'}, h('b', {}, runWhat(run)), runPill(run), h('span', {class: 'sp'}),
+      going && run.id === (data.active && data.active.id) && h('button', {class: 'btn', onclick: () => stopRun(run)}, 'Stop…')),
+    h('div', {class: 'mut sm'}, `${run.id} · started ${when(run.startedAt || run.createdAt)}`,
+      run.finishedAt ? ` · ended ${when(run.finishedAt)}` : '',
+      run.status === 'cowork' ? ' · exit 75 is the hand-off, not a failure: resume once Cowork has written its files' : '',
+      run.status === 'interrupted' ? ' · the dashboard stopped while it ran, so how it ended is not known' : ''),
+    h('pre', {id: 'run-log', class: 'log'}, shown.text),
+    h('div', {class: 'mut sm'}, `Kept in ${data.runsDir}/${run.id}.log, with every .env value replaced by its name.`));
+}
+
+function renderRuns(data, shown) {
+  const elsewhere = data.elsewhere;
+  return [
+    elsewhere && h('div', {class: 'box warning'},
+      `Another dashboard has run ${elsewhere.id} going (${runWhat(elsewhere)}). Start nothing here until it ends.`),
+    h('div', {class: 'two'},
+      h('div', {},
+        h('h3', {}, 'Start a run'),
+        startBox(data),
+        h('h3', {}, 'Checked before every run'),
+        checksBox(runsForm.check),
+        h('div', {class: 'mut sm gap'},
+          'A run started in a terminal (scheduled_pipeline.sh or pipeline.py) is not visible to the last check. ',
+          'Make sure none is going before you start one here.')),
+      h('div', {},
+        h('h3', {}, 'Log'),
+        logBox(data, shown),
+        h('h3', {}, `Past runs${data.runCount > data.runs.length ? ` (newest ${data.runs.length} of ${data.runCount})` : ''}`),
+        data.runs.length ? h('table', {},
+          h('tr', {}, ['When', 'Run', 'Result', ''].map(name => h('th', {}, name))),
+          data.runs.map(run => h('tr', {class: shown && shown.run.id === run.id ? 'on' : ''},
+            h('td', {class: 'sm nowrap'}, when(run.startedAt || run.createdAt)),
+            h('td', {class: 'sm'}, runWhat(run)),
+            h('td', {}, runPill(run)),
+            h('td', {class: 'right'}, h('a', {class: 'btn s', href: `#runs/${run.id}`}, 'Log')))))
+          : h('div', {class: 'mut sm'}, 'None yet.'))),
+  ];
+}
+
+// `#runs/<run id>` shows that run's log; plain `#runs` the run going, else the newest.
+// `#runs/from/<stem>` and `#runs/resume/<stem>` fill in the form, then become plain #runs.
+async function showRuns(current, argument, stem) {
+  if (runsPoll) clearTimeout(runsPoll);
+  if ((argument === 'from' || argument === 'resume') && stem) {
+    Object.assign(runsForm, {mode: argument, stem, check: null, error: null, shown: null});
+    history.replaceState(null, '', '#runs');
+    argument = null;
+  }
+  const data = await api('/api/runs');
+  const wanted = argument || (data.active && data.active.id) || (data.runs[0] && data.runs[0].id) || null;
+  let shown = null;
+  if (wanted) {
+    try {
+      shown = await api(`/api/runs/log?id=${encodeURIComponent(wanted)}&offset=-1`);
+    } catch (error) {
+      shown = null;
+    }
+  }
+  current(renderRuns(data, shown));
+  const log = document.getElementById('run-log');
+  if (log) log.scrollTop = log.scrollHeight;
+  // While the run on show is going, add to its log each second; redraw once it ends.
+  const watch = async () => {
+    if ((location.hash.slice(1) || 'today').split('/')[0] !== 'runs') return;
+    const more = await api(`/api/runs/log?id=${encodeURIComponent(shown.run.id)}&offset=${shown.offset}`);
+    const pre = document.getElementById('run-log');
+    if (pre && more.text) {
+      const atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+      pre.append(more.text);
+      if (atEnd) pre.scrollTop = pre.scrollHeight;
+    }
+    shown.offset = more.offset;
+    if (more.run.status === 'running' || more.run.status === 'starting') runsPoll = setTimeout(watch, 1000);
+    else route();
+  };
+  if (shown && (shown.run.status === 'running' || shown.run.status === 'starting')) runsPoll = setTimeout(watch, 1000);
+}
+
 // --------------------------------------------------------------------------- routing
 
 function show(nodes) {
@@ -1076,7 +1304,7 @@ function setCounts(today) {
   setBadge('clips-count', today.clipsToReview);
 }
 
-const TABS = ['today', 'episode', 'clips', 'shirts', 'lab', 'settings'];
+const TABS = ['today', 'episode', 'clips', 'shirts', 'lab', 'runs', 'settings'];
 let latestRoute = 0;
 let lastTab = null;
 
@@ -1120,6 +1348,8 @@ async function route() {
       await showLab(current, argument);
     } else if (known === 'shirts') {
       await showShirts(current, argument);
+    } else if (known === 'runs') {
+      await showRuns(current, argument, rest[0]);
     } else {
       const list = await api('/api/episodes');
       const stem = argument || (list[0] && list[0].stem);
@@ -1142,7 +1372,7 @@ async function loadHeader() {
     const header = await api('/api/header');
     token = header.token;
     document.getElementById('data-dir').textContent = header.dataDir;
-    document.getElementById('convex').textContent = header.convex;
+    setConvexPill(header.convex);
   } catch (error) {
     document.getElementById('data-dir').textContent = `server not answering: ${error.message}`;
   }

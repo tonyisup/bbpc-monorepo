@@ -63,6 +63,23 @@ python pipeline.py episodes/20260405.mp3
 python pipeline.py episodes/20260405.mp3 --only clip
 ```
 
+### Check before a run
+
+```bash
+venv/bin/python scripts/check_run.py                 # before an unattended run
+venv/bin/python scripts/check_run.py --from clip     # before pipeline.py <episode> --from clip
+```
+
+The checks the dashboard's Runs tab makes: the data directory exists,
+`check_configuration()` passes (the Convex target matches its pins, through the
+Node importer), the credentials the run needs are set, ffmpeg has libass and
+Node is 22.6 or newer. Credentials are listed by name, set or not set; no
+`.env` value is printed. It exits 1 if a check fails.
+
+`scripts/redacted_run.py -- <command>` runs a command with every `.env` value in
+its output replaced by the value's name; the Runs tab starts the pipeline
+through it so the log can be kept and shown.
+
 ### Transcription engine
 
 Set `settings.transcription_engine` in `config.json`:
@@ -143,19 +160,20 @@ python backfill.py --date-after 20260401
 ## Dashboard
 
 One local page over the data directory: what needs you, each episode's stages
-and Cowork files, every setting, and a Lab for trying a change to how clips
-look on one clip. Standard library only, no venv needed to start it:
+and Cowork files, every setting, a Lab for trying a change to how clips look
+on one clip, and pipeline runs. Standard library only, no venv needed to start it:
 
 ```bash
 python3 -m dashboard                # then open http://127.0.0.1:8765/
 python3 -m dashboard --port 9000
-python3 -m dashboard --pipeline-python /path/to/venv/bin/python   # for the Lab, when ./venv is elsewhere
+python3 -m dashboard --pipeline-python /path/to/venv/bin/python   # for the Lab and Runs, when ./venv is elsewhere
 ```
 
 It listens on `127.0.0.1` only and refuses any request not addressed to
 `127.0.0.1` or `localhost` on its own port. `config.json` and the data directory
 are read again on every page load, so a reload shows the current state. It does
-not read `.env`.
+not read `.env`: the Runs tab's checks and runs read it in their own processes,
+and only names and results come back.
 
 Looking never writes. The dashboard changes only these, all but one in the
 data directory:
@@ -164,7 +182,9 @@ data directory:
   when you apply a draft;
 - publish decisions, `output/publish-decisions.json`;
 - the T-shirt shortlist, `output/tshirt/ideas.json`;
-- the phrase report under `output/phrases/`, when you press Rescan.
+- the phrase report under `output/phrases/`, when you press Rescan;
+- a run's record and log under `output/runs/`, and whatever the pipeline run
+  itself writes, Convex included, when you start one from the Runs tab.
 
 Those requests need a token made when the server starts and must come from
 the dashboard's own page.
@@ -215,6 +235,20 @@ the dashboard's own page.
   give it. With the `openrouter` or `openai` provider that is one paid request,
   and you are asked before it is sent. Past renders are listed with the draft
   that made them and can be deleted.
+- **Runs**: starts `pipeline.py` and shows its log as it runs. Three kinds:
+  unattended (no episode: the newest in Azure, as `scheduled_pipeline.sh` runs
+  it), one local episode from a stage, and resume after Cowork (from `movies`,
+  for an episode whose Cowork files are written, or any waiting episode when
+  headless Cowork is on). Check runs the checks of `scripts/check_run.py`, plus
+  "no other dashboard run is active"; Run makes them again, then asks you to
+  confirm the exact command, because every run reaches `publish`, which writes
+  to Convex. One run at a time. Exit 75 shows as handed to Cowork, never as a
+  failure. Stop ends the run and everything it started. Each run is kept as
+  `output/runs/<id>.json` and `<id>.log`; the log passes through
+  `scripts/redacted_run.py`, so it holds no `.env` value. A run started in a
+  terminal is not seen by these checks. The page runs the code of the checkout
+  the dashboard was started from, so the importer's Node packages must be
+  installed there (`pnpm install` at the repository root).
 
 A Lab render is the pipeline's own clip stage: `pipeline.py <episode> --config
 <run config> --only clip`, where the run config is `config.json` plus the draft
@@ -226,8 +260,8 @@ holds a one-clip SEO file, so the episode's real clip, SEO file and
 The pipeline keeps no record of the stages it ran, so stage status is worked
 out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
 and `publish` leave no local file: they are inferred from `state.json` and drawn
-outlined rather than solid. The Convex target is shown as not checked. Runs
-is not built yet.
+outlined rather than solid. The Convex target in the header is the result of
+the Runs tab's last check since the server started, or "not checked".
 
 ## Configuration
 
@@ -414,7 +448,9 @@ declarations, the Clerk M2M/Convex boundary, visual-prompt safety, backfill
 error handling, the settings schema (every key the code reads is declared), stage
 status, the Lab (drafts, run folders, what it refuses), a pinned copy of the
 default caption file and ffmpeg command, publish decisions and their script,
-the T-shirt shortlist and its script, and the dashboard's views and server.
+the T-shirt shortlist and its script, the checks before a run and the wrapper
+that keeps `.env` values out of its log, run records, and the dashboard's views
+and server. Runs are tested with stand-in commands; no test starts `pipeline.py`.
 
 ## Read-only pipeline identity probe
 
@@ -455,6 +491,7 @@ output/
 ├── review-clips/<episode>/   # Audio clips from review segments
 ├── laughter/                 # laughter_autotune.py results
 ├── lab/                      # dashboard Lab: drafts/ and one folder per test render
+├── runs/                     # dashboard Runs: <id>.json and <id>.log per pipeline run
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)
 ```
 

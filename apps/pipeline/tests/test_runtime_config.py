@@ -242,3 +242,47 @@ class RuntimeConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SecretValueTests(unittest.TestCase):
+    """What the pipeline's own process hides from a log: the values it loaded from .env."""
+
+    def setUp(self):
+        self._original_env = os.environ.copy()
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(self._original_env)))
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        (self.root / "checkout").mkdir()
+        (self.root / "data").mkdir()
+        os.environ["BBPC_PIPELINE_DATA_DIR"] = str(self.root / "data")
+        for name in ("CONVEX_URL", "CLERK_MACHINE_SECRET_KEY", "AZURE_STORAGE_CONNECTION_STRING", "SHELL_ONLY_TOKEN"):
+            os.environ.pop(name, None)
+        patcher = mock.patch("lib.runtime_config.PIPELINE_ROOT", self.root / "checkout")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_files_are_the_checkouts_then_the_data_directorys_and_only_those_that_exist(self):
+        from lib import runtime_config
+
+        self.assertEqual(runtime_config.env_files(), [])
+        (self.root / "data/.env").write_text("A=1\n")
+        self.assertEqual(runtime_config.env_files(), [self.root / "data/.env"])
+        (self.root / "checkout/.env").write_text("B=2\n")
+        self.assertEqual(runtime_config.env_files(), [self.root / "checkout/.env", self.root / "data/.env"])
+
+    def test_every_value_in_the_files_and_the_environments_value_for_named_keys(self):
+        from lib import runtime_config
+
+        (self.root / "data/.env").write_text(
+            "# a comment\nCONVEX_URL=https://quiet-otter-123.convex.cloud\n"
+            "export CLERK_MACHINE_SECRET_KEY=\"ak_live_abcdefghij\"\nEMPTY=\n")
+        os.environ["CONVEX_URL"] = "https://from-the-shell.convex.cloud"
+        os.environ["SHELL_ONLY_TOKEN"] = "shell-token-value"
+        values = runtime_config.secret_values(["SHELL_ONLY_TOKEN", "NEVER_SET"])
+        self.assertEqual(sorted(values), [
+            ("CLERK_MACHINE_SECRET_KEY", "ak_live_abcdefghij"),
+            ("CONVEX_URL", "https://from-the-shell.convex.cloud"),
+            ("CONVEX_URL", "https://quiet-otter-123.convex.cloud"),
+            ("SHELL_ONLY_TOKEN", "shell-token-value"),
+        ])

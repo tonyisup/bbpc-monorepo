@@ -23,7 +23,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - ✅ **Brand Logo:** Composited onto clip backgrounds.
 - ⏸ **Laughter Detection:** Detector kept but not called by any stage; next step is handing its timestamps to Cowork.
 - ✅ **Thumbnail Generation:** 1920x1920 episode thumbnails from reviewed movie posters + BBPC logo.
-- 🚧 **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Clips, Shirts, Settings and the clip Lab; Runs to follow.
+- ✅ **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Clips, Shirts, the clip Lab, Runs and Settings.
 - ✅ **T-shirt shortlist:** `output/tshirt/ideas.json`, kept by `scripts/shirt_ideas.py` and the dashboard's Shirts tab, with licensing flags.
 
 ## Completed Tasks
@@ -50,7 +50,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] **Dashboard, change 2 (Lab):** settings drafts and one-clip test renders under `output/lab/`; the caption rules and the zoom are settings (`caption_*`, `clip_zoom_amount`).
 - [x] **Dashboard, change 3 (Shirts):** shortlist file (`lib/shirt_ideas.py`, `scripts/shirt_ideas.py`) and a board over the phrase scan, the per-episode shirts files and `ideas.txt`; Rescan button; licensing flags.
 - [x] **Dashboard, change 4 (Clips):** review rendered clips and record publish decisions from the page, through `publish_log.decide`, the function the script now uses too.
-- [ ] **Dashboard, change 5 (Runs):** start and watch pipeline runs; the only part that can write to Convex.
+- [x] **Dashboard, change 5 (Runs):** start and watch pipeline runs, checked first (`scripts/check_run.py`), one at a time, logged under `output/runs/` through `scripts/redacted_run.py`; the only part that can write to Convex.
 - [ ] **Stage journal:** have `pipeline.py` record each stage it runs, so `import_transcript` and `publish` status is known rather than inferred from `state.json`.
 - [ ] **T-shirt report:** shirts files for past episodes, so the Shirts tab has Cowork's picks for the back catalogue. (The cross-episode list joined with the phrase scan is the Shirts tab.)
 - [ ] **Shirts tab, ignore from the page:** add a phrase to `output/phrases/ignore.txt` from the board (today it is edited by hand, then Rescan).

@@ -195,6 +195,17 @@ h3 + .chips { margin-bottom: 4px; }
 main > .bar:first-of-type > h3, main > audio + .bar > h3 { margin-top: 0; }
 audio#shirt-audio { position: sticky; top: 8px; z-index: 1; margin: 0 0 10px; }
 
+/* Runs */
+.runs-form label { display: block; color: var(--muted-foreground); font-size: 12px; margin: 10px 0 4px; }
+.runs-form label:first-child { margin-top: 0; }
+.runs-form select.inp { width: 100%; }
+ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+ul.checks li { display: flex; gap: 8px; align-items: baseline; }
+ul.checks .dot { flex: none; position: relative; top: 1px; }
+h4 { font-size: 12px; margin: 12px 0 4px; font-weight: 600; }
+pre.log { max-height: 460px; overflow-y: auto; }
+tr.on td { background: var(--code-background); }
+
 @media (max-width: 860px) {
   .tiles { grid-template-columns: repeat(2, 1fr); }
   .two, .set, .lab { grid-template-columns: 1fr; }

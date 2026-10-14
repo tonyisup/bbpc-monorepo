@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, List, Tuple
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 from lib.data_dir import data_dir, resolve_data_paths
 
@@ -35,6 +35,28 @@ def _ensure_env_loaded() -> None:
         print("[ENV] WARNING: No .env file found")
 
     _CONFIG_ENV_LOADED = True
+
+
+def env_files() -> List[Path]:
+    """The ``.env`` files the pipeline loads, in the order it loads them."""
+    _ensure_env_loaded()  # the checkout's may set BBPC_PIPELINE_DATA_DIR, which places the other
+    return [path for path in (PIPELINE_ROOT / ".env", data_dir() / ".env") if path.is_file()]
+
+
+def secret_values(names: Iterable[str] = ()) -> List[Tuple[str, str]]:
+    """Every value set in the ``.env`` files, and the environment's value for each of their keys
+    and ``names``, as (key, value) pairs, so that output can be scrubbed of them
+    (``lib.redaction``). Only for this process's own use: never print or send them.
+    """
+    pairs = set()
+    keys = set(names)
+    for path in env_files():
+        for key, value in dotenv_values(path).items():
+            keys.add(key)
+            if value:
+                pairs.add((key, value))
+    pairs.update((key, os.environ[key]) for key in keys if os.environ.get(key))
+    return sorted(pairs)
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Dict[str, Any]:

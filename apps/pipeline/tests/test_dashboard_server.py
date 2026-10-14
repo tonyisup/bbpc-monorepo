@@ -563,7 +563,7 @@ class ReadOnlyTests(ServerTestCase):
              "/api/episode?stem=20260105", "/api/episode?stem=20260112", "/api/episode?stem=20260119",
              "/api/episode?stem=20100101", "/api/settings", "/docs/show-format.md",
              "/api/shirts", "/api/shirts/phrases?section=catchphrases",
-             "/api/clips", "/api/clips?stem=20260105",
+             "/api/clips", "/api/clips?stem=20260105", "/api/runs",
              "/media/episodes/20260105.mp3", "/media/output/thumbnails/20260105.png")
 
     def test_serving_every_page_leaves_the_data_directory_untouched_and_never_shows_dot_env(self):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -14,29 +15,48 @@ from lib.runtime_config import (
 )
 
 
+def node_binary() -> str:
+    return os.environ.get("BBPC_NODE_BINARY") or "node"
+
+
 def _command() -> list[str]:
     # apps/pipeline/lib -> monorepo root
     root = Path(__file__).resolve().parents[3]
     script = root / "packages/convex-backend/local-tools/transcripts/pipeline.mjs"
     if not script.is_file():
         raise RuntimeError(f"Transcript importer not found at {script}.")
-    return [os.environ.get("BBPC_NODE_BINARY") or "node", "--experimental-strip-types", str(script)]
+    return [node_binary(), "--experimental-strip-types", str(script)]
 
 
-def _execute(args: list[str], env: dict[str, str]) -> None:
+def _failure(exc: subprocess.CalledProcessError) -> str:
+    """What the importer said when it failed: its message, or the error line of a Node stack trace."""
+    lines = [line.strip() for line in (exc.stderr or exc.stdout or "").splitlines() if line.strip()]
+    error = next((line for line in lines if re.match(r"\w*Error\b", line)), None)
+    return error or " ".join(lines) or f"exit status {exc.returncode}"
+
+
+def _execute(args: list[str], env: dict[str, str], capture: bool = False) -> str:
+    """Run the importer. With ``capture`` its output is returned, and a failure carries its message."""
     try:
-        subprocess.run([*_command(), *args], env=env, check=True)
+        done = subprocess.run([*_command(), *args], env=env, check=True, capture_output=capture, text=capture)
     except FileNotFoundError:
         raise RuntimeError("Transcript imports require Node.js 22.6.0+ on PATH (or BBPC_NODE_BINARY).") from None
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
+        if capture:
+            raise RuntimeError(f"The importer's configuration check failed: {_failure(exc)}") from None
         raise RuntimeError("Transcript import failed; see the importer message above. The local transcript was kept.") from None
+    return done.stdout if capture else ""
 
 
-def check_configuration() -> None:
-    """Check the pinned target and local CLI before starting expensive stages."""
+def check_configuration(capture: bool = False) -> str:
+    """Check the pinned target and local CLI before starting expensive stages.
+
+    With ``capture`` the importer's output is returned instead of printed. It
+    names the target, a value from ``.env``: scrub it before showing it anywhere.
+    """
     url = get_convex_url()  # Loads .env before copying the environment.
     resolve_convex_pipeline_auth()  # Validate credential selection without minting.
-    _execute(["--url", url, "--check-config"], os.environ.copy())
+    return _execute(["--url", url, "--check-config"], os.environ.copy(), capture)
 
 
 def run(context: dict) -> None:

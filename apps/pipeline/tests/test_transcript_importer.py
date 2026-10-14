@@ -1,3 +1,4 @@
+import sys
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -167,3 +168,38 @@ def test_import_only_requires_confirmation_and_does_not_transcribe(tmp_path, mon
     assert context["transcript_complete"] is True
     assert context["transcript_dry_run"] is True
     assert context["episode_id"] == "verified-id"
+
+
+def test_a_captured_configuration_check_returns_what_the_importer_printed(tmp_path, monkeypatch):
+    stand_in = tmp_path / "importer.py"
+    stand_in.write_text("import sys\nprint('Transcript import target verified: ' + sys.argv[sys.argv.index('--url') + 1])\n")
+    monkeypatch.setattr(transcript_importer, "_command", lambda: [sys.executable, str(stand_in)])
+    monkeypatch.setattr(transcript_importer, "get_convex_url", lambda: "https://synthetic.convex.cloud")
+    monkeypatch.setattr(transcript_importer, "resolve_convex_pipeline_auth", lambda: ("synthetic.jwt.token", None))
+    assert transcript_importer.check_configuration(capture=True) == (
+        "Transcript import target verified: https://synthetic.convex.cloud\n")
+
+
+def test_a_captured_configuration_check_that_fails_says_why(tmp_path, monkeypatch):
+    stand_in = tmp_path / "importer.py"
+    stand_in.write_text("import sys\nprint('Target must match BBPC_EXPECTED_CONVEX_URL.', file=sys.stderr)\nsys.exit(1)\n")
+    monkeypatch.setattr(transcript_importer, "_command", lambda: [sys.executable, str(stand_in)])
+    monkeypatch.setattr(transcript_importer, "get_convex_url", lambda: "https://synthetic.convex.cloud")
+    monkeypatch.setattr(transcript_importer, "resolve_convex_pipeline_auth", lambda: ("synthetic.jwt.token", None))
+    with pytest.raises(RuntimeError, match=r"failed: Target must match BBPC_EXPECTED_CONVEX_URL\.$"):
+        transcript_importer.check_configuration(capture=True)
+
+
+def test_a_node_stack_trace_is_cut_to_its_error_line(tmp_path, monkeypatch):
+    stand_in = tmp_path / "importer.py"
+    stand_in.write_text(
+        "import sys\nprint('node:internal/modules/package_json_reader:314\\n  throw new ERR_MODULE_NOT_FOUND();\\n  ^\\n\\n"
+        "Error [ERR_MODULE_NOT_FOUND]: Cannot find package \\'convex\\' imported from /x/pipeline.mjs\\n"
+        "    at Object.getPackageJSONURL (node:internal:1:1)\\n}\\n\\nNode.js v22.22.3', file=sys.stderr)\nsys.exit(1)\n")
+    monkeypatch.setattr(transcript_importer, "_command", lambda: [sys.executable, str(stand_in)])
+    monkeypatch.setattr(transcript_importer, "get_convex_url", lambda: "https://synthetic.convex.cloud")
+    monkeypatch.setattr(transcript_importer, "resolve_convex_pipeline_auth", lambda: ("synthetic.jwt.token", None))
+    with pytest.raises(RuntimeError) as failed:
+        transcript_importer.check_configuration(capture=True)
+    assert str(failed.value) == ("The importer's configuration check failed: Error [ERR_MODULE_NOT_FOUND]: "
+                                 "Cannot find package 'convex' imported from /x/pipeline.mjs")
