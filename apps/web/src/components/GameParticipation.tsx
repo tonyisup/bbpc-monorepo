@@ -126,6 +126,7 @@ export function GameParticipation({
           <ConvexQuotabungaSubmission
             key={`${user.appUserId}:${episodeId}`}
             isAdmin={user.isAdmin}
+            draftKey={`${user.appUserId}:${episodeId}`}
             episodeId={episodeId}
             episodeStatus={episodeStatus}
           />
@@ -135,6 +136,7 @@ export function GameParticipation({
           <ConvexQuotabungaSubmission
             key={`${user.appUserId}:${episodeId}`}
             isAdmin={user.isAdmin}
+            draftKey={`${user.appUserId}:${episodeId}`}
             episodeId={episodeId}
             episodeStatus={episodeStatus}
           />
