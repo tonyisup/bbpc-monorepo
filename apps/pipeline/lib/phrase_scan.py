@@ -109,6 +109,11 @@ def _normalize(token: str) -> str:
     return token.lower().replace("\u2019", "'")
 
 
+def normalize_phrase(text: str) -> str:
+    """A phrase as the scan compares it: lowercase words, punctuation and spacing dropped."""
+    return " ".join(_normalize(token) for token in _TOKEN.findall(text))
+
+
 def _tokens(path: Path) -> _Tokens:
     with path.open(encoding="utf-8") as f:
         segments = json.load(f)
@@ -134,7 +139,7 @@ def _ignored(options: ScanOptions) -> Set[str]:
     path = Path(options.ignore_file) if options.ignore_file else None
     if not path or not path.is_file():
         return set()
-    return {" ".join(_normalize(t) for t in _TOKEN.findall(line))
+    return {normalize_phrase(line)
             for line in path.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.lstrip().startswith("#")}
 
@@ -480,14 +485,14 @@ def _atomic_write(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-def _clock(seconds: float) -> str:
+def clock(seconds: float) -> str:
     s = int(seconds)
     return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}"
 
 
 def _line(p: Dict[str, Any]) -> str:
     ex = p["examples"][-1] if p.get("examples") else None
-    where = f' — "{ex["text"][:120]}" ({ex["stem"]} {_clock(ex["start"])})' if ex else ""
+    where = f' — "{ex["text"][:120]}" ({ex["stem"]} {clock(ex["start"])})' if ex else ""
     burst = ""
     if p.get("burst"):
         b = p["burst"]
@@ -495,13 +500,34 @@ def _line(p: Dict[str, Any]) -> str:
     return f'- **{p["phrase"]}**: {p["episodes"]} eps, {p["firstStem"]}–{p["lastStem"]}{burst}{where}'
 
 
+# The lists a report is read by, in the order the markdown report prints them.
+SECTIONS = (
+    ("catchphrases", "Catchphrases"), ("gags", "Running gags"), ("passages", "Drops and rituals"),
+    ("staples", "Staples"), ("titles", "Titles and names"),
+)
+
+
+def sections(result: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """Sort a scan result into its lists; a phrase can be in more than one.
+
+    Passages are the report's ``passages`` rows (``text``); every other list
+    holds ``phrases`` rows (``phrase``).
+    """
+    phrases = result.get("phrases", [])
+    spoken = [p for p in phrases if not p["looksLikeTitle"]]
+    return {
+        "catchphrases": [p for p in spoken if "fixed" in p["reasons"]],
+        "gags": sorted((p for p in spoken if p["burst"]), key=lambda p: (-p["burst"]["count"], -p["burst"]["lift"])),
+        "passages": list(result.get("passages", [])),
+        "staples": [p for p in spoken if "staple" in p["reasons"]],
+        "titles": [p for p in phrases if p["looksLikeTitle"]],
+    }
+
+
 def render_markdown(result: Dict[str, Any], top: int = 100) -> str:
     phrases = result["phrases"]
-    spoken = [p for p in phrases if not p["looksLikeTitle"]]
-    catchphrases = [p for p in spoken if "fixed" in p["reasons"]]
-    staples = [p for p in spoken if "staple" in p["reasons"]]
-    gags = sorted((p for p in spoken if p["burst"]), key=lambda p: (-p["burst"]["count"], -p["burst"]["lift"]))
-    titles = [p for p in phrases if p["looksLikeTitle"]]
+    lists = sections(result)
+    catchphrases, gags, staples, titles = (lists[key] for key in ("catchphrases", "gags", "staples", "titles"))
     changes = result.get("changes") or {}
     out = [
         "# Recurring phrases",
@@ -523,7 +549,7 @@ def render_markdown(result: Dict[str, Any], top: int = 100) -> str:
     out += ["## Running gags (bursts)", ""] + [_line(p) for p in gags[:top]] + [""]
     out += ["## Recurring passages (drops and rituals)", ""]
     out += [f'- {p["episodes"]} eps, {p["firstStem"]}–{p["lastStem"]}: "{p["text"][:300]}"'
-            for p in result["passages"][:top]] + [""]
+            for p in lists["passages"][:top]] + [""]
     out += ["## Staples (review once)", "",
             "Phrases made only of words found in most episodes. The scan can't tell show "
             "staples (\"we ride together\") from ordinary English (\"next week\"); add the "
@@ -531,3 +557,40 @@ def render_markdown(result: Dict[str, Any], top: int = 100) -> str:
     out += [_line(p) for p in staples[:top]] + [""]
     out += ["## Likely titles and names", ""] + [_line(p) for p in titles[:top]] + [""]
     return "\n".join(out)
+
+
+def _saved_at(path: Path) -> Optional[str]:
+    if not path.is_file():
+        return None
+    saved = _dt.datetime.fromtimestamp(path.stat().st_mtime, _dt.timezone.utc)
+    return saved.replace(microsecond=0).isoformat()
+
+
+def load_report(out_dir: Path) -> Dict[str, Any]:
+    """The last scan's ``recurring-phrases.json``, or an empty dict before any scan."""
+    json_path = Path(out_dir) / "recurring-phrases.json"
+    return json.loads(json_path.read_text(encoding="utf-8")) if json_path.is_file() else {}
+
+
+def report_status(out_dir: Path) -> Dict[str, Any]:
+    """What the last scan found, and whether ``ignore.txt`` has been saved since.
+
+    A scan honours ``ignore.txt`` as it was when the scan ran, so a report
+    older than the ignore file still lists phrases that are now ignored.
+    """
+    out_dir = Path(out_dir)
+    json_path, ignore_path = out_dir / "recurring-phrases.json", out_dir / "ignore.txt"
+    result = load_report(out_dir)
+    return {
+        "scanned": bool(result),
+        "scannedAt": result.get("scannedAt"),
+        "transcripts": result.get("transcripts", 0),
+        "firstStem": result.get("firstStem"),
+        "lastStem": result.get("lastStem"),
+        "phrases": len(result.get("phrases", [])),
+        "passages": len(result.get("passages", [])),
+        "reportSavedAt": _saved_at(json_path),
+        "ignoreSavedAt": _saved_at(ignore_path),
+        "stale": bool(result) and ignore_path.is_file()
+        and ignore_path.stat().st_mtime > json_path.stat().st_mtime,
+    }

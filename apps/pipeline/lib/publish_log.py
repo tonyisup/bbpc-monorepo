@@ -29,6 +29,8 @@ DECISIONS = ("published", "skipped")
 LOG_VERSION = 1
 _YOUTUBE_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _YOUTUBE_URL_ID = re.compile(r"(?:youtu\.be/|/shorts/|[?&]v=|/embed/)([A-Za-z0-9_-]{11})")
+_STEM = re.compile(r"\d{8}")
+_CLIP = re.compile(r"(c?)(\d+)", re.IGNORECASE)
 
 
 # --------------------------------------------------------------------------- paths and storage
@@ -113,6 +115,11 @@ def youtube_id(value: Optional[str]) -> Optional[str]:
     raise ValueError(f"not a YouTube video ID or URL: {value!r}")
 
 
+def short_url(video_id: str) -> str:
+    """Where a published Short is watched."""
+    return f"https://youtube.com/shorts/{video_id}"
+
+
 def decision_key(row: Dict[str, Any]) -> tuple:
     if row["source"] == "untracked":
         return (row["stem"], "untracked", row["headline"])
@@ -175,12 +182,32 @@ def mark_candidate(config: Dict[str, Any], stem: str, index: int, decision: str,
     return _record(config, row)
 
 
+def _stem(stem: Any) -> str:
+    if not isinstance(stem, str) or not _STEM.fullmatch(stem):
+        raise ValueError(f"episode must be a date like 20261005, not {stem!r}")
+    return stem
+
+
+def _words(name: str, value: Any) -> Optional[str]:
+    """Optional free text: stripped, and None when there is nothing left."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be text")
+    return value.strip() or None
+
+
 def mark_untracked(config: Dict[str, Any], stem: str, label: str,
                    youtube: Optional[str] = None, note: Optional[str] = None) -> Dict[str, Any]:
     """Record a published Short whose clip is no longer in the pipeline's output."""
+    label = _words("label", label)
+    if not label:
+        raise ValueError("an untracked Short needs a label (the bit's name)")
+    if not _words("youtube", youtube):
+        raise ValueError("an untracked Short needs its YouTube URL or ID")
     return _record(config, {
-        "stem": stem, "source": "untracked", "start": None, "end": None, "headline": label,
-        "decision": "published", "youtubeId": youtube_id(youtube), "reason": note,
+        "stem": _stem(stem), "source": "untracked", "start": None, "end": None, "headline": label,
+        "decision": "published", "youtubeId": youtube_id(youtube), "reason": _words("note", note),
     })
 
 
@@ -196,7 +223,85 @@ def mark_rest(config: Dict[str, Any], stem: str, decision: str,
     return rows
 
 
+def decide(config: Dict[str, Any], stem: str, clip: Any, decision: str,
+           youtube: Optional[str] = None, reason: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Record ``decision`` for ``clip`` and return the rows written.
+
+    ``clip`` is a rendered clip's number (its ``NN-`` file prefix), ``c`` and a
+    candidate's position in ``candidateClips``, or ``rest`` for every rendered
+    clip of the episode still undecided. Publishing needs the Short's address.
+    """
+    stem = _stem(stem)
+    which = clip.strip().lower() if isinstance(clip, str) else clip
+    numbered = _CLIP.fullmatch(str(which)) if isinstance(which, (str, int)) and not isinstance(which, bool) else None
+    if which != "rest" and not numbered:
+        raise ValueError(f"clip must be a rendered clip's number, c and a candidate's number, or rest, not {clip!r}")
+    if decision not in DECISIONS:
+        raise ValueError(f"decision must be one of {', '.join(DECISIONS)}, not {decision!r}")
+    reason = _words("reason", reason)
+    youtube = _words("youtube", youtube)
+    if decision == "published" and which == "rest":
+        raise ValueError("rest can only be skipped: each published Short has its own address")
+    if decision == "published" and not youtube:
+        raise ValueError("publish needs the Short's YouTube URL or ID")
+    if which == "rest":
+        return mark_rest(config, stem, decision, reason=reason)
+    mark = mark_candidate if numbered.group(1) else mark_rendered
+    return [mark(config, stem, int(numbered.group(2)), decision, youtube, reason)]
+
+
 # --------------------------------------------------------------------------- reporting
+
+def _seconds(clip: Dict[str, Any]) -> float:
+    return round(float(clip["end"]) - float(clip["start"]), 2)
+
+
+def published_lengths(config: Dict[str, Any]) -> Dict[str, Any]:
+    """How long the published Shorts whose window is known ran: how many, the shortest and the longest."""
+    lengths = [_seconds(d) for d in load(config)["decisions"]
+               if d.get("decision") == "published" and d.get("start") is not None and d.get("end") is not None]
+    return {"count": len(lengths), "shortest": min(lengths, default=None), "longest": max(lengths, default=None)}
+
+
+def listing(config: Dict[str, Any], stem: str) -> Dict[str, Any]:
+    """Everything decided or still to decide for ``stem``.
+
+    ``rendered``: the clip stage's picks, by file number. ``candidates``: all
+    of Cowork's candidates by position, each with the number of the pick it
+    was ``rendered`` as (None when it was not). ``untracked``: published
+    Shorts whose clip is gone. Each clip row has its ``decision`` (or None),
+    its length in ``seconds``, and ``longerThanPublished``: longer than every
+    Short published so far.
+    """
+    mine = [d for d in load(config)["decisions"] if d["stem"] == stem]
+    decided = {decision_key(d): d for d in mine}
+    longest = published_lengths(config)["longest"]
+
+    def row(clip: Dict[str, Any], **fields: Any) -> Dict[str, Any]:
+        seconds = _seconds(clip)
+        return {**fields, "clip": clip, "seconds": seconds,
+                "decision": decided.get(decision_key(clip_row(stem, clip, "pick", "skipped", None, None))),
+                "longerThanPublished": longest is not None and seconds > longest}
+
+    rendered = [row(r["clip"], index=r["index"], file=r["file"], fileExists=r["fileExists"])
+                for r in rendered_clips(config, stem)]
+    as_pick = {decision_key(clip_row(stem, r["clip"], "pick", "skipped", None, None)): r["index"] for r in rendered}
+    candidates = [
+        row(clip, index=index, rendered=as_pick.get(decision_key(clip_row(stem, clip, "candidate", "skipped", None, None))))
+        for index, clip in enumerate(candidate_clips(config, stem))
+    ]
+    return {"rendered": rendered, "candidates": candidates,
+            "untracked": [d for d in mine if d["source"] == "untracked"]}
+
+
+def tracked_stems(config: Dict[str, Any]) -> List[str]:
+    """Every episode with a clips folder or a recorded decision, oldest first."""
+    clips_root = Path(config.get("paths", {}).get("output_dir", "./output")) / "clips"
+    stems = ({p.name for p in clips_root.iterdir() if p.is_dir() and _STEM.fullmatch(p.name)}
+             if clips_root.is_dir() else set())
+    stems |= {d["stem"] for d in load(config)["decisions"]}
+    return sorted(stems)
+
 
 def report(config: Dict[str, Any], stems: Sequence[str]) -> List[Dict[str, Any]]:
     decisions = load(config)["decisions"]
@@ -212,6 +317,8 @@ def report(config: Dict[str, Any], stems: Sequence[str]) -> List[Dict[str, Any]]
             "published": sum(1 for d in picked if d and d["decision"] == "published"),
             "skipped": sum(1 for d in picked if d and d["decision"] == "skipped"),
             "undecided": sum(1 for d in picked if d is None),
+            # Undecided picks whose rendered file is still on disk: the clips left to review.
+            "toReview": sum(1 for r, d in zip(rendered, picked) if d is None and r["fileExists"]),
             "publishedNotPicked": sum(1 for d in mine if d["source"] == "candidate" and d["decision"] == "published"),
             "untracked": sum(1 for d in mine if d["source"] == "untracked"),
         })

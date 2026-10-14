@@ -34,6 +34,8 @@
     "thumbnail_logo_max_height_fraction": 0.12,
     "thumbnail_logo_margin_px": 40,
     "thumbnail_logo_position": "top_right",
-    "cowork_outputs_dir": "./output/cowork"
+    "cowork_outputs_dir": "./output/cowork",
+    "cowork_headless": true,
+    "cowork_headless_timeout_seconds": 3600
   }
 }

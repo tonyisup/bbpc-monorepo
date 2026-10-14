@@ -35,6 +35,9 @@ EXIT_AWAITING_COWORK = 75  # EX_TEMPFAIL: not a failure, try again later
 
 STATUS_AWAITING = "awaiting_cowork"
 STATUS_DONE = "done"
+# The note on an episode marked done because its SEO file already existed: the
+# parse stage had run, but nothing recorded whether it was published.
+SEEDED_NOTE = "seeded from existing output"
 
 CLIP_MIN_SECONDS = 20.0
 CLIP_MAX_SECONDS = 90.0
@@ -546,7 +549,7 @@ def _seed_state(config: Dict[str, Any]) -> Dict[str, Any]:
         stem = path.name[: -len(".seo.json")]
         if "." in stem:  # e.g. 20260713.seo.pre-budget-fix.json
             continue
-        episodes[stem] = {"status": STATUS_DONE, "updatedAt": _now(), "note": "seeded from existing output"}
+        episodes[stem] = {"status": STATUS_DONE, "updatedAt": _now(), "note": SEEDED_NOTE}
     return {"version": 1, "episodes": episodes}
 
 
@@ -592,3 +595,83 @@ def awaiting(config: Dict[str, Any]) -> List[str]:
         stem for stem, entry in load_state(config)["episodes"].items()
         if entry.get("status") == STATUS_AWAITING
     )
+
+
+# --------------------------------------------------------------------------- checking an episode's files
+
+def transcript_path(config: Dict[str, Any], stem: str) -> Path:
+    entry = load_state(config)["episodes"].get(stem, {})
+    recorded = Path(entry["transcriptPath"]) if entry.get("transcriptPath") else None
+    if recorded is not None and recorded.is_file():
+        return recorded
+    # Fall back to the data directory (the recorded path may be the Mac's
+    # absolute path when this runs in Cowork's Linux environment).
+    transcripts = Path(config.get("paths", {}).get("transcripts_dir", "./transcripts"))
+    return (transcripts / f"{stem}.json").resolve()
+
+
+def _movies_summary(payload: Dict[str, Any]) -> str:
+    accepted = [m.get("title") for m in payload["movies"] if m.get("status", "accepted") == "accepted"]
+    return f"accepted: {', '.join(accepted) or '(none)'}"
+
+
+def _seo_summary(payload: Dict[str, Any]) -> str:
+    return f"{len(payload['candidateClips'])} candidate clips, {len(payload['clipAnalysis'])} selected"
+
+
+def _shirts_summary(payload: Dict[str, Any]) -> str:
+    origins = [row.get("origin") for row in payload["phrases"]]
+    counts = ", ".join(f"{origins.count(origin)} {origin}" for origin in SHIRT_ORIGINS)
+    return f"{len(origins)} phrases ({counts})"
+
+
+def check_episode(config: Dict[str, Any], stem: str) -> Dict[str, Any]:
+    """Validate an episode's three Cowork files against its transcript.
+
+    Each ``files`` row has ``status``: ``ok``, ``invalid`` (with ``problems``),
+    ``missing`` (movies or SEO not written) or ``not_written`` (the optional
+    shirts file). ``ok`` is false when any file is invalid or a required one
+    is missing. Without a transcript the duration, segment-boundary and
+    phrase-text checks are skipped; ``transcriptNote`` says why when the file
+    is there but cannot be read as a list of segments.
+    """
+    transcript = transcript_path(config, stem)
+    segments, note = None, None
+    if transcript.is_file():
+        try:
+            loaded = json.loads(transcript.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            note = f"could not be read: {exc}"
+        else:
+            if isinstance(loaded, list) and all(isinstance(seg, dict) for seg in loaded):
+                segments = loaded
+            else:
+                note = "could not be read: it is not a list of segments"
+    checks = (
+        ("movies", movies_path, lambda: load_movies(config, stem, segments), _movies_summary, movies_warnings),
+        ("seo", seo_path, lambda: load_seo(config, stem, segments=segments), _seo_summary, seo_warnings),
+        ("shirts", shirts_path, lambda: load_shirts(config, stem, segments), _shirts_summary, shirts_warnings),
+    )
+    files = []
+    for label, path_for, loader, summarize, warn in checks:
+        row: Dict[str, Any] = {"label": label, "path": str(path_for(config, stem)), "status": "ok",
+                               "problems": [], "summary": None, "warnings": []}
+        try:
+            payload = loader()
+        except CoworkOutputInvalid as exc:
+            row.update(status="invalid", problems=list(exc.problems))
+        else:
+            if payload is None:
+                # The shirts file is information for Tony; the pipeline never waits for it.
+                row["status"] = "not_written" if label == "shirts" else "missing"
+            else:
+                row.update(summary=summarize(payload), warnings=warn(payload))
+        files.append(row)
+    return {
+        "stem": stem,
+        "transcript": str(transcript),
+        "transcriptFound": segments is not None,
+        "transcriptNote": note,
+        "ok": all(row["status"] in ("ok", "not_written") for row in files),
+        "files": files,
+    }

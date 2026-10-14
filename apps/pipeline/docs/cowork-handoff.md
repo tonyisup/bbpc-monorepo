@@ -29,6 +29,39 @@ every episode that already has `output/seo/<stem>.seo.json` as `done`.
 Unattended runs (no episode argument) skip `done` episodes and resume
 `awaiting_cowork` ones once the movies and SEO files exist.
 
+## Headless hand-off
+
+With `settings.cowork_headless` set to `true` in `config.json` (the repo
+default), the pipeline does not stop at `movies`. `lib/cowork_headless.py`
+starts a non-interactive Claude Code session (`claude -p`) that follows the
+instructions below for that one episode, and the run carries on when the
+session ends.
+
+```
+run ─► pipeline.py ─► transcribe ─► import_transcript ─► claude -p writes the files ─► movies … publish (state: done)
+```
+
+- The session is given a temporary copy of the transcript with one segment per
+  line (`start`, `end`, `text`, tab-separated) and no word timings, because
+  the transcript JSON is too large to read whole.
+- It may read the pipeline directory, write in `output/cowork/`, and run
+  `python3 scripts/validate_cowork_outputs.py` and no other shell command. It
+  does not get the values in the pipeline's `.env`, and it runs without your
+  own Claude hooks, skills and MCP servers.
+- Nothing is printed while it works. It is stopped after
+  `settings.cowork_headless_timeout_seconds` (default 3600).
+  `settings.cowork_headless_model` picks the model; without it the CLI's
+  default is used.
+- The `movies` and `parse` stages validate the files as before. If the session
+  fails, times out, or `claude` is not on `PATH`, the run ends with exit 75 and
+  the episode stays `awaiting_cowork`: write the files in Cowork, or run the
+  pipeline again to retry.
+- An unattended run (no episode argument) that finds an episode
+  `awaiting_cowork` without files starts the session again. Set
+  `cowork_headless` to `false` to go back to the hand-off by hand, or pass
+  `--no-cowork-headless` for one run. `backfill.py` always passes it, so a
+  backfill never starts a session per episode.
+
 ## Instructions for Cowork
 
 Cowork needs two folders: `apps/pipeline` (to run the validator) and the data

@@ -1,7 +1,8 @@
 #!/bin/bash
 # Unattended entry point (run by hand, cron, or launchd). Safe to run repeatedly:
 #   - finished episodes are skipped (output/cowork/state.json in the data directory)
-#   - a new episode is transcribed + imported, then handed to Cowork (exit 75)
+#   - a new episode is transcribed + imported, then handed to Cowork: headlessly
+#     through `claude -p` when settings.cowork_headless is on, otherwise exit 75
 #   - once Cowork has written its files, the next run resumes from `movies`
 set -uo pipefail
 

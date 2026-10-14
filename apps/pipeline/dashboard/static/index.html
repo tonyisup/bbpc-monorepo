@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BBPC pipeline</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+ <header class="bar">
+  <b class="brand">BBPC pipeline</b>
+  <span class="sp"></span>
+  <span class="pill mono" id="data-dir" title="Pipeline data directory"></span>
+  <span class="pill" id="convex-pill" title="Checked by the Runs tab before every run: check_configuration() runs the Node importer."><i class="dot no"></i>Convex target not checked</span>
+  <span class="pill" title="Looking never writes. The Lab writes test renders under output/lab/ in the data directory, and config.json only when you apply a draft. Clips records publish decisions in output/publish-decisions.json. Shirts writes the shortlist, output/tshirt/ideas.json, and its Rescan rewrites the phrase report under output/phrases/. Runs starts the pipeline itself, which writes to Convex and everywhere a pipeline run writes; each run is logged under output/runs/."><i class="dot wa"></i>Writes: Lab renders, decisions, shirt list, phrases; Runs write to Convex</span>
+ </header>
+ <nav class="tabs" id="tabs">
+  <a href="#today" data-tab="today">Today<span class="n" id="needs-count" hidden></span></a>
+  <a href="#episode" data-tab="episode" id="episode-tab">Episode</a>
+  <a href="#clips" data-tab="clips">Clips<span class="n" id="clips-count" hidden></span></a>
+  <a href="#shirts" data-tab="shirts">Shirts</a>
+  <a href="#lab" data-tab="lab">Lab</a>
+  <a href="#runs" data-tab="runs">Runs</a>
+  <a href="#settings" data-tab="settings">Settings</a>
+ </nav>
+ <main id="view"><p class="mut">Loading…</p></main>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

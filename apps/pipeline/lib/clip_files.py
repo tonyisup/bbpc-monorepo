@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Sequence, Tuple
 
-DEFAULT_MIN_CLIP_DURATION = 20.0
+from lib import settings_schema
+
+DEFAULT_MIN_CLIP_DURATION = settings_schema.default("min_clip_duration_seconds")
 
 
 def slugify(value: str) -> str:
@@ -24,7 +26,7 @@ def clip_file_name(index: int, clip: Dict[str, Any]) -> str:
 
 
 def min_clip_duration(config: Dict[str, Any]) -> float:
-    return float(config.get("settings", {}).get("min_clip_duration_seconds", DEFAULT_MIN_CLIP_DURATION))
+    return float(settings_schema.value(config.get("settings", {}), "min_clip_duration_seconds"))
 
 
 def renderable_clips(

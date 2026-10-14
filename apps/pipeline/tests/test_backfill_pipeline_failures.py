@@ -35,6 +35,12 @@ class BackfillPipelineFailureTests(unittest.TestCase):
 
         self.assertFalse(result)
 
+    def test_run_pipeline_for_episode_never_starts_a_headless_cowork_session(self):
+        with mock.patch("backfill.subprocess.run") as run:
+            self.backfill._run_pipeline_for_episode("20150608.mp3", self.backfill.EPISODES_DIR / "20150608.mp3")
+
+        self.assertIn("--no-cowork-headless", run.call_args.args[0])
+
     def test_convex_dates_and_episode_upsert_are_idempotent(self):
         client = mock.Mock()
         client.list_episode_dates.return_value = {"2015-06-08"}

@@ -112,7 +112,8 @@ def get_last_seo_data(filename):
 def _run_pipeline_for_episode(filename: str, episode_path: Path) -> bool:
     try:
         subprocess.run(
-            [sys.executable, "pipeline.py", str(episode_path)],
+            # A backfill covers many episodes; it must not start a Claude session for each.
+            [sys.executable, "pipeline.py", str(episode_path), "--no-cowork-headless"],
             check=True,
             capture_output=True,
             text=True,

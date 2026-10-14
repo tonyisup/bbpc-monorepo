@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
+from lib import settings_schema
+
 
 def _slugify(value: str) -> str:
     cleaned = "".join(ch.lower() if ch.isalnum() else "-" for ch in value)
@@ -117,12 +119,12 @@ def run(context: Dict[str, Any]) -> None:
         return
 
     settings = config.get("settings", {})
-    gap_seconds = float(settings.get("review_clip_merge_gap_seconds", 6.0))
-    pre_roll = float(settings.get("review_clip_preroll_seconds", 3.0))
-    post_roll = float(settings.get("review_clip_postroll_seconds", 3.0))
-    min_seconds = float(settings.get("review_clip_min_seconds", 12.0))
-    max_seconds = float(settings.get("review_clip_max_seconds", 180.0))
-    max_clips_per_movie = max(1, int(settings.get("review_clip_max_per_movie", 3)))
+    gap_seconds = float(settings_schema.value(settings, "review_clip_merge_gap_seconds"))
+    pre_roll = float(settings_schema.value(settings, "review_clip_preroll_seconds"))
+    post_roll = float(settings_schema.value(settings, "review_clip_postroll_seconds"))
+    min_seconds = float(settings_schema.value(settings, "review_clip_min_seconds"))
+    max_seconds = float(settings_schema.value(settings, "review_clip_max_seconds"))
+    max_clips_per_movie = max(1, int(settings_schema.value(settings, "review_clip_max_per_movie")))
 
     output_root = Path(config.get("paths", {}).get("output_dir", "./output"))
     episode_stem = Path(context.get("episode_path", "")).stem

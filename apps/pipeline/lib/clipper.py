@@ -4,19 +4,18 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
 import shlex
 import subprocess
 import sys
-import tempfile
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from functools import lru_cache
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Mapping, cast
 
 from PIL import Image
 
-from lib import clip_files
+from lib import clip_files, settings_schema
 from lib.visual_prompts import (
     ABSTRACT_VISUAL_GUARDRAIL,
     normalize_clip_image_prompt,
@@ -32,23 +31,58 @@ VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
 CLIP_FPS = 30  # Must match zoompan fps and ffmpeg -r for still→video clips
 ZOOMPAN_WORK_SCALE = 4  # Higher working resolution reduces visible x/y stepping from zoompan integer crop math.
-DEFAULT_AUDIO_FADE_OUT_SECONDS = 0.8
-# Captions: at most CAPTION_MAX_LINES lines, measured in the caption font.
-# Uppercase Arial Bold 84 px fits ~17-20 characters per line, but wide letters
-# (M, W) need fewer, so the character cap alone does not guarantee two lines.
-CAPTION_MAX_CHARS = 32
-CAPTION_MAX_LINES = 2
-CAPTION_FONT_PATH = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
-CAPTION_FONT_SIZE = 84
-# Usable line width: frame minus MarginL/R (80 each) minus the 4 px outline.
-CAPTION_LINE_WIDTH = VIDEO_WIDTH - 2 * 80 - 2 * 4
-# A pause longer than this between words starts a new caption.
-CAPTION_PAUSE_SECONDS = 0.5
-# Parakeet sometimes stretches a word over following music; cap how long a word shows.
-CAPTION_MAX_WORD_SECONDS = 1.5
-# Hold a caption until the next one when the gap is shorter than this.
-CAPTION_BRIDGE_SECONDS = 0.3
+DEFAULT_AUDIO_FADE_OUT_SECONDS = settings_schema.default("clip_audio_fade_out_seconds")
+DEFAULT_ZOOM_AMOUNT = settings_schema.default("clip_zoom_amount")
 _CAPTION_BREAK_AFTER = (".", "!", "?")
+
+
+@dataclass(frozen=True)
+class CaptionLook:
+    """How captions are drawn and cut into chunks: the ``caption_*`` settings."""
+
+    font_path: str
+    font_name: str
+    font_size: int
+    color: str
+    outline_color: str
+    outline_px: int
+    margin_bottom_px: int
+    margin_side_px: int
+    # At most max_lines lines, measured in the caption font. The default font and
+    # size fit ~17-20 uppercase characters per line, but wide letters (M, W) need
+    # fewer, so the character cap alone does not guarantee the line count.
+    max_chars: int
+    max_lines: int
+    pause_seconds: float      # a longer pause between words starts a new caption
+    max_word_seconds: float   # Parakeet sometimes stretches a word over following music
+    bridge_seconds: float     # hold a caption until the next one across a shorter gap
+
+    @property
+    def line_width(self) -> int:
+        """Usable line width: the frame less both side margins and the outline."""
+        return VIDEO_WIDTH - 2 * self.margin_side_px - 2 * self.outline_px
+
+
+def _caption_look(settings: Mapping[str, Any]) -> CaptionLook:
+    """The caption look for a run: config.json's values, defaults from the settings schema."""
+    return CaptionLook(
+        font_path=str(settings_schema.value(settings, "caption_font_path")),
+        font_name=str(settings_schema.value(settings, "caption_font_name")),
+        font_size=int(settings_schema.value(settings, "caption_font_size")),
+        color=str(settings_schema.value(settings, "caption_color")),
+        outline_color=str(settings_schema.value(settings, "caption_outline_color")),
+        outline_px=int(settings_schema.value(settings, "caption_outline_px")),
+        margin_bottom_px=int(settings_schema.value(settings, "caption_margin_bottom_px")),
+        margin_side_px=int(settings_schema.value(settings, "caption_margin_side_px")),
+        max_chars=int(settings_schema.value(settings, "caption_max_chars")),
+        max_lines=int(settings_schema.value(settings, "caption_max_lines")),
+        pause_seconds=float(settings_schema.value(settings, "caption_pause_seconds")),
+        max_word_seconds=float(settings_schema.value(settings, "caption_max_word_seconds")),
+        bridge_seconds=float(settings_schema.value(settings, "caption_bridge_seconds")),
+    )
+
+
+DEFAULT_LOOK = _caption_look({})
 
 
 def _pipeline_root() -> Path:
@@ -65,17 +99,17 @@ def _apply_brand_logo(vertical_path: Path, config: Dict[str, Any]) -> Path:
     Returns ``vertical_path`` unchanged if branding is disabled or the logo file is missing.
     """
     settings = config.get("settings", {})
-    if not settings.get("brand_logo_enabled", True):
+    if not settings_schema.value(settings, "brand_logo_enabled"):
         return vertical_path
-    rel = settings.get("brand_logo_path", "assets/logo-short.png")
+    rel = settings_schema.value(settings, "brand_logo_path")
     logo_path = (_pipeline_root() / rel).expanduser().resolve()
     if not logo_path.is_file():
         logger.info("Brand logo not found at %s, skipping overlay", logo_path)
         return vertical_path
 
-    margin = int(settings.get("brand_logo_margin_px", 48))
-    max_w = int(VIDEO_WIDTH * float(settings.get("brand_logo_max_width_fraction", 0.38)))
-    max_h = int(VIDEO_HEIGHT * float(settings.get("brand_logo_max_height_fraction", 0.14)))
+    margin = int(settings_schema.value(settings, "brand_logo_margin_px"))
+    max_w = int(VIDEO_WIDTH * float(settings_schema.value(settings, "brand_logo_max_width_fraction")))
+    max_h = int(VIDEO_HEIGHT * float(settings_schema.value(settings, "brand_logo_max_height_fraction")))
 
     out_path = vertical_path.with_name(f"{vertical_path.stem}_logo{vertical_path.suffix}")
 
@@ -102,11 +136,7 @@ def _apply_brand_logo(vertical_path: Path, config: Dict[str, Any]) -> Path:
     base.convert("RGB").save(out_path, format="PNG", optimize=True)
     logger.info("Wrote branded still: %s", out_path.name)
     return out_path
-DEFAULT_STYLE_SUFFIX = (
-    "Vertical 9:16 cinematic poster art, bold contrast, dramatic composition. "
-    "Purely visual scene: no text, letters, numbers, typography, logos, captions, "
-    "titles, watermarks, fake UI, or media player chrome. Subtitles are added separately."
-)
+DEFAULT_STYLE_SUFFIX = settings_schema.default("visual_style_suffix")
 
 
 def _build_visual_prompt(
@@ -181,7 +211,9 @@ def _estimate_words(segment: Dict[str, Any]) -> List[Dict[str, Any]]:
     return words
 
 
-def _caption_words(segments: List[Dict[str, Any]], start: float, end: float) -> List[Dict[str, Any]]:
+def _caption_words(
+    segments: List[Dict[str, Any]], start: float, end: float, look: CaptionLook = DEFAULT_LOOK,
+) -> List[Dict[str, Any]]:
     """Return the words spoken inside [start, end], using stored word timings when present."""
     words: List[Dict[str, Any]] = []
     for segment in segments:
@@ -191,32 +223,32 @@ def _caption_words(segments: List[Dict[str, Any]], start: float, end: float) -> 
         for word in segment.get("words") or _estimate_words(segment):
             word_start, word_end = float(word["start"]), float(word["end"])
             if timed:
-                word_end = min(word_end, word_start + CAPTION_MAX_WORD_SECONDS)
+                word_end = min(word_end, word_start + look.max_word_seconds)
             text = str(word.get("text", "")).strip()
             if text and word_end > start and word_start < end:
                 words.append({"start": max(word_start, start), "end": min(word_end, end), "text": text})
     return words
 
 
-@lru_cache(maxsize=1)
-def _caption_font() -> Any:
+@lru_cache(maxsize=8)
+def _caption_font(font_path: str = DEFAULT_LOOK.font_path, font_size: int = DEFAULT_LOOK.font_size) -> Any:
     from PIL import ImageFont
 
     try:
-        probe = ImageFont.truetype(CAPTION_FONT_PATH, 100)
+        probe = ImageFont.truetype(font_path, 100)
     except OSError:
-        logger.info("Caption font %s not found; limiting captions by character count", CAPTION_FONT_PATH)
+        logger.info("Caption font %s not found; limiting captions by character count", font_path)
         return None
     ascent, descent = probe.getmetrics()
     # libass sizes fonts by ascent + descent rather than the em square.
-    return ImageFont.truetype(CAPTION_FONT_PATH, round(CAPTION_FONT_SIZE * 100 / (ascent + descent)))
+    return ImageFont.truetype(font_path, round(font_size * 100 / (ascent + descent)))
 
 
-def _caption_fits(text: str) -> bool:
-    """True when *text* renders within CAPTION_MAX_LINES lines of the caption font."""
-    if len(text) > CAPTION_MAX_CHARS:
+def _caption_fits(text: str, look: CaptionLook = DEFAULT_LOOK) -> bool:
+    """True when *text* renders within ``look.max_lines`` lines of the caption font."""
+    if len(text) > look.max_chars:
         return False
-    font = _caption_font()
+    font = _caption_font(look.font_path, look.font_size)
     if font is None:
         return True
     shown = text.upper()
@@ -224,17 +256,17 @@ def _caption_fits(text: str) -> bool:
     line = ""
     for word in shown.split():
         candidate = f"{line} {word}".strip()
-        if line and font.getlength(candidate) > CAPTION_LINE_WIDTH:
+        if line and font.getlength(candidate) > look.line_width:
             lines += 1
             line = word
         else:
             line = candidate
-        if font.getlength(line) > CAPTION_LINE_WIDTH:
+        if font.getlength(line) > look.line_width:
             return False
-    return lines <= CAPTION_MAX_LINES
+    return lines <= look.max_lines
 
 
-def _caption_chunks(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _caption_chunks(words: List[Dict[str, Any]], look: CaptionLook = DEFAULT_LOOK) -> List[Dict[str, Any]]:
     """Group words into short captions, breaking on punctuation, pauses and length."""
     chunks: List[Dict[str, Any]] = []
     current: List[Dict[str, Any]] = []
@@ -250,8 +282,8 @@ def _caption_chunks(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     for word in words:
         if current:
-            too_long = not _caption_fits(" ".join(w["text"] for w in current + [word]))
-            paused = word["start"] - current[-1]["end"] > CAPTION_PAUSE_SECONDS
+            too_long = not _caption_fits(" ".join(w["text"] for w in current + [word]), look)
+            paused = word["start"] - current[-1]["end"] > look.pause_seconds
             if too_long or paused:
                 flush()
         current.append(word)
@@ -260,12 +292,21 @@ def _caption_chunks(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     flush()
 
     for caption, following in zip(chunks, chunks[1:]):
-        if 0 < following["start"] - caption["end"] < CAPTION_BRIDGE_SECONDS:
+        if 0 < following["start"] - caption["end"] < look.bridge_seconds:
             caption["end"] = following["start"]
     return chunks
 
 
-def _build_ass_subtitles(segments: List[Dict[str, Any]], start: float, end: float) -> str:
+def _ass_colour(hex_colour: str) -> str:
+    """``#RRGGBB`` as ASS writes it: ``&H00BBGGRR``."""
+    red, green, blue = hex_colour[1:3], hex_colour[3:5], hex_colour[5:7]
+    return f"&H00{blue}{green}{red}".upper()
+
+
+def _build_ass_subtitles(
+    segments: List[Dict[str, Any]], start: float, end: float, look: CaptionLook = DEFAULT_LOOK,
+) -> str:
+    colour, outline, side = _ass_colour(look.color), _ass_colour(look.outline_color), look.margin_side_px
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {VIDEO_WIDTH}
@@ -274,13 +315,13 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Caption,Arial Bold,84,&H0000FFFF,&H0000FFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,4,0,2,80,80,220,1
+Style: Caption,{look.font_name},{look.font_size},{colour},{colour},{outline},&H64000000,-1,0,0,0,100,100,0,0,1,{look.outline_px},0,2,{side},{side},{look.margin_bottom_px},1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 """
     lines: List[str] = [header]
-    captions = _caption_chunks(_caption_words(segments, start, end))
+    captions = _caption_chunks(_caption_words(segments, start, end, look), look)
     if not captions:
         return header
     for caption in captions:
@@ -314,10 +355,10 @@ def _prepare_vertical_background(image_path: Path) -> Path:
 
 def _generate_background_image_local(prompt: str, path: Path, config: Dict[str, Any]) -> bool:
     settings = config.get("settings", {})
-    script_path = Path(settings.get("local_visual_script", "./scripts/generate_local_visual.py")).expanduser().resolve()
-    model_name = settings.get("local_visual_model", "stabilityai/sdxl-turbo")
-    steps = str(settings.get("local_visual_steps", 8))
-    seed = str(settings.get("local_visual_seed", 42))
+    script_path = Path(settings_schema.value(settings, "local_visual_script")).expanduser().resolve()
+    model_name = settings_schema.value(settings, "local_visual_model")
+    steps = str(settings_schema.value(settings, "local_visual_steps"))
+    seed = str(settings_schema.value(settings, "local_visual_seed"))
     if not script_path.is_file():
         logger.error("Local visual generation script not found: %s", script_path)
         return False
@@ -329,8 +370,8 @@ def _generate_background_image_local(prompt: str, path: Path, config: Dict[str, 
         python_exe = str(override_path.resolve()) if override_path.is_file() else str(override)
     else:
         python_exe = sys.executable
-    lw = int(settings.get("local_visual_width", VIDEO_WIDTH))
-    lh = int(settings.get("local_visual_height", VIDEO_HEIGHT))
+    lw = int(settings_schema.value(settings, "local_visual_width"))
+    lh = int(settings_schema.value(settings, "local_visual_height"))
     cmd = [
         python_exe,
         str(script_path),
@@ -433,9 +474,9 @@ def _generate_background_image_openai(prompt: str, path: Path, config: Dict[str,
     from lib.runtime_config import get_openai_api_key, get_openai_base_url
 
     settings = config.get("settings", {})
-    model = settings.get("openai_visual_model", "gpt-image-1")
-    size = settings.get("openai_image_size", "1024x1536")
-    quality = settings.get("openai_image_quality", "high")
+    model = settings_schema.value(settings, "openai_visual_model")
+    size = settings_schema.value(settings, "openai_image_size")
+    quality = settings_schema.value(settings, "openai_image_quality")
 
     try:
         client_kwargs: Dict[str, Any] = {"api_key": get_openai_api_key()}
@@ -497,7 +538,7 @@ def _generate_background_image_openrouter(prompt: str, path: Path, config: Dict[
     )
 
     settings = config.get("settings", {})
-    model = settings.get("openrouter_visual_model", "google/gemini-3.1-flash-image")
+    model = settings_schema.value(settings, "openrouter_visual_model")
     try:
         client = OpenAI(
             base_url=get_openrouter_api_url(),
@@ -538,8 +579,10 @@ def _generate_background_image(prompt: str, provider: str, path: Path, config: D
     return False
 
 
-def _write_ass_subtitles(path: Path, segments: List[Dict[str, Any]], start: float, end: float) -> None:
-    path.write_text(_build_ass_subtitles(segments, start, end), encoding="utf-8")
+def _write_ass_subtitles(
+    path: Path, segments: List[Dict[str, Any]], start: float, end: float, look: CaptionLook = DEFAULT_LOOK,
+) -> None:
+    path.write_text(_build_ass_subtitles(segments, start, end, look), encoding="utf-8")
 
 
 def _ffmpeg_has_subtitles_filter() -> bool:
@@ -568,8 +611,10 @@ def _escape_subtitle_path_for_filter(path: Path) -> str:
     return str(path).replace("\\", r"\\").replace(":", r"\:").replace("'", r"\'")
 
 
-def _build_zoompan_filter(duration: float, subtitle_path: Path | None) -> str:
-    """Ken Burns zoom: slow push from 1.0→1.12 across the *whole* clip.
+def _build_zoompan_filter(
+    duration: float, subtitle_path: Path | None, zoom_amount: float = DEFAULT_ZOOM_AMOUNT,
+) -> str:
+    """Ken Burns zoom: slow push from 1.0 to 1.0 + ``zoom_amount`` across the *whole* clip.
 
     The old expression ``min(zoom+0.0008, 1.12)`` hit the cap in 150 frames (~5s at
     30fps). Driving zoom from output frame index ``on`` keeps motion visible for
@@ -577,8 +622,8 @@ def _build_zoompan_filter(duration: float, subtitle_path: Path | None) -> str:
     """
     total_frames = max(int(duration * CLIP_FPS), 1)
     denom = max(total_frames - 1, 1)
-    # Linear zoom in from 1.00 -> 1.12 over the clip.
-    z_expr = f"1+0.12*on/{denom}"
+    # Linear zoom in over the clip: 1.00 -> 1.12 with the default amount.
+    z_expr = f"1+{zoom_amount}*on/{denom}"
     # zoompan crop coordinates move in integer pixels. Running at higher working
     # resolution makes those crop steps much smaller once resampled back down.
     work_w = VIDEO_WIDTH * ZOOMPAN_WORK_SCALE
@@ -635,9 +680,10 @@ def _render_clip_video(
     end: float,
     burn_subtitles: bool,
     audio_fade_out_seconds: float = DEFAULT_AUDIO_FADE_OUT_SECONDS,
+    zoom_amount: float = DEFAULT_ZOOM_AMOUNT,
 ) -> None:
     duration = end - start
-    filtergraph = _build_zoompan_filter(duration, subtitle_path if burn_subtitles else None)
+    filtergraph = _build_zoompan_filter(duration, subtitle_path if burn_subtitles else None, zoom_amount)
     audio_filter = _build_audio_fade_filter(duration, audio_fade_out_seconds)
     cmd = [
         "ffmpeg",
@@ -709,13 +755,14 @@ def run(context: dict) -> None:
     visuals_dir = output_root / "visuals" / episode_stem
     visuals_dir.mkdir(parents=True, exist_ok=True)
 
-    visuals_provider = config.get("settings", {}).get("visuals_provider", "local")
-    style_suffix = config.get("settings", {}).get("visual_style_suffix", DEFAULT_STYLE_SUFFIX)
+    settings = config.get("settings", {})
+    visuals_provider = settings_schema.value(settings, "visuals_provider")
+    style_suffix = settings_schema.value(settings, "visual_style_suffix")
     audio_fade_out_seconds = _resolve_audio_fade_out_seconds(
-        config.get("settings", {}).get(
-            "clip_audio_fade_out_seconds", DEFAULT_AUDIO_FADE_OUT_SECONDS
-        )
+        settings_schema.value(settings, "clip_audio_fade_out_seconds")
     )
+    look = _caption_look(settings)
+    zoom_amount = float(settings_schema.value(settings, "clip_zoom_amount"))
     episode_audio = context.get("episode_audio") or context.get("episode_path")
 
     burn_subtitles = _ffmpeg_has_subtitles_filter()
@@ -760,7 +807,7 @@ def run(context: dict) -> None:
 
         print(f"Generating clip {index}/{len(valid_clips)}: {clip.get('headline', clip_name)}")
 
-        reuse_still = bool(config.get("settings", {}).get("local_visual_reuse_cached_still", False))
+        reuse_still = bool(settings_schema.value(settings, "local_visual_reuse_cached_still"))
         if reuse_still and image_path.exists():
             print(f"  Reusing cached still {image_path.name}")
         else:
@@ -771,7 +818,7 @@ def run(context: dict) -> None:
 
         prepared_bg = _prepare_vertical_background(image_path)
         clip_still = _apply_brand_logo(prepared_bg, config)
-        _write_ass_subtitles(subtitle_path, segments, start, end)
+        _write_ass_subtitles(subtitle_path, segments, start, end, look)
 
         try:
             _render_clip_video(
@@ -783,6 +830,7 @@ def run(context: dict) -> None:
                 end,
                 burn_subtitles,
                 audio_fade_out_seconds,
+                zoom_amount=zoom_amount,
             )
             print(f"  Clip saved: {clip_output}")
         except subprocess.CalledProcessError as exc:

@@ -28,17 +28,6 @@ def _load_config(path: Path) -> dict:
         return resolve_data_paths(json.load(f))
 
 
-def _transcript_path(config: dict, stem: str) -> Path:
-    entry = cowork_handoff.load_state(config)["episodes"].get(stem, {})
-    recorded = Path(entry["transcriptPath"]) if entry.get("transcriptPath") else None
-    if recorded is not None and recorded.is_file():
-        return recorded
-    # Fall back to the data directory (the recorded path may be the Mac's
-    # absolute path when this runs in Cowork's Linux environment).
-    transcripts = Path(config.get("paths", {}).get("transcripts_dir", "./transcripts"))
-    return (transcripts / f"{stem}.json").resolve()
-
-
 def _pending(config: dict) -> int:
     state = cowork_handoff.load_state(config)["episodes"]
     rows = []
@@ -46,7 +35,7 @@ def _pending(config: dict) -> int:
         entry = state[stem]
         rows.append({
             "stem": stem,
-            "transcript": str(_transcript_path(config, stem)),
+            "transcript": str(cowork_handoff.transcript_path(config, stem)),
             "moviesOut": str(cowork_handoff.movies_path(config, stem)),
             "seoOut": str(cowork_handoff.seo_path(config, stem)),
             "shirtsOut": str(cowork_handoff.shirts_path(config, stem)),
@@ -58,48 +47,26 @@ def _pending(config: dict) -> int:
 
 
 def _validate(config: dict, stem: str) -> int:
-    transcript = _transcript_path(config, stem)
-    segments = None
-    if transcript.is_file():
-        segments = json.loads(transcript.read_text(encoding="utf-8"))
-    else:
-        print(f"note: transcript not found at {transcript}; skipping duration, segment-boundary and phrase-text checks")
+    result = cowork_handoff.check_episode(config, stem)
+    if not result["transcriptFound"]:
+        found = f"at {result['transcript']} {result['transcriptNote']}" if result.get("transcriptNote") else \
+            f"not found at {result['transcript']}"
+        print(f"note: transcript {found}; skipping duration, segment-boundary and phrase-text checks")
 
-    ok = True
-    for label, loader in (
-        ("movies", lambda: cowork_handoff.load_movies(config, stem, segments)),
-        ("seo", lambda: cowork_handoff.load_seo(config, stem, segments=segments)),
-        ("shirts", lambda: cowork_handoff.load_shirts(config, stem, segments)),
-    ):
-        try:
-            payload = loader()
-        except cowork_handoff.CoworkOutputInvalid as exc:
-            ok = False
-            print(f"FAIL {label}: {exc}")
-            continue
-        if payload is None:
-            if label == "shirts":  # information for Tony; the pipeline never waits for it
-                print(f"{label}: not written (optional)")
-                continue
-            ok = False
+    for row in result["files"]:
+        label = row["label"]
+        if row["status"] == "invalid":
+            print(f"FAIL {label}: {cowork_handoff.CoworkOutputInvalid(Path(row['path']), row['problems'])}")
+        elif row["status"] == "not_written":
+            print(f"{label}: not written (optional)")
+        elif row["status"] == "missing":
             print(f"MISSING {label}")
-            continue
-        print(f"OK {label}")
-        if label == "seo":
-            warnings = cowork_handoff.seo_warnings(payload)
-            print(f"  {len(payload['candidateClips'])} candidate clips, {len(payload['clipAnalysis'])} selected")
-        elif label == "shirts":
-            warnings = cowork_handoff.shirts_warnings(payload)
-            origins = [row.get("origin") for row in payload["phrases"]]
-            counts = ", ".join(f"{origins.count(origin)} {origin}" for origin in cowork_handoff.SHIRT_ORIGINS)
-            print(f"  {len(origins)} phrases ({counts})")
         else:
-            warnings = cowork_handoff.movies_warnings(payload)
-            accepted = [m.get("title") for m in payload["movies"] if m.get("status", "accepted") == "accepted"]
-            print(f"  accepted: {', '.join(accepted) or '(none)'}")
-        for warning in warnings:
-            print(f"  warning: {warning}")
-    return 0 if ok else 1
+            print(f"OK {label}")
+            print(f"  {row['summary']}")
+            for warning in row["warnings"]:
+                print(f"  warning: {warning}")
+    return 0 if result["ok"] else 1
 
 
 def main() -> int:
