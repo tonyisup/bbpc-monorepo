@@ -223,6 +223,7 @@ const openRound = {
 };
 
 let renderer: ReactTestRenderer | null = null;
+let memberId = "user-1";
 
 async function renderSubmission(
   episodeStatus = "next",
@@ -237,6 +238,7 @@ async function renderSubmission(
     renderer = create(
       <ConvexQuotabungaSubmission
         isAdmin={false}
+        draftKey={`${memberId}:episode-test`}
         episodeId="episode-test"
         episodeStatus={episodeStatus}
       />,
@@ -1618,5 +1620,216 @@ describe("ConvexQuotabungaSubmission writes", () => {
     });
     expect(withdraw().props["aria-disabled"]).toBe(false);
     expect(renderedText(rendered)).toContain("Hold on to ya");
+  });
+});
+
+/** The browser's storage, which outlives every mount of the panel in a test. */
+function stubStorage() {
+  const entries = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      entries.set(key, value);
+    },
+    removeItem: (key: string) => {
+      entries.delete(key);
+    },
+  });
+  return entries;
+}
+
+/** What a reload, a route change or a swapped-out game sheet does to the panel. */
+function leavePage() {
+  act(() => renderer?.unmount());
+  renderer = null;
+}
+
+function quoteField(rendered: ReactTestRenderer) {
+  return rendered.root.findByProps({ id: "convex-quotabunga-quote" });
+}
+
+describe("ConvexQuotabungaSubmission unsaved drafts", () => {
+  let storage: Map<string, string>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("window", globalThis);
+    storage = stubStorage();
+    memberId = "user-1";
+    mocks.window = undefined;
+    mocks.errorCode.mockReturnValue(null);
+    mocks.load.mockResolvedValue(openRound);
+    mocks.submit.mockResolvedValue(undefined);
+    mocks.withdraw.mockResolvedValue(undefined);
+    mocks.checkDuplicate.mockResolvedValue({ possibleMatch: false });
+  });
+
+  afterEach(() => {
+    if (renderer !== null) {
+      act(() => renderer?.unmount());
+      renderer = null;
+    }
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  test("an unsubmitted quote comes back, form open, after the listener leaves the page", async () => {
+    let rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    act(() => {
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-clip" })
+        .props.onChange({ target: { value: "https://vimeo.com/1" } });
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-timestamp" })
+        .props.onChange({ target: { value: "42" } });
+      rendered.root
+        .findByProps({ id: "convex-quotabunga-notes" })
+        .props.onChange({ target: { value: "Stop before the cut" } });
+    });
+    leavePage();
+
+    rendered = await renderSubmission("next", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(1);
+    expect(quoteField(rendered).props.value).toBe("Hold on to ya");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-source" }).props.value
+    ).toBe("Heat");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-clip" }).props.value
+    ).toBe("https://vimeo.com/1");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-timestamp" }).props
+        .value
+    ).toBe("42");
+    expect(
+      rendered.root.findByProps({ id: "convex-quotabunga-notes" }).props.value
+    ).toBe("Stop before the cut");
+    expect(renderedText(rendered)).toContain("not submitted yet");
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  test("a submitted entry leaves no draft behind", async () => {
+    mocks.load
+      .mockResolvedValueOnce(openRound)
+      .mockResolvedValue({ ...openRound, submission: savedEntry });
+    let rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    expect(storage.size).toBe(1);
+    await submitForm(rendered);
+    expect(storage.size).toBe(0);
+    leavePage();
+
+    rendered = await renderSubmission("next", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(renderedText(rendered)).toContain("Submitted for episode");
+  });
+
+  test("a failed save keeps the draft for the next visit", async () => {
+    mocks.submit.mockRejectedValue(new Error("offline"));
+    let rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    await submitForm(rendered);
+    leavePage();
+
+    rendered = await renderSubmission("next", undefined, false);
+    expect(quoteField(rendered).props.value).toBe("Hold on to ya");
+  });
+
+  test("Cancel throws the stored draft away", async () => {
+    let rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    await act(async () => {
+      findButton(rendered, "Cancel").props.onClick();
+    });
+    expect(storage.size).toBe(0);
+    leavePage();
+
+    rendered = await renderSubmission("next", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(findButton(rendered, "Add your quote")).toBeDefined();
+  });
+
+  test("an edit in progress comes back over the entry it was started from", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    let rendered = await renderSubmission();
+    await act(async () => {
+      findButton(rendered, " Edit").props.onClick();
+    });
+    enterQuote(rendered, "Hold on to ya, kid", "Heat");
+    leavePage();
+
+    rendered = await renderSubmission();
+    expect(rendered.root.findAllByType("form")).toHaveLength(1);
+    expect(quoteField(rendered).props.value).toBe("Hold on to ya, kid");
+  });
+
+  test("an edit is dropped once the entry was changed somewhere else", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    let rendered = await renderSubmission();
+    await act(async () => {
+      findButton(rendered, " Edit").props.onClick();
+    });
+    enterQuote(rendered, "Hold on to ya, kid", "Heat");
+    leavePage();
+
+    mocks.load.mockResolvedValue({
+      ...openRound,
+      submission: { ...savedEntry, quoteText: "Newer", updatedAt: 2 },
+    });
+    rendered = await renderSubmission();
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(renderedText(rendered)).toContain("Newer");
+    expect(storage.size).toBe(0);
+  });
+
+  test("a draft belongs to the member who typed it", async () => {
+    let rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    leavePage();
+
+    memberId = "user-2";
+    rendered = await renderSubmission("next", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(storage.size).toBe(1);
+  });
+
+  test("a draft for a round that has locked is dropped", async () => {
+    let rendered = await renderSubmission();
+    enterQuote(rendered, "Hold on to ya", "Heat");
+    leavePage();
+
+    mocks.load.mockResolvedValue({ ...openRound, isOpen: false });
+    rendered = await renderSubmission("recording", undefined, false);
+    expect(rendered.root.findAllByType("form")).toHaveLength(0);
+    expect(storage.size).toBe(0);
+  });
+
+  test("a failed save offers no reload that would undo the edit, and a failed load still retries", async () => {
+    mocks.load.mockResolvedValue({ ...openRound, submission: savedEntry });
+    mocks.submit.mockRejectedValue(new Error("offline"));
+    const rendered = await renderSubmission();
+    await act(async () => {
+      findButton(rendered, " Edit").props.onClick();
+    });
+    enterQuote(rendered, "Hold on to ya, kid", "Heat");
+    await submitForm(rendered);
+    expect(renderedText(rendered)).toContain("could not be saved");
+    expect(
+      rendered.root.findAllByType("button").map((b) => instanceText(b))
+    ).not.toContain("Try again");
+    expect(quoteField(rendered).props.value).toBe("Hold on to ya, kid");
+    leavePage();
+
+    mocks.load.mockRejectedValueOnce(new Error("offline"));
+    const retried = await renderSubmission("next", undefined, false);
+    expect(renderedText(retried)).toContain("Could not load");
+    await act(async () => {
+      findButton(retried, "Try again").props.onClick();
+      await Promise.resolve();
+    });
+    expect(mocks.load).toHaveBeenCalledTimes(3);
   });
 });

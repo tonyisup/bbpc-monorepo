@@ -52,6 +52,11 @@ import {
   PredictionRoundState,
   getPredictionRoundState,
 } from "@/lib/predictionRound.mjs";
+import {
+  clearQuotabungaDraft,
+  readQuotabungaDraft,
+  writeQuotabungaDraft,
+} from "@/lib/quotabungaDraft";
 import { getEpisodePath } from "@/lib/routes";
 
 const QUOTE_DUPLICATE_CHECK_DELAY_MS = 500;
@@ -158,10 +163,13 @@ function TranscriptMatchList({
 
 export function ConvexQuotabungaSubmission({
   isAdmin,
+  draftKey,
   episodeId,
   episodeStatus,
 }: {
   isAdmin: boolean;
+  /** Names this member's entry for this episode; an unsubmitted quote is kept in the browser under it. */
+  draftKey: string;
   /** The episode this panel belongs to; entries stay attached to it. */
   episodeId: string;
   episodeStatus: string;
@@ -174,6 +182,9 @@ export function ConvexQuotabungaSubmission({
   const [isSaving, setIsSaving] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Only a failed load offers Try again. Reloading after a failed save would
+  // put the saved entry back over the edit that did not go through.
+  const [hasLoadFailed, setHasLoadFailed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   // A listener without an entry opens the form from the row's button.
   const [isComposing, setIsComposing] = useState(false);
@@ -308,6 +319,7 @@ export function ConvexQuotabungaSubmission({
     loadGenerationRef.current = generation;
     setIsLoading(true);
     setErrorMessage(null);
+    setHasLoadFailed(false);
     try {
       const result = await loadConvexQuotabunga(convex, episodeId);
       if (loadGenerationRef.current === generation) {
@@ -321,6 +333,7 @@ export function ConvexQuotabungaSubmission({
         setErrorMessage(
           "Could not load your Quotabunga entry. Please try again."
         );
+        setHasLoadFailed(true);
       }
     } finally {
       if (loadGenerationRef.current === generation) {
@@ -351,6 +364,77 @@ export function ConvexQuotabungaSubmission({
     setListenerNotes(submission.listenerNotes ?? "");
     setIsEditing(false);
   }, [resetForm, submission]);
+
+  // The form only lives in this component, so a reload, a route change or the
+  // game sheet being swapped out would take an unsubmitted quote with it. Keep
+  // it in the browser and pick it up, form open, once the entry has loaded.
+  const [isDraftChecked, setIsDraftChecked] = useState(false);
+  const [isDraftRestored, setIsDraftRestored] = useState(false);
+  const draftBase = submission?.updatedAt ?? null;
+  const canEdit = isOpen && submission?.scored !== true;
+  useEffect(() => {
+    if (current === null || isDraftChecked) return;
+    setIsDraftChecked(true);
+    const draft = readQuotabungaDraft(draftKey);
+    // A draft typed over an entry that has since changed is out of date.
+    if (draft === null || !canEdit || draft.basedOn !== draftBase) return;
+    setQuoteText(draft.quoteText);
+    setSourceTitle(draft.sourceTitle);
+    setSourceType(draft.sourceType);
+    setClipUrl(draft.clipUrl);
+    setClipStartSeconds(draft.clipStartSeconds);
+    setClipEndSeconds(draft.clipEndSeconds);
+    setClipDuration(null);
+    lastVideoIdRef.current = parseYouTubeUrl(draft.clipUrl)?.id ?? null;
+    setListenerNotes(draft.listenerNotes);
+    setIsEditing(true);
+    setIsComposing(true);
+    setIsDraftRestored(true);
+  }, [canEdit, current, draftBase, draftKey, isDraftChecked]);
+
+  const isFormOpen =
+    current !== null &&
+    (submission === null ? isOpen && isComposing : isEditing);
+  const hasUnsavedChanges =
+    quoteText !== (submission?.quoteText ?? "") ||
+    sourceTitle !== (submission?.sourceTitle ?? "") ||
+    sourceType !== (submission?.sourceType ?? "MOVIE") ||
+    clipUrl !== (submission?.clipUrl ?? "") ||
+    clipStartSeconds !== (submission?.clipStartSeconds?.toString() ?? "") ||
+    clipEndSeconds !== (submission?.clipEndSeconds?.toString() ?? "") ||
+    listenerNotes !== (submission?.listenerNotes ?? "");
+  useEffect(() => {
+    if (!isDraftChecked) return;
+    if (!isFormOpen || !hasUnsavedChanges) {
+      // Saved, withdrawn, cancelled, locked or emptied: nothing to bring back.
+      clearQuotabungaDraft(draftKey);
+      setIsDraftRestored(false);
+      return;
+    }
+    writeQuotabungaDraft(draftKey, {
+      basedOn: draftBase,
+      quoteText,
+      sourceTitle,
+      sourceType,
+      clipUrl,
+      clipStartSeconds,
+      clipEndSeconds,
+      listenerNotes,
+    });
+  }, [
+    clipEndSeconds,
+    clipStartSeconds,
+    clipUrl,
+    draftBase,
+    draftKey,
+    hasUnsavedChanges,
+    isDraftChecked,
+    isFormOpen,
+    listenerNotes,
+    quoteText,
+    sourceTitle,
+    sourceType,
+  ]);
 
   useEffect(() => {
     const normalizedQuote = quoteText.trim();
@@ -442,6 +526,7 @@ export function ConvexQuotabungaSubmission({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSaving) return;
+    setHasLoadFailed(false);
     const normalizedQuote = quoteText.trim();
     const normalizedSource = sourceTitle.trim();
     const normalizedClipUrl = clipUrl.trim();
@@ -514,6 +599,7 @@ export function ConvexQuotabungaSubmission({
     }
     setIsWithdrawing(true);
     setErrorMessage(null);
+    setHasLoadFailed(false);
     try {
       await withdrawConvexQuotabunga(convex, episodeId);
       resetForm();
@@ -586,7 +672,7 @@ export function ConvexQuotabungaSubmission({
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>{errorMessage}</span>
-                {!isSaving && !isWithdrawing ? (
+                {hasLoadFailed && !isSaving && !isWithdrawing ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -696,6 +782,13 @@ export function ConvexQuotabungaSubmission({
               onSubmit={(event) => void handleSubmit(event)}
             >
               {closingNotice}
+              {isDraftRestored ? (
+                <p className="text-sm text-zinc-300" role="status">
+                  {submission
+                    ? "Your unsaved changes are back. They are not saved yet."
+                    : "Your unsaved quote is back. It is not submitted yet."}
+                </p>
+              ) : null}
               <div className="space-y-2">
                 <label
                   htmlFor="convex-quotabunga-quote"
