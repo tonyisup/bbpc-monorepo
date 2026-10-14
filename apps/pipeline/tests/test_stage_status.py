@@ -86,13 +86,16 @@ class StageStatusesTests(StageStatusTestCase):
         self.assertEqual(rows["clip"]["detail"], "3 of 3 picks rendered")
         self.assertEqual(rows["publish"]["detail"], "state.json says done; this stage leaves no local file")
 
-    def test_a_seeded_state_entry_says_so(self):
+    def test_a_seeded_state_entry_does_not_show_publish_ran(self):
+        # Seeding only saw an SEO file, which the parse stage writes; nothing recorded a publish.
         self.full_episode()
         self.state(s20260101={"status": "done", "note": "seeded from existing output"})
-        self.assertEqual(
-            self.statuses()["publish"]["detail"],
-            "state.json says done (seeded from existing output); this stage leaves no local file",
-        )
+        rows = self.statuses()
+        self.assertEqual((rows["import_transcript"]["state"], rows["import_transcript"]["detail"]), (
+            "inferred", "state.json says done (seeded from existing output); this stage leaves no local file"))
+        self.assertEqual((rows["publish"]["state"], rows["publish"]["detail"]), (
+            "unknown", "state.json says done (seeded from existing output), "
+            "which does not show a publish; this stage leaves no local file"))
 
     def test_a_transcript_with_no_state_entry_has_unknown_import_and_publish(self):
         self.put(f"transcripts/{STEM}.json", [])
@@ -134,7 +137,9 @@ class StageStatusesTests(StageStatusTestCase):
 
     def test_reading_status_never_creates_state_json(self):
         self.full_episode()
-        self.assertEqual(self.states()["publish"], "inferred")  # seeded in memory from the SEO file
+        states = self.states()
+        self.assertEqual(states["import_transcript"], "inferred")  # seeded in memory from the SEO file
+        self.assertEqual(states["publish"], "unknown")
         self.assertFalse((self.output / "cowork" / "state.json").exists())
 
 

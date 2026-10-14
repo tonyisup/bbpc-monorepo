@@ -319,8 +319,6 @@ def lab_view(
 ) -> Dict[str, Any]:
     """The Lab tab: what can be rendered, the drafts, and past runs. ``active`` is the run in progress."""
     configured = raw_config.get("settings") if isinstance(raw_config.get("settings"), dict) else {}
-    provider = settings_schema.value(configured, "visuals_provider")
-    model_key = f"{provider}_visual_model"
     episodes_ = []
     for stem in reversed(lab.lab_episodes(config)):
         number, title = _identity(config, stem)
@@ -337,11 +335,7 @@ def lab_view(
         "stages": list(lab.LAB_STAGES),
         "neverInLab": list(lab.NEVER_IN_LAB),
         "python": {"path": str(python) if python else None, "found": python_found},
-        "provider": {
-            "name": provider,
-            "model": settings_schema.value(configured, model_key) if model_key in settings_schema.BY_KEY else None,
-            "paid": provider in lab.PAID_PROVIDERS,
-        },
+        "provider": lab.visuals(configured),
         "limits": {
             "minSeconds": float(settings_schema.value(configured, "min_clip_duration_seconds")),
             "maxSeconds": lab.MAX_CLIP_SECONDS,

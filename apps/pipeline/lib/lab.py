@@ -159,8 +159,22 @@ def save_draft(
     return draft
 
 
+def visuals(settings: Mapping[str, Any]) -> Dict[str, Any]:
+    """The provider a new background would come from, its model, and whether the request costs money."""
+    provider = settings_schema.value(settings, "visuals_provider")
+    model_key = f"{provider}_visual_model"
+    return {
+        "name": provider,
+        "model": settings_schema.value(settings, model_key) if model_key in settings_schema.BY_KEY else None,
+        "paid": provider in PAID_PROVIDERS,
+    }
+
+
 def list_drafts(config: Dict[str, Any], raw_config: Mapping[str, Any]) -> List[Dict[str, Any]]:
-    """Every readable draft, by name, with its ``changes`` against config.json and any ``problems``."""
+    """Every readable draft, by name, with its ``changes`` against config.json and any ``problems``.
+
+    ``provider`` is what a new background would use with the draft (config.json's when the draft has problems).
+    """
     folder = lab_dir(config) / "drafts"
     settings = _settings(raw_config)
     drafts = []
@@ -174,6 +188,7 @@ def list_drafts(config: Dict[str, Any], raw_config: Mapping[str, Any]) -> List[D
             "overrides": draft["overrides"],
             "changes": [] if problems else changes(settings, draft["overrides"]),
             "problems": problems,
+            "provider": visuals({**settings, **({} if problems else draft["overrides"])}),
         })
     return drafts
 

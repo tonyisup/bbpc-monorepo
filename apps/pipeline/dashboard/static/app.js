@@ -248,8 +248,9 @@ function renderEpisode(ep, list) {
       h('div', {},
         h('h3', {}, 'Cowork files'),
         h('div', {class: 'box'}, ep.cowork.files.map(file => coworkFile(file, state)),
-          !ep.cowork.transcriptFound && h('div', {class: 'mut sm gap'},
-            'Transcript not found, so the duration, segment-boundary and phrase-text checks were skipped.')),
+          !ep.cowork.transcriptFound && h('div', {class: 'mut sm gap'}, ep.cowork.transcriptNote
+            ? `The transcript ${ep.cowork.transcriptNote}, so the duration, segment-boundary and phrase-text checks were skipped.`
+            : 'Transcript not found, so the duration, segment-boundary and phrase-text checks were skipped.')),
         h('h3', {}, 'SEO title'),
         seoBox(ep)),
       h('div', {}, h('h3', {}, 'Movies'), moviesBox(ep.movies))),
@@ -469,6 +470,8 @@ const seconds = clip => Math.round(clip.end - clip.start);
 const clipLabel = clip => (clip.source === 'pick'
   ? `${String(clip.index).padStart(2, '0')} · ${clip.headline} · ${seconds(clip)} s`
   : `c${clip.index} · ${clip.headline} · ${seconds(clip)} s · no still`);
+// The provider a new background would use: the chosen draft's when it has one, else config.json's.
+const labProvider = (data, draft) => (draft && draft.provider) || data.provider;
 const RUN_WORDS = {ready: 'starting', running: 'rendering', done: 'done', failed: 'failed', interrupted: 'interrupted'};
 const RUN_TONES = {ready: 'in', running: 'in', done: 'ok', failed: 'er', interrupted: 'wa'};
 
@@ -477,12 +480,19 @@ async function render(data, clip, draft, newBackground) {
   if (labForm.start !== null && labForm.start !== clip.start) edits.start = labForm.start;
   if (labForm.end !== null && labForm.end !== clip.end) edits.end = labForm.end;
   if (newBackground && labForm.prompt !== null && labForm.prompt !== clip.imagePrompt) edits.imagePrompt = labForm.prompt;
-  if (newBackground && data.provider.paid && !window.confirm(
-    `This makes ONE PAID image request to ${data.provider.name} (${data.provider.model}).\n\nContinue?`)) return;
-  const answer = await post('/api/lab/runs', {
+  const provider = labProvider(data, draft);
+  if (newBackground && provider.paid && !window.confirm(
+    `This makes ONE PAID image request to ${provider.name} (${provider.model}).\n\nContinue?`)) return;
+  const request = confirmPaid => post('/api/lab/runs', {
     stem: labForm.stem, clip: clip.id, stage: 'clip', draft: draft ? draft.name : null, edits,
-    newBackground, confirmPaid: newBackground && data.provider.paid,
+    newBackground, confirmPaid,
   });
+  let answer = await request(newBackground && provider.paid);
+  // The server decides what is paid; if it still asks (config.json changed since the page loaded), ask Tony too.
+  if (!answer.ok && answer.body.code === 'confirm_paid') {
+    if (!window.confirm(`${answer.body.error}\n\nContinue?`)) return;
+    answer = await request(true);
+  }
   labForm.error = answer.ok ? null : (answer.body.problems || [answer.body.error]).join(' ');
   if (answer.ok) location.hash = `#lab/${answer.body.run.id}`; // the run has its own address
   else route();
@@ -544,6 +554,7 @@ function renderLab(data, shownRun) {
   const clip = episode.clips.find(c => c.id === labForm.clip) || episode.clips[0];
   if (labForm.clip !== clip.id) Object.assign(labForm, {clip: clip.id, start: null, end: null, prompt: null});
   const draft = chosenDraft(data.drafts);
+  const provider = labProvider(data, draft);
   const busy = Boolean(data.active);
   const canRender = data.python.found && !busy && !(draft && draft.problems.length);
 
@@ -600,11 +611,12 @@ function renderLab(data, shownRun) {
       h('summary', {}, 'New background…'),
       h('label', {}, 'Image prompt for this test (the SEO file is not edited)'),
       prompt,
-      h('div', {class: data.provider.paid ? 'sm warning gap' : 'sm mut gap'}, data.provider.paid
-        ? `One paid image request to ${data.provider.name} (${data.provider.model}). You are asked before it is sent.`
-        : `One image from the ${data.provider.name} provider on this Mac. No cost.`),
+      h('div', {class: provider.paid ? 'sm warning gap' : 'sm mut gap'}, provider.paid
+        ? `One paid image request to ${provider.name} (${provider.model}). You are asked before it is sent.`
+        : `One image from the ${provider.name} provider on this Mac. No cost.`,
+        provider.name !== data.provider.name ? ` The draft sets the provider; config.json uses ${data.provider.name}.` : ''),
       h('div', {class: 'gap'}, h('button', {class: 'btn', disabled: !canRender, onclick: () => render(data, clip, draft, true)},
-        data.provider.paid ? 'Render with a new background (paid)…' : 'Render with a new background'))));
+        provider.paid ? 'Render with a new background (paid)…' : 'Render with a new background'))));
 
   const runFor = shownRun || null;
   return [

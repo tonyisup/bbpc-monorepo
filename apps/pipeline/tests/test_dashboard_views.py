@@ -281,6 +281,17 @@ class LabViewTests(ViewsTestCase):
         self.assertEqual(view["python"], {"path": "/venv/bin/python", "found": True})
         self.assertEqual([e["stem"] for e in view["episodes"]], ["20260105"])
 
+    def test_each_draft_names_the_provider_a_new_background_would_use_with_its_overrides(self):
+        lab.save_draft(self.config, self.raw, "Free", {"visuals_provider": "local"})
+        lab.save_draft(self.config, self.raw, "Openai", {"visuals_provider": "openai", "openai_visual_model": "gpt-x"})
+        lab.save_draft(self.config, self.raw, "Tight", {"caption_font_size": 60})
+        drafts = {d["name"]: d.get("provider") for d in views.lab_view(self.config, self.raw)["drafts"]}
+        self.assertEqual(drafts, {
+            "free": {"name": "local", "model": "stabilityai/sdxl-turbo", "paid": False},
+            "openai": {"name": "openai", "model": "gpt-x", "paid": True},
+            "tight": {"name": "openrouter", "model": "google/gemini-3.1-flash-image", "paid": True},
+        })
+
     def test_a_run_is_shown_with_its_clip_once_rendered_beside_the_real_clip(self):
         run = lab.create_run(self.config, self.raw, stem="20260105", clip="pick-2")
         shown = views.lab_run(self.config, run)

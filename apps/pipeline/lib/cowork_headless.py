@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from lib import cowork_handoff, settings_schema
+from lib import cowork_handoff, run_checks, settings_schema
 from lib.data_dir import ENV_VAR, data_dir
 
 PIPELINE_ROOT = Path(__file__).resolve().parents[1]
@@ -94,12 +94,14 @@ def build_command(config: Dict[str, Any], add_dirs: List[Path]) -> List[str]:
 
 
 def session_env() -> Dict[str, str]:
-    """The environment for the session: this process's, minus what the pipeline's .env files set.
+    """The environment for the session: this process's, minus the pipeline's credentials.
 
-    Those are the pipeline's own credentials (Convex, Azure, image models). The
-    hand-off needs none of them, only the data directory the validator reads.
+    Those are what the pipeline's .env files set, and the credentials the
+    pre-run checks know about, wherever they were set (Convex, Azure, image
+    models). The hand-off needs none of them, only the data directory the
+    validator reads.
     """
-    env = dict(os.environ)
+    env = {name: value for name, value in os.environ.items() if name not in run_checks.CREDENTIAL_NAMES}
     for env_file in (PIPELINE_ROOT / ".env", data_dir() / ".env"):
         if not env_file.is_file():
             continue

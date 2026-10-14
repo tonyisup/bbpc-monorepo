@@ -546,6 +546,23 @@ class CheckEpisodeTests(CoworkHandoffTestCase):
         self.assertEqual((rows["shirts"]["status"], rows["shirts"]["summary"]),
                          ("ok", "1 phrases (1 original, 0 quote, 0 unsure)"))
 
+    def test_a_transcript_that_cannot_be_read_is_skipped_with_a_note(self):
+        self.write("20260101.movies.json", _movies_payload(_movie("Sketch", 2025)))
+        cases = {"not JSON": b"[{", "not UTF-8": b"\xff\xfe[]", "not a list": b'{"segments": []}',
+                 "not a list of segments": b"[1, 2]"}
+        for name, content in cases.items():
+            with self.subTest(name):
+                self.transcript.write_bytes(content)
+                try:
+                    result, rows = self.check()
+                except Exception as exc:  # noqa: BLE001 - the point is that nothing escapes
+                    self.fail(f"check_episode raised {exc!r}")
+                self.assertFalse(result["transcriptFound"])
+                self.assertTrue(result["transcriptNote"].startswith("could not be read: "), result["transcriptNote"])
+                self.assertEqual(rows["movies"]["status"], "ok")
+        self.transcript.write_text(json.dumps(SHIRT_SEGMENTS))
+        self.assertIsNone(self.check()[0]["transcriptNote"])
+
     def test_missing_movies_or_seo_fails_and_missing_shirts_does_not(self):
         result, rows = self.check()
         self.assertEqual({label: row["status"] for label, row in rows.items()},
@@ -801,6 +818,15 @@ class HeadlessCoworkTests(CoworkHandoffTestCase):
             _, cli, _ = self.run_headless(writes=("20260101.movies.json", "20260101.seo.json"))
         self.assertEqual(env, {"BBPC_PIPELINE_DATA_DIR": str(self.root), "PATH": "/usr/bin", "HOME": "/Users/tony"})
         self.assertNotIn("CLERK_MACHINE_SECRET_KEY", cli.call_args.kwargs["env"])
+
+    def test_session_environment_leaves_out_pipeline_credentials_set_in_the_shell(self):
+        from lib import run_checks
+        environ = {name: "from-the-shell" for name in run_checks.CREDENTIAL_NAMES}
+        environ.update({"BBPC_PIPELINE_DATA_DIR": str(self.root), "PATH": "/usr/bin", "ANTHROPIC_API_KEY": "kept"})
+        with mock.patch.dict(cowork_headless.os.environ, environ, clear=True), \
+             mock.patch.object(cowork_headless, "PIPELINE_ROOT", self.root / "no-checkout-env"):
+            env = cowork_headless.session_env()
+        self.assertEqual(env, {"BBPC_PIPELINE_DATA_DIR": str(self.root), "PATH": "/usr/bin", "ANTHROPIC_API_KEY": "kept"})
 
     def test_a_run_that_did_not_work_out_returns_false_instead_of_raising(self):
         both = ("20260101.movies.json", "20260101.seo.json")

@@ -260,7 +260,8 @@ holds a one-clip SEO file, so the episode's real clip, SEO file and
 The pipeline keeps no record of the stages it ran, so stage status is worked
 out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
 and `publish` leave no local file: they are inferred from `state.json` and drawn
-outlined rather than solid. The Convex target in the header is the result of
+outlined rather than solid. An episode `state.json` seeded from an existing SEO
+file shows `publish` as unknown, since nothing recorded whether it was published. The Convex target in the header is the result of
 the Runs tab's last check since the server started, or "not checked".
 
 ## Configuration
@@ -376,7 +377,8 @@ show's biggest catchphrases and everyday English look alike, so review it once.
 
 `scripts/shirt_ideas.py` keeps the phrases Tony is considering for shirts in
 `output/tshirt/ideas.json`. The dashboard's Shirts tab is the same list; both
-go through `lib/shirt_ideas.py`. Standard library only.
+go through `lib/shirt_ideas.py`, and a change holds `.ideas.json.lock` beside it
+so neither overwrites the other. Standard library only.
 
 ```bash
 python3 scripts/shirt_ideas.py list                         # every idea, with its flags

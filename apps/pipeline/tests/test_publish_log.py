@@ -137,6 +137,8 @@ class DecisionTests(PublishLogTestCase):
         clips_root = self.log_path.parent / "clips"
         (clips_root / "20260108").mkdir()
         (clips_root / ".DS_Store").write_bytes(b"")
+        for name in ("20260108.old", "drafts", "2026010"):  # folders that are not an episode date
+            (clips_root / name).mkdir()
         publish_log.mark_untracked(self.config, "20251225", "Bingo Card", youtube="U7w5VheXhAc")
         self.assertEqual(publish_log.tracked_stems(self.config), ["20251225", "20260101", "20260108"])
 

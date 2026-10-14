@@ -1,8 +1,10 @@
+import fcntl
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -62,7 +64,7 @@ class StorageTests(ShirtIdeasTestCase):
         })
         self.assertEqual(self.saved(), {"version": 1, "nextId": 2, "ideas": [idea]})
         self.assertTrue(self.path.read_text(encoding="utf-8").endswith("}\n"))
-        self.assertEqual(sorted(p.name for p in self.path.parent.iterdir()), ["ideas.json", "ideas.txt"])
+        self.assertEqual(sorted(p.name for p in self.path.parent.iterdir()), [".ideas.json.lock", "ideas.json", "ideas.txt"])
 
     def test_every_field_can_be_given_when_adding(self):
         idea = shirt_ideas.add(self.config, "I'd buy that for a dollar", print_text="I'D BUY THAT FOR A DOLLAR",
@@ -155,7 +157,7 @@ class StorageTests(ShirtIdeasTestCase):
             with self.assertRaises(OSError):
                 shirt_ideas.add(self.config, "Big booty")
         self.assertEqual(self.path.read_bytes(), before)
-        self.assertEqual(sorted(p.name for p in self.path.parent.iterdir()), ["ideas.json", "ideas.txt"])
+        self.assertEqual(sorted(p.name for p in self.path.parent.iterdir()), [".ideas.json.lock", "ideas.json", "ideas.txt"])
 
     def test_a_file_from_a_newer_version_is_not_rewritten(self):
         self.path.write_text(json.dumps({"version": 2, "ideas": [], "boards": {}}))
@@ -624,8 +626,40 @@ class ReadOnlyTests(ShirtIdeasTestCase):
         shirt_ideas.update(self.config, 1, status="rejected")
         shirt_ideas.remove(self.config, 2)
         changed = sorted({row[0] for row in set(snapshot(self.root)) ^ set(before)})
-        self.assertEqual(changed, ["output/tshirt", "output/tshirt/ideas.json"])
+        self.assertEqual(changed, ["output/tshirt", "output/tshirt/.ideas.json.lock", "output/tshirt/ideas.json"])
         self.assertEqual(len(self.ideas()), 3)
+
+
+class LockTests(ShirtIdeasTestCase):
+    """The dashboard and scripts/shirt_ideas.py can both change the list; one waits for the other."""
+
+    def hold_lock(self):
+        lock = self.path.with_name(".ideas.json.lock")
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        held = open(lock, "a")
+        fcntl.flock(held, fcntl.LOCK_EX)
+        return held
+
+    def test_each_change_waits_while_another_writer_holds_the_list(self):
+        shirt_ideas.add(self.config, "Pain train")
+        changes = {
+            "add": lambda: shirt_ideas.add(self.config, "Big booty"),
+            "update": lambda: shirt_ideas.update(self.config, 1, status="rejected"),
+            "remove": lambda: shirt_ideas.remove(self.config, 1),
+        }
+        for name, change in changes.items():
+            with self.subTest(name):
+                before = self.path.read_bytes()
+                held = self.hold_lock()
+                worker = threading.Thread(target=change)
+                worker.start()
+                worker.join(0.3)
+                waited = worker.is_alive()
+                unchanged = self.path.read_bytes() == before
+                held.close()  # releases the lock
+                worker.join(5)
+                self.assertTrue(waited and unchanged, f"{name} did not wait for the lock")
+                self.assertNotEqual(self.path.read_bytes(), before)
 
 
 if __name__ == "__main__":

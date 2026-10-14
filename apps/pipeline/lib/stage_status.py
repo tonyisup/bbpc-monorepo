@@ -79,6 +79,10 @@ def _inferred_stage(stage: str, entry: Dict[str, Any]) -> Dict[str, Any]:
     if status == cowork_handoff.STATUS_DONE:
         note = f" ({entry['note']})" if entry.get("note") else ""
         said = f"state.json says done{note}"
+        # pipeline.py marks an episode done after a run that reached publish; seeding only saw an SEO file.
+        if stage == "publish" and entry.get("note") == cowork_handoff.SEEDED_NOTE:
+            return {"stage": stage, "state": UNKNOWN, "checked": False,
+                    "detail": f"{said}, which does not show a publish; this stage leaves no local file"}
     elif status == cowork_handoff.STATUS_AWAITING and stage == "import_transcript":
         said = "state.json says awaiting_cowork, which follows the import"
     else:

@@ -49,8 +49,9 @@ def _pending(config: dict) -> int:
 def _validate(config: dict, stem: str) -> int:
     result = cowork_handoff.check_episode(config, stem)
     if not result["transcriptFound"]:
-        print(f"note: transcript not found at {result['transcript']}; "
-              "skipping duration, segment-boundary and phrase-text checks")
+        found = f"at {result['transcript']} {result['transcriptNote']}" if result.get("transcriptNote") else \
+            f"not found at {result['transcript']}"
+        print(f"note: transcript {found}; skipping duration, segment-boundary and phrase-text checks")
 
     for row in result["files"]:
         label = row["label"]

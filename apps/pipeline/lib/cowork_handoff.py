@@ -35,6 +35,9 @@ EXIT_AWAITING_COWORK = 75  # EX_TEMPFAIL: not a failure, try again later
 
 STATUS_AWAITING = "awaiting_cowork"
 STATUS_DONE = "done"
+# The note on an episode marked done because its SEO file already existed: the
+# parse stage had run, but nothing recorded whether it was published.
+SEEDED_NOTE = "seeded from existing output"
 
 CLIP_MIN_SECONDS = 20.0
 CLIP_MAX_SECONDS = 90.0
@@ -546,7 +549,7 @@ def _seed_state(config: Dict[str, Any]) -> Dict[str, Any]:
         stem = path.name[: -len(".seo.json")]
         if "." in stem:  # e.g. 20260713.seo.pre-budget-fix.json
             continue
-        episodes[stem] = {"status": STATUS_DONE, "updatedAt": _now(), "note": "seeded from existing output"}
+        episodes[stem] = {"status": STATUS_DONE, "updatedAt": _now(), "note": SEEDED_NOTE}
     return {"version": 1, "episodes": episodes}
 
 
@@ -629,12 +632,21 @@ def check_episode(config: Dict[str, Any], stem: str) -> Dict[str, Any]:
     ``missing`` (movies or SEO not written) or ``not_written`` (the optional
     shirts file). ``ok`` is false when any file is invalid or a required one
     is missing. Without a transcript the duration, segment-boundary and
-    phrase-text checks are skipped.
+    phrase-text checks are skipped; ``transcriptNote`` says why when the file
+    is there but cannot be read as a list of segments.
     """
     transcript = transcript_path(config, stem)
-    segments = None
+    segments, note = None, None
     if transcript.is_file():
-        segments = json.loads(transcript.read_text(encoding="utf-8"))
+        try:
+            loaded = json.loads(transcript.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            note = f"could not be read: {exc}"
+        else:
+            if isinstance(loaded, list) and all(isinstance(seg, dict) for seg in loaded):
+                segments = loaded
+            else:
+                note = "could not be read: it is not a list of segments"
     checks = (
         ("movies", movies_path, lambda: load_movies(config, stem, segments), _movies_summary, movies_warnings),
         ("seo", seo_path, lambda: load_seo(config, stem, segments=segments), _seo_summary, seo_warnings),
@@ -659,6 +671,7 @@ def check_episode(config: Dict[str, Any], stem: str) -> Dict[str, Any]:
         "stem": stem,
         "transcript": str(transcript),
         "transcriptFound": segments is not None,
+        "transcriptNote": note,
         "ok": all(row["status"] in ("ok", "not_written") for row in files),
         "files": files,
     }

@@ -221,6 +221,10 @@ class ShirtsApiTests(ShirtsServerTestCase):
             ("/api/shirts/ideas/update", {"status": "done"}, "no idea #None"),
             ("/api/shirts/ideas/delete", {"id": "1"}, "no idea #1"),
         ]
+        # The lock a change takes is there after the first change; a refused one changes nothing else.
+        lock = self.root / "output" / "tshirt" / ".ideas.json.lock"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        lock.touch()
         before = snapshot(self.root)
         for path, payload, reason in refused:
             with self.subTest(path=path, payload=payload):

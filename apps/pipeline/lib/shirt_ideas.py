@@ -21,13 +21,15 @@ one, and two of the show's rating names are real people's names.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
+import fcntl
 import json
 import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from lib import cowork_handoff, phrase_scan
 
@@ -62,6 +64,16 @@ def ideas_path(config: Dict[str, Any]) -> Path:
 
 def notes_path(config: Dict[str, Any]) -> Path:
     return _output_dir(config) / "tshirt" / "ideas.txt"
+
+
+@contextlib.contextmanager
+def _locked(config: Dict[str, Any]) -> Iterator[None]:
+    """Hold the list from load to save, so the dashboard and the script never overwrite each other."""
+    lock = ideas_path(config).with_name(".ideas.json.lock")
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with lock.open("a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)  # released when the file closes
+        yield
 
 
 def load(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -238,49 +250,52 @@ def add(
         "notes": "" if notes is None else _text("notes", notes, NOTES_MAX_CHARS),
         "from": dict(came_from or {"kind": "manual"}),
     }
-    data = load(config)
-    already = _listed(data).get(phrase_key(phrase))
-    if already:
-        raise ValueError(f"{phrase!r} is already on the list as #{already['id']} ({already.get('status')})")
-    now = _now()
-    idea = {"id": data["nextId"], **fields, "addedAt": now, "updatedAt": now}
-    data["ideas"].append(idea)
-    data["nextId"] += 1
-    _save(config, data)
+    with _locked(config):
+        data = load(config)
+        already = _listed(data).get(phrase_key(phrase))
+        if already:
+            raise ValueError(f"{phrase!r} is already on the list as #{already['id']} ({already.get('status')})")
+        now = _now()
+        idea = {"id": data["nextId"], **fields, "addedAt": now, "updatedAt": now}
+        data["ideas"].append(idea)
+        data["nextId"] += 1
+        _save(config, data)
     return idea
 
 
 def update(config: Dict[str, Any], idea_id: int, **changes: Any) -> Dict[str, Any]:
     """Change any of ``EDITABLE`` on one idea. The phrase as spoken is what the idea is, so it stays."""
-    data = load(config)
-    idea = _find(data, idea_id)
-    for name in changes:
-        if name not in EDITABLE:
-            raise ValueError(f"cannot change {name} (only {', '.join(EDITABLE)})")
-    if not changes:
-        raise ValueError("nothing to change")
-    if "printText" in changes:
-        idea["printText"] = _print_text(changes["printText"])
-    if "status" in changes:
-        idea["status"] = _status(changes["status"])
-    if "notes" in changes:
-        idea["notes"] = _text("notes", changes["notes"], NOTES_MAX_CHARS)
-    if "origin" in changes or "source" in changes:
-        origin = changes.get("origin", idea.get("origin"))
-        # A line that stops being a quote loses its source with it.
-        kept = idea.get("source") if origin == "quote" else None
-        idea.update(_origin(origin, changes["source"] if "source" in changes else kept))
-    idea["updatedAt"] = _now()
-    _save(config, data)
+    with _locked(config):
+        data = load(config)
+        idea = _find(data, idea_id)
+        for name in changes:
+            if name not in EDITABLE:
+                raise ValueError(f"cannot change {name} (only {', '.join(EDITABLE)})")
+        if not changes:
+            raise ValueError("nothing to change")
+        if "printText" in changes:
+            idea["printText"] = _print_text(changes["printText"])
+        if "status" in changes:
+            idea["status"] = _status(changes["status"])
+        if "notes" in changes:
+            idea["notes"] = _text("notes", changes["notes"], NOTES_MAX_CHARS)
+        if "origin" in changes or "source" in changes:
+            origin = changes.get("origin", idea.get("origin"))
+            # A line that stops being a quote loses its source with it.
+            kept = idea.get("source") if origin == "quote" else None
+            idea.update(_origin(origin, changes["source"] if "source" in changes else kept))
+        idea["updatedAt"] = _now()
+        _save(config, data)
     return idea
 
 
 def remove(config: Dict[str, Any], idea_id: int) -> Dict[str, Any]:
     """Take an idea off the list for good. Its number is not given out again."""
-    data = load(config)
-    idea = _find(data, idea_id)
-    data["ideas"].remove(idea)
-    _save(config, data)
+    with _locked(config):
+        data = load(config)
+        idea = _find(data, idea_id)
+        data["ideas"].remove(idea)
+        _save(config, data)
     return idea
 
 

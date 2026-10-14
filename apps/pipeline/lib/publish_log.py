@@ -297,7 +297,8 @@ def listing(config: Dict[str, Any], stem: str) -> Dict[str, Any]:
 def tracked_stems(config: Dict[str, Any]) -> List[str]:
     """Every episode with a clips folder or a recorded decision, oldest first."""
     clips_root = Path(config.get("paths", {}).get("output_dir", "./output")) / "clips"
-    stems = {p.name for p in clips_root.iterdir() if p.is_dir()} if clips_root.is_dir() else set()
+    stems = ({p.name for p in clips_root.iterdir() if p.is_dir() and _STEM.fullmatch(p.name)}
+             if clips_root.is_dir() else set())
     stems |= {d["stem"] for d in load(config)["decisions"]}
     return sorted(stems)
 
