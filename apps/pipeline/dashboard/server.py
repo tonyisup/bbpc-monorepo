@@ -14,7 +14,9 @@ A GET never writes. The POSTs are:
   rewrite ``config.json`` when a draft is applied;
 - the Shirts tab's (``/api/shirts/...``): they change the shortlist,
   ``output/tshirt/ideas.json``, and Rescan runs ``scripts/scan_phrases.py``,
-  which rewrites the report under ``output/phrases/``.
+  which rewrites the report under ``output/phrases/``;
+- the Clips tab's (``/api/clips/...``): they record a publish decision in
+  ``output/publish-decisions.json``.
 
 Each needs the token made when the server started and this server's own
 Origin, because any web page open in the browser can post to localhost.
@@ -36,7 +38,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from dashboard import views
 from dashboard.lab_runner import DEFAULT_TIMEOUT_SECONDS, LabBusy, LabRunner
 from dashboard.scan_runner import DEFAULT_TIMEOUT_SECONDS as SCAN_TIMEOUT_SECONDS, ScanBusy, ScanRunner
-from lib import lab, shirt_ideas
+from lib import lab, publish_log, shirt_ideas
 from lib.data_dir import data_dir, require_data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,7 +65,7 @@ CONTENT_POLICY = (
 CHUNK_BYTES = 64 * 1024
 MAX_POST_BYTES = 64 * 1024
 TOKEN_HEADER = "X-Dashboard-Token"
-POST_PREFIXES = ("/api/lab/", "/api/shirts/")
+POST_PREFIXES = ("/api/lab/", "/api/shirts/", "/api/clips/")
 # What the page may send when it adds an idea, and the library's name for each.
 IDEA_FIELDS = (("printText", "print_text"), ("origin", "origin"), ("source", "source"), ("status", "status"),
                ("notes", "notes"))
@@ -135,7 +137,9 @@ class DashboardServer(ThreadingHTTPServer):
         self.config_path = Path(config_path)
         self.runner = runner
         self.scans = scans
-        self.ideas_lock = threading.Lock()  # one change to the shortlist at a time: each rewrites the file
+        # One change at a time to the shortlist and to the decisions log: each rewrites its whole file.
+        self.ideas_lock = threading.Lock()
+        self.decisions_lock = threading.Lock()
         # Sent to the page with /api/header and required back on every POST. Another site's
         # page cannot read it (no CORS), and a rebound domain is refused by the Host check.
         self.token = secrets.token_urlsafe(32)
@@ -191,17 +195,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._started = False
         try:
-            if prefix == "/api/lab/":
-                self._lab_post(path[len(prefix):], payload)
-            else:
-                self._shirts_post(path[len(prefix):], payload)
+            post = {"/api/lab/": self._lab_post, "/api/shirts/": self._shirts_post, "/api/clips/": self._clips_post}
+            post[prefix](path[len(prefix):], payload)
         except lab.LabError as exc:
             self._json(400, {"error": str(exc), "problems": exc.problems, "code": exc.code})
         except LabBusy as exc:
             self._json(409, {"error": "A render is already running. One at a time.", "active": exc.active})
         except ScanBusy:
             self._json(409, {"error": "A rescan is already running."})
-        except ValueError as exc:  # what the shortlist library refuses, in its own words
+        except ValueError as exc:  # what the shortlist or the decisions library refuses, in its own words
             self._json(400, {"error": str(exc)})
         except Exception as exc:
             traceback.print_exc()
@@ -270,6 +272,12 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 (run,) = [r for r in lab.list_runs(config, runner.active) if r["id"] == run["id"]]
                 self._json(200, {"run": views.lab_run(config, run), "log": lab.log_tail(config, run["id"])})
+        elif name == "clips":
+            page = views.clips(config, (query.get("stem") or [None])[0])
+            if page is None:
+                self._json(404, {"error": "no clips or decisions for that episode"})
+            else:
+                self._json(200, page)
         elif name == "shirts":
             self._json(200, views.shirts(config, self.server.scans.state()))
         elif name == "shirts/phrases":
@@ -337,6 +345,24 @@ class Handler(BaseHTTPRequestHandler):
             runner.release()
             raise
         self._json(202, {"run": views.lab_run(config, runner.start(config, run))})
+
+    # ----------------------------------------------------------------------- the Clips tab
+
+    def _clips_post(self, name: str, payload: Dict[str, Any]) -> None:
+        """Record a publish decision: the same calls ``scripts/publish_decisions.py`` makes."""
+        _, config = views.load_config(self.server.config_path)
+        if name == "decide":
+            with self.server.decisions_lock:
+                rows = publish_log.decide(config, payload.get("stem"), payload.get("clip"), payload.get("decision"),
+                                          payload.get("youtube"), payload.get("reason"))
+            self._json(200, {"rows": rows})
+        elif name == "untracked":
+            with self.server.decisions_lock:
+                row = publish_log.mark_untracked(config, payload.get("stem"), payload.get("label"),
+                                                 payload.get("youtube"), payload.get("note"))
+            self._json(200, {"row": row})
+        else:
+            self._not_found()
 
     # ----------------------------------------------------------------------- the Shirts tab
 
@@ -475,7 +501,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     server = make_server(Path(args.config), args.port, Path(args.pipeline_python).expanduser())
     print(f"Pipeline dashboard: http://{BIND_ADDRESS}:{server.server_address[1]}/")
     print(f"  data directory {data_dir()}; Ctrl-C to stop")
-    print("  writes only: output/lab/ (Lab), output/tshirt/ideas.json (Shirts), output/phrases/ (Rescan)")
+    print("  writes only: output/lab/ (Lab), output/tshirt/ideas.json (Shirts), output/phrases/ (Rescan), "
+          "output/publish-decisions.json (Clips)")
     if not server.runner.python_found():
         print(f"  no pipeline python at {server.runner.python}: the Lab cannot render (see --pipeline-python)")
     try:

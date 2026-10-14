@@ -162,6 +162,7 @@ data directory:
 
 - the Lab's test renders and drafts under `output/lab/`, and `config.json`
   when you apply a draft;
+- publish decisions, `output/publish-decisions.json`;
 - the T-shirt shortlist, `output/tshirt/ideas.json`;
 - the phrase report under `output/phrases/`, when you press Rescan.
 
@@ -176,6 +177,18 @@ the dashboard's own page.
   result and warnings, the SEO title against its 60-character limit, and the
   movies with each host's rating. The episode's mp3 plays when it is in
   `episodes/`.
+- **Clips**: one episode's rendered picks, each with a player, and Cowork's
+  candidates that were not rendered, published ones first in each list.
+  "Published…" takes the Short's YouTube URL or ID, "Skip…" an optional
+  reason, and "Skip the rest…" skips every rendered clip still undecided;
+  marking again replaces the earlier decision.
+  A Short whose clip is gone can be recorded by its label. These are the calls
+  `scripts/publish_decisions.py` makes (see
+  [Publish decisions](#publish-decisions)); the page can do nothing the script
+  cannot. A clip longer than every Short published so far is marked. "Open in
+  Lab" puts the Lab on that pick or candidate when the episode's mp3 is in
+  `episodes/`; a candidate has no still, so its test render needs a new
+  background.
 - **Shirts**: the T-shirt shortlist as a board (ideas, shortlisted, designing,
   done; rejected ones folded away) and the three places a phrase can come
   from: the recurring-phrase report by its lists, with each phrase's episode
@@ -213,8 +226,8 @@ holds a one-clip SEO file, so the episode's real clip, SEO file and
 The pipeline keeps no record of the stages it ran, so stage status is worked
 out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
 and `publish` leave no local file: they are inferred from `state.json` and drawn
-outlined rather than solid. The Convex target is shown as not checked. Clips
-and Runs are not built yet.
+outlined rather than solid. The Convex target is shown as not checked. Runs
+is not built yet.
 
 ## Configuration
 
@@ -295,6 +308,12 @@ Clip numbers are the `NN-` prefix of the rendered file. Decisions copy the
 clip's window and headline, so they survive deleting the rendered files. In
 `report`, `undecided` counts every pick with no decision and `toReview` counts
 only those whose rendered file is still on disk.
+
+`publish` needs the Short's address, and `rest` can only be skipped, since
+each published Short has its own. The episode is its date (`20261005`).
+`list` ends with how long the published Shorts have run so far. The
+dashboard's Clips tab records the same decisions through the same function
+(`publish_log.decide`).
 
 ## Recurring phrases
 
@@ -394,8 +413,8 @@ stages), clip rendering, review clipping, laughter detection, runtime config, de
 declarations, the Clerk M2M/Convex boundary, visual-prompt safety, backfill
 error handling, the settings schema (every key the code reads is declared), stage
 status, the Lab (drafts, run folders, what it refuses), a pinned copy of the
-default caption file and ffmpeg command, the T-shirt shortlist and its script,
-and the dashboard's views and server.
+default caption file and ffmpeg command, publish decisions and their script,
+the T-shirt shortlist and its script, and the dashboard's views and server.
 
 ## Read-only pipeline identity probe
 

@@ -312,6 +312,7 @@ class ReadOnlyTests(ViewsTestCase):
         views.settings({"settings": dict(self.config["settings"])})
         views.shirts(self.config)
         views.shirt_phrases(self.config, "catchphrases")
+        views.clips(self.config)
         self.assertEqual(snapshot(self.root), before)
         self.assertGreater(len(before), 30)
 

@@ -161,6 +161,7 @@ def today(config: Dict[str, Any]) -> Dict[str, Any]:
         })
     return {
         "needs": _needs(config, state, reports, transcript_stems, phrases),
+        "clipsToReview": sum(row["toReview"] for row in reports.values()),
         "archive": {
             "transcripts": len(transcript_stems),
             "firstDate": _date(transcript_stems[0]) if transcript_stems else None,
@@ -409,3 +410,86 @@ def shirt_phrases(
         for example in row["examples"]:
             example["audioUrl"] = _audio_url(config, example["stem"])
     return page
+
+
+# --------------------------------------------------------------------------- Clips
+
+_COUNTS = ("rendered", "published", "skipped", "toReview", "untracked")
+
+
+def _decision(decision: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A recorded decision, with the address of the Short when it has one."""
+    if decision is None:
+        return None
+    video = decision.get("youtubeId")
+    return {**decision, "youtubeUrl": publish_log.short_url(video) if video else None}
+
+
+def _clip_row(listed: Dict[str, Any], lab_clip: Optional[str], **fields: Any) -> Dict[str, Any]:
+    clip = listed["clip"]
+    return {
+        "index": listed["index"], **fields,
+        "headline": str(clip.get("headline") or ""), "start": float(clip["start"]), "end": float(clip["end"]),
+        "seconds": listed["seconds"], "why": clip.get("why"),
+        "decision": _decision(listed["decision"]), "longerThanPublished": listed["longerThanPublished"],
+        "labClip": lab_clip,  # the Lab's id for this clip, when the Lab can render it
+    }
+
+
+def _published_first(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Published clips first; the sort is stable, so each group keeps its order."""
+    return sorted(rows, key=lambda row: (row["decision"] or {}).get("decision") != "published")
+
+
+def clips(config: Dict[str, Any], stem: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """The Clips tab for one episode: its rendered picks, the other candidates, and what was decided.
+
+    Published clips come first in both lists; otherwise they keep their order.
+
+    With no ``stem`` it opens on the newest episode that has clips left to
+    review, or the newest episode. None when ``stem`` has no clips folder and
+    no decision.
+    """
+    tracked = publish_log.tracked_stems(config)
+    reports = {row["stem"]: row for row in publish_log.report(config, tracked)}
+    lengths = publish_log.published_lengths(config)
+    if stem is None:
+        newest = list(reversed(tracked))
+        stem = next((s for s in newest if reports[s]["toReview"]), newest[0] if newest else None)
+        if stem is None:
+            return {"episodes": [], "stem": None, "lengths": lengths}
+    if stem not in tracked:
+        return None
+    episodes_ = []
+    for tracked_stem in reversed(tracked):
+        number, title = _identity(config, tracked_stem)
+        episodes_.append({"stem": tracked_stem, "date": _date(tracked_stem), "number": number, "title": title,
+                          **{key: reports[tracked_stem][key] for key in _COUNTS}})
+    listing = publish_log.listing(config, stem)
+    in_lab = stem in lab.lab_episodes(config)
+    lab_ids = {choice["id"] for choice in lab.clip_choices(config, stem)} if in_lab else set()
+    clips_dir = Path(config.get("paths", {}).get("output_dir", "./output")) / "clips" / stem
+
+    def lab_id(source: str, index: int) -> Optional[str]:
+        return f"{source}-{index}" if f"{source}-{index}" in lab_ids else None
+
+    index = tracked.index(stem)
+    number, title = _identity(config, stem)
+    return {
+        "episodes": episodes_,
+        "stem": stem, "date": _date(stem), "number": number, "title": title,
+        "prev": tracked[index - 1] if index else None,
+        "next": tracked[index + 1] if index + 1 < len(tracked) else None,
+        "counts": reports[stem],
+        "rendered": _published_first([
+            _clip_row(row, lab_id("pick", row["index"]), file=row["file"], fileExists=row["fileExists"],
+                      url=media_url(config, clips_dir / row["file"]) if row["fileExists"] else None)
+            for row in listing["rendered"]
+        ]),
+        "candidates": _published_first([_clip_row(row, lab_id("candidate", row["index"]))
+                                        for row in listing["candidates"] if row["rendered"] is None]),
+        "candidateCount": len(listing["candidates"]),
+        "untracked": [_decision(row) for row in listing["untracked"]],
+        "lengths": lengths,
+        "lab": in_lab,
+    }

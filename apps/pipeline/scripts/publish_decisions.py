@@ -11,7 +11,8 @@ the pipeline data directory.
     python3 scripts/publish_decisions.py skip 20261005 1 --reason "payoff too slow"
     python3 scripts/publish_decisions.py skip 20261005 rest
         clip numbers are the NN- prefix of the rendered file; "rest" means every
-        rendered clip of that episode that has no decision yet
+        rendered clip of that episode that has no decision yet, and can only be
+        skipped (each published Short has its own address)
 
     python3 scripts/publish_decisions.py publish 20261005 c7 https://youtu.be/ID
         a candidate that was not rendered (c + its position in candidateClips)
@@ -41,57 +42,45 @@ def _load_config(path: Path) -> dict:
         return resolve_data_paths(json.load(f))
 
 
-def _decision_index(config: dict, stem: str) -> dict:
-    return {publish_log.decision_key(d): d for d in publish_log.load(config)["decisions"] if d["stem"] == stem}
-
-
 def _describe(decision: dict | None) -> str:
     if not decision:
         return "-"
     text = decision["decision"]
     if decision.get("youtubeId"):
-        text += f" https://youtube.com/shorts/{decision['youtubeId']}"
+        text += f" {publish_log.short_url(decision['youtubeId'])}"
     if decision.get("reason"):
         text += f" ({decision['reason']})"
     return text
 
 
 def _list(config: dict, stem: str) -> int:
-    decided = _decision_index(config, stem)
-    rendered = publish_log.rendered_clips(config, stem)
-    if not rendered:
+    listing = publish_log.listing(config, stem)
+    if not listing["rendered"]:
         print(f"No rendered clips for {stem} (no output/seo/{stem}.seo.json or no picks).")
     else:
         print(f"Rendered clips for {stem}:")
-    for r in rendered:
-        row = publish_log.clip_row(stem, r["clip"], "pick", "skipped", None, None)
+    for r in listing["rendered"]:
         missing = "" if r["fileExists"] else "  [file missing]"
-        print(f"  {r['index']}  {r['file']}{missing}\n     {_describe(decided.get(publish_log.decision_key(row)))}")
-    candidates = publish_log.candidate_clips(config, stem)
-    if candidates:
+        print(f"  {r['index']}  {r['file']}{missing}\n     {_describe(r['decision'])}")
+    if listing["candidates"]:
         print("Candidates (c#):")
-    for i, clip in enumerate(candidates):
-        row = publish_log.clip_row(stem, clip, "candidate", "skipped", None, None)
+    for c in listing["candidates"]:
+        clip = c["clip"]
         length = float(clip["end"]) - float(clip["start"])
-        status = _describe(decided.get(publish_log.decision_key(row)))
-        print(f"  c{i:<2} {float(clip['start']):8.1f}s {length:4.0f}s  {clip.get('headline', '')}"
+        status = _describe(c["decision"])
+        print(f"  c{c['index']:<2} {float(clip['start']):8.1f}s {length:4.0f}s  {clip.get('headline', '')}"
               + ("" if status == "-" else f"  -> {status}"))
-    for d in decided.values():
-        if d["source"] == "untracked":
-            print(f"  untracked: {d['headline']} -> {_describe(d)}")
+    for d in listing["untracked"]:
+        print(f"  untracked: {d['headline']} -> {_describe(d)}")
+    lengths = publish_log.published_lengths(config)
+    if lengths["count"] and (listing["rendered"] or listing["candidates"]):
+        print(f"Published Shorts so far run {lengths['shortest']:.0f}-{lengths['longest']:.0f} s "
+              f"({lengths['count']} with a known length).")
     return 0
 
 
 def _decide(config: dict, args: argparse.Namespace, decision: str) -> int:
-    youtube = getattr(args, "youtube", None)
-    if decision == "published" and not youtube:
-        raise ValueError("publish needs the Short's YouTube URL or ID")
-    if args.clip == "rest":
-        rows = publish_log.mark_rest(config, args.stem, decision, reason=args.reason)
-    elif args.clip.lower().startswith("c"):
-        rows = [publish_log.mark_candidate(config, args.stem, int(args.clip[1:]), decision, youtube, args.reason)]
-    else:
-        rows = [publish_log.mark_rendered(config, args.stem, int(args.clip), decision, youtube, args.reason)]
+    rows = publish_log.decide(config, args.stem, args.clip, decision, getattr(args, "youtube", None), args.reason)
     for row in rows:
         print(f"{row['stem']} {row['decision']}: {row['headline']}")
     if not rows:

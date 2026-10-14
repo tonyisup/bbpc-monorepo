@@ -1,6 +1,6 @@
 // BBPC pipeline dashboard. Every figure is computed by the server (dashboard/views.py);
-// this file lays it out. Looking only sends GET requests. The Lab, its drafts and the
-// Shirts tab send POSTs, each carrying the token the server made when it started.
+// this file lays it out. Looking only sends GET requests. The Lab, its drafts, the Clips
+// tab and the Shirts tab send POSTs, each carrying the token the server made when it started.
 'use strict';
 
 const view = document.getElementById('view');
@@ -87,9 +87,8 @@ function needRow(need) {
   if (need.kind === 'clips') {
     return h('div', {}, dot('wa'), h('div', {class: 't'},
       h('b', {}, `${episodeName(need)} · ${plural(need.count, 'rendered clip has', 'rendered clips have')} no publish decision`),
-      h('div', {class: 'mut sm'}, need.title ? `${need.title} · ` : '', 'Record each one with ',
-        h('code', {}, `python3 scripts/publish_decisions.py list ${need.stem}`))),
-      h('a', {class: 'btn', href: `#episode/${need.stem}`}, 'Open episode'));
+      h('div', {class: 'mut sm'}, need.title ? `${need.title} · ` : '', 'Watch them and mark each one published or skipped.')),
+      h('a', {class: 'btn p', href: `#clips/${need.stem}`}, 'Review clips'));
   }
   if (need.kind === 'cowork') {
     const ready = need.ready && need.ok;
@@ -674,6 +673,136 @@ async function showLab(current, runId) {
   if (shownRun && (shownRun.status === 'running' || shownRun.status === 'ready')) labPoll = setTimeout(watch, 1000);
 }
 
+// --------------------------------------------------------------------------- Clips
+
+const clipsForm = {error: null};
+const wholeSeconds = seconds => `${Math.round(seconds)} s`;
+
+function decisionLine(decision) {
+  if (!decision) return h('div', {class: 'pills'}, pill('wa', 'Not decided'));
+  if (decision.decision === 'published') {
+    return h('div', {class: 'pills'}, pill('ok', 'Published'),
+      // A link to click, not something the page loads: the address comes from the server.
+      decision.youtubeUrl && h('a', {class: 'sm', href: decision.youtubeUrl, target: '_blank', rel: 'noreferrer noopener'},
+        `youtube.com/shorts/${decision.youtubeId}`),
+      decision.reason && h('span', {class: 'mut sm'}, decision.reason));
+  }
+  return h('div', {class: 'pills'}, pill('no', 'Skipped'), decision.reason && h('span', {class: 'mut sm'}, decision.reason));
+}
+
+// `clip` is what scripts/publish_decisions.py takes: a rendered clip's number, c<candidate>, or rest.
+async function decideClip(stem, clip, decision, what) {
+  let youtube = null;
+  let reason = null;
+  if (decision === 'published') {
+    youtube = (window.prompt(`YouTube URL or video ID of the Short:\n\n${what}`) || '').trim();
+    if (!youtube) return;
+  } else {
+    const typed = window.prompt(`Why skip it? You can leave this empty.\n\n${what}`);
+    if (typed === null) return;
+    reason = typed.trim() || null;
+  }
+  const answer = await post('/api/clips/decide', {stem, clip, decision, youtube, reason});
+  clipsForm.error = answer.ok ? null : answer.body.error;
+  route();
+}
+
+// `main`: a rendered clip still waiting for its decision, the one thing on the tab that needs doing.
+function decideButtons(data, clip, row, what, main) {
+  const again = row.decision ? 'Replaces the decision already recorded' : null;
+  return [
+    h('button', {class: main && !row.decision ? 'btn p s' : 'btn s', title: again, onclick: () => decideClip(data.stem, clip, 'published', what)}, 'Published…'),
+    h('button', {class: 'btn s', title: again, onclick: () => decideClip(data.stem, clip, 'skipped', what)}, 'Skip…'),
+    row.labClip && h('a', {class: 'btn s', href: `#lab/clip/${data.stem}/${row.labClip}`,
+      title: 'Opens the Lab on this clip. A test render goes to output/lab/, never over the real clip.'}, 'Open in Lab'),
+  ];
+}
+
+const longerNote = (row, lengths) => row.longerThanPublished
+  && h('div', {class: 'sm warning'}, `Longer than any published Short (the longest ran ${wholeSeconds(lengths.longest)})`);
+
+function clipCard(data, row) {
+  return h('div', {class: 'clip box'},
+    row.url ? h('video', {controls: true, preload: 'metadata', src: row.url})
+      : h('div', {class: 'novid'}, `The rendered file is not on disk: ${row.file}`),
+    h('div', {class: 'h'}, row.headline),
+    h('div', {class: 'mut sm'}, `${String(row.index).padStart(2, '0')} · ${wholeSeconds(row.seconds)} · starts ${clock(row.start)}`),
+    row.why && h('div', {class: 'mut sm'}, row.why),
+    longerNote(row, data.lengths),
+    decisionLine(row.decision),
+    h('div', {class: 'row'}, decideButtons(data, row.index, row, row.headline, true)));
+}
+
+function untrackedBox(data) {
+  const label = h('input', {class: 'inp', type: 'text', placeholder: 'The bit, for example “Bingo Card”', 'aria-label': 'Label'});
+  const youtube = h('input', {class: 'inp', type: 'text', placeholder: 'YouTube URL or video ID', 'aria-label': 'YouTube URL or ID'});
+  const note = h('input', {class: 'inp', type: 'text', placeholder: 'Note (optional)', 'aria-label': 'Note'});
+  // A refused entry is shown here and the form is left as typed.
+  const problem = h('div', {class: 'sm problem gap', hidden: true});
+  const record = async () => {
+    const answer = await post('/api/clips/untracked', {stem: data.stem, label: label.value, youtube: youtube.value, note: note.value});
+    if (!answer.ok) {
+      problem.textContent = answer.body.error;
+      problem.hidden = false;
+      return;
+    }
+    clipsForm.error = null;
+    route();
+  };
+  return h('div', {class: 'box'},
+    h('div', {class: 'mut sm'}, 'A Short you published from this episode whose clip is no longer in the pipeline’s output.'),
+    data.untracked.map(row => h('div', {class: 'file'}, h('b', {}, row.headline), decisionLine(row))),
+    h('div', {class: 'pair gap'}, label, youtube, note, h('button', {class: 'btn', onclick: record}, 'Record')),
+    problem);
+}
+
+function renderClips(data) {
+  if (!data.stem) return h('div', {class: 'box mut'}, 'No episode has rendered clips or publish decisions yet.');
+  const picker = h('select', {class: 'btn', 'aria-label': 'Episode'}, data.episodes.map(ep =>
+    h('option', {value: ep.stem, selected: ep.stem === data.stem},
+      [ep.number, ep.title, ep.date || ep.stem, ep.toReview ? `${ep.toReview} to review` : null].filter(Boolean).join(' · '))));
+  picker.addEventListener('change', () => { location.hash = `#clips/${picker.value}`; });
+  const step = (stem, text) => h('a', {class: stem ? 'btn' : 'btn off', href: stem ? `#clips/${stem}` : null}, text);
+  const named = [data.number, data.title].filter(Boolean).join(' · ');
+  const counts = data.counts;
+  const undecided = data.rendered.filter(row => !row.decision).length;
+  const lengths = data.lengths;
+  return [
+    h('div', {class: 'bar'},
+      h('b', {class: 'big'}, `${named || data.date || data.stem} · rendered clips`),
+      h('span', {class: 'mut'}, `${plural(data.rendered.length, 'pick')} rendered · ${plural(data.candidates.length, 'more candidate')}`),
+      h('span', {class: 'sp'}), step(data.prev, '← Older'), picker, step(data.next, 'Newer →')),
+    h('div', {class: 'bar gap'},
+      h('span', {class: 'pill'}, lengths.count
+        ? `Published Shorts so far run ${Math.round(lengths.shortest)}–${wholeSeconds(lengths.longest)}` : 'No Short published yet'),
+      h('span', {class: 'mut sm'}, `${counts.published} published · ${counts.skipped} skipped · ${counts.undecided} not decided`,
+        counts.publishedNotPicked ? ` · ${counts.publishedNotPicked} published from the candidates` : ''),
+      h('span', {class: 'sp'}),
+      h('a', {class: 'btn s', href: `#episode/${data.stem}`}, 'Open episode'),
+      undecided > 0 && h('button', {class: 'btn s', onclick: () => decideClip(data.stem, 'rest', 'skipped',
+        `All ${plural(undecided, 'undecided rendered clip')} of this episode`)}, 'Skip the rest…')),
+    clipsForm.error && h('div', {class: 'box problem gap'}, clipsForm.error),
+    data.rendered.length ? h('div', {class: 'clips gap'}, data.rendered.map(row => clipCard(data, row)))
+      : h('div', {class: 'box mut gap'}, 'No picks were rendered for this episode.'),
+    h('h3', {}, `Candidates that were not rendered (${data.candidates.length} of ${data.candidateCount})`),
+    data.candidates.length ? h('table', {class: 'phrases'},
+      h('tr', {}, ['', 'Candidate', 'Length', 'Starts', 'Decision', ''].map(name => h('th', {}, name))),
+      data.candidates.map(row => h('tr', {},
+        h('td', {class: 'mono mut nowrap'}, `c${row.index}`),
+        h('td', {}, h('b', {}, row.headline), row.why && h('div', {class: 'mut sm'}, row.why), longerNote(row, lengths)),
+        h('td', {class: 'nowrap'}, wholeSeconds(row.seconds)),
+        h('td', {class: 'mut nowrap'}, clock(row.start)),
+        h('td', {}, row.decision ? decisionLine(row.decision) : h('span', {class: 'mut'}, '—')),
+        h('td', {class: 'right nowrap'}, decideButtons(data, `c${row.index}`, row, row.headline, false)))))
+      : h('div', {class: 'mut sm'}, 'None.'),
+    !data.lab && h('div', {class: 'mut sm gap'}, 'This episode’s mp3 is not in episodes/, so the Lab cannot render its clips.'),
+    h('h3', {}, 'Published, but the clip is gone'),
+    untrackedBox(data),
+    h('div', {class: 'mut sm gap'}, 'Decisions are saved in ', h('code', {}, 'output/publish-decisions.json'), '. The same from a terminal: ',
+      h('code', {}, `python3 scripts/publish_decisions.py list ${data.stem}`)),
+  ];
+}
+
 // --------------------------------------------------------------------------- Shirts
 
 // What the tab is showing; it survives a redraw. `source` is a scan section, 'episodes' or 'notes'.
@@ -935,21 +1064,28 @@ function show(nodes) {
   view.replaceChildren(...[nodes].flat(Infinity).filter(Boolean));
 }
 
-function setNeedsCount(count) {
-  const badge = document.getElementById('needs-count');
+function setBadge(id, count) {
+  const badge = document.getElementById(id);
   badge.textContent = count;
   badge.hidden = !count;
 }
 
-const TABS = ['today', 'episode', 'shirts', 'lab', 'settings'];
+// The two tab badges: things that need Tony, and rendered clips with no publish decision.
+function setCounts(today) {
+  setBadge('needs-count', today.needs.length);
+  setBadge('clips-count', today.clipsToReview);
+}
+
+const TABS = ['today', 'episode', 'clips', 'shirts', 'lab', 'settings'];
 let latestRoute = 0;
 let lastTab = null;
 
 async function route() {
-  const [tab, argument] = (location.hash.slice(1) || 'today').split('/');
+  const [tab, argument, ...rest] = (location.hash.slice(1) || 'today').split('/');
   const known = TABS.includes(tab) ? tab : 'today';
   for (const link of document.querySelectorAll('#tabs a')) link.classList.toggle('on', link.dataset.tab === known);
   if (known !== 'settings') applied = null;
+  if (known !== 'clips') clipsForm.error = null;
   // A slow answer for a tab the reader has already left must not replace the current one.
   const ticket = ++latestRoute;
   const sameTab = lastTab === known;
@@ -964,10 +1100,22 @@ async function route() {
     await ready;
     if (known === 'today') {
       const data = await api('/api/today');
-      setNeedsCount(data.needs.length);
+      setCounts(data);
       current(renderToday(data));
     } else if (known === 'settings') {
       current(renderSettings(await api('/api/settings')));
+    } else if (known === 'clips') {
+      const data = await api(argument ? `/api/clips?stem=${encodeURIComponent(argument)}` : '/api/clips');
+      setBadge('clips-count', data.episodes.reduce((sum, ep) => sum + ep.toReview, 0));
+      // Plain #clips opens on the episode with clips to review. Keep its address, so deciding
+      // the last one does not move the page on to another episode.
+      if (!argument && data.stem && ticket === latestRoute) history.replaceState(null, '', `#clips/${data.stem}`);
+      current(renderClips(data));
+    } else if (known === 'lab' && argument === 'clip' && rest.length === 2) {
+      // `#lab/clip/<stem>/<clip id>`: the Clips tab's "Open in Lab". Put the form on that clip, then be plain #lab.
+      Object.assign(labForm, {stem: rest[0], clip: rest[1], start: null, end: null, prompt: null, shownRun: null, error: null});
+      history.replaceState(null, '', '#lab');
+      await showLab(current, null);
     } else if (known === 'lab') {
       await showLab(current, argument);
     } else if (known === 'shirts') {
@@ -1006,7 +1154,7 @@ route();
 ready.then(async () => {
   if ((location.hash.slice(1) || 'today').split('/')[0] !== 'today') {
     try {
-      setNeedsCount((await api('/api/today')).needs.length);
+      setCounts(await api('/api/today'));
     } catch (error) { /* the tab itself reports a server that is not answering */ }
   }
 });
