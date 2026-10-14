@@ -1,18 +1,20 @@
 """Which pipeline stages have run for an episode, worked out from the files they leave.
 
-The pipeline keeps no record of the stages it ran. Six stages leave a file in
-the data directory, so those are checked. ``import_transcript`` and ``publish``
-write only to Convex, so they are inferred from ``output/cowork/state.json``
-and marked ``checked: False``.
+Six stages leave a file in the data directory, so those are checked.
+``import_transcript`` and ``publish`` write only to Convex. ``pipeline.py``
+journals each stage it runs (``lib/stage_journal.py``), so their last journaled
+run says whether they finished; an episode with no journaled run of them falls
+back to ``output/cowork/state.json`` and is marked ``checked: False``.
 
 Standard library only: the dashboard imports this without the pipeline venv.
 """
 from __future__ import annotations
 
+import datetime as _dt
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from lib import cowork_handoff, phrase_scan, publish_log
+from lib import cowork_handoff, phrase_scan, publish_log, stage_journal
 
 STAGES = ["transcribe", "import_transcript", "movies", "review_clip", "parse", "clip", "thumbnail", "publish"]
 
@@ -20,8 +22,11 @@ DONE = "done"          # the stage's file is there
 PARTIAL = "partial"    # some of the stage's files are there
 MISSING = "missing"    # the stage's file is not there
 WAITING = "waiting"    # not there, and the episode is waiting on Cowork
+RECORDED = "recorded"  # no local file; the stage journal says its last run finished
+FAILED = "failed"      # no local file; the stage journal says its last run failed or was interrupted
 INFERRED = "inferred"  # no local file to check; state.json implies it ran
 UNKNOWN = "unknown"    # no local file to check, and state.json does not say
+JOURNALED = ("import_transcript", "publish")
 
 
 def artifacts(config: Dict[str, Any], stem: str) -> Dict[str, Path]:
@@ -93,6 +98,36 @@ def _inferred_stage(stage: str, entry: Dict[str, Any]) -> Dict[str, Any]:
             "detail": f"{said}; this stage leaves no local file"}
 
 
+def _at(stamp: Any) -> str:
+    """A journal time as ``2026-10-14 19:00 UTC``; anything unreadable as it is."""
+    try:
+        moment = _dt.datetime.fromisoformat(str(stamp)).astimezone(_dt.timezone.utc)
+    except ValueError:
+        return str(stamp)
+    return f"{moment:%Y-%m-%d %H:%M} UTC"
+
+
+def _journaled_stage(stage: str, runs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The row for a stage from its journaled runs, or None when it has none. Dry runs write nothing, so they do not count."""
+    runs = [run for run in runs if run["stage"] == stage and run["outcome"] != "dry_run"]
+    if not runs:
+        return None
+    last = runs[-1]
+    if last["outcome"] == "done":
+        return {"stage": stage, "state": RECORDED, "checked": True,
+                "detail": f"pipeline.py finished it at {_at(last['finishedAt'])}"}
+    if last["outcome"] == "failed":
+        said = f"the last run failed at {_at(last['finishedAt'])}" + (f" ({last['detail']})" if last.get("detail") else "")
+    elif last["outcome"] == "interrupted":
+        said = f"the last run was interrupted at {_at(last['finishedAt'])}"
+    else:
+        said = f"the last run stopped at {_at(last['finishedAt'])} ({last['outcome']})"
+    finished = [run for run in runs if run["outcome"] == "done"]
+    if finished:
+        said += f"; it last finished at {_at(finished[-1]['finishedAt'])}"
+    return {"stage": stage, "state": FAILED, "checked": True, "detail": said}
+
+
 def stage_statuses(
     config: Dict[str, Any],
     stem: str,
@@ -106,6 +141,7 @@ def stage_statuses(
     entry = state["episodes"].get(stem, {})
     waiting = entry.get("status") == cowork_handoff.STATUS_AWAITING
     paths = artifacts(config, stem)
+    runs = stage_journal.entries(config, stem)
     rows = {
         "transcribe": _file_stage("transcribe", paths["transcript"]),
         "import_transcript": _inferred_stage("import_transcript", entry),
@@ -116,4 +152,6 @@ def stage_statuses(
         "thumbnail": _file_stage("thumbnail", paths["thumbnail"]),
         "publish": _inferred_stage("publish", entry),
     }
+    for stage in JOURNALED:
+        rows[stage] = _journaled_stage(stage, runs) or rows[stage]
     return [rows[stage] for stage in STAGES]

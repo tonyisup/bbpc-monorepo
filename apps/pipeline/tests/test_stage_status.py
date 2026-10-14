@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 import pipeline
-from lib import cowork_handoff, stage_status
+from lib import cowork_handoff, stage_journal, stage_status
 
 STEM = "20260101"
 
@@ -120,6 +120,41 @@ class StageStatusesTests(StageStatusTestCase):
             self.statuses()["import_transcript"]["detail"],
             "state.json says awaiting_cowork, which follows the import; this stage leaves no local file",
         )
+
+    def journal(self, *rows, stem=STEM):
+        for stage, outcome, at, *detail in rows:
+            stage_journal.record(self.config, stem, stage, outcome, started_at=at, finished_at=at,
+                                 detail=detail[0] if detail else None)
+
+    def test_a_journaled_import_and_publish_are_recorded_not_inferred(self):
+        self.full_episode()
+        self.state(s20260101={"status": "done", "note": "seeded from existing output"})
+        self.journal(("import_transcript", "done", "2026-10-14T19:00:00+00:00"),
+                     ("publish", "done", "2026-10-14T19:05:00+00:00"))
+        rows = self.statuses()
+        self.assertEqual({stage: (rows[stage]["state"], rows[stage]["checked"], rows[stage]["detail"])
+                          for stage in ("import_transcript", "publish")}, {
+            "import_transcript": ("recorded", True, "pipeline.py finished it at 2026-10-14 19:00 UTC"),
+            "publish": ("recorded", True, "pipeline.py finished it at 2026-10-14 19:05 UTC"),
+        })
+
+    def test_the_last_journaled_run_decides_and_a_dry_run_is_not_an_import(self):
+        self.full_episode()
+        self.state(s20260101={"status": "done"})
+        self.journal(("publish", "done", "2026-10-07T10:00:00+00:00"),
+                     ("publish", "failed", "2026-10-14T19:05:00+00:00", "RuntimeError: No episode found"),
+                     ("import_transcript", "dry_run", "2026-10-14T19:00:00+00:00"))
+        rows = self.statuses()
+        self.assertEqual((rows["publish"]["state"], rows["publish"]["detail"]), (
+            "failed", "the last run failed at 2026-10-14 19:05 UTC (RuntimeError: No episode found); "
+            "it last finished at 2026-10-07 10:00 UTC"))
+        self.assertEqual(rows["import_transcript"]["state"], "inferred")  # a dry run writes nothing to Convex
+        self.journal(("publish", "interrupted", "2026-10-14T20:00:00+00:00"))
+        self.assertEqual(self.statuses()["publish"]["detail"],
+                         "the last run was interrupted at 2026-10-14 20:00 UTC; "
+                         "it last finished at 2026-10-07 10:00 UTC")
+        self.journal(("publish", "done", "2026-10-14T21:00:00+00:00"))
+        self.assertEqual(self.statuses()["publish"]["state"], "recorded")
 
     def test_some_picks_rendered_is_partial(self):
         self.full_episode(clips=1)

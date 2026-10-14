@@ -51,7 +51,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] **Dashboard, change 3 (Shirts):** shortlist file (`lib/shirt_ideas.py`, `scripts/shirt_ideas.py`) and a board over the phrase scan, the per-episode shirts files and `ideas.txt`; Rescan button; licensing flags.
 - [x] **Dashboard, change 4 (Clips):** review rendered clips and record publish decisions from the page, through `publish_log.decide`, the function the script now uses too.
 - [x] **Dashboard, change 5 (Runs):** start and watch pipeline runs, checked first (`scripts/check_run.py`), one at a time, logged under `output/runs/` through `scripts/redacted_run.py`; the only part that can write to Convex.
-- [ ] **Stage journal:** have `pipeline.py` record each stage it runs, so `import_transcript` and `publish` status is known rather than inferred from `state.json`.
+- [x] **Stage journal:** `pipeline.py` records each stage it runs in `output/journal/<episode>.jsonl` (`lib/stage_journal.py`), so `import_transcript` and `publish` status is known rather than inferred from `state.json`.
 - [ ] **T-shirt report:** shirts files for past episodes, so the Shirts tab has Cowork's picks for the back catalogue. (The cross-episode list joined with the phrase scan is the Shirts tab.)
 - [ ] **Shirts tab, ignore from the page:** add a phrase to `output/phrases/ignore.txt` from the board (today it is edited by hand, then Rescan).
 - [ ] **Laughter → Cowork:** Write laughter timestamps where Cowork reads them.

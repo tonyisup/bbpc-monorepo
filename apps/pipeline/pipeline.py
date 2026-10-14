@@ -1,14 +1,18 @@
 import argparse
+import contextlib
 import os
 import sys
 from pathlib import Path
 
 from azure.storage.blob import BlobServiceClient
 
-from lib import clipper, cowork_handoff, cowork_headless, movie_extractor, parser, publisher, review_clipper, thumbnail, transcriber, transcript_importer
+from lib import clipper, cowork_handoff, cowork_headless, movie_extractor, parser, publisher, review_clipper, run_checks, stage_journal, thumbnail, transcriber, transcript_importer
 from lib.data_dir import require_data_dir
-from lib.runtime_config import get_azure_connection_string, load_config
+from lib.redaction import redact
+from lib.runtime_config import get_azure_connection_string, load_config, secret_values
 from lib.stage_status import STAGES
+
+JOURNAL_DETAIL_CHARS = 500
 
 def _resolve_episode(path_arg: str, episodes_dir: Path) -> Path:
     candidate = Path(path_arg).expanduser()
@@ -168,9 +172,44 @@ def _ensure_cowork_outputs(context: dict, episode_path: Path, stage: str) -> Non
     cowork_headless.run(config, stem, context["transcript_path"], context.get("config_path"))
 
 
-def _run_stages(args, context: dict, episode_path: Path, transcript_output_path: Path) -> None:
+def _journal(context: dict, stem: str, stage: str, outcome: str, started: str, detail: str | None = None) -> None:
+    """Write one journal line; a journal that cannot be written never stops the run or hides its error."""
+    try:
+        if detail:  # no .env value is ever written to the journal
+            detail = redact(detail, secret_values(run_checks.CREDENTIAL_NAMES))[:JOURNAL_DETAIL_CHARS]
+        stage_journal.record(context["config"], stem, stage, outcome, started_at=started, detail=detail)
+    except Exception as exc:  # noqa: BLE001 - the journal is a record, never a reason to stop
+        print(f"Warning: could not write the stage journal ({type(exc).__name__}).", file=sys.stderr)
 
-    if _should_run("transcribe", args.only, args.from_stage):
+
+@contextlib.contextmanager
+def _journaled(context: dict, episode_path: Path, stage: str):
+    """Run one stage and journal how it ended (lib/stage_journal.py)."""
+    stem, started = episode_path.stem, stage_journal.now()
+    try:
+        yield
+    except (cowork_handoff.AwaitingCowork, cowork_handoff.CoworkOutputInvalid) as exc:
+        _journal(context, stem, stage, "awaiting_cowork", started, str(exc))
+        raise
+    except KeyboardInterrupt:
+        _journal(context, stem, stage, "interrupted", started)
+        raise
+    except BaseException as exc:
+        _journal(context, stem, stage, "failed", started, f"{type(exc).__name__}: {exc}")
+        raise
+    dry_run = stage == "import_transcript" and context.get("transcript_dry_run")
+    _journal(context, stem, stage, "dry_run" if dry_run else "done", started)
+
+
+def _run_stages(args, context: dict, episode_path: Path, transcript_output_path: Path) -> None:
+    for stage in STAGES:
+        if _should_run(stage, args.only, args.from_stage):
+            with _journaled(context, episode_path, stage):
+                _run_stage(stage, args, context, episode_path, transcript_output_path)
+
+
+def _run_stage(stage: str, args, context: dict, episode_path: Path, transcript_output_path: Path) -> None:
+    if stage == "transcribe":
         engine, model_name = transcriber.engine_from_settings(context["config"].get("settings", {}))
         print(f"[1/8] Transcribing with {engine} ({model_name})...")
         progress_file = os.environ.get("BACKFILL_PROGRESS_FILE")
@@ -187,33 +226,33 @@ def _run_stages(args, context: dict, episode_path: Path, transcript_output_path:
         context["transcript_complete"] = True
         print(f"Transcript saved to {transcript_path}")
 
-    if _should_run("import_transcript", args.only, args.from_stage):
+    elif stage == "import_transcript":
         print(f"[2/8] Importing transcript for {episode_path.name}...")
         transcript_importer.run(context)
 
-    if _should_run("movies", args.only, args.from_stage):
+    elif stage == "movies":
         print(f"[3/8] Extracting reviewed movies from {episode_path.name}...")
         _ensure_cowork_outputs(context, episode_path, "movies")
         movie_extractor.run(context)
 
-    if _should_run("review_clip", args.only, args.from_stage):
+    elif stage == "review_clip":
         print(f"[4/8] Creating movie review clips for {episode_path.name}...")
         review_clipper.run(context)
 
-    if _should_run("parse", args.only, args.from_stage):
+    elif stage == "parse":
         print(f"[5/8] Parsing {episode_path.name}...")
         _ensure_cowork_outputs(context, episode_path, "parse")
         parser.run(context)
 
-    if _should_run("clip", args.only, args.from_stage):
+    elif stage == "clip":
         print(f"[6/8] Clipping {episode_path.name}...")
         clipper.run(context)
 
-    if _should_run("thumbnail", args.only, args.from_stage):
+    elif stage == "thumbnail":
         print(f"[7/8] Generating thumbnail for {episode_path.name}...")
         thumbnail.run(context)
 
-    if _should_run("publish", args.only, args.from_stage):
+    elif stage == "publish":
         print(f"[8/8] Publishing {episode_path.name}...")
         publisher.run(context)
 

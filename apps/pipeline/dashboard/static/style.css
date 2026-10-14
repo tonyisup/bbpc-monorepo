@@ -95,13 +95,15 @@ tr:last-child td { border-bottom: 0; }
 tr.link { cursor: pointer; }
 tr.link:hover td { background: var(--secondary); }
 
-/* One bar per stage. Solid: the stage's file was found. Outlined: inferred from state.json. */
+/* One bar per stage. Solid: the stage's file was found, or the stage journal says it finished. Outlined: inferred from state.json. */
 .rail { display: inline-flex; gap: 2px; vertical-align: middle; }
 .rail i { width: 13px; height: 8px; border-radius: 2px; border: 1.5px solid var(--border); background: var(--border); }
 .rail i.done { background: var(--success); border-color: var(--success); }
 .rail i.partial { background: linear-gradient(90deg, var(--success) 50%, transparent 50%); border-color: var(--success); }
 .rail i.inferred { background: transparent; border-color: var(--success); }
 .rail i.waiting { background: var(--warning); border-color: var(--warning); }
+.rail i.recorded { background: var(--success); border-color: var(--success); }
+.rail i.failed { background: var(--destructive); border-color: var(--destructive); }
 .rail i.unknown { background: transparent; border-style: dotted; border-color: var(--muted-foreground); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -110,8 +112,10 @@ tr.link:hover td { background: var(--secondary); }
 .stage { border: 1.5px solid var(--border); border-radius: 6px; padding: 6px 4px; text-align: center; font-size: 11px; background: var(--background); min-width: 0; }
 .stage b { display: block; font-size: 14px; line-height: 1.2; }
 .stage .d { display: block; color: var(--muted-foreground); font-size: 10.5px; overflow-wrap: anywhere; margin-top: 2px; }
-.stage.done { border-color: var(--success); }
-.stage.done b, .stage.partial b, .stage.inferred b { color: var(--success); }
+.stage.done, .stage.recorded { border-color: var(--success); }
+.stage.done b, .stage.recorded b, .stage.partial b, .stage.inferred b { color: var(--success); }
+.stage.failed { border-color: var(--destructive); }
+.stage.failed b { color: var(--destructive); }
 .stage.partial { border-color: var(--success); border-style: dashed; }
 .stage.inferred { border-color: var(--success); border-style: dashed; background: transparent; }
 .stage.waiting { border-color: var(--warning); }

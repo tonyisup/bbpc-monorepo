@@ -257,12 +257,25 @@ holds a one-clip SEO file, so the episode's real clip, SEO file and
 `state.json` are never touched. Only the clip stage runs in the Lab;
 `import_transcript` and `publish` are refused by the server.
 
-The pipeline keeps no record of the stages it ran, so stage status is worked
-out from the files each stage leaves (`lib/stage_status.py`). `import_transcript`
-and `publish` leave no local file: they are inferred from `state.json` and drawn
-outlined rather than solid. An episode `state.json` seeded from an existing SEO
-file shows `publish` as unknown, since nothing recorded whether it was published. The Convex target in the header is the result of
-the Runs tab's last check since the server started, or "not checked".
+Stage status is worked out from the files each stage leaves
+(`lib/stage_status.py`). `import_transcript` and `publish` leave no local file,
+so their last run in the stage journal decides: finished, or failed (with the
+error). An episode with no journaled run of them, such as one processed before
+the journal existed, falls back to `state.json`, drawn outlined rather than
+solid. An episode `state.json` seeded from an existing SEO file shows `publish`
+as unknown, since nothing recorded whether it was published. The Convex target
+in the header is the result of the Runs tab's last check since the server
+started, or "not checked".
+
+### Stage journal
+
+`pipeline.py` appends one line to `output/journal/<episode>.jsonl` as each
+stage it runs ends (`lib/stage_journal.py`): the stage, `done`, `failed`,
+`awaiting_cowork`, `dry_run` (an import with `--dry-run`) or `interrupted`
+(Ctrl-C), when it started and finished, and for a failure the error, with every
+`.env` value replaced by its name. A run that is killed, including by the Runs
+tab's Stop, writes nothing for the stage it was in.
+A journal that cannot be written prints a warning and never stops the run.
 
 ## Configuration
 
@@ -494,6 +507,7 @@ output/
 ├── laughter/                 # laughter_autotune.py results
 ├── lab/                      # dashboard Lab: drafts/ and one folder per test render
 ├── runs/                     # dashboard Runs: <id>.json and <id>.log per pipeline run
+├── journal/<episode>.jsonl   # one line per stage pipeline.py ran (lib/stage_journal.py)
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)
 ```
 
