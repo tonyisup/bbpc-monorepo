@@ -329,7 +329,18 @@ same instructions, limited to writing in `output/cowork/` and running the
 validator, and continues when the files are there. It needs the Claude Code
 CLI on `PATH`, signed in, and prints nothing while it works (the limit is
 `settings.cowork_headless_timeout_seconds`). If the session fails, the run ends
-with exit 75 as before. Show knowledge (hosts, rating
+with exit 75 as before.
+
+Before the hand-off, by hand or headless, the pipeline listens to the
+episode's mp3 for laughter (`lib/laughter_detector.py`, with the parameters
+`scripts/laughter_autotune.py` kept) and writes the times to
+`output/laughter/<stem>.laughter.json`. The headless session gets them in its
+prompt; `--pending` lists the file for Cowork by hand. They mark stretches to
+read closely, not clips: the detector hears loud, quick sound, and always
+reports up to 20 moments. It runs once per episode (delete the file to run it
+again), takes about 15 s and 8 GB of memory for a two-hour episode, and never
+stops a run: without the mp3 or librosa, or when it fails, Cowork works
+without it. `settings.cowork_laughter_hints` set to `false` turns it off. Show knowledge (hosts, rating
 scale, segments, what Tony publishes) lives in [`docs/show-format.md`](docs/show-format.md).
 
 ```bash
@@ -509,7 +520,7 @@ output/
 ├── phrases/                  # recurring-phrases.{md,json} + ignore.txt (scripts/scan_phrases.py)
 ├── tshirt/                   # ideas.json, the shortlist (scripts/shirt_ideas.py); ideas.txt, Tony's notes
 ├── review-clips/<episode>/   # Audio clips from review segments
-├── laughter/                 # laughter_autotune.py results
+├── laughter/                 # <episode>.laughter.json for Cowork; laughter_autotune.py results
 ├── lab/                      # dashboard Lab: drafts/ and one folder per test render
 ├── runs/                     # dashboard Runs: <id>.json and <id>.log per pipeline run
 ├── journal/<episode>.jsonl   # one line per stage pipeline.py ran (lib/stage_journal.py)
@@ -520,7 +531,7 @@ output/
 
 - **Transcriber** uses Parakeet (MLX) by default or `faster-whisper` with int8 quantization, with resume support and a trailing-silence-aware coverage gate
 - **Movie extractor** matches Cowork's titles (and original titles) to the Convex catalog, preferring the episode's assigned movies
-- **Laughter detector** (`lib/laughter_detector.py`) is not called by any stage today; it is kept so its timestamps can be handed to Cowork as audio evidence
+- **Laughter detector** (`lib/laughter_detector.py`) runs before the Cowork hand-off; `lib/laughter_hints.py` writes the times it hears for Cowork
 - **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in the caption font, 32 characters max; all `caption_*` settings) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments
 - **Convex client** uses the documented Functions API with bearer authentication, runtime response validation, typed errors, bounded retries, and cached Clerk M2M JWT refresh
 - **Pipeline identity** must be pre-provisioned with `pipeline:publish`; the Clerk pipeline machine must be scoped to the receiver machine configured as `CLERK_M2M_AUDIENCE`

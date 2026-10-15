@@ -21,7 +21,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - ✅ **Metadata Sync:** Idempotent SEO metadata updates through Convex.
 - ✅ **Backfill:** Batch processing with retry logic and Rich dashboard.
 - ✅ **Brand Logo:** Composited onto clip backgrounds.
-- ⏸ **Laughter Detection:** Detector kept but not called by any stage; next step is handing its timestamps to Cowork.
+- ✅ **Laughter Detection:** Run before the Cowork hand-off; its timestamps go to Cowork as places to read closely (`output/laughter/<stem>.laughter.json`).
 - ✅ **Thumbnail Generation:** 1920x1920 episode thumbnails from reviewed movie posters + BBPC logo.
 - ✅ **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Clips, Shirts, the clip Lab, Runs and Settings.
 - ✅ **T-shirt shortlist:** `output/tshirt/ideas.json`, kept by `scripts/shirt_ideas.py` and the dashboard's Shirts tab, with licensing flags.
@@ -54,7 +54,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] **Stage journal:** `pipeline.py` records each stage it runs in `output/journal/<episode>.jsonl` (`lib/stage_journal.py`), so `import_transcript` and `publish` status is known rather than inferred from `state.json`.
 - [ ] **T-shirt report:** shirts files for past episodes, so the Shirts tab has Cowork's picks for the back catalogue. (The cross-episode list joined with the phrase scan is the Shirts tab.)
 - [x] **Shirts tab, ignore from the page:** "Ignore…" on a phrase of the report, and `scripts/shirt_ideas.py ignore`, add it to `output/phrases/ignore.txt` (`phrase_scan.add_ignored`); the next Rescan leaves it out.
-- [ ] **Laughter → Cowork:** Write laughter timestamps where Cowork reads them.
+- [x] **Laughter → Cowork:** before the hand-off the pipeline writes the detector's times to `output/laughter/<stem>.laughter.json` (`lib/laughter_hints.py`); the headless prompt carries them and `--pending` lists the file.
 - [ ] **Advanced Captions:** Move to word-level timestamps for more dynamic "pop-in" caption styles.
 - [ ] **Social Upload:** Integrate automated upload to TikTok/Instagram/YouTube APIs.
 - [ ] **Web Integration:** Sync clip paths to the Next.js frontend content directory.

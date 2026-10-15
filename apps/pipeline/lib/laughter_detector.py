@@ -110,7 +110,6 @@ def detect_laughter(
 
     merged: List[Dict[str, Any]] = []
     centroid_med = 0.0
-    rms_med = 0.0
     features = _audio_features(y=y, sr=sr, hop_length=hop_length)
     for pass_idx, pass_params in enumerate(fallback_passes):
         merged, pass_diag = _run_detection_pass(
@@ -121,7 +120,6 @@ def detect_laughter(
             max_detections=max_detections,
         )
         centroid_med = pass_diag["centroid_med"]
-        rms_med = pass_diag["rms_med"]
         diagnostics.append(
             {
                 "pass": pass_idx,
@@ -154,6 +152,8 @@ def detect_laughter(
             "why": f"Audio-laughter detected (score {cand['score']:.2f}): onset rate {cand['onset_rate']:.1f}/s, "
                    f"centroid {cand['centroid']/centroid_med:.1f}× median, laugh-band ratio {cand['laugh_ratio']:.2f}",
             "source": "laughter_audio",
+            "peak": round(float(cand.get("peak_center", cand["center"])), 2),
+            "score": round(float(cand["score"]), 3),
         })
     
     logger.info("Detected %d laughter moments from %d candidates", len(clips), len(merged))

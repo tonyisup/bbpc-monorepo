@@ -168,7 +168,7 @@ class ConfigCheckTests(unittest.TestCase):
     def test_the_checked_in_config_leaves_most_settings_to_their_defaults_and_carries_one_unread_key(self):
         config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
         check = settings_schema.config_check(config["settings"])
-        self.assertEqual(len(check["notInConfig"]), 29)
+        self.assertEqual(len(check["notInConfig"]), 30)
         for key in ("review_clip_max_seconds", "min_clip_duration_seconds", "visual_timeout_seconds",
                     "cowork_headless_model", "caption_font_size", "clip_zoom_amount"):
             self.assertIn(key, check["notInConfig"])

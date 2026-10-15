@@ -244,7 +244,7 @@ class SettingsTests(ViewsTestCase):
 
     def test_config_check_and_an_out_of_range_value(self):
         self.assertEqual(self.view["check"], settings_schema.config_check(self.raw["settings"]))
-        self.assertEqual(len(self.view["check"]["notInConfig"]), 29)
+        self.assertEqual(len(self.view["check"]["notInConfig"]), 30)
         self.raw["settings"]["review_clip_max_per_movie"] = 0
         view = views.settings(self.raw)
         rows = {row["key"]: row for group in view["groups"] for row in group["settings"]}

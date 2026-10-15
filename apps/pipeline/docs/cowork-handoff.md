@@ -44,6 +44,7 @@ run ─► pipeline.py ─► transcribe ─► import_transcript ─► claude 
 - The session is given a temporary copy of the transcript with one segment per
   line (`start`, `end`, `text`, tab-separated) and no word timings, because
   the transcript JSON is too large to read whole.
+- When the episode has laughter hints (below), the prompt lists their times.
 - It may read the pipeline directory, write in `output/cowork/`, and run
   `python3 scripts/validate_cowork_outputs.py` and no other shell command. It
   does not get the values in the pipeline's `.env`, and it runs without your
@@ -71,12 +72,14 @@ directory is mounted; it stops if that directory is missing. It prints the
 exact transcript and output paths to use.
 
 1. `python3 scripts/validate_cowork_outputs.py --pending` lists episodes to
-   work on (transcript path, output paths, and any `lastError` from a
-   previous rejected file). Nothing listed → stop.
+   work on (transcript path, output paths, the laughter hints file or `null`,
+   and any `lastError` from a previous rejected file). Nothing listed → stop.
 2. Read the **entire** transcript (`[{start, end, text, words?}]`). Do not
    sample. Speakers are not labelled; infer from context. Parakeet segments
    are sentences of at most ~15 s; the optional `words` list holds word
-   timings for captions and can be ignored when reading.
+   timings for captions and can be ignored when reading. If there is a
+   laughter file, read the stretches around its times closely (see
+   [Laughter hints](#laughter-hints)).
 3. Write the two files below, then run
    `python3 scripts/validate_cowork_outputs.py <stem>` and fix anything it
    reports. Never edit `state.json`.
@@ -113,6 +116,25 @@ validator passes is a file the pipeline accepts.
 The shirts rules are checked by the validator only. A shirts `FAIL` makes the
 validator exit 1 but does not block the pipeline or write `lastError`. A
 missing shirts file is reported as `not written (optional)`.
+
+### Laughter hints
+
+Before the hand-off the pipeline listens to the episode's audio for laughter
+and writes `output/laughter/<stem>.laughter.json` (pipeline-owned; never edit
+it):
+
+```json
+{"episode": {"stem": "20261012"}, "generatedAt": "<ISO-8601>", "params": {},
+ "moments": [{"at": 812.4, "score": 0.71}]}
+```
+
+`at` is seconds into the episode, in time order; `score` is the detector's
+0–1 score. The detector hears loud, quick sound, which is often a laugh and
+often just cross-talk, and it reports up to 20 moments whatever the episode.
+Use the times to find stretches worth reading closely, and judge them from the
+transcript: never pick a clip for a laugh alone, and never snap a window to
+a moment instead of to segment boundaries. A missing file or an empty
+`moments` list says nothing about the episode.
 
 ### Show format (what to look for)
 
