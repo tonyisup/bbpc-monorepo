@@ -56,6 +56,8 @@ class CaptionLook:
     pause_seconds: float      # a longer pause between words starts a new caption
     max_word_seconds: float   # Parakeet sometimes stretches a word over following music
     bridge_seconds: float     # hold a caption until the next one across a shorter gap
+    style: str                # chunk, pop or highlight (_styled_caption)
+    highlight_color: str      # the word being said, when style is highlight
 
     @property
     def line_width(self) -> int:
@@ -79,6 +81,8 @@ def _caption_look(settings: Mapping[str, Any]) -> CaptionLook:
         pause_seconds=float(settings_schema.value(settings, "caption_pause_seconds")),
         max_word_seconds=float(settings_schema.value(settings, "caption_max_word_seconds")),
         bridge_seconds=float(settings_schema.value(settings, "caption_bridge_seconds")),
+        style=str(settings_schema.value(settings, "caption_style")),
+        highlight_color=str(settings_schema.value(settings, "caption_highlight_color")),
     )
 
 
@@ -277,6 +281,7 @@ def _caption_chunks(words: List[Dict[str, Any]], look: CaptionLook = DEFAULT_LOO
                 "start": current[0]["start"],
                 "end": current[-1]["end"],
                 "text": " ".join(w["text"] for w in current),
+                "words": list(current),
             })
             current.clear()
 
@@ -303,6 +308,40 @@ def _ass_colour(hex_colour: str) -> str:
     return f"&H00{blue}{green}{red}".upper()
 
 
+def _ass_inline_colour(hex_colour: str) -> str:
+    """``#RRGGBB`` as an override tag takes it: ``&HBBGGRR&``."""
+    return f"&H{hex_colour[5:7]}{hex_colour[3:5]}{hex_colour[1:3]}&".upper()
+
+
+# A word fades in over this long when caption_style is pop. Growing the word
+# instead would make libass re-lay the whole line while it grows.
+_POP_MS = 80
+
+
+def _styled_caption(caption: Dict[str, Any], look: CaptionLook) -> str:
+    """One caption's Dialogue text: whole for ``chunk``, word by word for ``pop`` and ``highlight``.
+
+    Times in override tags are milliseconds from the caption's start. A tag
+    carries over to the words after it, so every word sets its own start state.
+    """
+    if look.style not in ("pop", "highlight"):
+        return _ass_escape(caption["text"])
+    base, lit = _ass_inline_colour(look.color), _ass_inline_colour(look.highlight_color)
+    words = caption["words"]
+    offsets = [round((float(word["start"]) - float(caption["start"])) * 1000) for word in words]
+    parts = []
+    for index, word in enumerate(words):
+        at = offsets[index]
+        if look.style == "pop":
+            tags = f"\\alpha&HFF&\\t({at},{at + _POP_MS},\\alpha&H00&)"
+        else:
+            tags = f"\\1c{base}\\t({at},{at + 1},\\1c{lit})"
+            if index + 1 < len(words):
+                tags += f"\\t({offsets[index + 1]},{offsets[index + 1] + 1},\\1c{base})"
+        parts.append(f"{{{tags}}}{_ass_escape(word['text'])}")
+    return " ".join(parts)
+
+
 def _build_ass_subtitles(
     segments: List[Dict[str, Any]], start: float, end: float, look: CaptionLook = DEFAULT_LOOK,
 ) -> str:
@@ -325,9 +364,9 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
     if not captions:
         return header
     for caption in captions:
-        text = _ass_escape(caption["text"])
-        if not text:
+        if not _ass_escape(caption["text"]):
             continue
+        text = _styled_caption(caption, look)
         rel_start = float(caption["start"]) - start
         rel_end = float(caption["end"]) - start
         lines.append(
