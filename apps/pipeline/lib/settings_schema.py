@@ -189,6 +189,9 @@ SETTINGS: Tuple[Setting, ...] = (
             "Model for the headless session. Unset: the CLI's default."),
     Setting("cowork_headless_command", "path", "claude", "Cowork instructions", _COWORK,
             "The Claude Code CLI that runs the headless session, found on PATH."),
+    Setting("cowork_laughter_hints", "bool", True, "Cowork instructions", _COWORK,
+            "Before the hand-off, listen to the episode for laughter and give Cowork the times "
+            "(output/laughter/<stem>.laughter.json). About 15 s and 8 GB of memory for a two-hour episode."),
 )
 
 BY_KEY: Dict[str, Setting] = {setting.key: setting for setting in SETTINGS}

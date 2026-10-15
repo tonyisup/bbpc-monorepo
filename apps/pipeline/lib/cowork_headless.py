@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from lib import cowork_handoff, run_checks, settings_schema
+from lib import cowork_handoff, laughter_hints, run_checks, settings_schema
 from lib.data_dir import ENV_VAR, data_dir
 
 PIPELINE_ROOT = Path(__file__).resolve().parents[1]
@@ -60,10 +60,15 @@ def build_prompt(config: Dict[str, Any], stem: str, reading_copy: Path, config_p
     validate = f"{VALIDATOR} {stem}"
     if config_path is not None:
         validate += f" --config {config_path}"
+    laughs = laughter_hints.load(config, stem)
+    laughter = "" if not laughs else (
+        f"\n   The laughter detector heard laughter at these seconds: {', '.join(str(m['at']) for m in laughs)}. "
+        "It hears loud, quick sound, not jokes: read those stretches closely, and never pick a clip for a laugh alone."
+    )
     return f"""You are doing the Cowork hand-off for BBPC episode {stem}, unattended. Nobody can answer questions, so finish the job or stop and say what blocked you.
 
 1. Read docs/cowork-handoff.md and docs/show-format.md in full. They are the rules for this job. Skip the `--pending` step: the episode is {stem}.
-2. Read the whole transcript at {reading_copy}. It has one segment per line: start seconds, end seconds and text, separated by tabs. Those start and end values are the exact segment boundaries your clip, evidence and phrase windows must use. Word timings are left out. Read every line; do not sample.
+2. Read the whole transcript at {reading_copy}. It has one segment per line: start seconds, end seconds and text, separated by tabs. Those start and end values are the exact segment boundaries your clip, evidence and phrase windows must use. Word timings are left out. Read every line; do not sample.{laughter}
 3. Write {cowork_handoff.movies_path(config, stem)} and {cowork_handoff.seo_path(config, stem)}. Then run `{validate}` and fix every FAIL it reports until both are OK.
 4. Write {cowork_handoff.shirts_path(config, stem)}, run the validator again and fix anything it reports under shirts.
 

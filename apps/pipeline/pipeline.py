@@ -6,7 +6,7 @@ from pathlib import Path
 
 from azure.storage.blob import BlobServiceClient
 
-from lib import clipper, cowork_handoff, cowork_headless, movie_extractor, parser, publisher, review_clipper, run_checks, stage_journal, thumbnail, transcriber, transcript_importer
+from lib import clipper, cowork_handoff, cowork_headless, laughter_hints, movie_extractor, parser, publisher, review_clipper, run_checks, stage_journal, thumbnail, transcriber, transcript_importer
 from lib.data_dir import require_data_dir
 from lib.redaction import redact
 from lib.runtime_config import get_azure_connection_string, load_config, secret_values
@@ -156,12 +156,16 @@ def main() -> None:
 
 
 def _ensure_cowork_outputs(context: dict, episode_path: Path, stage: str) -> None:
-    """With settings.cowork_headless on, write missing Cowork files before the stage that reads them."""
+    """Before the stage that reads missing Cowork files: note the laughs for Cowork and, with
+    settings.cowork_headless on, write the files."""
     config, stem = context["config"], episode_path.stem
-    if cowork_handoff.outputs_ready(config, stem) or not cowork_headless.enabled(config):
+    if cowork_handoff.outputs_ready(config, stem):
         return
     if not Path(context["transcript_path"]).is_file():
         return  # nothing for Cowork to read; the stage decides what that means
+    _write_laughter_hints(context, episode_path)
+    if not cowork_headless.enabled(config):
+        return
     # Recorded first: the validator finds the transcript through state.json, and
     # an interrupted run stays resumable.
     cowork_handoff.mark_episode(
@@ -170,6 +174,25 @@ def _ensure_cowork_outputs(context: dict, episode_path: Path, stage: str) -> Non
         waitingOn=stage,
     )
     cowork_headless.run(config, stem, context["transcript_path"], context.get("config_path"))
+
+
+def _write_laughter_hints(context: dict, episode_path: Path) -> None:
+    """Write where the audio laughs, once, for Cowork (lib/laughter_hints.py). A hint never stops the run."""
+    config, stem = context["config"], episode_path.stem
+    path = laughter_hints.hints_path(config, stem)
+    if not laughter_hints.enabled(config) or path.is_file():
+        return
+    if not episode_path.is_file():
+        print(f"Laughter hints skipped: no audio at {episode_path}.")
+        return
+    print(f"Listening to {episode_path.name} for laughter, for Cowork...")
+    try:
+        hints = laughter_hints.detect(config, stem, episode_path)
+    except Exception as exc:  # noqa: BLE001 - the detector is a hint, never a reason to stop
+        print(f"Warning: laughter detection failed ({type(exc).__name__}: {exc}); Cowork works without it.")
+        return
+    if hints is not None:
+        print(f"Laughter hints: {len(hints['moments'])} moments in {path}")
 
 
 def _journal(context: dict, stem: str, stage: str, outcome: str, started: str, detail: str | None = None) -> None:

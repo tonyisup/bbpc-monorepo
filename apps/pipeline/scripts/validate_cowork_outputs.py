@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib import cowork_handoff  # noqa: E402
+from lib import cowork_handoff, laughter_hints  # noqa: E402
 from lib.data_dir import require_data_dir, resolve_data_paths  # noqa: E402
 
 
@@ -39,6 +39,7 @@ def _pending(config: dict) -> int:
             "moviesOut": str(cowork_handoff.movies_path(config, stem)),
             "seoOut": str(cowork_handoff.seo_path(config, stem)),
             "shirtsOut": str(cowork_handoff.shirts_path(config, stem)),
+            "laughter": str(laughter_hints.hints_path(config, stem)) if laughter_hints.load(config, stem) is not None else None,
             "outputsPresent": cowork_handoff.outputs_ready(config, stem),
             "lastError": entry.get("lastError"),
         })
