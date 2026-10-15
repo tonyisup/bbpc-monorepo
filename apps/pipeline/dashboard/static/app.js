@@ -58,9 +58,10 @@ const episodeName = ep => (ep.number ? `Ep ${ep.number}` : ep.date || ep.stem);
 const STAGE_LABELS = {import_transcript: 'import', review_clip: 'review clips'};
 const STATE_WORDS = {
   done: 'file found', partial: 'some files found', missing: 'no file', waiting: 'waiting on Cowork',
+  recorded: 'finished, by the stage journal', failed: 'last run failed, by the stage journal',
   inferred: 'inferred from state.json, not checked', unknown: 'no way to tell from local files',
 };
-const STATE_MARKS = {done: '✓', partial: '◐', missing: '–', waiting: '…', inferred: '✓', unknown: '?'};
+const STATE_MARKS = {done: '✓', partial: '◐', missing: '–', waiting: '…', recorded: '✓', failed: '✗', inferred: '✓', unknown: '?'};
 const stageLabel = stage => STAGE_LABELS[stage] || stage;
 const stageTitle = row => `${stageLabel(row.stage)}: ${STATE_WORDS[row.state]}. ${row.detail}`;
 
@@ -72,8 +73,8 @@ function stageLegend() {
   const key = (state, text) => h('span', {}, h('span', {class: 'rail'}, h('i', {class: state})), text);
   return h('div', {class: 'legend mut sm'},
     key('done', 'file found'), key('partial', 'some files'), key('waiting', 'waiting on Cowork'),
-    key('missing', 'no file'), key('inferred', 'inferred from state.json, not checked'),
-    key('unknown', 'cannot tell'));
+    key('missing', 'no file'), key('recorded', 'finished, by the stage journal'), key('failed', 'last run failed'),
+    key('inferred', 'inferred from state.json, not checked'), key('unknown', 'cannot tell'));
 }
 
 // --------------------------------------------------------------------------- Today
@@ -240,7 +241,7 @@ function renderEpisode(ep, list) {
       h('b', {}, STATE_MARKS[row.state]), stageLabel(row.stage),
       h('span', {class: 'd'}, row.checked ? row.detail : `${row.state}: no local file`)))),
     h('div', {class: 'mut sm gap'},
-      'Solid boxes were checked against a file. Dashed and dotted boxes (import, publish) leave no local file, so they are read from state.json: ',
+      'Import and publish leave no local file. Their last run in the stage journal decides; with none, they are read from state.json (dashed and dotted): ',
       state.status ? h('b', {}, state.status) : h('b', {}, 'no entry'),
       state.updatedAt ? `, updated ${when(state.updatedAt)}` : '', state.note ? ` (${state.note})` : '', '.'),
     state.lastError && h('pre', {}, `Last error: ${state.lastError}`),
