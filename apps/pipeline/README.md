@@ -285,7 +285,8 @@ A journal that cannot be written prints a warning and never stops the run.
 in `lib/settings_schema.py` with its type, default, limits, and the stage that
 reads it; the stages take their defaults from there. How a rendered clip looks
 is settings too: the `caption_*` settings (font, size, colour, outline,
-margins, how words are grouped and timed) and `clip_zoom_amount`. Their
+margins, how words are grouped and timed, and whether they appear whole or word
+by word) and `clip_zoom_amount`. Their
 defaults are what the clipper always did. Environment variables (`.env`) store
 secrets:
 
@@ -532,7 +533,7 @@ output/
 - **Transcriber** uses Parakeet (MLX) by default or `faster-whisper` with int8 quantization, with resume support and a trailing-silence-aware coverage gate
 - **Movie extractor** matches Cowork's titles (and original titles) to the Convex catalog, preferring the episode's assigned movies
 - **Laughter detector** (`lib/laughter_detector.py`) runs before the Cowork hand-off; `lib/laughter_hints.py` writes the times it hears for Cowork
-- **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in the caption font, 32 characters max; all `caption_*` settings) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments
+- **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in the caption font, 32 characters max; all `caption_*` settings) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments. `caption_style` picks how a caption appears: `chunk` (whole, the default), `pop` (each word fades in, in its final place, as it is said) or `highlight` (whole, with the word being said in `caption_highlight_color`); try one on a clip in the Lab before changing `config.json`
 - **Convex client** uses the documented Functions API with bearer authentication, runtime response validation, typed errors, bounded retries, and cached Clerk M2M JWT refresh
 - **Pipeline identity** must be pre-provisioned with `pipeline:publish`; the Clerk pipeline machine must be scoped to the receiver machine configured as `CLERK_M2M_AUDIENCE`
 - **Backfill** processes Azure Blob episodes with a Rich dashboard and idempotent Convex episode creation from MP3 ID3 tags

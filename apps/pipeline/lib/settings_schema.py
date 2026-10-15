@@ -107,6 +107,13 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("caption_bridge_seconds", "float", 0.3, "Clips and captions", _CLIP,
             "A caption holds until the next one when the gap between them is shorter than this.", 0, 5,
             draft=True),
+    Setting("caption_style", "choice", "chunk", "Clips and captions", _CLIP,
+            "chunk: each caption appears whole. pop: each word of the caption appears as it is said. "
+            "highlight: the caption appears whole and the word being said turns caption_highlight_color. "
+            "pop and highlight follow the transcript's word timings, estimated when it has none.",
+            choices=("chunk", "pop", "highlight"), draft=True),
+    Setting("caption_highlight_color", "str", "#FFFFFF", "Clips and captions", _CLIP,
+            "Colour of the word being said when caption_style is highlight.", **_COLOUR, draft=True),
     Setting("clip_duration", "int", None, "Clips and captions", (),
             "Nothing reads this. It can be removed from config.json.", 1, 600),
 
