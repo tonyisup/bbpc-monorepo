@@ -214,7 +214,9 @@ the dashboard's own page.
   from: the recurring-phrase report by its lists, with each phrase's episode
   count and span; Cowork's picks in each episode's shirts file; and your own
   `output/tshirt/ideas.txt`, which is read and never changed. "Shortlist"
-  copies a phrase to the list. Each idea has the text to print, an origin
+  copies a phrase to the list. "Ignore…" adds a phrase of the report to
+  `output/phrases/ignore.txt` (not while a rescan runs); it is marked ignored
+  until the next Rescan leaves it out. Each idea has the text to print, an origin
   (original, quote, not checked), the work a quote is from, and notes.
   Licensing flags are shown beside every phrase and idea; nothing is blocked
   (see [T-shirt shortlist](#t-shirt-shortlist)). "Hear it" plays the phrase
@@ -383,7 +385,9 @@ new since the previous scan) and `recurring-phrases.json` (every phrase with
 its episodes and timestamped examples). Ordinary English that slips through
 (the scan has no outside English baseline) goes in `output/phrases/ignore.txt`,
 one phrase per line; later scans skip it. A passage is skipped when a line
-matches its whole text (case and punctuation don't matter). The "Staples" section is where the
+matches its whole text (case and punctuation don't matter). The Shirts tab's
+"Ignore…" and `scripts/shirt_ideas.py ignore "<phrase>"` add a line for a
+phrase of the report, keeping the lines and comments already there. The "Staples" section is where the
 show's biggest catchphrases and everyday English look alike, so review it once.
 
 ## T-shirt shortlist
@@ -398,6 +402,7 @@ python3 scripts/shirt_ideas.py list                         # every idea, with i
 python3 scripts/shirt_ideas.py add "Pain train" --print "PAIN TRAIN"
 python3 scripts/shirt_ideas.py scan staples --find dollar   # browse the phrase report by its lists
 python3 scripts/shirt_ideas.py add-scan "we ride together"  # shortlist a phrase from the report
+python3 scripts/shirt_ideas.py ignore "first time"          # add it to output/phrases/ignore.txt
 python3 scripts/shirt_ideas.py episode 20261012             # Cowork's picks for an episode
 python3 scripts/shirt_ideas.py add-episode 20261012 3       # shortlist pick 3
 python3 scripts/shirt_ideas.py notes                        # the lines of ideas.txt, by line number

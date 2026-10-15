@@ -135,13 +135,40 @@ def _tokens(path: Path) -> _Tokens:
     return toks
 
 
-def _ignored(options: ScanOptions) -> Set[str]:
-    path = Path(options.ignore_file) if options.ignore_file else None
+def _read_ignored(path: Optional[Path]) -> Set[str]:
     if not path or not path.is_file():
         return set()
     return {normalize_phrase(line)
             for line in path.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.lstrip().startswith("#")}
+
+
+def _ignored(options: ScanOptions) -> Set[str]:
+    return _read_ignored(Path(options.ignore_file) if options.ignore_file else None)
+
+
+def ignored_phrases(out_dir: Path) -> Set[str]:
+    """``out_dir/ignore.txt`` as the scan compares it: each line's words, lowercased."""
+    return _read_ignored(Path(out_dir) / "ignore.txt")
+
+
+def add_ignored(out_dir: Path, phrase: str) -> str:
+    """Append ``phrase`` to ``out_dir/ignore.txt`` as a line of its own and return the line.
+
+    The lines already there, Tony's comments included, are kept as they are.
+    The next scan skips the phrase; the report already written still lists it.
+    """
+    line = " ".join(str(phrase).split())
+    if not normalize_phrase(line):
+        raise ValueError("phrase needs at least one word")
+    if normalize_phrase(line) in ignored_phrases(out_dir):
+        raise ValueError(f"{line!r} is already in ignore.txt")
+    path = Path(out_dir) / "ignore.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ends_open = path.is_file() and path.stat().st_size and not path.read_bytes().endswith(b"\n")
+    with path.open("a", encoding="utf-8") as f:
+        f.write(("\n" if ends_open else "") + line + "\n")
+    return line
 
 
 # --------------------------------------------------------------------------- counting

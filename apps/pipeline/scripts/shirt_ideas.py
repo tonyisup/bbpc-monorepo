@@ -19,6 +19,10 @@ pipeline data directory; ideas.txt beside it is read and never changed.
         browse the recurring-phrase report by its lists, and shortlist a phrase
         (rescan with scripts/scan_phrases.py)
 
+    python3 scripts/shirt_ideas.py ignore "first time"
+        add a phrase of the report to output/phrases/ignore.txt; the next scan
+        leaves it out, and until then `scan` marks it (ignored)
+
     python3 scripts/shirt_ideas.py episode 20261012
     python3 scripts/shirt_ideas.py add-episode 20261012 3
         Cowork's picks for an episode (output/cowork/<stem>.shirts.json), and
@@ -98,7 +102,8 @@ def _scan(config: dict, section: str | None, find: str, top: int) -> int:
     page = shirt_ideas.scan_rows(config, section, query=find, limit=top)
     print(f"{page['title']}: {page['total']}" + (f" matching {page['query']!r}" if page["query"] else ""))
     for row in page["rows"]:
-        print(f"{row['episodes']:>5} eps  {row['firstStem']}-{row['lastStem']}  {row['text']}{_mark(row['ideaId'])}")
+        ignored = "  (ignored)" if row["ignored"] else ""
+        print(f"{row['episodes']:>5} eps  {row['firstStem']}-{row['lastStem']}  {row['text']}{_mark(row['ideaId'])}{ignored}")
         for flag in row["flags"]:
             print(f"             ! {flag['text']}")
     if page["total"] > len(page["rows"]):
@@ -172,6 +177,9 @@ def main() -> int:
     p.add_argument("phrase")
     _add_fields(p, "shortlisted")
 
+    p = sub.add_parser("ignore", help="add a phrase of the report to output/phrases/ignore.txt")
+    p.add_argument("phrase")
+
     p = sub.add_parser("episode", help="Cowork's phrases for an episode, or the episodes that have any")
     p.add_argument("stem", nargs="?")
 
@@ -206,6 +214,10 @@ def main() -> int:
             return _scan(config, args.section, args.find, args.top)
         if args.command == "add-scan":
             return _saved(shirt_ideas.add_from_scan(config, args.phrase, **_given(args)))
+        if args.command == "ignore":
+            ignored = shirt_ideas.ignore_from_scan(config, args.phrase)
+            print(f"ignored: {ignored['phrase']} (the next scan leaves it out)")
+            return 0
         if args.command == "episode":
             return _episode(config, args.stem)
         if args.command == "add-episode":

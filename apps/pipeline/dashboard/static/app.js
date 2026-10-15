@@ -933,6 +933,11 @@ function addIdeaBox() {
 
 const onList = id => h('span', {class: 'tag', title: 'Already on the list above'}, `on the list · #${id}`);
 
+function ignorePhrase(text) {
+  if (!window.confirm(`Add this to output/phrases/ignore.txt?\n\n${text}\n\nThe next Rescan leaves it out of every list. To undo, delete its line from ignore.txt.`)) return;
+  shirtsPost('/api/shirts/ignore', {phrase: text});
+}
+
 function rescanBox(data) {
   const scan = data.scan;
   const rescan = data.rescan;
@@ -955,7 +960,7 @@ function rescanBox(data) {
     rescan.finishedAt && rescan.output && h('pre', {}, rescan.output));
 }
 
-function phraseTable(page) {
+function phraseTable(page, rescanning) {
   const filter = h('input', {class: 'inp', type: 'text', value: shirtsForm.query, placeholder: `Find in ${page.title.toLowerCase()}`, 'aria-label': 'Find a phrase'});
   filter.addEventListener('change', () => { shirtsForm.query = filter.value; shirtsForm.offset = 0; route(); });
   const last = page.offset + page.rows.length;
@@ -979,7 +984,11 @@ function phraseTable(page) {
           h('td', {class: 'mut nowrap'}, span(row)),
           h('td', {class: 'right nowrap'}, heard && hearButton(heard.audioUrl, heard.start), ' ',
             row.ideaId ? onList(row.ideaId)
-              : h('button', {class: 'btn s', onclick: () => shirtsPost('/api/shirts/ideas', {from: 'scan', phrase: row.text})}, 'Shortlist')));
+              : h('button', {class: 'btn s', onclick: () => shirtsPost('/api/shirts/ideas', {from: 'scan', phrase: row.text})}, 'Shortlist'), ' ',
+            row.ignored
+              ? h('span', {class: 'tag', title: 'In output/phrases/ignore.txt; this report was written before it was added'}, 'ignored · Rescan to drop it')
+              : h('button', {class: 'btn s', disabled: rescanning, title: rescanning ? 'Wait for the rescan to finish' : 'Add it to output/phrases/ignore.txt',
+                onclick: () => ignorePhrase(row.text)}, 'Ignore…')));
       })) : h('div', {class: 'mut sm gap'}, shirtsForm.query
         ? 'No phrase in this list contains that. The counts above show which lists do.' : 'Nothing in this list.'),
   ];
@@ -1051,7 +1060,7 @@ function renderShirts(data, page) {
       chip('notes', 'Your notes', data.notes.lines.length)),
     shirtsForm.source === 'episodes' ? episodePicks(data)
       : shirtsForm.source === 'notes' ? notesList(data)
-      : [rescanBox(data), phraseTable(page)],
+      : [rescanBox(data), phraseTable(page, data.rescan.running)],
   ];
 }
 

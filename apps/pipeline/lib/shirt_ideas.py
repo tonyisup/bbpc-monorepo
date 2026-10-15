@@ -344,6 +344,7 @@ def scan_rows(
     limit = min(limit, PAGE_ROWS_MAX)
     rows = _matching(phrase_scan.sections(_report(config))[section], wanted)
     listed = _listed(load(config))
+    ignored = phrase_scan.ignored_phrases(_output_dir(config) / "phrases")
 
     def shown(row: Dict[str, Any]) -> Dict[str, Any]:
         text, burst = _row_text(row), row.get("burst")
@@ -354,6 +355,7 @@ def scan_rows(
             "looksLikeTitle": bool(row.get("looksLikeTitle")),
             "examples": [{key: example[key] for key in ("stem", "start", "text")} for example in row.get("examples", [])],
             "ideaId": idea["id"] if idea else None,
+            "ignored": phrase_key(text) in ignored,  # added to ignore.txt since this report was written
             "flags": _text_flags(text) + ([dict(TITLE_FLAG)] if row.get("looksLikeTitle") else []),
         }
 
@@ -373,6 +375,21 @@ def add_from_scan(config: Dict[str, Any], phrase: str, *, status: str = "shortli
                              "firstStem": row["firstStem"], "lastStem": row["lastStem"],
                              "scannedAt": report.get("scannedAt")}
                 return add(config, _row_text(row), status=status, came_from=came_from, **fields)
+    raise ValueError(f"{phrase!r} is not in the phrase report")
+
+
+def ignore_from_scan(config: Dict[str, Any], phrase: Any) -> Dict[str, Any]:
+    """Add a phrase or passage of the report to ``output/phrases/ignore.txt``, as the report spells it.
+
+    The next scan leaves it out; until then the report lists it, marked ``ignored``.
+    """
+    if not isinstance(phrase, str):
+        raise ValueError("phrase must be text")
+    key = phrase_key(phrase)
+    for rows in phrase_scan.sections(_report(config)).values():
+        for row in rows:
+            if key and phrase_key(_row_text(row)) == key:
+                return {"phrase": phrase_scan.add_ignored(_output_dir(config) / "phrases", _row_text(row))}
     raise ValueError(f"{phrase!r} is not in the phrase report")
 
 

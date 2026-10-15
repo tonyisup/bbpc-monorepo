@@ -247,12 +247,12 @@ class ScanSectionTests(ShirtIdeasTestCase):
                          {"section": "catchphrases", "total": 2, "offset": 0, "limit": 50})
         self.assertEqual(page.get("rows"), [
             {"text": "pain train", "episodes": 40, "firstStem": "20100101", "lastStem": "20260105", "burst": None,
-             "looksLikeTitle": False, "ideaId": None, "flags": [], "examples": [
+             "looksLikeTitle": False, "ideaId": None, "ignored": True, "flags": [], "examples": [
                  {"stem": "20100101", "start": 20.0, "text": "All aboard the pain train."},
                  {"stem": "20260105", "start": 30.0, "text": "That is the pain train, baby."}]},
             {"text": "give it a slater", "episodes": 30, "firstStem": "20110416", "lastStem": "20260105",
              "burst": {"count": 5, "window": 20, "fromStem": "20250106", "toStem": "20260105"},
-             "looksLikeTitle": False, "ideaId": None,
+             "looksLikeTitle": False, "ideaId": None, "ignored": False,
              "flags": [{"kind": "person", "text": "Names a real person: Slater"}], "examples": []},
         ])
 
@@ -262,7 +262,7 @@ class ScanSectionTests(ShirtIdeasTestCase):
         passages = shirt_ideas.scan_rows(self.config, "passages").get("rows", [])
         self.assertEqual(passages[:1], [
             {"text": DOLLAR, "episodes": 135, "firstStem": "20110416", "lastStem": "20260105", "burst": None,
-             "looksLikeTitle": False, "ideaId": None, "examples": [],
+             "looksLikeTitle": False, "ideaId": None, "ignored": False, "examples": [],
              "flags": [{"kind": "known_quote", "text": "Known quote: RoboCop (docs/show-format.md)"}]}])
         titles = shirt_ideas.scan_rows(self.config, "titles").get("rows", [])
         self.assertEqual([(row["text"], row["looksLikeTitle"], row["flags"]) for row in titles], [
@@ -543,7 +543,7 @@ class ScriptTests(ShirtIdeasTestCase):
         ))
         self.assertEqual(self.ok("scan", "catchphrases"), (
             "Catchphrases: 2\n"
-            "   40 eps  20100101-20260105  pain train\n"
+            "   40 eps  20100101-20260105  pain train  (ignored)\n"
             "   30 eps  20110416-20260105  give it a slater\n"
             "             ! Names a real person: Slater\n"
         ))
@@ -552,7 +552,7 @@ class ScriptTests(ShirtIdeasTestCase):
             "   50 eps  20100101-20130707  one two three in the place to be\n"
         ))
         self.assertEqual(self.ok("add-scan", "pain train", "--print", "PAIN TRAIN"), "#1 shortlisted: PAIN TRAIN\n")
-        self.assertIn("   40 eps  20100101-20260105  pain train  [#1]\n", self.ok("scan", "catchphrases"))
+        self.assertIn("   40 eps  20100101-20260105  pain train  [#1]  (ignored)\n", self.ok("scan", "catchphrases"))
         self.assertIn("      from: phrase scan, Catchphrases, 40 episodes 20100101-20260105\n", self.ok("list"))
 
     def test_an_episodes_phrases_can_be_listed_and_promoted(self):
@@ -593,6 +593,8 @@ class ScriptTests(ShirtIdeasTestCase):
             (("add-episode", "20260105", "1"), "error: no shirts file for 20260105"),
             (("add-note", "1"), "error: line 1 of ideas.txt is not an idea"),
             (("scan", "bangers"), "error: no section 'bangers'"),
+            (("ignore", "gravy boat"), "error: 'gravy boat' is not in the phrase report"),
+            (("ignore", "Pain Train"), "error: 'pain train' is already in ignore.txt"),
         ):
             with self.subTest(args):
                 result = self.run_script(*args)
@@ -604,6 +606,46 @@ class ScriptTests(ShirtIdeasTestCase):
         result = self.run_script("list", data=self.root / "nowhere")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Pipeline data directory not found", result.stderr)
+
+
+class IgnoreTests(ShirtIdeasTestCase):
+    """Ignoring a phrase of the report adds it to output/phrases/ignore.txt, which the next scan skips."""
+
+    def setUp(self):
+        super().setUp()
+        self.ignore = self.root / "output" / "phrases" / "ignore.txt"
+
+    def ignored_rows(self):
+        return {row["text"]: row.get("ignored") for section, _ in phrase_scan.SECTIONS
+                for row in shirt_ideas.scan_rows(self.config, section, limit=200)["rows"]}
+
+    def test_a_report_phrase_becomes_its_own_line_and_tonys_lines_stay(self):
+        self.ignore.write_text("# ordinary English\npain train", encoding="utf-8")  # no newline at the end
+        self.assertEqual(shirt_ideas.ignore_from_scan(self.config, "Big Booty!"), {"phrase": "big booty"})
+        self.assertEqual(shirt_ideas.ignore_from_scan(self.config, "A dollar, I'd buy that for a dollar"),
+                         {"phrase": "a dollar. I'd buy that for a dollar"})
+        self.assertEqual(self.ignore.read_text(encoding="utf-8"),
+                         "# ordinary English\npain train\nbig booty\na dollar. I'd buy that for a dollar\n")
+        # The scan reads each line as it compares phrases.
+        self.assertEqual(phrase_scan.ignored_phrases(self.ignore.parent),
+                         {"pain train", "big booty", "a dollar i'd buy that for a dollar"})
+        rows = self.ignored_rows()
+        self.assertEqual({text for text, ignored in rows.items() if ignored},
+                         {"pain train", "big booty", "a dollar. I'd buy that for a dollar"})
+        self.assertFalse(rows["give it a slater"])
+
+    def test_with_no_ignore_file_one_is_started(self):
+        self.ignore.unlink()
+        self.assertEqual(phrase_scan.ignored_phrases(self.ignore.parent), set())
+        shirt_ideas.ignore_from_scan(self.config, "big booty")
+        self.assertEqual(self.ignore.read_text(encoding="utf-8"), "big booty\n")
+
+    def test_what_is_not_in_the_report_or_already_ignored_is_refused_and_nothing_written(self):
+        before = snapshot(self.root)
+        self.refused("'gravy boat' is not in the phrase report", shirt_ideas.ignore_from_scan, "gravy boat")
+        self.refused("'pain train' is already in ignore.txt", shirt_ideas.ignore_from_scan, "Pain, train.")
+        self.refused("phrase must be text", shirt_ideas.ignore_from_scan, None)
+        self.assertEqual(snapshot(self.root), before)
 
 
 class ReadOnlyTests(ShirtIdeasTestCase):

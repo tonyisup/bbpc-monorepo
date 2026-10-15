@@ -276,6 +276,30 @@ class ShirtsApiTests(ShirtsServerTestCase):
         self.assertEqual(json.loads(self.ideas.read_text()), {"version": 2, "ideas": []})
 
 
+class IgnoreApiTests(ShirtsServerTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ignore = self.root / "output" / "phrases" / "ignore.txt"
+
+    def test_ignore_adds_a_report_phrase_to_ignore_txt_and_the_page_marks_it(self):
+        in_the_past(self.root)
+        self.assertEqual(self.post("/api/shirts/ignore", {"phrase": "big booty"}), (200, {"ignored": "big booty"}))
+        self.assertEqual(self.ignore.read_text(encoding="utf-8"), "pain train\nbig booty\n")
+        self.assertTrue(self.api("/api/shirts")["scan"]["stale"])  # until the next Rescan
+        rows = self.api("/api/shirts/phrases?section=gags&limit=200")["rows"]
+        self.assertIn(("big booty", True), [(row["text"], row.get("ignored")) for row in rows])
+
+    def test_what_the_library_refuses_is_a_400_and_nothing_is_written(self):
+        before = snapshot(self.root)
+        for payload, reason in (({"phrase": "gravy boat"}, "is not in the phrase report"),
+                                ({"phrase": "PAIN TRAIN"}, "already in ignore.txt"), ({}, "phrase must be text")):
+            with self.subTest(payload):
+                status, answer = self.post("/api/shirts/ignore", payload)
+                self.assertEqual(status, 400)
+                self.assertIn(reason, (answer or {}).get("error", ""))
+        self.assertEqual(snapshot(self.root), before)
+
+
 class RescanTests(ShirtsServerTestCase):
     def test_rescan_runs_the_scan_and_reports_what_it_printed(self):
         in_the_past(self.root)
@@ -315,6 +339,12 @@ class RescanBusyTests(ShirtsServerTestCase):
         self.assertEqual(self.post("/api/shirts/rescan", {})[0], 202)
         status, answer = self.post("/api/shirts/rescan", {})
         self.assertEqual((status, "already running" in (answer or {}).get("error", "")), (409, True))
+        # The scan reads ignore.txt as it starts, so a phrase ignored now would not count until the next one.
+        ignore = self.root / "output" / "phrases" / "ignore.txt"
+        before = ignore.read_bytes()
+        status, answer = self.post("/api/shirts/ignore", {"phrase": "big booty"})
+        self.assertEqual((status, (answer or {}).get("error")), (409, "A rescan is running. Ignore phrases once it has finished."))
+        self.assertEqual(ignore.read_bytes(), before)
         state = self.rescan_finished()
         self.assertEqual((state.get("timedOut"), state.get("running")), (True, False))
         self.assertNotEqual(state.get("returncode"), 0)
