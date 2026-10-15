@@ -144,6 +144,7 @@ class DashboardServer(ThreadingHTTPServer):
         self.runs = runs
         # One change at a time to the shortlist and to the decisions log: each rewrites its whole file.
         self.ideas_lock = threading.Lock()
+        self.ignore_lock = threading.Lock()
         self.decisions_lock = threading.Lock()
         # Sent to the page with /api/header and required back on every POST. Another site's
         # page cannot read it (no CORS), and a rebound domain is refused by the Host check.
@@ -445,6 +446,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"deleted": removed})
         elif name == "rescan":
             self._json(202, {"rescan": self.server.scans.start(self.server.config_path)})
+        elif name == "ignore":
+            # A scan reads ignore.txt as it starts, so a line added during one would not count until the next.
+            with self.server.ignore_lock:
+                if self.server.scans.state()["running"]:
+                    self._json(409, {"error": "A rescan is running. Ignore phrases once it has finished."})
+                    return
+                ignored = shirt_ideas.ignore_from_scan(config, payload.get("phrase"))
+            self._json(200, {"ignored": ignored["phrase"]})
         else:
             self._not_found()
 
