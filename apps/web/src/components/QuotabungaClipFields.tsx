@@ -1,5 +1,6 @@
 "use client";
 
+import { Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { FullScreenDialog } from "@/components/FullScreenDialog";
 import { QuoteClipEditor } from "@/components/QuoteClipEditor";
@@ -198,8 +199,18 @@ export function QuotabungaClipFields({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3">
-        <p className="text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           Need help finding the moment?
+          <a
+            href="https://youtube.com/shorts/uQJG9cjLUJE"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Watch the how-to short"
+            title="Watch the how-to short"
+            className="inline-flex rounded-full text-muted-foreground transition-colors hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <Info aria-hidden="true" className="h-3.5 w-3.5" />
+          </a>
         </p>
         <Button
           type="button"
