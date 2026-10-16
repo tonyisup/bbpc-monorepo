@@ -177,6 +177,30 @@ describe("NavMenu game point badge", () => {
     ).toBeUndefined();
   });
 
+  test("links Merch to the internal shop page in the same tab", async () => {
+    mocks.pathname = "/merch";
+    const rendered = await render();
+
+    const merchLinks = rendered.root.findAll(
+      (node) => node.type === "a" && text(node) === "Merch"
+    );
+    expect(merchLinks).toHaveLength(2);
+    for (const link of merchLinks) {
+      expect(link.props).toMatchObject({
+        href: "/merch",
+        "aria-current": "page",
+      });
+      expect(link.props.target).toBeUndefined();
+      expect(link.props.rel).toBeUndefined();
+    }
+    expect(
+      rendered.root.findAll(
+        (node) =>
+          node.type === "a" && String(node.props.href).includes("teepublic.com")
+      )
+    ).toHaveLength(0);
+  });
+
   test("does not query points for signed-out visitors", async () => {
     mocks.accountStatus = "not-applicable";
     mocks.user = null;

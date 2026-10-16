@@ -34,7 +34,6 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   requiresAuth?: boolean;
-  external?: boolean;
 }
 
 const publicNavItems: NavItem[] = [
@@ -46,12 +45,7 @@ const publicNavItems: NavItem[] = [
   },
   { href: "/game", label: "Game", icon: <GamepadIcon className="h-4 w-4" /> },
   { href: "/year", label: "Year", icon: <CalendarIcon className="h-4 w-4" /> },
-  {
-    href: "https://www.teepublic.com/user/badboyspodcast",
-    label: "Merch",
-    icon: <ShirtIcon className="h-4 w-4" />,
-    external: true,
-  },
+  { href: "/merch", label: "Merch", icon: <ShirtIcon className="h-4 w-4" /> },
   { href: "/about", label: "About", icon: <UserIcon className="h-4 w-4" /> },
 ];
 
@@ -113,14 +107,10 @@ const NavMenu: FC = () => {
           <Link
             key={item.label}
             href={item.href}
-            target={item.external ? "_blank" : undefined}
-            rel={item.external ? "noreferrer noopener" : undefined}
-            aria-current={
-              !item.external && isActive(item.href) ? "page" : undefined
-            }
+            aria-current={isActive(item.href) ? "page" : undefined}
             className={cn(
               "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm transition-colors hover:bg-white/5 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500",
-              !item.external && isActive(item.href)
+              isActive(item.href)
                 ? "bg-red-500/10 text-red-300"
                 : "text-zinc-300"
             )}
@@ -192,18 +182,10 @@ const NavMenu: FC = () => {
                   <NavigationMenuLink key={item.label} asChild>
                     <Link
                       href={item.href}
-                      target={item.external ? "_blank" : undefined}
-                      rel={item.external ? "noreferrer noopener" : undefined}
-                      aria-current={
-                        !item.external && isActive(item.href)
-                          ? "page"
-                          : undefined
-                      }
+                      aria-current={isActive(item.href) ? "page" : undefined}
                       className={cn(
                         "flex items-center gap-2 px-4 py-3 transition hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500",
-                        !item.external &&
-                          isActive(item.href) &&
-                          "bg-red-500/10 text-red-300"
+                        isActive(item.href) && "bg-red-500/10 text-red-300"
                       )}
                     >
                       {item.icon}
