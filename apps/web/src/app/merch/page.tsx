@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { unstable_rethrow } from "next/navigation";
 import { ArrowUpRight } from "lucide-react";
 
@@ -33,6 +34,11 @@ async function loadItems(): Promise<MerchItem[]> {
   } catch (error) {
     // Next signals rendering decisions by throwing; never swallow those.
     unstable_rethrow(error);
+    // After deploy, throwing keeps serving the last good page instead of
+    // caching an empty one. Only the build has no earlier page to fall back to.
+    if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD) {
+      throw error;
+    }
     // The store link alone still makes a working page.
     console.error("Merch items could not be loaded.", error);
     return [];

@@ -61,6 +61,15 @@ function validateOptionalText(
   return validateText(value, label, maxLength);
 }
 
+// Listeners load images on an https page, so plain http would be mixed content.
+function validateHttpsImageUrl(value: string): string {
+  const url = validateHttpUrl(value, "The image URL");
+  if (!url.startsWith("https://")) {
+    domainError("VALIDATION_FAILED", "The image URL must use https.");
+  }
+  return url;
+}
+
 export function validateMerchItemInput(
   input: MerchItemInput,
 ): MerchItemFields {
@@ -72,7 +81,7 @@ export function validateMerchItemInput(
   const imageUrl =
     input.imageUrl === null || input.imageUrl.trim().length === 0
       ? undefined
-      : validateHttpUrl(input.imageUrl, "The image URL");
+      : validateHttpsImageUrl(input.imageUrl);
   const priceLabel = validateOptionalText(
     input.priceLabel,
     "The price label",

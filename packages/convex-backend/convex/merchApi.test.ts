@@ -292,6 +292,7 @@ describe("merch administration", () => {
       { url: "javascript:alert(1)" },
       { url: "not a url" },
       { imageUrl: "data:image/png;base64,AAAA" },
+      { imageUrl: "http://images.example.test/tee.jpg" },
       { priceLabel: "x".repeat(25) },
       { badge: "x".repeat(21) },
     ]) {
@@ -479,6 +480,33 @@ describe("merch administration", () => {
       "merch.admin.updated",
       "merch.admin.deleted",
     ]);
+  });
+
+  test("moves items that share a sortOrder", async () => {
+    const t = await createBackend();
+    const first = await asAdmin(t).mutation(
+      api.merch.admin.create,
+      input({ title: "First" }),
+    );
+    const second = await asAdmin(t).mutation(
+      api.merch.admin.create,
+      input({ title: "Second" }),
+    );
+    // An import or dashboard edit left both rows at the same position.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("merchItems", second.id, { sortOrder: 0 });
+    });
+
+    const moved = await asAdmin(t).mutation(api.merch.admin.move, {
+      clientApiVersion: BBPC_API_VERSION,
+      id: second.id,
+      direction: "up",
+    });
+    expect(moved.map((item) => [item.title, item.sortOrder])).toEqual([
+      ["Second", 0],
+      ["First", 1],
+    ]);
+    expect(first.sortOrder).toBe(0);
   });
 
   test("caps the number of items", async () => {

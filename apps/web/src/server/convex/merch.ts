@@ -20,8 +20,25 @@ const merchItemSchema = z.object({
 
 const listVisibleReference = api.merch.public.listVisible;
 
+function hasProtocol(value: string, protocols: string[]): boolean {
+  try {
+    return protocols.includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+// The backend validates links on write, but rows can also arrive by import or
+// dashboard edit. Never render a non-web link or a non-https image.
 export async function listVisibleMerchItems(): Promise<MerchItem[]> {
-  return z
+  const items = z
     .array(merchItemSchema)
     .parse(await fetchPublicQuery(listVisibleReference, {}));
+  return items
+    .filter((item) => hasProtocol(item.url, ["http:", "https:"]))
+    .map((item) =>
+      item.imageUrl === null || hasProtocol(item.imageUrl, ["https:"])
+        ? item
+        : { ...item, imageUrl: null }
+    );
 }

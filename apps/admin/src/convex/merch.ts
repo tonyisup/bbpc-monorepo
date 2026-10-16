@@ -11,6 +11,7 @@ export const MERCH_DESCRIPTION_MAX_LENGTH = 200;
 export const MERCH_PRICE_LABEL_MAX_LENGTH = 24;
 export const MERCH_BADGE_MAX_LENGTH = 20;
 export const MERCH_ITEM_LIMIT = 48;
+export const MERCH_URL_MAX_LENGTH = 2048;
 
 const merchItemSchema = z.object({
   id: z.string().min(1),

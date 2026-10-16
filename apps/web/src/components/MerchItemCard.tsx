@@ -88,21 +88,23 @@ export function MerchSpotlight({ item }: { item: MerchItem }) {
         />
         <MerchPills item={item} showFeatured={false} />
       </div>
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 p-5">
-        <div className="min-w-0">
-          <p className="text-xl font-black tracking-tight text-white">
+      <div className="p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="text-xl font-black tracking-tight text-white">
             {item.title}
-          </p>
-          {item.description !== null && (
-            <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-              {item.description}
-            </p>
+          </h2>
+          {item.priceLabel !== null && (
+            <span className="text-sm font-semibold text-white">
+              {item.priceLabel}
+            </span>
           )}
         </div>
-        <span className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-red-300 transition-colors group-hover:text-red-200">
-          {item.priceLabel !== null && (
-            <span className="mr-2 text-white">{item.priceLabel}</span>
-          )}
+        {item.description !== null && (
+          <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+            {item.description}
+          </p>
+        )}
+        <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-red-300 transition-colors group-hover:text-red-200">
           {getMerchLinkLabel(item.url)}
           <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">(opens in a new tab)</span>

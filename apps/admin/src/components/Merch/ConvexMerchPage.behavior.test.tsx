@@ -224,7 +224,7 @@ describe("ConvexMerchPage", () => {
     expect(mocks.create).not.toHaveBeenCalled();
     for (const error of [
       "The title must be 80 characters or fewer.",
-      "The image link must start with http:// or https://.",
+      "The image link must start with https://.",
       "The description must be 200 characters or fewer.",
       "The price label must be 24 characters or fewer.",
       "The badge must be 20 characters or fewer.",
@@ -429,6 +429,40 @@ describe("ConvexMerchPage", () => {
     );
     expect(titleField.props.value).toBe("Logo Tee");
     expect(mocks.load).toHaveBeenCalledTimes(1);
+  });
+
+  test("blocks a second action while a write is in flight", async () => {
+    mocks.load.mockResolvedValue([item("tee")]);
+    let finishCreate: (value: unknown) => void = () => undefined;
+    mocks.create.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishCreate = resolve;
+      })
+    );
+    await render();
+    await click("New Item");
+    type("convex-merch-title", "Logo Tee");
+    type("convex-merch-url", `https://www.teepublic.com/${"x".repeat(2048)}`);
+    await click("Save Item");
+    expect(text()).toContain("The product link must be 2048 characters or fewer.");
+    expect(mocks.create).not.toHaveBeenCalled();
+
+    type("convex-merch-url", "https://www.teepublic.com/t-shirt/1");
+    await click("Save Item");
+    expect(text()).toContain("Saving...");
+    expect(button("Saving...").props.disabled).toBe(true);
+    expect(button("Cancel").props.disabled).toBe(true);
+    for (const label of ["Hide Item tee", "Edit Item tee", "Delete Item tee"]) {
+      expect(button(label).props.disabled).toBe(true);
+    }
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishCreate(item("new"));
+    });
+    await act(() => Promise.resolve());
+    expect(text()).not.toContain("Saving...");
+    expect(button("Hide Item tee").props.disabled).toBe(false);
   });
 
   test("keeps the order when a move fails", async () => {

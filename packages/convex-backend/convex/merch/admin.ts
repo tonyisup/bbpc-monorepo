@@ -113,13 +113,26 @@ export const move = adminMutation({
     if (neighbour === undefined) {
       return items.map(toAdminMerchItem);
     }
+    let itemOrder = neighbour.sortOrder;
+    let neighbourOrder = item.sortOrder;
+    if (itemOrder === neighbourOrder) {
+      // Imported or hand-edited rows can share a sortOrder, which would make
+      // the swap a no-op. Renumber by position first.
+      for (const [position, row] of items.entries()) {
+        if (row.sortOrder !== position) {
+          await ctx.db.patch("merchItems", row._id, { sortOrder: position });
+        }
+      }
+      itemOrder = neighbourIndex;
+      neighbourOrder = index;
+    }
     const now = Date.now();
     await ctx.db.patch("merchItems", item._id, {
-      sortOrder: neighbour.sortOrder,
+      sortOrder: itemOrder,
       updatedAt: now,
     });
     await ctx.db.patch("merchItems", neighbour._id, {
-      sortOrder: item.sortOrder,
+      sortOrder: neighbourOrder,
       updatedAt: now,
     });
     await writeAuditEvent(ctx, {

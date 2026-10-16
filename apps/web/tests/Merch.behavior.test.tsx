@@ -163,6 +163,7 @@ describe("merch helpers", () => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
   mocks.listVisible.mockReset();
   mocks.fetchPublicQuery.mockReset();
@@ -203,7 +204,14 @@ describe("merch page", () => {
     ]);
   });
 
-  test("falls back to one store link on a failed load, else spotlights the first featured item", async () => {
+  test("keeps the last good page by throwing when a refresh fails after deploy", async () => {
+    const failure = new Error("offline");
+    mocks.listVisible.mockRejectedValueOnce(failure);
+    await expect(MerchPage()).rejects.toBe(failure);
+  });
+
+  test("falls back to one store link on a failed build, else spotlights the first featured item", async () => {
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -265,6 +273,15 @@ describe("merch server loader", () => {
 
     await expect(listVisibleMerchItems()).resolves.toEqual([item()]);
     expect(mocks.fetchPublicQuery).toHaveBeenCalledWith(expect.anything(), {});
+
+    // Rows that bypassed backend validation never render unsafe links.
+    mocks.fetchPublicQuery.mockResolvedValueOnce([
+      { ...row, id: "script", url: "javascript:alert(1)" },
+      { ...row, id: "plain", imageUrl: "http://images.example.test/tee.jpg" },
+    ]);
+    await expect(listVisibleMerchItems()).resolves.toEqual([
+      item({ id: "plain", imageUrl: null }),
+    ]);
 
     for (const malformed of [
       [{ ...row, featured: "yes" }],

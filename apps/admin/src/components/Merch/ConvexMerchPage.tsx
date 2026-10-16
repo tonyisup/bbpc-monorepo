@@ -30,6 +30,7 @@ import {
   MERCH_ITEM_LIMIT,
   MERCH_PRICE_LABEL_MAX_LENGTH,
   MERCH_TITLE_MAX_LENGTH,
+  MERCH_URL_MAX_LENGTH,
   moveConvexAdminMerchItem,
   setConvexAdminMerchItemVisible,
   updateConvexAdminMerchItem,
@@ -63,9 +64,20 @@ import { Textarea } from "../ui/textarea";
 const STORE_URL = "https://www.teepublic.com/user/badboyspodcast";
 const SHOP_PAGE_URL = "https://badboyspodcast.com/merch";
 
+const PREVIEW_IMAGE_DELAY_MS = 400;
+
+// The server stores trimmed NFC text, so measure the same string here.
+function cleanText(value: string): string {
+  return value.trim().normalize("NFC");
+}
+
 function nullableText(value: string): string | null {
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
+  const cleaned = cleanText(value);
+  return cleaned.length === 0 ? null : cleaned;
+}
+
+function isHttpsUrl(value: string): boolean {
+  return isHttpUrl(value) && value.startsWith("https://");
 }
 
 function isHttpUrl(value: string): boolean {
@@ -107,6 +119,7 @@ function mutationFailureMessage(error: unknown): string {
 }
 
 // The title is always shown beside the thumbnail, so the image is decorative.
+// Callers key it by URL, so a new URL starts without the failed state.
 function MerchThumbnail({
   imageUrl,
   className,
@@ -115,7 +128,6 @@ function MerchThumbnail({
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [imageUrl]);
   return (
     <div
       className={cn(
@@ -128,6 +140,8 @@ function MerchThumbnail({
         <img
           alt=""
           className="h-full w-full object-cover"
+          decoding="async"
+          loading="lazy"
           onError={() => setFailed(true)}
           src={imageUrl}
         />
@@ -154,6 +168,7 @@ function MerchPreview({
         <MerchThumbnail
           className="aspect-square w-full rounded-none border-0 bg-zinc-900"
           imageUrl={imageUrl}
+          key={imageUrl}
         />
         <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-1.5">
           {featured && (
@@ -241,9 +256,20 @@ function MerchEditor({
   const [visible, setVisible] = useState(editing?.visible ?? true);
   const [showErrors, setShowErrors] = useState(false);
 
-  const trimmedTitle = title.trim();
+  const trimmedTitle = cleanText(title);
   const productUrl = url.trim();
   const image = nullableText(imageUrl);
+  // Waits for typing to pause so partial URLs don't each fetch an image.
+  const [previewImage, setPreviewImage] = useState(
+    image !== null && isHttpsUrl(image) ? image : null
+  );
+  useEffect(() => {
+    const timer = setTimeout(
+      () => setPreviewImage(image !== null && isHttpsUrl(image) ? image : null),
+      PREVIEW_IMAGE_DELAY_MS
+    );
+    return () => clearTimeout(timer);
+  }, [image]);
   const text = nullableText(description);
   const price = nullableText(priceLabel);
   const badgeText = nullableText(badge);
@@ -253,9 +279,14 @@ function MerchEditor({
       `The title must be ${MERCH_TITLE_MAX_LENGTH} characters or fewer.`,
     !isHttpUrl(productUrl) &&
       "The product link must start with http:// or https://.",
+    productUrl.length > MERCH_URL_MAX_LENGTH &&
+      `The product link must be ${MERCH_URL_MAX_LENGTH} characters or fewer.`,
     image !== null &&
-      !isHttpUrl(image) &&
-      "The image link must start with http:// or https://.",
+      !isHttpsUrl(image) &&
+      "The image link must start with https://.",
+    image !== null &&
+      image.length > MERCH_URL_MAX_LENGTH &&
+      `The image link must be ${MERCH_URL_MAX_LENGTH} characters or fewer.`,
     text !== null &&
       text.length > MERCH_DESCRIPTION_MAX_LENGTH &&
       `The description must be ${MERCH_DESCRIPTION_MAX_LENGTH} characters or fewer.`,
@@ -378,7 +409,7 @@ function MerchEditor({
               description={text}
               featured={featured}
               url={productUrl}
-              imageUrl={image !== null && isHttpUrl(image) ? image : null}
+              imageUrl={previewImage}
               priceLabel={price}
               title={title}
             />
@@ -663,6 +694,7 @@ export function ConvexMerchPage() {
                         <MerchThumbnail
                           className="h-12 w-12"
                           imageUrl={item.imageUrl}
+                          key={item.imageUrl}
                         />
                         <div className="min-w-0">
                           <p className="break-words text-sm font-medium">
@@ -675,7 +707,7 @@ export function ConvexMerchPage() {
                           </p>
                           <a
                             className="block truncate text-xs text-muted-foreground underline"
-                            href={item.url}
+                            href={isHttpUrl(item.url) ? item.url : undefined}
                             rel="noreferrer"
                             target="_blank"
                           >
