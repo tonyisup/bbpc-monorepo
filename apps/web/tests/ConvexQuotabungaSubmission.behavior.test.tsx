@@ -163,6 +163,7 @@ vi.mock("lucide-react", () => {
     AlertTriangle: Icon,
     CheckCircle2: Icon,
     ExternalLink: Icon,
+    Info: Icon,
     Loader2: Icon,
     Pencil: Icon,
     Sparkles: Icon,
