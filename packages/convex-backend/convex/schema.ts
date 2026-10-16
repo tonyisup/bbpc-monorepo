@@ -349,6 +349,22 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_endsAt", ["endsAt"]),
 
+  merchItems: defineTable({
+    title: v.string(),
+    description: v.optional(v.string()),
+    url: v.string(),
+    imageUrl: v.optional(v.string()),
+    priceLabel: v.optional(v.string()),
+    badge: v.optional(v.string()),
+    featured: v.boolean(),
+    visible: v.boolean(),
+    sortOrder: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_sortOrder", ["sortOrder"])
+    .index("by_visible_and_sortOrder", ["visible", "sortOrder"]),
+
   tags: defineTable({
     legacyId: v.optional(v.string()),
     name: v.string(),
