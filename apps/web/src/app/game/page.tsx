@@ -169,6 +169,17 @@ export default async function GamePage() {
                 per week.
               </p>
               <p>
+                <a
+                  href="https://youtube.com/shorts/uQJG9cjLUJE"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-red-300 underline"
+                >
+                  Watch the how-to short
+                </a>{" "}
+                to see how to submit a quote.
+              </p>
+              <p>
                 With four entries, the hosts play two semifinals and a final.
                 With fewer entries, they rank the available quotes directly.
               </p>
