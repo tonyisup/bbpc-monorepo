@@ -384,7 +384,7 @@ impersonation sessions, and service principals in bounded batches. Its final ato
 step writes audit evidence, removes its own scrub record, and deletes the local
 `systemState`, restoring the backend's default-deny state before backup.
 
-The 43-table portable allowlist is schema-tested: canonical domain tables, approved
+The 51-table portable allowlist is schema-tested: canonical domain tables, approved
 auth identities, durable side-effect intents, recording data, and audit evidence are
 retained. The independently reconciled public recording catalogs may be populated in
 S1, while session/history tables remain a fail-closed blocker until their separate

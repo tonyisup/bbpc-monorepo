@@ -17,6 +17,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: "https://badboyspodcast.com",
       lastModified: new Date(),
     },
+    {
+      url: "https://badboyspodcast.com/merch",
+      lastModified: new Date(),
+    },
     ...episodeEntries,
   ];
 }

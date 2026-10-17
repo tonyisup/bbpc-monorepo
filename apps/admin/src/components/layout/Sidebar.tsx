@@ -20,7 +20,8 @@ import {
 	List,
 	Quote,
 	RotateCcw,
-	Megaphone
+	Megaphone,
+	Shirt
 } from "lucide-react"
 import { cn } from "../../lib/utils"
 import { Button } from "../ui/button"
@@ -141,6 +142,12 @@ export function Sidebar({ className }: SidebarProps) {
 					icon: Megaphone,
 					href: "/announcement",
 					active: pathname.startsWith("/announcement"),
+				},
+				{
+					label: "Merch",
+					icon: Shirt,
+					href: "/merch",
+					active: pathname.startsWith("/merch"),
 				},
 				{
 					label: "Seasons",

@@ -880,6 +880,154 @@ export type PublicApiType = {
       >;
     };
   };
+  merch: {
+    admin: {
+      list: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          id: Id<"merchItems">;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          updatedAt: number;
+          visible: boolean;
+          sortOrder: number;
+          createdAt: number;
+        }>
+      >;
+      create: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          visible: boolean;
+        },
+        {
+          id: Id<"merchItems">;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          updatedAt: number;
+          visible: boolean;
+          sortOrder: number;
+          createdAt: number;
+        }
+      >;
+      update: FunctionReference<
+        "mutation",
+        "public",
+        {
+          id: Id<"merchItems">;
+          clientApiVersion: string;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          visible: boolean;
+        },
+        {
+          id: Id<"merchItems">;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          updatedAt: number;
+          visible: boolean;
+          sortOrder: number;
+          createdAt: number;
+        }
+      >;
+      setVisible: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"merchItems">; visible: boolean },
+        {
+          id: Id<"merchItems">;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          updatedAt: number;
+          visible: boolean;
+          sortOrder: number;
+          createdAt: number;
+        }
+      >;
+      move: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          id: Id<"merchItems">;
+          direction: "up" | "down";
+        },
+        Array<{
+          id: Id<"merchItems">;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          updatedAt: number;
+          visible: boolean;
+          sortOrder: number;
+          createdAt: number;
+        }>
+      >;
+      remove: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; id: Id<"merchItems"> },
+        { id: Id<"merchItems"> }
+      >;
+    };
+    public: {
+      listVisible: FunctionReference<
+        "query",
+        "public",
+        Record<string, never>,
+        Array<{
+          id: Id<"merchItems">;
+          title: string;
+          description: string | null;
+          url: string;
+          imageUrl: string | null;
+          priceLabel: string | null;
+          badge: string | null;
+          featured: boolean;
+          updatedAt: number;
+        }>
+      >;
+    };
+  };
   admin: {
     dashboardBackfill: {
       initialize: FunctionReference<
