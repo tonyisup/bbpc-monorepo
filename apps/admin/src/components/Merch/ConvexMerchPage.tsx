@@ -489,9 +489,14 @@ export function ConvexMerchPage() {
     };
   }, [convex, revision]);
 
+  // Reloads in place, so the rows stay visible after a save or delete.
   const refresh = () => {
-    setItems(null);
     setRevision((value) => value + 1);
+  };
+
+  const retryLoad = () => {
+    setItems(null);
+    refresh();
   };
 
   const save = (input: ConvexAdminMerchItemInput) => {
@@ -629,7 +634,7 @@ export function ConvexMerchPage() {
             <p className="mb-4 text-sm text-muted-foreground">
               Merch could not be loaded. Try again.
             </p>
-            <Button onClick={refresh} variant="outline">
+            <Button onClick={retryLoad} variant="outline">
               <RefreshCw className="mr-2 h-4 w-4" />
               Try again
             </Button>

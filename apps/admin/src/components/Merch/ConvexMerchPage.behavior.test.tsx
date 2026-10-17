@@ -465,6 +465,29 @@ describe("ConvexMerchPage", () => {
     expect(button("Hide Item tee").props.disabled).toBe(false);
   });
 
+  test("keeps the rows visible while reloading after a save", async () => {
+    mocks.load.mockResolvedValueOnce([item("tee")]);
+    let finishReload: (value: unknown) => void = () => undefined;
+    mocks.load.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishReload = resolve;
+      })
+    );
+    mocks.update.mockResolvedValueOnce(item("tee", { title: "Logo Tee" }));
+    await render();
+
+    await click("Edit Item tee");
+    await click("Save Item");
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+    expect(text()).toContain("Item tee");
+
+    await act(async () => {
+      finishReload([item("tee", { title: "Logo Tee" })]);
+    });
+    await act(() => Promise.resolve());
+    expect(text()).toContain("Logo Tee");
+  });
+
   test("keeps the order when a move fails", async () => {
     const first = item("first", { sortOrder: 0 });
     const second = item("second", { sortOrder: 1 });
