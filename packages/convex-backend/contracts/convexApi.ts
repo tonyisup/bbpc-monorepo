@@ -8798,6 +8798,38 @@ export type PublicApiType = {
           title: string;
         } | null
       >;
+      getEpisodeTimeline: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons">; today: string },
+        Array<{
+          episode: {
+            date: string;
+            id: Id<"episodes">;
+            number: number;
+            slug: string | null;
+            status: string | null;
+            title: string;
+          };
+          guesses: { count: number; scored: number };
+          players: Array<{
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+          points: { count: number; total: number };
+          quotes: { count: number };
+          wagers: {
+            count: number;
+            lost: number;
+            pointsWagered: number;
+            won: number;
+          };
+        }>
+      >;
       getPerformance: FunctionReference<
         "query",
         "public",

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import type {
   ConvexAdminSeasonGamblingEntry,
   ConvexAdminSeasonGuess,
-  ConvexAdminSeasonPoint,
+  ConvexAdminSeasonTimelineEpisode,
 } from "@/convex/seasonDetails";
 import type * as SeasonsAdapter from "@/convex/seasons";
 
@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   client: {},
   detail: vi.fn<(client: unknown, id: string) => Promise<unknown>>(),
   performance: vi.fn<(client: unknown, id: string) => Promise<unknown>>(),
-  points: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  timeline: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   guesses: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   gambling: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }));
@@ -54,7 +54,7 @@ vi.mock("../ui/tabs", () => {
 vi.mock("@/convex/seasonDetails", () => ({
   loadConvexAdminSeasonDetail: mocks.detail,
   loadConvexAdminSeasonPerformance: mocks.performance,
-  loadConvexAdminSeasonPointsPage: mocks.points,
+  loadConvexAdminSeasonEpisodeTimeline: mocks.timeline,
   loadConvexAdminSeasonGuessesPage: mocks.guesses,
   loadConvexAdminSeasonGamblingPage: mocks.gambling,
 }));
@@ -109,9 +109,39 @@ const basePoint = {
   gamePointType: null,
   total: 5,
 };
-const points: ConvexAdminSeasonPoint[] = [
-  { ...basePoint, id: "point-linked", episode: episode401 },
-  { ...basePoint, id: "point-manual", total: -2, episode: null },
+const quietEpisode: ConvexAdminSeasonTimelineEpisode = {
+  episode: {
+    id: "episode-400",
+    number: 400,
+    title: "Quiet week",
+    date: "2026-09-01",
+    status: "published",
+    slug: null,
+  },
+  points: { total: 0, count: 0 },
+  guesses: { count: 0, scored: 0 },
+  wagers: { count: 0, pointsWagered: 0, won: 0, lost: 0 },
+  quotes: { count: 0 },
+  players: [],
+};
+const timeline: ConvexAdminSeasonTimelineEpisode[] = [
+  {
+    episode: {
+      ...episode401,
+      date: "2026-09-08",
+      status: "published",
+      slug: "arrival",
+    },
+    points: { total: 13, count: 3 },
+    guesses: { count: 2, scored: 1 },
+    wagers: { count: 1, pointsWagered: 3, won: 1, lost: 0 },
+    quotes: { count: 2 },
+    players: [
+      { user, total: 15 },
+      { user: { id: "user-2", name: "Grace Hopper", image: null }, total: -2 },
+    ],
+  },
+  quietEpisode,
 ];
 const assignment = {
   id: "assignment-1",
@@ -205,7 +235,18 @@ function textOf(value: unknown): string {
   return JSON.stringify(value).replace(/","/gu, "");
 }
 
-describe("ConvexSeasonDetailPage episode groups", () => {
+const seasonDetail = {
+  ...season,
+  episodeCount: 20,
+  counts: {
+    points: { count: 3, isExact: true },
+    guesses: { count: 2, isExact: true },
+    gamblingEntries: { count: 2, isExact: true },
+    quoteSubmissions: { count: 2, isExact: true },
+  },
+};
+
+describe("ConvexSeasonDetailPage", () => {
   afterEach(() => {
     if (renderer !== null) {
       act(() => renderer?.unmount());
@@ -214,19 +255,66 @@ describe("ConvexSeasonDetailPage episode groups", () => {
     vi.clearAllMocks();
   });
 
-  test("groups activity by episode and links rows to their points", async () => {
-    mocks.detail.mockResolvedValue({
-      ...season,
-      episodeCount: 20,
-      counts: {
-        points: { count: 2, isExact: true },
-        guesses: { count: 2, isExact: true },
-        gamblingEntries: { count: 2, isExact: true },
-        quoteSubmissions: { count: 0, isExact: true },
-      },
-    });
+  test("shows the season's episodes so far with each one's game activity", async () => {
+    mocks.detail.mockResolvedValue(seasonDetail);
     mocks.performance.mockResolvedValue({ userSummary: [], points: [] });
-    mocks.points.mockResolvedValue(page(points, false));
+    mocks.timeline.mockResolvedValue(timeline);
+    mocks.guesses.mockResolvedValue(page([]));
+    mocks.gambling.mockResolvedValue(page([]));
+
+    const rendered = await render();
+    const text = textOf(rendered.toJSON());
+    const hrefs = rendered.root
+      .findAllByType("a")
+      .map((link) => link.props.href as string);
+
+    expect(mocks.timeline).toHaveBeenCalledWith(
+      mocks.client,
+      "season-1",
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/u)
+    );
+    expect(text).toContain("Episode 401");
+    expect(text).toContain(" · Arrival");
+    expect(text).toContain("#2 of 20");
+    expect(text).toContain("Sep 8, 2026");
+    expect(text).toContain("+13");
+    expect(text).toContain("3 awards");
+    expect(text).toContain("1 scored");
+    expect(text).toContain("3 pts · 1 won · 0 lost");
+    const playerChips = rendered.root
+      .findByProps({ "aria-label": "Points by player" })
+      .findAllByType("li")
+      .map((chip) =>
+        chip
+          .findAllByType("span")
+          .flatMap((span) => span.children)
+          .filter((child) => typeof child === "string")
+          .join(" ")
+      );
+    expect(playerChips).toEqual(["A Ada +15", "GH Grace Hopper -2"]);
+    expect(hrefs).toContain("/episode/arrival");
+    expect(text).toContain("Episode 400");
+    expect(text).toContain("#1 of 20");
+    expect(text).toContain("No game activity recorded for this episode.");
+    expect(text).not.toContain("No episode");
+  });
+
+  test("offers a retry when the episode timeline fails to load", async () => {
+    mocks.detail.mockResolvedValue(seasonDetail);
+    mocks.performance.mockResolvedValue({ userSummary: [], points: [] });
+    mocks.timeline.mockRejectedValue(new Error("Unknown function"));
+    mocks.guesses.mockResolvedValue(page([]));
+    mocks.gambling.mockResolvedValue(page([]));
+
+    const text = textOf((await render()).toJSON());
+
+    expect(text).toContain("This activity feed could not be loaded.");
+  });
+
+  test("groups guesses and wagers by episode and links rows to their points", async () => {
+    mocks.detail.mockResolvedValue(seasonDetail);
+    mocks.performance.mockResolvedValue({ userSummary: [], points: [] });
+    mocks.timeline.mockResolvedValue([]);
     mocks.guesses.mockResolvedValue(page(guesses));
     mocks.gambling.mockResolvedValue(page(wagers));
 
@@ -238,19 +326,13 @@ describe("ConvexSeasonDetailPage episode groups", () => {
 
     expect(text).toContain("Episode 401");
     expect(text).toContain("No episode");
-    expect(text).toContain("+5 pts · 1 entry so far");
-    expect(text).toContain("-2 pts · 1 entry so far");
+    expect(text).toContain("No episodes are dated in this season yet.");
     expect(text).toContain("2 guesses");
     expect(text).toContain("1 wager · 3 pts wagered");
     expect(text).toContain("20 episodes");
     expect(hrefs).toEqual(
-      expect.arrayContaining([
-        "/point/point-linked",
-        "/point/point-manual",
-        "/point/point-guess",
-        "/point/point-wager",
-      ])
+      expect.arrayContaining(["/point/point-guess", "/point/point-wager"])
     );
-    expect(hrefs.filter((href) => href.startsWith("/point/"))).toHaveLength(4);
+    expect(hrefs.filter((href) => href.startsWith("/point/"))).toHaveLength(2);
   });
 });

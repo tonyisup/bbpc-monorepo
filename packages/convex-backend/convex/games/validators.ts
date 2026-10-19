@@ -209,6 +209,27 @@ export const seasonAdminPerformanceValidator = v.object({
   points: v.array(performancePointValidator),
 });
 
+export const seasonAdminTimelineEpisodeValidator = v.object({
+  episode: v.object({
+    id: v.id("episodes"),
+    number: v.number(),
+    title: v.string(),
+    date: v.string(),
+    status: nullableStringValidator,
+    slug: nullableStringValidator,
+  }),
+  points: v.object({ total: v.number(), count: v.number() }),
+  guesses: v.object({ count: v.number(), scored: v.number() }),
+  wagers: v.object({
+    count: v.number(),
+    pointsWagered: v.number(),
+    won: v.number(),
+    lost: v.number(),
+  }),
+  quotes: v.object({ count: v.number() }),
+  players: v.array(performanceUserValidator),
+});
+
 export const guessValidator = v.object({
   id: v.id("guesses"),
   createdAt: v.number(),

@@ -32,12 +32,12 @@ import {
   type ConvexAdminSeasonGamblingEntry,
   type ConvexAdminSeasonGuess,
   type ConvexAdminSeasonPerformance,
-  type ConvexAdminSeasonPoint,
+  type ConvexAdminSeasonTimelineEpisode,
   loadConvexAdminSeasonDetail,
+  loadConvexAdminSeasonEpisodeTimeline,
   loadConvexAdminSeasonGamblingPage,
   loadConvexAdminSeasonGuessesPage,
   loadConvexAdminSeasonPerformance,
-  loadConvexAdminSeasonPointsPage,
 } from "@/convex/seasonDetails";
 import {
   type ConvexAdminGameType,
@@ -45,13 +45,19 @@ import {
   loadConvexAdminGameTypes,
   updateConvexAdminSeason,
 } from "@/convex/seasons";
-import { formatInstantLocal, formatPlainDate } from "@/lib/dates";
+import {
+  formatInstantLocal,
+  formatPlainDate,
+  getPacificTodayPlainDate,
+} from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
+import { initials, plural } from "./activityFormat";
 import {
   ConvexSeasonEditor,
   seasonMutationFailureMessage,
 } from "./ConvexSeasonsPage";
+import { SeasonEpisodeTimeline } from "./SeasonEpisodeTimeline";
 import {
   type SeasonActivityGroup,
   groupSeasonActivityByEpisode,
@@ -83,22 +89,6 @@ interface PageState<T> {
   continueCursor: string | null;
   isDone: boolean;
   failed: boolean;
-}
-
-function initials(name: string | null): string {
-  if (name === null) {
-    return "U";
-  }
-  return (
-    name
-      .trim()
-      .split(/\s+/u)
-      .filter(Boolean)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "U"
-  );
 }
 
 function countLabel(count: { count: number; isExact: boolean }): string {
@@ -133,10 +123,6 @@ function ActivityFailure({ onRetry }: { onRetry: () => void }) {
       </Button>
     </div>
   );
-}
-
-function plural(count: number, singular: string, pluralForm: string): string {
-  return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
 function EpisodeActivityGroups<T extends { id: string }>({
@@ -244,15 +230,17 @@ export function ConvexSeasonDetailPage() {
   const [performance, setPerformance] = useState<
     ConvexAdminSeasonPerformance | null | undefined
   >(undefined);
-  const [points, setPoints] =
-    useState<PageState<ConvexAdminSeasonPoint> | null>(null);
+  // Undefined while loading; null when it failed.
+  const [timeline, setTimeline] = useState<
+    ConvexAdminSeasonTimelineEpisode[] | null | undefined
+  >(undefined);
   const [guesses, setGuesses] =
     useState<PageState<ConvexAdminSeasonGuess> | null>(null);
   const [gambling, setGambling] =
     useState<PageState<ConvexAdminSeasonGamblingEntry> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState<
-    "points" | "guesses" | "gambling" | null
+    "guesses" | "gambling" | null
   >(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -266,7 +254,7 @@ export function ConvexSeasonDetailPage() {
     setSeason(undefined);
     setGameTypes(null);
     setPerformance(undefined);
-    setPoints(null);
+    setTimeline(undefined);
     setGuesses(null);
     setGambling(null);
     setLoadFailed(false);
@@ -289,10 +277,14 @@ export function ConvexSeasonDetailPage() {
 
     void Promise.allSettled([
       loadConvexAdminSeasonPerformance(convex, seasonId),
-      loadConvexAdminSeasonPointsPage(convex, seasonId, null),
+      loadConvexAdminSeasonEpisodeTimeline(
+        convex,
+        seasonId,
+        getPacificTodayPlainDate()
+      ),
       loadConvexAdminSeasonGuessesPage(convex, seasonId, null),
       loadConvexAdminSeasonGamblingPage(convex, seasonId, null),
-    ]).then(([performanceResult, pointsResult, guessesResult, gamblingResult]) => {
+    ]).then(([performanceResult, timelineResult, guessesResult, gamblingResult]) => {
       if (!active) {
         return;
       }
@@ -301,10 +293,8 @@ export function ConvexSeasonDetailPage() {
           ? performanceResult.value
           : null
       );
-      setPoints(
-        pointsResult.status === "fulfilled"
-          ? activityPage(pointsResult.value)
-          : { items: [], continueCursor: null, isDone: true, failed: true }
+      setTimeline(
+        timelineResult.status === "fulfilled" ? timelineResult.value : null
       );
       setGuesses(
         guessesResult.status === "fulfilled"
@@ -341,14 +331,6 @@ export function ConvexSeasonDetailPage() {
     return [...rows.values()];
   }, [performance]);
 
-  const pointGroups = useMemo(
-    () =>
-      groupSeasonActivityByEpisode(
-        points?.items ?? [],
-        (point) => point.episode
-      ),
-    [points]
-  );
   const guessGroups = useMemo(
     () =>
       groupSeasonActivityByEpisode(
@@ -367,29 +349,6 @@ export function ConvexSeasonDetailPage() {
   );
 
   const refresh = () => setRevision((value) => value + 1);
-
-  const loadMorePoints = () => {
-    if (
-      seasonId === null ||
-      points === null ||
-      points.continueCursor === null
-    ) {
-      return;
-    }
-    setLoadingMore("points");
-    void loadConvexAdminSeasonPointsPage(
-      convex,
-      seasonId,
-      points.continueCursor
-    )
-      .then((result) =>
-        setPoints((current) =>
-          activityPage(result, current?.items ?? [])
-        )
-      )
-      .catch(() => toast.error("The next point page could not be loaded."))
-      .finally(() => setLoadingMore(null));
-  };
 
   const loadMoreGuesses = () => {
     if (
@@ -683,76 +642,21 @@ export function ConvexSeasonDetailPage() {
               </TabsList>
 
               <TabsContent className="space-y-3 pt-4" value="points">
-                {points === null ? (
+                {timeline === undefined ? (
                   <Loader2 className="mx-auto my-12 h-8 w-8 animate-spin text-muted-foreground" />
-                ) : points.failed ? (
+                ) : timeline === null ? (
                   <ActivityFailure onRetry={refresh} />
-                ) : points.items.length === 0 ? (
+                ) : timeline.length === 0 ? (
                   <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    No point activity has been recorded.
+                    {season.startedOn === null
+                      ? "Set a start date to place episodes in this season."
+                      : "No episodes are dated in this season yet."}
                   </p>
                 ) : (
-                  <>
-                    <EpisodeActivityGroups
-                      groups={pointGroups}
-                      isComplete={points.isDone}
-                      renderItem={(point) => (
-                        <PointLink pointId={point.id}>
-                          <Card className={pointCardHover}>
-                            <CardContent className="flex items-center justify-between gap-4 p-4">
-                              <div className="flex min-w-0 items-center gap-3">
-                                <Avatar className="h-9 w-9">
-                                  <AvatarImage src={point.user.image ?? ""} />
-                                  <AvatarFallback>
-                                    {initials(point.user.name)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-bold">
-                                    {point.user.name ?? "Unnamed user"}
-                                  </p>
-                                  <p className="truncate text-xs text-muted-foreground">
-                                    {point.gamePointType?.title ??
-                                      point.reason ??
-                                      "Manual adjustment"}{" "}
-                                    · {formatInstantLocal(new Date(point.earnedAt))}
-                                  </p>
-                                </div>
-                              </div>
-                              <Badge
-                                className={cn(
-                                  "font-mono",
-                                  point.total >= 0
-                                    ? "bg-emerald-500/10 text-emerald-700"
-                                    : "bg-rose-500/10 text-rose-700"
-                                )}
-                              >
-                                {point.total > 0 ? "+" : ""}
-                                {point.total}
-                              </Badge>
-                            </CardContent>
-                          </Card>
-                        </PointLink>
-                      )}
-                      summarize={(items) => {
-                        const total = items.reduce(
-                          (sum, point) => sum + point.total,
-                          0
-                        );
-                        return `${total > 0 ? "+" : ""}${total} pts · ${plural(
-                          items.length,
-                          "entry",
-                          "entries"
-                        )}`;
-                      }}
-                    />
-                    {!points.isDone && (
-                      <LoadMoreButton
-                        isLoading={loadingMore === "points"}
-                        onClick={loadMorePoints}
-                      />
-                    )}
-                  </>
+                  <SeasonEpisodeTimeline
+                    episodeCount={season.episodeCount}
+                    episodes={timeline}
+                  />
                 )}
               </TabsContent>
 

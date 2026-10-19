@@ -741,6 +741,20 @@ Administrator `games.points.listForSeasonPage` items carry an `episode` (`id`,
 assignment, falling back to its quote's episode. It is `null` for manual adjustments or
 when the chain has no episode.
 
+Administrator `games.seasons.getEpisodeTimeline` takes a `seasonId` and the caller's
+`YYYY-MM-DD` `today`, and returns the season's episodes so far, newest first: dated
+episodes of any status from the season's start through `today` or its end date,
+whichever is earlier. It is empty when the season has no start date. Each item has the
+`episode` (`id`, `number`, `title`, `date`, `status`, `slug`) and a summary of the
+season's activity for it: `points` (`total`, `count`), `guesses` (`count`, `scored`),
+`wagers` (`count`, `pointsWagered` excluding rejected wagers, `won`, `lost`),
+`quotes` (`count`), and `players` (`user`, `total`), highest total first, covering
+everyone with activity on that episode. Points resolve to episodes the same way as in
+`listForSeasonPage`; manual adjustments appear in no episode. More than 100 episodes,
+25 assignments per episode, 200 point links per assignment, 2,000 season points,
+guesses, or wagers, or 2,000 season quotes fail with `CONFLICT`. Unlike the public
+standings it includes results for unpublished episodes.
+
 ## Member season API
 
 Authenticated members read their own season history through `games.member`. `today` is
