@@ -543,7 +543,7 @@ describe("point API", () => {
     });
   });
 
-  test("reports fixed-length season progress from dated episodes", async () => {
+  test("reports fixed-length season progress from published episodes", async () => {
     const t = createTestBackend();
     await seedActors(t);
     const { seasonId } = await seedGameFoundation(t);
@@ -572,7 +572,7 @@ describe("point API", () => {
       }),
     ).resolves.toMatchObject({
       season: { id: seasonId, episodeCount: 20 },
-      recordedEpisodeCount: 3,
+      recordedEpisodeCount: 2,
     });
   });
 
@@ -751,20 +751,24 @@ describe("point API", () => {
     });
   });
 
-  test("counts season progress only within the season's dates", async () => {
+  test("counts season progress from published episodes within the season's dates", async () => {
     const t = createTestBackend();
     await seedActors(t);
     const { seasonId } = await seedGameFoundation(t);
     const counts = await t.run(async (ctx) => {
-      for (const [number, date] of [
-        [1, "2026-01-05"],
-        [2, "2026-03-01"],
-        [3, "2026-06-01"],
+      for (const [number, date, status] of [
+        [1, "2026-01-05", "published"],
+        [2, "2026-03-01", "Published"],
+        [3, "2026-06-01", "published"],
+        [4, "2026-07-20", "next"],
+        [5, "2026-07-21", "recording"],
+        [6, "2026-07-22", undefined],
       ] as const) {
         await ctx.db.insert("episodes", {
           number,
           title: `Episode ${String(number)}`,
           date,
+          ...(status === undefined ? {} : { status }),
         });
       }
       const season = await ctx.db.get("seasons", seasonId);

@@ -127,7 +127,9 @@ export async function hydrateAdminSeason(
 
 /**
  * Episodes are not linked to seasons, so a fixed-length season's progress
- * counts the dated episodes from its start through `today` (or its end date).
+ * counts the published episodes dated from its start through `today` (or its
+ * end date). An upcoming "next" episode already has a date but has not aired.
+ * "Published" and "published" both count, as in isPublishedStatus.
  */
 export async function countSeasonEpisodesThrough(
   ctx: GameReadContext,
@@ -142,13 +144,20 @@ export async function countSeasonEpisodesThrough(
   if (through < startedOn) {
     return 0;
   }
-  const episodes = await ctx.db
-    .query("episodes")
-    .withIndex("by_date_and_status", (index) =>
-      index.gte("date", startedOn).lte("date", through),
-    )
-    .take(MAX_SEASON_EPISODES_TO_COUNT);
-  return episodes.length;
+  const ranges = await Promise.all(
+    ["published", "Published"].map((status) =>
+      ctx.db
+        .query("episodes")
+        .withIndex("by_status_and_date", (index) =>
+          index
+            .eq("status", status)
+            .gte("date", startedOn)
+            .lte("date", through),
+        )
+        .take(MAX_SEASON_EPISODES_TO_COUNT),
+    ),
+  );
+  return Math.min(ranges.flat().length, MAX_SEASON_EPISODES_TO_COUNT);
 }
 
 export async function findCurrentSeason(
