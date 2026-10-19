@@ -12,9 +12,11 @@ import {
   hydrateAdminSeason,
   requireGameTypeDocument,
 } from "./readModel.js";
+import { loadSeasonEpisodeTimeline } from "./seasonTimelineReadModel.js";
 import {
   seasonAdminValidator,
   seasonAdminPerformanceValidator,
+  seasonAdminTimelineEpisodeValidator,
 } from "./validators.js";
 import {
   MAX_SEASON_PERFORMANCE_ACTIVITY,
@@ -218,6 +220,17 @@ export const getPerformance = adminQuery({
       userSummary,
       points: flattenedPoints,
     };
+  },
+});
+
+/** The season's episodes so far, newest first, with each one's activity. */
+export const getEpisodeTimeline = adminQuery({
+  args: { seasonId: v.id("seasons"), today: v.string() },
+  returns: v.array(seasonAdminTimelineEpisodeValidator),
+  handler: async (ctx, args) => {
+    const today = validatePlainDate(args.today, "Current date");
+    const season = await requireSeason(ctx, args.seasonId);
+    return await loadSeasonEpisodeTimeline(ctx, season, today);
   },
 });
 

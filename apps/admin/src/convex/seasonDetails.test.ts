@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   loadConvexAdminSeasonDetail,
+  loadConvexAdminSeasonEpisodeTimeline,
   loadConvexAdminSeasonGamblingPage,
   loadConvexAdminSeasonGuessesPage,
   loadConvexAdminSeasonPerformance,
@@ -234,5 +235,39 @@ describe("Convex season detail adapter", () => {
     await expect(
       loadConvexAdminSeasonPointsPage(client, season.id, null)
     ).resolves.toMatchObject({ items: [{ id: point.id, episode: null }] });
+  });
+
+  test("sends today's date for the episode timeline and validates it", async () => {
+    const episode = {
+      episode: {
+        id: "episode-1",
+        number: 401,
+        title: "Episode 401",
+        date: "2026-01-08",
+        status: "published",
+        slug: null,
+      },
+      points: { total: 3, count: 1 },
+      guesses: { count: 1, scored: 1 },
+      wagers: { count: 0, pointsWagered: 0, won: 0, lost: 0 },
+      quotes: { count: 0 },
+      players: [{ user, total: 3 }],
+    };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([episode])
+      .mockResolvedValueOnce([{ ...episode, players: undefined }]);
+    const client = { query } as unknown as ConvexReactClient;
+
+    await expect(
+      loadConvexAdminSeasonEpisodeTimeline(client, season.id, "2026-01-10")
+    ).resolves.toEqual([episode]);
+    expect(query).toHaveBeenCalledWith(expect.anything(), {
+      seasonId: season.id,
+      today: "2026-01-10",
+    });
+    await expect(
+      loadConvexAdminSeasonEpisodeTimeline(client, season.id, "2026-01-10")
+    ).rejects.toThrow();
   });
 });

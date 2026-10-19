@@ -26,6 +26,10 @@ export const MAX_SEASON_PERFORMANCE_ACTIVITY = 2000;
 export const MAX_SEASON_EPISODE_COUNT = 500;
 // Season progress stops counting here; a longer season reads as this many.
 export const MAX_SEASON_EPISODES_TO_COUNT = 500;
+// The admin episode timeline reads every assignment of each episode it shows.
+export const MAX_SEASON_TIMELINE_EPISODES = 100;
+export const MAX_ASSIGNMENTS_PER_TIMELINE_EPISODE = 25;
+export const MAX_POINT_LINKS_PER_TIMELINE_ASSIGNMENT = 200;
 export const MAX_POINT_PAGE_SIZE = 100;
 export const MAX_POINTS_FOR_AGGREGATE = 2000;
 export const MAX_POINTS_FOR_LATEST_CHANGE = 200;

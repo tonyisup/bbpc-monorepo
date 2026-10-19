@@ -216,7 +216,33 @@ const performanceSchema = z
     });
   });
 
+const timelineEpisodeSchema = z.object({
+  episode: z.object({
+    id: z.string().min(1),
+    number: z.number(),
+    title: z.string(),
+    date: z.string(),
+    status: z.string().nullable(),
+    slug: z.string().nullable(),
+  }),
+  points: z.object({ total: z.number(), count: z.number().int().nonnegative() }),
+  guesses: z.object({
+    count: z.number().int().nonnegative(),
+    scored: z.number().int().nonnegative(),
+  }),
+  wagers: z.object({
+    count: z.number().int().nonnegative(),
+    pointsWagered: z.number(),
+    won: z.number().int().nonnegative(),
+    lost: z.number().int().nonnegative(),
+  }),
+  quotes: z.object({ count: z.number().int().nonnegative() }),
+  players: z.array(z.object({ user: pointUserSchema, total: z.number() })),
+});
+
 const getSeasonReference = api.games.seasons.getById;
+
+const getEpisodeTimelineReference = api.games.seasons.getEpisodeTimeline;
 
 const getPerformanceReference = api.games.seasons.getPerformance;
 
@@ -229,6 +255,9 @@ const listGamblingReference = api.games.gambling.listForSeasonPage;
 export const ADMIN_SEASON_ACTIVITY_PAGE_SIZE = 30;
 
 export type ConvexAdminSeasonPerformance = z.infer<typeof performanceSchema>;
+export type ConvexAdminSeasonTimelineEpisode = z.infer<
+  typeof timelineEpisodeSchema
+>;
 export type ConvexAdminSeasonPoint = z.infer<typeof adminSeasonPointSchema>;
 export type ConvexAdminSeasonGuess = z.infer<typeof adminGuessSchema>;
 export type ConvexAdminSeasonGamblingEntry = z.infer<
@@ -269,6 +298,20 @@ export async function loadConvexAdminSeasonPerformance(
   return performanceSchema.parse(
     await client.query(getPerformanceReference, {
       seasonId: documentId("seasons", seasonId),
+    })
+  );
+}
+
+/** The season's episodes so far, newest first, each with its game activity. */
+export async function loadConvexAdminSeasonEpisodeTimeline(
+  client: ConvexReactClient,
+  seasonId: string,
+  today: string
+): Promise<ConvexAdminSeasonTimelineEpisode[]> {
+  return z.array(timelineEpisodeSchema).parse(
+    await client.query(getEpisodeTimelineReference, {
+      seasonId: documentId("seasons", seasonId),
+      today,
     })
   );
 }
