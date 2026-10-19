@@ -54,6 +54,12 @@ interface RecordingAudioPage<T> {
   continueCursor: string;
 }
 
+interface RecordingSeasonPage<T> {
+  seasons: T[];
+  isDone: boolean;
+  continueCursor: string;
+}
+
 interface RecordingEpisodePage<T> {
   episodes: T[];
   isDone: boolean;
@@ -154,6 +160,34 @@ export function getEpisodeSeasonPosition(
   return earlierNumbers.size + 1;
 }
 
+/**
+ * The season whose date range holds the episode. An undated episode is placed
+ * by `today`, as `getEpisodeSeasonPosition` does. Overlapping seasons resolve
+ * to the one that started last.
+ */
+export function findEpisodeSeason<
+  T extends { startedOn: string | null; endedOn: string | null }
+>(
+  episode: { date: string | null },
+  seasons: readonly T[],
+  today: string
+): T | null {
+  const date = episode.date ?? today;
+  return seasons.reduce<T | null>((found, season) => {
+    const { startedOn, endedOn } = season;
+    if (
+      startedOn === null ||
+      date < startedOn ||
+      (endedOn !== null && date > endedOn)
+    ) {
+      return found;
+    }
+    return found === null || (found.startedOn ?? "") < startedOn
+      ? season
+      : found;
+  }, null);
+}
+
 /** Whether an episode is its season's finale, or past its fixed length. */
 export function getSeasonFinaleState(
   position: number | null,
@@ -172,6 +206,16 @@ export async function collectAllRecordingEpisodes<T>(
     loadPage,
     (page) => page.episodes,
     "season episode catalog"
+  );
+}
+
+export async function collectAllRecordingSeasons<T>(
+  loadPage: (cursor: string | null) => Promise<RecordingSeasonPage<T>>
+): Promise<T[]> {
+  return collectAllRecordingPages(
+    loadPage,
+    (page) => page.seasons,
+    "season catalog"
   );
 }
 
