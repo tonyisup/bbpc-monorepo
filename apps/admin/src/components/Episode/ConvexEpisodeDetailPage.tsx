@@ -14,6 +14,7 @@ import {
   Save,
   Settings2,
   Trash2,
+  Trophy,
 } from "lucide-react";
 import Head from "next/head";
 import Link from "next/link";
@@ -70,6 +71,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
 import { EpisodeId } from "./EpisodeId";
+import {
+  EpisodeResultsPanel,
+  EpisodeSeasonBadges,
+  useEpisodeResults,
+} from "./EpisodeResults";
 import { EpisodeRelationships } from "./EpisodeRelationships";
 import { EpisodeMergeDialog } from "./EpisodeMergeDialog";
 
@@ -372,6 +378,7 @@ export function ConvexEpisodeDetailPage() {
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("general");
+  const results = useEpisodeResults(episode ?? null, revision);
 
   useEffect(() => {
     if (slug === null) {
@@ -571,11 +578,12 @@ export function ConvexEpisodeDetailPage() {
         <section className="relative overflow-hidden rounded-2xl border bg-card p-8 shadow-sm">
           <Mic2 className="pointer-events-none absolute right-10 top-4 h-40 w-40 opacity-[0.03]" />
           <div className="relative z-10">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">Ep. {episode.number}</Badge>
               <Badge className={statusClass(episode.status)}>
                 {episode.status ?? "unset"}
               </Badge>
+              <EpisodeSeasonBadges state={results} />
             </div>
             <h1 className="mt-4 text-4xl font-black tracking-tight">
               {episode.title}
@@ -608,7 +616,7 @@ export function ConvexEpisodeDetailPage() {
         </section>
 
         <Tabs onValueChange={setActiveTab} value={activeTab}>
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-5">
             <TabsTrigger className="gap-2" value="general">
               <Settings2 className="h-4 w-4" />
               Details
@@ -624,6 +632,10 @@ export function ConvexEpisodeDetailPage() {
             <TabsTrigger className="gap-2" value="notes">
               <FileText className="h-4 w-4" />
               Show notes
+            </TabsTrigger>
+            <TabsTrigger className="gap-2" value="results">
+              <Trophy className="h-4 w-4" />
+              Season & results
             </TabsTrigger>
           </TabsList>
 
@@ -936,6 +948,14 @@ export function ConvexEpisodeDetailPage() {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent className="pt-6" value="results">
+            <EpisodeResultsPanel
+              episode={episode}
+              onRetry={refresh}
+              state={results}
+            />
           </TabsContent>
         </Tabs>
 
