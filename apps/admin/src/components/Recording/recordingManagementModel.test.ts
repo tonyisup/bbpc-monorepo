@@ -9,6 +9,7 @@ import {
   chunkRecordingValues,
   collectAllRecordingAudioMessages,
   collectAllRecordingUsers,
+  findEpisodeSeason,
   getAssignmentRecordingDisclosure,
   getEpisodeSeasonPosition,
   getSeasonFinaleState,
@@ -472,6 +473,62 @@ describe("recording management model", () => {
         total: 5,
       },
     ]);
+  });
+});
+
+describe("findEpisodeSeason", () => {
+  const seasons = [
+    { id: "s3", startedOn: "2026-01-01", endedOn: null },
+    { id: "s2", startedOn: "2025-07-01", endedOn: "2025-12-31" },
+    { id: "s1", startedOn: "2025-01-01", endedOn: "2025-06-30" },
+  ];
+
+  it("finds the season whose range holds the episode date, inclusively", () => {
+    expect(
+      findEpisodeSeason({ date: "2025-07-01" }, seasons, "2026-03-01")?.id
+    ).toBe("s2");
+    expect(
+      findEpisodeSeason({ date: "2025-06-30" }, seasons, "2026-03-01")?.id
+    ).toBe("s1");
+    expect(
+      findEpisodeSeason({ date: "2026-02-10" }, seasons, "2026-03-01")?.id
+    ).toBe("s3");
+  });
+
+  it("places an undated episode by today", () => {
+    expect(findEpisodeSeason({ date: null }, seasons, "2025-08-01")?.id).toBe(
+      "s2"
+    );
+  });
+
+  it("returns null before the first season or in a gap", () => {
+    expect(
+      findEpisodeSeason({ date: "2024-12-31" }, seasons, "2026-03-01")
+    ).toBe(null);
+    expect(
+      findEpisodeSeason(
+        { date: "2025-07-15" },
+        [
+          { startedOn: "2025-08-01", endedOn: null },
+          { startedOn: "2025-01-01", endedOn: "2025-06-30" },
+        ],
+        "2026-03-01"
+      )
+    ).toBe(null);
+  });
+
+  it("prefers the latest start among overlapping seasons and skips undated ones", () => {
+    expect(
+      findEpisodeSeason(
+        { date: "2025-09-01" },
+        [
+          { id: "undated", startedOn: null, endedOn: null },
+          { id: "long", startedOn: "2025-01-01", endedOn: null },
+          { id: "short", startedOn: "2025-08-01", endedOn: "2025-10-01" },
+        ],
+        "2026-03-01"
+      )?.id
+    ).toBe("short");
   });
 });
 
