@@ -120,6 +120,7 @@ import { ConfirmModal } from "../ui/confirm-modal";
 import {
   type AssignmentPointTotal,
   type AssignmentRecordingDisclosure,
+  type RecordingListenerGames,
   chunkRecordingValues,
   collectAllRecordingAudioMessages,
   collectAllRecordingEpisodes,
@@ -127,7 +128,7 @@ import {
   getAssignmentRecordingDisclosure,
   getEpisodeSeasonPosition,
   getRecordingGuessSettlementPreview,
-  groupRecordingGuessesByListener,
+  groupRecordingGamesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
@@ -1162,6 +1163,207 @@ function QuotabungaEntryCard({
   );
 }
 
+function ListenerGames({
+  assignmentId,
+  group,
+  onAwardGuess,
+  onResolveWager,
+  onSettleGuesses,
+  savingKey,
+  settlement,
+}: {
+  assignmentId: string;
+  group: RecordingListenerGames;
+  onAwardGuess: (guess: ConvexAdminSeasonGuess) => void;
+  onResolveWager: (
+    wager: ConvexAdminSeasonGamblingEntry,
+    status: "won" | "lost" | "rejected"
+  ) => void;
+  onSettleGuesses: (userId: string) => void;
+  savingKey: string | null;
+  settlement: RecordingGuessSettlement | undefined;
+}) {
+  const hasGuesses = group.guesses.length > 0;
+  const preview = getRecordingGuessSettlementPreview(group.guesses);
+  const settlementMatches =
+    preview.eligible &&
+    settlement?.outcome === preview.outcome &&
+    settlement?.correctCount === preview.correctCount;
+  const saving =
+    savingKey === `guess-settlement-${assignmentId}-${group.user.id}`;
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
+        <div>
+          <p className="font-bold">{group.user.name ?? "Unnamed listener"}</p>
+          <p className="text-xs text-muted-foreground">
+            {hasGuesses ? preview.message : "No guesses recorded"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {hasGuesses && (
+            <Badge variant="outline">
+              {group.guesses.length} guess
+              {group.guesses.length === 1 ? "" : "es"}
+            </Badge>
+          )}
+          {group.wagers.length > 0 && (
+            <Badge variant="outline">
+              {group.wagers.length} wager
+              {group.wagers.length === 1 ? "" : "s"}
+            </Badge>
+          )}
+          {preview.eligible && (
+            <Badge
+              variant={
+                preview.outcome === "allcorrect"
+                  ? "default"
+                  : preview.outcome === "all-incorrect"
+                  ? "destructive"
+                  : "outline"
+              }
+            >
+              {preview.outcome === "allcorrect"
+                ? "All correct"
+                : preview.outcome === "all-incorrect"
+                ? "All incorrect"
+                : "Mixed"}
+            </Badge>
+          )}
+          {settlement !== undefined && (
+            <Badge variant={settlementMatches ? "secondary" : "destructive"}>
+              {settlementMatches ? "Settled" : "Needs resettlement"}
+            </Badge>
+          )}
+          {hasGuesses && (
+            <Button
+              disabled={
+                (settlement === undefined && !preview.eligible) ||
+                savingKey !== null
+              }
+              onClick={() => onSettleGuesses(group.user.id)}
+              size="sm"
+              variant={
+                preview.outcome === "all-incorrect" ? "destructive" : "outline"
+              }
+            >
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {settlement === undefined ? "Settle listener" : "Reconcile"}
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="divide-y">
+        {group.guesses.map((guess) => {
+          const actual = guess.assignmentReview.review.rating;
+          const revealed = isRecordingGuessRevealed(guess);
+          const correct = actual?.id === guess.rating.id;
+          return (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 p-3"
+              key={guess.id}
+            >
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Target className="h-3.5 w-3.5" />
+                <span className="font-semibold text-foreground">
+                  {guess.assignmentReview.review.user?.name ?? "Host"}
+                </span>
+                {revealed ? (
+                  <>
+                    <span>· Guess</span>
+                    <RatingIcon value={guess.rating.value} />
+                    <span>· Actual</span>
+                    <RatingIcon value={actual?.value ?? 0} />
+                  </>
+                ) : (
+                  <span>· Prediction hidden until this host rates</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {!revealed ? (
+                  <Badge variant="outline">Hidden</Badge>
+                ) : (
+                  <>
+                    <Badge variant={correct ? "default" : "outline"}>
+                      {correct ? "Correct" : "No award"}
+                    </Badge>
+                    {guess.point !== null ? (
+                      <Badge variant="secondary">
+                        {guess.point.total} pts awarded
+                      </Badge>
+                    ) : correct ? (
+                      <Button
+                        disabled={savingKey !== null}
+                        onClick={() => onAwardGuess(guess)}
+                        size="sm"
+                      >
+                        Award point
+                      </Button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {group.wagers.map((wager) => {
+          const active = wager.status === "pending" || wager.status === "locked";
+          return (
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 p-3"
+              key={wager.id}
+            >
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Coins className="h-3.5 w-3.5" />
+                <span className="font-semibold text-foreground">
+                  {wager.gamblingType.title}
+                </span>
+                <span>
+                  · {wager.points} points × {wager.gamblingType.multiplier}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{wager.status}</Badge>
+                {wager.awardPoint !== null && (
+                  <Badge variant="secondary">{wager.awardPoint.total} pts</Badge>
+                )}
+                {active && (
+                  <>
+                    <Button
+                      disabled={savingKey !== null}
+                      onClick={() => onResolveWager(wager, "won")}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Won
+                    </Button>
+                    <Button
+                      disabled={savingKey !== null}
+                      onClick={() => onResolveWager(wager, "lost")}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Lost
+                    </Button>
+                    <Button
+                      disabled={savingKey !== null}
+                      onClick={() => onResolveWager(wager, "rejected")}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      Reject
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AssignmentGameCard({
   assignment,
   audioRevision,
@@ -1208,9 +1410,11 @@ function AssignmentGameCard({
       ),
     [reviews]
   );
-  const groupedGuesses = useMemo(
-    () => groupRecordingGuessesByListener(guesses),
-    [guesses]
+  // Wager details, and so who wagered, stay hidden until every host rates.
+  const wagersHidden = wagers.length > 0 && !disclosure.allHostsRated;
+  const listenerGames = useMemo(
+    () => groupRecordingGamesByListener(guesses, wagersHidden ? [] : wagers),
+    [guesses, wagers, wagersHidden]
   );
   const settlementByUserAndSeason = useMemo(
     () =>
@@ -1319,166 +1523,11 @@ function AssignmentGameCard({
             </div>
           )}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 xl:col-span-2">
           <h3 className="flex items-center gap-2 font-black">
-            <Target className="h-4 w-4" /> Guesses
+            <Target className="h-4 w-4" /> Guesses & wagers
           </h3>
-          {guesses.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No guesses recorded.
-            </p>
-          ) : (
-            groupedGuesses.map((group) => {
-              const preview = getRecordingGuessSettlementPreview(group.guesses);
-              const settlement = settlementByUserAndSeason.get(
-                `${group.user.id}::${group.guesses[0]?.season.id ?? ""}`
-              );
-              const settlementMatches =
-                preview.eligible &&
-                settlement?.outcome === preview.outcome &&
-                settlement?.correctCount === preview.correctCount;
-              const saving =
-                savingKey ===
-                `guess-settlement-${assignment.id}-${group.user.id}`;
-              return (
-                <div
-                  className="overflow-hidden rounded-lg border"
-                  key={group.user.id}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2">
-                    <div>
-                      <p className="font-bold">
-                        {group.user.name ?? "Unnamed listener"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {preview.message}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">
-                        {group.guesses.length} guess
-                        {group.guesses.length === 1 ? "" : "es"}
-                      </Badge>
-                      {preview.eligible && (
-                        <Badge
-                          variant={
-                            preview.outcome === "allcorrect"
-                              ? "default"
-                              : preview.outcome === "all-incorrect"
-                              ? "destructive"
-                              : "outline"
-                          }
-                        >
-                          {preview.outcome === "allcorrect"
-                            ? "All correct"
-                            : preview.outcome === "all-incorrect"
-                            ? "All incorrect"
-                            : "Mixed"}
-                        </Badge>
-                      )}
-                      {settlement !== undefined && (
-                        <Badge
-                          variant={
-                            settlementMatches ? "secondary" : "destructive"
-                          }
-                        >
-                          {settlementMatches ? "Settled" : "Needs resettlement"}
-                        </Badge>
-                      )}
-                      <Button
-                        disabled={
-                          (settlement === undefined && !preview.eligible) ||
-                          savingKey !== null
-                        }
-                        onClick={() => onSettleGuesses(group.user.id)}
-                        size="sm"
-                        variant={
-                          preview.outcome === "all-incorrect"
-                            ? "destructive"
-                            : "outline"
-                        }
-                      >
-                        {saving && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        {settlement === undefined
-                          ? "Settle listener"
-                          : "Reconcile"}
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="divide-y">
-                    {group.guesses.map((guess) => {
-                      const actual = guess.assignmentReview.review.rating;
-                      const revealed = isRecordingGuessRevealed(guess);
-                      const correct = actual?.id === guess.rating.id;
-                      return (
-                        <div
-                          className="flex flex-wrap items-center justify-between gap-3 p-3"
-                          key={guess.id}
-                        >
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-semibold text-foreground">
-                              {guess.assignmentReview.review.user?.name ??
-                                "Host"}
-                            </span>
-                            {revealed ? (
-                              <>
-                                <span>· Guess</span>
-                                <RatingIcon value={guess.rating.value} />
-                                <span>· Actual</span>
-                                <RatingIcon value={actual?.value ?? 0} />
-                              </>
-                            ) : (
-                              <span>
-                                · Prediction hidden until this host rates
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {!revealed ? (
-                              <Badge variant="outline">Hidden</Badge>
-                            ) : (
-                              <>
-                                <Badge
-                                  variant={correct ? "default" : "outline"}
-                                >
-                                  {correct ? "Correct" : "No award"}
-                                </Badge>
-                                {guess.point !== null ? (
-                                  <Badge variant="secondary">
-                                    {guess.point.total} pts awarded
-                                  </Badge>
-                                ) : correct ? (
-                                  <Button
-                                    disabled={savingKey !== null}
-                                    onClick={() => onAwardGuess(guess)}
-                                    size="sm"
-                                  >
-                                    Award point
-                                  </Button>
-                                ) : null}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-        <div className="space-y-3">
-          <h3 className="flex items-center gap-2 font-black">
-            <Coins className="h-4 w-4" /> Wagers
-          </h3>
-          {wagers.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No wagers recorded.
-            </p>
-          ) : !disclosure.allHostsRated ? (
+          {wagersHidden && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
               <p className="font-bold text-amber-700 dark:text-amber-300">
                 {wagers.length} wager{wagers.length === 1 ? "" : "s"} ·{" "}
@@ -1490,63 +1539,30 @@ function AssignmentGameCard({
                   : `${disclosure.ratedHostCount} of ${disclosure.activeHostCount} active hosts have rated. Details unlock after every host rates.`}
               </p>
             </div>
+          )}
+          {listenerGames.length === 0 ? (
+            !wagersHidden && (
+              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                No guesses or wagers recorded.
+              </p>
+            )
           ) : (
-            wagers.map((wager) => {
-              const active =
-                wager.status === "pending" || wager.status === "locked";
-              return (
-                <div
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
-                  key={wager.id}
-                >
-                  <div>
-                    <p className="font-bold">
-                      {wager.user.name ?? "Unnamed listener"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {wager.points} points × {wager.gamblingType.multiplier} ·{" "}
-                      {wager.gamblingType.title}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{wager.status}</Badge>
-                    {wager.awardPoint !== null && (
-                      <Badge variant="secondary">
-                        {wager.awardPoint.total} pts
-                      </Badge>
-                    )}
-                    {active && (
-                      <>
-                        <Button
-                          disabled={savingKey !== null}
-                          onClick={() => onResolveWager(wager, "won")}
-                          size="sm"
-                          variant="outline"
-                        >
-                          Won
-                        </Button>
-                        <Button
-                          disabled={savingKey !== null}
-                          onClick={() => onResolveWager(wager, "lost")}
-                          size="sm"
-                          variant="outline"
-                        >
-                          Lost
-                        </Button>
-                        <Button
-                          disabled={savingKey !== null}
-                          onClick={() => onResolveWager(wager, "rejected")}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          Reject
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+            <div className="grid items-start gap-3 xl:grid-cols-2">
+              {listenerGames.map((group) => (
+                <ListenerGames
+                  assignmentId={assignment.id}
+                  group={group}
+                  key={group.user.id}
+                  onAwardGuess={onAwardGuess}
+                  onResolveWager={onResolveWager}
+                  onSettleGuesses={onSettleGuesses}
+                  savingKey={savingKey}
+                  settlement={settlementByUserAndSeason.get(
+                    `${group.user.id}::${group.guesses[0]?.season.id ?? ""}`
+                  )}
+                />
+              ))}
+            </div>
           )}
         </div>
       </CardContent>

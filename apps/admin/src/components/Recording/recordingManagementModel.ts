@@ -30,9 +30,10 @@ export interface AssignmentRecordingDisclosure {
   allHostsRated: boolean;
 }
 
-export interface RecordingGuessGroup {
+export interface RecordingListenerGames {
   user: ConvexAdminSeasonGuess["user"];
   guesses: ConvexAdminSeasonGuess[];
+  wagers: ConvexAdminSeasonGamblingEntry[];
 }
 
 export interface RecordingGuessSettlementPreview {
@@ -286,22 +287,27 @@ export function isRecordingGuessRevealed(
   return guess.assignmentReview.review.rating !== null;
 }
 
-export function groupRecordingGuessesByListener(
-  guesses: ConvexAdminSeasonGuess[]
-): RecordingGuessGroup[] {
-  const groups = new Map<string, RecordingGuessGroup>();
-
-  guesses.forEach((guess) => {
-    const group = groups.get(guess.user.id);
-    if (group === undefined) {
-      groups.set(guess.user.id, {
-        user: guess.user,
-        guesses: [guess],
-      });
-      return;
+/**
+ * Each listener's guesses and wagers, in the order the listeners first appear:
+ * guessers first, then listeners who only wagered.
+ */
+export function groupRecordingGamesByListener(
+  guesses: ConvexAdminSeasonGuess[],
+  wagers: ConvexAdminSeasonGamblingEntry[]
+): RecordingListenerGames[] {
+  const groups = new Map<string, RecordingListenerGames>();
+  const groupFor = (user: RecordingListenerGames["user"]) => {
+    const existing = groups.get(user.id);
+    if (existing !== undefined) {
+      return existing;
     }
-    group.guesses.push(guess);
-  });
+    const created: RecordingListenerGames = { user, guesses: [], wagers: [] };
+    groups.set(user.id, created);
+    return created;
+  };
+
+  guesses.forEach((guess) => groupFor(guess.user).guesses.push(guess));
+  wagers.forEach((wager) => groupFor(wager.user).wagers.push(wager));
 
   return [...groups.values()];
 }
