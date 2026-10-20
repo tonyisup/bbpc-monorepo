@@ -14,7 +14,7 @@ import {
   getEpisodeSeasonPosition,
   getSeasonFinaleState,
   getRecordingGuessSettlementPreview,
-  groupRecordingGuessesByListener,
+  groupRecordingGamesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
@@ -338,11 +338,10 @@ describe("recording management model", () => {
       id: "guess-listener-a-second",
     };
 
-    const groups = groupRecordingGuessesByListener([
-      listenerAFirst,
-      listenerBGuess,
-      listenerASecond,
-    ]);
+    const groups = groupRecordingGamesByListener(
+      [listenerAFirst, listenerBGuess, listenerASecond],
+      []
+    );
 
     expect(groups.map(({ user }) => user.id)).toEqual([
       "listener-a",
@@ -353,6 +352,26 @@ describe("recording management model", () => {
       listenerASecond.id,
     ]);
     expect(groups[1]?.guesses.map(({ id }) => id)).toEqual([listenerBGuess.id]);
+  });
+
+  it("puts each listener's wagers with their guesses", () => {
+    const listenerAWager = wager("listener-a", 4);
+    const listenerCWager = wager("listener-c", -2);
+
+    const groups = groupRecordingGamesByListener(
+      [guess("listener-a"), guess("listener-b")],
+      [listenerCWager, listenerAWager]
+    );
+
+    expect(groups.map(({ user }) => user.id)).toEqual([
+      "listener-a",
+      "listener-b",
+      "listener-c",
+    ]);
+    expect(groups[0]?.wagers).toEqual([listenerAWager]);
+    expect(groups[1]?.wagers).toEqual([]);
+    expect(groups[2]?.guesses).toEqual([]);
+    expect(groups[2]?.wagers).toEqual([listenerCWager]);
   });
 
   it("previews all-correct, all-incorrect, and mixed settlements", () => {
