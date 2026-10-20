@@ -1,5 +1,6 @@
 import type * as YouTubeModule from "@bbpc/youtube";
 import type * as ReuseModule from "../Quotabunga/QuoteReuseChance";
+import type * as QuotabungaModule from "../../convex/quotabunga";
 import type { ReactNode } from "react";
 import {
   act,
@@ -25,6 +26,13 @@ vi.mock("../Quotabunga/QuoteReuseChance", async (importOriginal) => ({
     reuse.blind.push(blind === true);
     return null;
   },
+}));
+const awards = vi.hoisted(() => ({
+  award: vi.fn(async () => ({ awarded: 3 })),
+}));
+vi.mock("../../convex/quotabunga", async (importOriginal) => ({
+  ...(await importOriginal<typeof QuotabungaModule>()),
+  awardConvexAdminQuotePlacements: awards.award,
 }));
 // An opened clip's player stays loading; these tests only check which opens.
 vi.mock("@bbpc/youtube", async (importOriginal) => ({
@@ -181,6 +189,12 @@ const finishedFour = [
   ...["b", "b", "b"].map((side, judge) => ({ type: "matchVote", matchId: "third", judge, side })),
   ...["b", "b", "b"].map((side, judge) => ({ type: "matchVote", matchId: "r2m1", judge, side })),
 ];
+
+const openModals = () =>
+  view.root
+    .findAllByType(ConfirmModal)
+    .filter((node) => node.props.isOpen === true)
+    .map((node) => node.props.title as string);
 
 const placementsShown = () =>
   Object.fromEntries(
@@ -418,6 +432,229 @@ describe("Quotabunga recording bracket", () => {
       "Placement for the Source d entry": "",
       "Placement for the Source e entry": "",
     });
+  });
+
+  test("asks to award points as soon as the bracket finishes", async () => {
+    stubStorage();
+    await render(five().slice(0, 4));
+    click("Start bracket");
+    judgeMatchup("a", "a", "a");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+    click("Next matchup");
+    judgeMatchup("b", "b", "b");
+    click("Next matchup");
+    expect(openModals()).toEqual([]);
+    judgeMatchup("c", "c", "c");
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
+
+    const prompt = view.root
+      .findAllByType(ConfirmModal)
+      .find((node) => node.props.isOpen === true);
+    // It names the winners the way the results do, so names stay hidden.
+    expect(prompt?.props.description).toContain(
+      "1st: #3 Source c, 2nd: #1 Source a, 3rd: #2 Source b"
+    );
+    act(() => prompt?.props.onClose());
+    expect(openModals()).toEqual([]);
+    // The button still asks later.
+    click("Award points");
+    expect(openModals()).toEqual(["Replace Quotabunga awards?"]);
+  });
+
+  test("confirming the bracket's prompt awards its 1st, 2nd and 3rd", async () => {
+    // Value: protects=the finish prompt saves the bracket's placements; fails_when=prompt confirm no-ops or saves the old saved placements; why_new=no test drove a confirm to the award write; seam=none; no_claim=server result handling
+    awards.award.mockClear();
+    stubStorage();
+    // d was saved 1st before the bracket; the bracket's result replaces it.
+    await render(
+      five()
+        .slice(0, 4)
+        .map((entry) =>
+          entry.id === "d" ? { ...entry, placement: 1 as const } : entry
+        )
+    );
+    click("Start bracket");
+    judgeMatchup("a", "a", "a");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+    click("Next matchup");
+    judgeMatchup("b", "b", "b");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+
+    const prompt = view.root
+      .findAllByType(ConfirmModal)
+      .find((node) => node.props.isOpen === true);
+    expect(prompt?.props.title).toBe("Award the bracket's points?");
+    await act(async () => prompt?.props.onConfirm());
+    expect(awards.award).toHaveBeenCalledTimes(1);
+    const [, episodeId, placements] = awards.award.mock.calls[0] as unknown as [
+      unknown,
+      string,
+      { submissionId: string; placement: number }[],
+    ];
+    expect(episodeId).toBe("episode-1");
+    expect(
+      [...placements].sort((left, right) => left.placement - right.placement)
+    ).toEqual([
+      { submissionId: "c", placement: 1 },
+      { submissionId: "a", placement: 2 },
+      { submissionId: "b", placement: 3 },
+    ]);
+    expect(openModals()).toEqual([]);
+  });
+
+  test("the bracket's prompt still awards its result after a refresh", async () => {
+    // Value: protects=a refresh while the prompt is open doesn't award the old placements; fails_when=the prompt saves the on-screen placements a refresh reset; why_new=the confirm test never refreshes; seam=none; no_claim=server result handling
+    awards.award.mockClear();
+    stubStorage();
+    const saved = five()
+      .slice(0, 4)
+      .map((entry) =>
+        entry.id === "d" ? { ...entry, placement: 1 as const } : entry
+      );
+    await render(saved);
+    click("Start bracket");
+    judgeMatchup("a", "a", "a");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+    click("Next matchup");
+    judgeMatchup("b", "b", "b");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+    // A write elsewhere on the page refreshes it: the same rows, new objects.
+    await rerender(saved.map((entry) => ({ ...entry })));
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
+
+    const prompt = view.root
+      .findAllByType(ConfirmModal)
+      .find((node) => node.props.isOpen === true);
+    await act(async () => prompt?.props.onConfirm());
+    const [, , placements] = awards.award.mock.calls[0] as unknown as [
+      unknown,
+      string,
+      { submissionId: string; placement: number }[],
+    ];
+    expect(
+      [...placements].sort((left, right) => left.placement - right.placement)
+    ).toEqual([
+      { submissionId: "c", placement: 1 },
+      { submissionId: "a", placement: 2 },
+      { submissionId: "b", placement: 3 },
+    ]);
+  });
+
+  test("a bracket finished in another tab asks this tab too", async () => {
+    // Value: protects=every open tab is reminded to award a finished bracket; fails_when=only the voting tab prompts; why_new=no test finished the bracket from another tab; seam=none; no_claim=which tab saves
+    const stored = stubStorage();
+    await render(five().slice(0, 4));
+    click("Start bracket");
+    stored.otherTab(BRACKET_KEY, storedEvents(finishedFour));
+    expect(text()).toContain("1st: #3 Source c");
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
+  });
+
+  test("doesn't ask again for a finished bracket picked up after a reload", async () => {
+    stubStorage({ [BRACKET_KEY]: storedEvents(finishedFour) });
+    await render(five().slice(0, 4));
+    expect(text()).toContain("1st: #3 Source c");
+    expect(openModals()).toEqual([]);
+  });
+
+  test("doesn't ask for another episode's finished bracket when switching to it", async () => {
+    // Value: protects=switching episodes never prompts an award; fails_when=prompt guard checks only for a prior result, not the same episode; why_new=reload test covers first render only; seam=none; no_claim=placement fill on switch
+    stubStorage({
+      "bbpc-admin:quotabunga-bracket:episode-2": storedEvents(finishedFour),
+    });
+    await render(five().slice(0, 4));
+    expect(text()).toContain("Start bracket");
+    await rerender(five().slice(0, 4), "episode-2");
+    expect(text()).toContain("1st: #3 Source c");
+    expect(openModals()).toEqual([]);
+  });
+
+  /** Plays five().slice(0, 4) to c 1st, a 2nd, b 3rd. */
+  function finishFour() {
+    click("Start bracket");
+    judgeMatchup("a", "a", "a");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+    click("Next matchup");
+    judgeMatchup("b", "b", "b");
+    click("Next matchup");
+    judgeMatchup("c", "c", "c");
+  }
+
+  test("a prompt set aside with its entries doesn't come back with them", async () => {
+    // Value: protects=a hidden award prompt never reopens unasked; fails_when=a stale result only hides the prompt; why_new=no test changed entries while the prompt was open; seam=none; no_claim=placements on return
+    stubStorage();
+    const four = five().slice(0, 4);
+    await render(four);
+    finishFour();
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
+    await rerender(four.slice(0, 3));
+    expect(openModals()).toEqual([]);
+    await rerender(four);
+    expect(openModals()).toEqual([]);
+  });
+
+  test("switching episodes with the prompt open drops it", async () => {
+    // Value: protects=one episode's award prompt never shows for another; fails_when=the prompt survives an episode switch; why_new=the switch test had no prompt open; seam=none; no_claim=placements after switching
+    stubStorage({
+      "bbpc-admin:quotabunga-bracket:episode-2": storedEvents(finishedFour),
+    });
+    const four = five().slice(0, 4);
+    await render(four);
+    finishFour();
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
+    await rerender(four, "episode-2");
+    expect(openModals()).toEqual([]);
+    await rerender(four);
+    expect(openModals()).toEqual([]);
+  });
+
+  test("the prompt numbers entries as the bracket started them", async () => {
+    // Value: protects=the prompt names the same entry numbers as the results; fails_when=it numbers by the current recording order; why_new=no test reordered entries mid-bracket; seam=none; no_claim=entry cards
+    stubStorage();
+    const four = five().slice(0, 4);
+    await render(four);
+    finishFour();
+    // The round is reshuffled after the bracket started.
+    await rerender(
+      four.map((entry, index) => ({ ...entry, bracketOrder: 4 - index }))
+    );
+    expect(text()).toContain("1st: #3 Source c");
+    const prompt = view.root
+      .findAllByType(ConfirmModal)
+      .find((node) => node.props.isOpen === true);
+    expect(prompt?.props.description).toContain(
+      "1st: #3 Source c, 2nd: #1 Source a, 3rd: #2 Source b"
+    );
+  });
+
+  test("a result changed while awarding asks once the save is done", async () => {
+    // Value: protects=a second award never races the first; fails_when=the prompt opens while a save is running; why_new=no test changed the result mid-save; seam=none; no_claim=server conflict handling
+    stubStorage();
+    let release = () => undefined as void;
+    awards.award.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ awarded: 3 });
+        })
+    );
+    await render(five().slice(0, 4));
+    finishFour();
+    const prompt = view.root
+      .findAllByType(ConfirmModal)
+      .find((node) => node.props.isOpen === true);
+    await act(async () => prompt?.props.onConfirm());
+    // The final's last vote is taken back and cast again while it saves.
+    click("Undo");
+    click(`MCP: vote for ${entry("a")}`);
+    expect(openModals()).toEqual([]);
+    await act(async () => release());
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
   });
 
   test("locks Award points while the bracket runs", async () => {
@@ -672,8 +909,11 @@ describe("Quotabunga recording bracket", () => {
     click("Next matchup");
     judgeMatchup("c", "c", "c");
     expect(placementsShown()["Placement for the Source c entry"]).toBe(1);
+    // Value: protects=undoing the final withdraws the award prompt; fails_when=prompt only ever opens, never clears when the result goes; why_new=undo test checked placements only; seam=none; no_claim=reset path prompt
+    expect(openModals()).toEqual(["Award the bracket's points?"]);
 
     click("Undo");
+    expect(openModals()).toEqual([]);
     expect(view.root.findAllByType("select")).toHaveLength(0);
     const reset = view.root
       .findAllByType(ConfirmModal)

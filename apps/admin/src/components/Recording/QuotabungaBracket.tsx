@@ -223,8 +223,14 @@ function summarize(result: CutRoundResult): string {
   return `${result.label}: ${parts.join(", ")}.`;
 }
 
+/** The bracket's places, in the order its results list them. */
+export const PLACES = ["1st", "2nd", "3rd"];
+
 /** How an entry is named everywhere in the bracket: its number and source. */
-function entryNames({ entries, entryIds }: BracketProps) {
+export function entryNames({
+  entries,
+  entryIds,
+}: Pick<BracketProps, "entries" | "entryIds">) {
   const number = (entryId: string) => entryIds.indexOf(entryId) + 1;
   const title = (entryId: string) =>
     entries.get(entryId)?.sourceTitle ?? "Missing entry";
@@ -511,7 +517,7 @@ function BracketRounds(props: BracketProps & { view: BracketView }) {
           <ol className="space-y-1 text-sm">
             {placements.map((entryId, index) => (
               <li key={entryId}>
-                {["1st", "2nd", "3rd"][index]}: {names.name(entryId)}
+                {PLACES[index]}: {names.name(entryId)}
               </li>
             ))}
           </ol>
