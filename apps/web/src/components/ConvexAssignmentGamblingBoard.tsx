@@ -28,6 +28,8 @@ import {
 } from "@/lib/predictionRound.mjs";
 import { cn } from "@/lib/utils";
 
+// Keep in step with apps/admin/src/components/Recording/recordingManagementModel.ts,
+// which reads the same lookup ids to suggest each wager's outcome.
 const wagerHostIdentifiers = ["mcp", "fonso", "harley"] as const;
 type WagerHostIdentifier = (typeof wagerHostIdentifiers)[number];
 

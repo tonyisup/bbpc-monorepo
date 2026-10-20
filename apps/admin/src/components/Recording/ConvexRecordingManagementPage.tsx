@@ -128,12 +128,17 @@ import {
   getAssignmentRecordingDisclosure,
   getEpisodeSeasonPosition,
   getRecordingGuessSettlementPreview,
+  getRecordingWagerOutcome,
   groupRecordingGamesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
   summarizeEpisodePoints,
 } from "./recordingManagementModel";
-import { QuotabungaBracket } from "./QuotabungaBracket";
+import {
+  PLACES,
+  QuotabungaBracket,
+  entryNames,
+} from "./QuotabungaBracket";
 import { bracketJudgeNames } from "./quotabungaBracketModel";
 import { SeasonPositionBadges } from "./SeasonPositionBadges";
 import { useQuotabungaBracket } from "./useQuotabungaBracket";
@@ -822,7 +827,11 @@ export function QuotabungaRecordingRound({
   const [placements, setPlacements] = useState<
     Record<string, ConvexQuotePlacement | null>
   >({});
-  const [confirming, setConfirming] = useState(false);
+  // A bracket finished on this page asks to award its points at once, so
+  // they aren't forgotten; the Award points button asks the same thing.
+  const [confirming, setConfirming] = useState<"bracket" | "button" | null>(
+    null
+  );
   const [saving, setSaving] = useState(false);
   // One clip plays at a time, so the page holds at most one YouTube player.
   const [openClipId, setOpenClipId] = useState<string | null>(null);
@@ -867,6 +876,12 @@ export function QuotabungaRecordingRound({
       })
     );
   }, [included, resultKey]);
+  // The prompt names the winners as the bracket's results do, by the numbers
+  // the entries had when the bracket started.
+  const entryName = entryNames({ entries, entryIds: entryOrder }).name;
+  const podium = (resultKey?.split("\n") ?? [])
+    .map((entryId, index) => `${PLACES[index] ?? ""}: ${entryName(entryId)}`)
+    .join(", ");
   const resultsApplied =
     bracketPlacements !== null &&
     included.every(
@@ -875,7 +890,8 @@ export function QuotabungaRecordingRound({
   // A bracket finished on this page fills in the placements, and one that's
   // undone or reset brings the saved placements back. A result restored by a
   // reload, or still there after a refresh, never replaces what's saved; the
-  // results offer to fill them in instead. Awarding still asks first.
+  // results offer to fill them in instead. Awarding still asks first, and a
+  // bracket that finishes here asks straight away.
   const [seenResult, setSeenResult] = useState<{
     episodeId: string;
     key: string | null;
@@ -890,8 +906,15 @@ export function QuotabungaRecordingRound({
     setSeenResult({ episodeId, key: resultKey });
     if (seenResult?.episodeId === episodeId) {
       setPlacements(bracketPlacements ?? savedPlacements);
+      setConfirming(bracketPlacements === null ? null : "bracket");
     }
   }
+  // A result set aside with its entries, or left behind with another
+  // episode, takes its prompt with it, so the prompt never comes back unasked.
+  if (confirming === "bracket" && bracketPlacements === null) {
+    setConfirming(null);
+  }
+  const bracketPrompt = confirming === "bracket" && bracketPlacements !== null;
 
   const renderEntry = (
     submission: ConvexAdminQuoteSubmission,
@@ -908,8 +931,8 @@ export function QuotabungaRecordingRound({
     />
   );
 
-  const save = () => {
-    setConfirming(false);
+  const save = (toSave: Record<string, ConvexQuotePlacement | null>) => {
+    setConfirming(null);
     // The placements are hidden while the bracket runs, so they can't be saved.
     if (bracketRunning) {
       toast.error("Finish or reset the bracket before awarding points.");
@@ -917,7 +940,7 @@ export function QuotabungaRecordingRound({
     }
     setSaving(true);
     const includedSet = new Set(includedIds);
-    const nextPlacements = Object.entries(placements)
+    const nextPlacements = Object.entries(toSave)
       .filter(
         (entry): entry is [string, ConvexQuotePlacement] =>
           entry[1] !== null && includedSet.has(entry[0])
@@ -968,7 +991,7 @@ export function QuotabungaRecordingRound({
               </Button>
               <Button
                 disabled={included.length === 0 || saving || bracketRunning}
-                onClick={() => setConfirming(true)}
+                onClick={() => setConfirming("button")}
                 size="sm"
                 title={
                   bracketRunning
@@ -1075,11 +1098,27 @@ export function QuotabungaRecordingRound({
         </CardContent>
       </Card>
       <ConfirmModal
-        description="This replaces the current Quotabunga placements and their owned point awards with the selections shown here."
-        isOpen={confirming}
-        onClose={() => setConfirming(false)}
-        onConfirm={save}
-        title="Replace Quotabunga awards?"
+        confirmText="Award points"
+        description={
+          bracketPrompt
+            ? `The bracket is finished: ${podium}. This awards their points, replacing the current Quotabunga placements and their owned point awards.`
+            : "This replaces the current Quotabunga placements and their owned point awards with the selections shown here."
+        }
+        // A refresh while the bracket's prompt is open puts the saved
+        // placements back on screen, so the prompt awards the bracket's own
+        // result. A bracket changed while a save runs asks once it's done,
+        // with what that save left behind.
+        isOpen={!saving && (confirming === "button" || bracketPrompt)}
+        onClose={() => setConfirming(null)}
+        onConfirm={() =>
+          save(bracketPrompt && bracketPlacements !== null ? bracketPlacements : placements)
+        }
+        title={
+          bracketPrompt
+            ? "Award the bracket's points?"
+            : "Replace Quotabunga awards?"
+        }
+        variant="default"
       />
     </>
   );
@@ -1163,12 +1202,15 @@ function QuotabungaEntryCard({
   );
 }
 
+const SUGGESTED_OUTCOME = "Picked from the host ratings";
+
 function ListenerGames({
   assignmentId,
   group,
   onAwardGuess,
   onResolveWager,
   onSettleGuesses,
+  refreshing,
   savingKey,
   settlement,
 }: {
@@ -1180,6 +1222,7 @@ function ListenerGames({
     status: "won" | "lost" | "rejected"
   ) => void;
   onSettleGuesses: (userId: string) => void;
+  refreshing: boolean;
   savingKey: string | null;
   settlement: RecordingGuessSettlement | undefined;
 }) {
@@ -1308,6 +1351,12 @@ function ListenerGames({
         })}
         {group.wagers.map((wager) => {
           const active = wager.status === "pending" || wager.status === "locked";
+          // The host ratings already decide most wagers, so that outcome is
+          // picked and only needs confirming. A rating just changed isn't in
+          // the guesses until the page reloads, so the buttons wait for it.
+          const outcome = active
+            ? getRecordingWagerOutcome(wager, group.guesses)
+            : null;
           return (
             <div
               className="flex flex-wrap items-center justify-between gap-3 p-3"
@@ -1324,29 +1373,34 @@ function ListenerGames({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{wager.status}</Badge>
+                {outcome !== null && (
+                  <span className="text-xs text-muted-foreground">
+                    {SUGGESTED_OUTCOME}
+                  </span>
+                )}
                 {wager.awardPoint !== null && (
                   <Badge variant="secondary">{wager.awardPoint.total} pts</Badge>
                 )}
                 {active && (
                   <>
                     <Button
-                      disabled={savingKey !== null}
+                      disabled={savingKey !== null || refreshing}
                       onClick={() => onResolveWager(wager, "won")}
                       size="sm"
-                      variant="outline"
+                      variant={outcome === "won" ? "default" : "outline"}
                     >
-                      Won
+                      {outcome === "won" ? "Confirm won" : "Won"}
                     </Button>
                     <Button
-                      disabled={savingKey !== null}
+                      disabled={savingKey !== null || refreshing}
                       onClick={() => onResolveWager(wager, "lost")}
                       size="sm"
-                      variant="outline"
+                      variant={outcome === "lost" ? "default" : "outline"}
                     >
-                      Lost
+                      {outcome === "lost" ? "Confirm lost" : "Lost"}
                     </Button>
                     <Button
-                      disabled={savingKey !== null}
+                      disabled={savingKey !== null || refreshing}
                       onClick={() => onResolveWager(wager, "rejected")}
                       size="sm"
                       variant="ghost"
@@ -1374,6 +1428,7 @@ function AssignmentGameCard({
   onSettleGuesses,
   onSetReviewRating,
   ratings,
+  refreshing,
   reviews,
   savingKey,
   settlements,
@@ -1394,6 +1449,7 @@ function AssignmentGameCard({
     ratingId: string | null
   ) => void;
   ratings: ConvexAdminRating[];
+  refreshing: boolean;
   reviews: ConvexAssignmentReview[];
   savingKey: string | null;
   settlements: RecordingGuessSettlement[];
@@ -1556,6 +1612,7 @@ function AssignmentGameCard({
                   onAwardGuess={onAwardGuess}
                   onResolveWager={onResolveWager}
                   onSettleGuesses={onSettleGuesses}
+                  refreshing={refreshing}
                   savingKey={savingKey}
                   settlement={settlementByUserAndSeason.get(
                     `${group.user.id}::${group.guesses[0]?.season.id ?? ""}`
@@ -1880,6 +1937,7 @@ export function ConvexRecordingManagementPage() {
                     }
                     onSetReviewRating={setReviewRating}
                     ratings={data.ratings}
+                    refreshing={refreshing}
                     reviews={data.reviews[assignment.id] ?? []}
                     savingKey={savingKey}
                     settlements={data.guessSettlements.filter(
