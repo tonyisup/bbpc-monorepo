@@ -14,6 +14,7 @@ import {
   getEpisodeSeasonPosition,
   getSeasonFinaleState,
   getRecordingGuessSettlementPreview,
+  getRecordingWagerOutcome,
   groupRecordingGamesByListener,
   isRecordingGuessRevealed,
   selectRecordingManagementEpisode,
@@ -372,6 +373,149 @@ describe("recording management model", () => {
     expect(groups[1]?.wagers).toEqual([]);
     expect(groups[2]?.guesses).toEqual([]);
     expect(groups[2]?.wagers).toEqual([listenerCWager]);
+  });
+
+  it("picks a wager's outcome from the guesses it rides on", () => {
+    const on = (lookupId: string, targetUser: string | null = null) => ({
+      ...wager("listener", 0),
+      gamblingType: { ...wager("listener", 0).gamblingType, lookupId },
+      targetUser:
+        targetUser === null
+          ? null
+          : { id: targetUser, name: targetUser, image: null },
+    });
+    const guesses = [
+      guess("listener", { hostId: "MCP", hostRated: true }),
+      guess("listener", { hostId: "Fonso", hostRated: true }),
+      guess("listener", { hostId: "Harley", hostRated: true, correct: false }),
+    ];
+
+    expect(
+      getRecordingWagerOutcome(on("mcp-rating-guess-1x", "MCP"), guesses)
+    ).toBe("won");
+    expect(
+      getRecordingWagerOutcome(on("harley-rating-guess-1x", "Harley"), guesses)
+    ).toBe("lost");
+    // A one-host wager goes by its named host, whatever its type says.
+    expect(
+      getRecordingWagerOutcome(on("mcp-rating-guess-1x", "Harley"), guesses)
+    ).toBe("lost");
+    expect(
+      getRecordingWagerOutcome(on("mcp-fonso-rating-guess-2x"), guesses)
+    ).toBe("won");
+    expect(
+      getRecordingWagerOutcome(on("fonso-harley-rating-guess-2x"), guesses)
+    ).toBe("lost");
+    expect(getRecordingWagerOutcome(on("all-rating-guess-3x"), guesses)).toBe(
+      "lost"
+    );
+    expect(
+      getRecordingWagerOutcome(on("all-rating-guess-3x"), guesses.slice(0, 2))
+    ).toBeNull();
+    expect(getRecordingWagerOutcome(on("bet"), guesses)).toBeNull();
+    expect(
+      getRecordingWagerOutcome(on("someone-rating-guess-1x"), guesses)
+    ).toBeNull();
+
+    // Value: protects=hosts matched by first name, any case, when no host id applies; fails_when=name split/lowercase or 1x no-target fallback dropped; why_new=fixtures used one-word names equal to ids; seam=none; no_claim=UI labels
+    const named = (
+      hostId: string,
+      name: string | null,
+      options: { correct?: boolean; noUser?: boolean } = {}
+    ): ConvexAdminSeasonGuess => {
+      const base = guess("listener", {
+        hostId,
+        hostRated: true,
+        correct: options.correct,
+      });
+      const review = base.assignmentReview.review;
+      return {
+        ...base,
+        assignmentReview: {
+          ...base.assignmentReview,
+          review: {
+            ...review,
+            user:
+              options.noUser === true || review.user === null
+                ? null
+                : { ...review.user, name },
+          },
+        },
+      };
+    };
+    const fullNames = [
+      named("host-1", "mcp Jones"),
+      named("host-2", "Fonso de la Cruz"),
+      named("host-3", "HARLEY Quinn", { correct: false }),
+    ];
+    // A one-host wager that names no host goes by its type's first name.
+    expect(getRecordingWagerOutcome(on("mcp-rating-guess-1x"), fullNames)).toBe(
+      "won"
+    );
+    expect(
+      getRecordingWagerOutcome(on("harley-rating-guess-1x"), fullNames)
+    ).toBe("lost");
+    expect(
+      getRecordingWagerOutcome(on("mcp-fonso-rating-guess-2x"), fullNames)
+    ).toBe("won");
+    // A guess whose host has no name, or no user, can't be matched to one.
+    expect(
+      getRecordingWagerOutcome(on("mcp-fonso-rating-guess-2x"), [
+        named("host-1", null),
+        named("host-2", "Fonso", { noUser: true }),
+      ])
+    ).toBeNull();
+  });
+
+  it("doesn't judge a wager on a host the listener guessed twice", () => {
+    // Value: protects=no outcome is picked from an arbitrary duplicate guess; fails_when=the first matching guess decides; why_new=fixtures had one guess per host; seam=none; no_claim=how duplicates arise
+    const onMcp = {
+      ...wager("listener", 0),
+      gamblingType: {
+        ...wager("listener", 0).gamblingType,
+        lookupId: "mcp-rating-guess-1x",
+      },
+      targetUser: { id: "MCP", name: "MCP", image: null },
+    };
+    expect(
+      getRecordingWagerOutcome(onMcp, [
+        guess("listener", { hostId: "MCP", hostRated: true }),
+        guess("listener", { hostId: "MCP", hostRated: true, correct: false }),
+      ])
+    ).toBeNull();
+  });
+
+  it("decides a wager only once its hosts rate, but a miss loses it early", () => {
+    const allThree = {
+      ...wager("listener", 0),
+      gamblingType: {
+        ...wager("listener", 0).gamblingType,
+        lookupId: "all-rating-guess-3x",
+      },
+    };
+    const rated = [
+      guess("listener", { hostId: "MCP", hostRated: true }),
+      guess("listener", { hostId: "Fonso", hostRated: true }),
+    ];
+
+    expect(
+      getRecordingWagerOutcome(allThree, [
+        ...rated,
+        guess("listener", { hostId: "Harley" }),
+      ])
+    ).toBeNull();
+    expect(
+      getRecordingWagerOutcome(allThree, [
+        ...rated,
+        guess("listener", { hostId: "Harley", hostRated: true }),
+      ])
+    ).toBe("won");
+    expect(
+      getRecordingWagerOutcome(allThree, [
+        guess("listener", { hostId: "MCP", hostRated: true, correct: false }),
+        guess("listener", { hostId: "Fonso" }),
+      ])
+    ).toBe("lost");
   });
 
   it("previews all-correct, all-incorrect, and mixed settlements", () => {

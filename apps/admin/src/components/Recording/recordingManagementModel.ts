@@ -368,6 +368,64 @@ export function getRecordingGuessSettlementPreview(
   };
 }
 
+/**
+ * The hosts a wager can ride on, by the first name its type names them. Keep in
+ * step with apps/web/src/components/ConvexAssignmentGamblingBoard.tsx, which
+ * reads the same lookup ids when listeners place wagers.
+ */
+const WAGER_HOSTS = ["mcp", "fonso", "harley"];
+
+/**
+ * The hosts a wager rides on, from its type's lookup id: "fonso-rating-guess-1x",
+ * "mcp-harley-rating-guess-2x" or "all-rating-guess-3x". Null for any other
+ * kind of wager.
+ */
+function wagerHosts(lookupId: string): string[] | null {
+  const hosts = /^(.+)-rating-guess-\d+x$/.exec(lookupId)?.[1];
+  if (hosts === undefined) {
+    return null;
+  }
+  const names = hosts === "all" ? WAGER_HOSTS : hosts.split("-");
+  return names.every((name) => WAGER_HOSTS.includes(name)) ? names : null;
+}
+
+/**
+ * Whether the listener's guesses won or lost a wager on them: lost once any
+ * guess it rides on misses its host's rating, and won once every one of them
+ * matches. Null while that isn't known yet, or for a wager on something else,
+ * so the admin decides it by hand.
+ */
+export function getRecordingWagerOutcome(
+  wager: Pick<ConvexAdminSeasonGamblingEntry, "gamblingType" | "targetUser">,
+  guesses: ConvexAdminSeasonGuess[]
+): "won" | "lost" | null {
+  const hosts = wagerHosts(wager.gamblingType.lookupId);
+  if (hosts === null) {
+    return null;
+  }
+  // A host with more than one guess has no one guess to judge by.
+  const guessFor = (host: string) => {
+    const matches = guesses.filter(({ assignmentReview: { review } }) =>
+      // A one-host wager names its host; the others go by first name.
+      hosts.length === 1 && wager.targetUser !== null
+        ? review.user?.id === wager.targetUser.id
+        : review.user?.name?.split(" ")[0]?.toLowerCase() === host
+    );
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+  const results = hosts.map((host) => {
+    const guess = guessFor(host);
+    const actual = guess?.assignmentReview.review.rating ?? null;
+    return guess === undefined || actual === null
+      ? null
+      : actual.id === guess.rating.id;
+  });
+  if (results.includes(false)) {
+    return "lost";
+  }
+  return results.every((result) => result === true) ? "won" : null;
+}
+
 export function summarizeEpisodePoints(
   guesses: ConvexAdminSeasonGuess[],
   wagers: ConvexAdminSeasonGamblingEntry[],
