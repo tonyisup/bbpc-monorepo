@@ -558,6 +558,116 @@ class LabViewApiTests(LabServerTestCase):
         self.assertEqual((view["drafts"], view["runs"], view["active"]), ([], [], None))
 
 
+# Stands in for scripts/youtube_upload.py: says it is done the way the script does, by rewriting youtube.json.
+UPLOAD_STAND_IN = """
+import json, pathlib, sys, time
+state_path, behaviour = pathlib.Path(sys.argv[1]), sys.argv[2]
+print("Uploading as a private video", flush=True)
+if behaviour == "slow":
+    time.sleep(30)
+if behaviour == "crash":
+    sys.exit(3)
+state = json.loads(state_path.read_text())
+state.update(status="done", videoId="NEWVIDEO_01", url="https://youtube.com/shorts/NEWVIDEO_01")
+state_path.write_text(json.dumps(state))
+print("Uploaded")
+"""
+
+
+class YouTubeTestCase(LabServerTestCase):
+    upload_behaviour = "upload"
+
+    def server_options(self):
+        def upload(config, run_id, config_path, python):
+            state = lab.lab_dir(config) / run_id / "youtube.json"
+            return [sys.executable, "-c", UPLOAD_STAND_IN, str(state), self.upload_behaviour]
+        return dict(super().server_options(), upload_command=upload)
+
+    def rendered(self, clip="pick-2"):
+        _, answer = self.render(clip=clip)
+        return self.wait_for(answer["run"]["id"])["run"]
+
+    def publish(self, run_id, **fields):
+        return self.post("/api/lab/youtube", {
+            "id": run_id, "title": "Bad Boys Podcast - 801 - Alpha - Bit 5", "description": "From episode 801",
+            "confirmed": True, **fields})
+
+    def wait_for_upload(self, run_id, timeout=10.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            answer = self.api(f"/api/lab/run?id={run_id}")
+            # Finished once the state says so and the process has gone (it writes the state just before it exits).
+            if (answer["run"]["youtube"]["state"]["status"] not in ("ready", "uploading")
+                    and self.api("/api/lab")["uploading"] is None):
+                return self.api(f"/api/lab/run?id={run_id}")
+            time.sleep(0.02)
+        self.fail(f"the upload of {run_id} did not finish")
+
+
+class YouTubeApiTests(YouTubeTestCase):
+    def test_a_finished_render_offers_an_upload_with_its_title_ready(self):
+        run = self.rendered()
+        self.assertEqual(run["youtube"], {
+            "state": None, "privacy": "private", "defaultTitle": "Bad Boys Podcast - 801 - Alpha - Bit 5",
+            "defaultDescription": "From Bad Boys Podcast episode 801: Alpha", "titleMax": 100, "published": None,
+        })
+        self.assertEqual(self.api("/api/lab")["runs"][0]["youtube"], run["youtube"])
+
+    def test_an_upload_must_be_confirmed_and_then_happens_once(self):
+        run = self.rendered()
+        before = self.outside_lab()
+        status, answer = self.publish(run["id"], confirmed="yes")
+        self.assertEqual((status, answer.get("error")), (400, "Confirm the upload first: it posts to the YouTube channel."))
+        self.assertFalse((self.lab / run["id"] / "youtube.json").exists())
+
+        status, answer = self.publish(run["id"])
+        self.assertEqual((status, answer["upload"]["status"], answer["upload"]["privacy"]), (202, "ready", "private"))
+        finished = self.wait_for_upload(run["id"])
+        state = finished["run"]["youtube"]["state"]
+        self.assertEqual((state["status"], state["url"]), ("done", "https://youtube.com/shorts/NEWVIDEO_01"))
+        self.assertIn("Uploading as a private video", finished["youtubeLog"])
+        self.assertIsNone(self.api("/api/lab")["uploading"])
+        status, answer = self.publish(run["id"])
+        self.assertEqual((status, answer.get("error")),
+                         (400, "this clip is already on YouTube: https://youtube.com/shorts/NEWVIDEO_01"))
+        self.assertEqual(self.outside_lab(), before)
+
+    def test_the_title_is_checked_and_only_a_finished_render_is_uploaded(self):
+        run = self.rendered()
+        status, answer = self.publish(run["id"], title="x" * 101)
+        self.assertEqual((status, answer.get("problems")), (400, ["the title is 101 characters; YouTube allows 100"]))
+        status, answer = self.publish("nope")
+        self.assertEqual((status, answer.get("error")), (400, "there is no test render called nope"))
+        self.assertIsNone(self.api("/api/lab")["uploading"])
+
+    def test_an_upload_that_fails_says_why(self):
+        self.upload_behaviour = "crash"
+        run = self.rendered()
+        self.publish(run["id"])
+        state = self.wait_for_upload(run["id"])["run"]["youtube"]["state"]
+        self.assertEqual((state["status"], state["message"]), ("failed", "the upload exited with status 3"))
+        self.assertEqual(self.publish(run["id"])[0], 202)  # a failed upload can be tried again
+
+
+class YouTubeBusyTests(YouTubeTestCase):
+    upload_behaviour = "slow"
+
+    def server_options(self):
+        return dict(super().server_options(), upload_timeout=0.6)
+
+    def test_one_upload_at_a_time_and_its_render_is_kept_while_it_runs(self):
+        first, second = self.rendered("pick-1"), self.rendered("pick-2")
+        self.assertEqual(self.publish(first["id"])[0], 202)
+        self.assertEqual(self.api("/api/lab")["uploading"], first["id"])
+        status, answer = self.publish(second["id"])
+        self.assertEqual((status, answer.get("active")), (409, first["id"]))
+        self.assertEqual(self.post("/api/lab/runs/delete", {"id": first["id"]})[0], 409)
+        state = self.wait_for_upload(first["id"])["run"]["youtube"]["state"]
+        self.assertEqual((state["status"], state["message"]), (
+            "failed", "stopped: the upload ran past its time limit. Check YouTube Studio before trying again."))
+        self.assertIsNone(self.api("/api/lab")["uploading"])
+
+
 class ReadOnlyTests(ServerTestCase):
     PATHS = ("/", "/static/app.js", "/static/style.css", "/api/header", "/api/today", "/api/episodes", "/api/lab",
              "/api/episode?stem=20260105", "/api/episode?stem=20260112", "/api/episode?stem=20260119",

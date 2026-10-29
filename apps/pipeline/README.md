@@ -161,7 +161,8 @@ python backfill.py --date-after 20260401
 
 One local page over the data directory: what needs you, each episode's stages
 and Cowork files, every setting, a Lab for trying a change to how clips look
-on one clip, and pipeline runs. Standard library only, no venv needed to start it:
+on one clip and publishing it to YouTube, and pipeline runs. Standard library
+only, no venv needed to start it:
 
 ```bash
 python3 -m dashboard                # then open http://127.0.0.1:8765/
@@ -172,15 +173,16 @@ python3 -m dashboard --pipeline-python /path/to/venv/bin/python   # for the Lab 
 It listens on `127.0.0.1` only and refuses any request not addressed to
 `127.0.0.1` or `localhost` on its own port. `config.json` and the data directory
 are read again on every page load, so a reload shows the current state. It does
-not read `.env`: the Runs tab's checks and runs read it in their own processes,
-and only names and results come back.
+not read `.env`: the Runs tab's checks and runs, and the Lab's YouTube
+uploads, read it in their own processes, and only names and results come back.
 
 Looking never writes. The dashboard changes only these, all but one in the
 data directory:
 
 - the Lab's test renders and drafts under `output/lab/`, and `config.json`
   when you apply a draft;
-- publish decisions, `output/publish-decisions.json`;
+- publish decisions, `output/publish-decisions.json` (from the Clips tab, and
+  after a Lab clip is uploaded to YouTube);
 - the T-shirt shortlist, `output/tshirt/ideas.json`;
 - the phrase report under `output/phrases/`, when you press Rescan;
 - a run's record and log under `output/runs/`, and whatever the pipeline run
@@ -236,7 +238,8 @@ the dashboard's own page.
   "New background" asks the image model for a new still with the prompt you
   give it. With the `openrouter` or `openai` provider that is one paid request,
   and you are asked before it is sent. Past renders are listed with the draft
-  that made them and can be deleted.
+  that made them and can be deleted. A finished render can be **published to
+  YouTube**: see [Publishing to YouTube](#publishing-to-youtube).
 - **Runs**: starts `pipeline.py` and shows its log as it runs. Three kinds:
   unattended (no episode: the newest in Azure, as `scheduled_pipeline.sh` runs
   it), one local episode from a stage, and resume after Cowork (from `movies`,
@@ -258,6 +261,47 @@ with every output path pointed at `output/lab/<run id>/`. That folder also
 holds a one-clip SEO file, so the episode's real clip, SEO file and
 `state.json` are never touched. Only the clip stage runs in the Lab;
 `import_transcript` and `publish` are refused by the server.
+
+### Publishing to YouTube
+
+"Publish to YouTube…" under a finished Lab render uploads that clip to the
+channel as a **private** video, with the title and description you give it
+(the title starts as `Bad Boys Podcast - <ep#> - <ep title> - <bit>`; YouTube
+allows 100 characters). The page asks before anything is sent. When the upload
+succeeds the clip is recorded as published in `output/publish-decisions.json`:
+as the pick or candidate it came from, or, when the Lab changed its start or
+end, as an untracked Short named by its headline. Then check the video in
+YouTube Studio (the page links to it) and make it public there. Each test
+render is uploaded once; a failed upload can be tried again. One upload at a
+time, and a render cannot be deleted while it is uploading. The same upload
+from a terminal:
+
+```bash
+venv/bin/python scripts/youtube_upload.py <run id> --title "Bad Boys Podcast - 801 - Alpha - Bit 5"
+```
+
+The upload is `scripts/youtube_upload.py`, under the venv's python because it
+reads the credentials from `.env`; what it printed is kept in the run's folder
+as `youtube.log`, and the result as `youtube.json`. It needs three values in
+`.env`, set up once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), make a
+   project and turn on the **YouTube Data API v3**.
+2. Under **Google Auth Platform**, set up the consent screen (External, in
+   testing) and add the Google account that owns `@badboyspodcast` as a test
+   user. Then make an OAuth client of type **Desktop app**.
+3. Put its ID and secret in `.env` as `YOUTUBE_CLIENT_ID` and
+   `YOUTUBE_CLIENT_SECRET`.
+4. Run `venv/bin/python scripts/youtube_auth.py`. It opens Google's sign-in;
+   sign in with that account, choose the channel, and allow uploads (the only
+   permission it asks for). It prints `YOUTUBE_REFRESH_TOKEN=...`; add that
+   line to `.env`.
+
+YouTube keeps every video uploaded through an API project that has not passed
+its audit private, which is why uploads are private. While the consent screen
+is in testing, Google expires the refresh token after seven days; when an
+upload says Google refused the sign-in, run `youtube_auth.py` again, or
+publish the consent screen to keep the token.
 
 Stage status is worked out from the files each stage leaves
 (`lib/stage_status.py`). `import_transcript` and `publish` leave no local file,
@@ -375,7 +419,8 @@ only those whose rendered file is still on disk.
 each published Short has its own. The episode is its date (`20261005`).
 `list` ends with how long the published Shorts have run so far. The
 dashboard's Clips tab records the same decisions through the same function
-(`publish_log.decide`).
+(`publish_log.decide`), and a Lab clip uploaded to YouTube is recorded through
+the same module ([Publishing to YouTube](#publishing-to-youtube)).
 
 ## Recurring phrases
 
@@ -482,7 +527,9 @@ status, the Lab (drafts, run folders, what it refuses), a pinned copy of the
 default caption file and ffmpeg command, publish decisions and their script,
 the T-shirt shortlist and its script, the checks before a run and the wrapper
 that keeps `.env` values out of its log, run records, and the dashboard's views
-and server. Runs are tested with stand-in commands; no test starts `pipeline.py`.
+and server, and the YouTube upload (what it sends, how it records the decision).
+Runs are tested with stand-in commands; no test starts `pipeline.py`, and
+Google is a stand-in too: no test reaches YouTube.
 
 ## Read-only pipeline identity probe
 
@@ -522,7 +569,7 @@ output/
 ├── tshirt/                   # ideas.json, the shortlist (scripts/shirt_ideas.py); ideas.txt, Tony's notes
 ├── review-clips/<episode>/   # Audio clips from review segments
 ├── laughter/                 # <episode>.laughter.json for Cowork; laughter_autotune.py results
-├── lab/                      # dashboard Lab: drafts/ and one folder per test render
+├── lab/                      # dashboard Lab: drafts/ and one folder per test render (with youtube.json once uploaded)
 ├── runs/                     # dashboard Runs: <id>.json and <id>.log per pipeline run
 ├── journal/<episode>.jsonl   # one line per stage pipeline.py ran (lib/stage_journal.py)
 ├── thumbnails/<episode>.png  # Episode thumbnail (posters + logo)

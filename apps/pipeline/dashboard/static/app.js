@@ -524,6 +524,73 @@ function runSummary(run) {
   ].filter(Boolean).join(' · ');
 }
 
+// --------------------------------------------------------------------------- Lab: publishing to YouTube
+
+const UPLOAD_WORDS = {ready: 'starting upload', uploading: 'uploading', done: 'on YouTube, private', failed: 'upload failed',
+  interrupted: 'upload interrupted'};
+const UPLOAD_TONES = {ready: 'in', uploading: 'in', done: 'ok', failed: 'er', interrupted: 'wa'};
+// What the upload form holds for the run on show, kept across re-renders.
+const uploadForm = {run: null, title: null, description: null, error: null};
+const uploading = run => Boolean(run && run.youtube && run.youtube.state
+  && (run.youtube.state.status === 'ready' || run.youtube.state.status === 'uploading'));
+
+async function publishToYouTube(run, title, description) {
+  const already = run.youtube.published
+    ? `This clip is already recorded as published (${run.youtube.published}). The new video replaces it in the decisions log.\n\n`
+    : '';
+  if (!window.confirm(`Upload this Lab clip to the YouTube channel as a PRIVATE video?\n\n${title}\n\n${already}`
+    + 'It is then recorded as published in output/publish-decisions.json. Make it public in YouTube Studio.')) return;
+  const answer = await post('/api/lab/youtube', {id: run.id, title, description, confirmed: true});
+  uploadForm.error = answer.ok ? null : (answer.body.problems || [answer.body.error]).join(' ');
+  route();
+}
+
+function youtubeBox(data, run) {
+  const youtube = run.youtube;
+  const state = youtube.state;
+  const link = (href, text) => h('a', {href, target: '_blank', rel: 'noreferrer noopener'}, text);
+  const heading = h('div', {class: 'bar'}, h('b', {}, 'YouTube'), h('span', {class: 'sp'}),
+    state && pill(UPLOAD_TONES[state.status], UPLOAD_WORDS[state.status]));
+  if (state && state.status === 'done') {
+    return h('div', {class: 'gap'}, heading,
+      // Links to click, not something the page loads: the addresses come from the server.
+      h('div', {class: 'sm gap'}, link(state.url, state.url), ' · ', link(state.studioUrl, 'Open in YouTube Studio'),
+        ' to check it and make it public.'),
+      state.decision && h('div', {class: 'mut sm'}, `Recorded as published (${state.decision.source}: ${state.decision.headline}).`),
+      state.message && h('div', {class: 'sm warning'}, state.message));
+  }
+  if (uploading(run)) {
+    return h('div', {class: 'gap'}, heading, h('div', {class: 'mut sm'}, `Uploading "${state.title}" as a private video…`),
+      h('pre', {id: 'youtube-log'}, run.youtubeLog || ''));
+  }
+  if (uploadForm.run !== run.id) Object.assign(uploadForm, {run: run.id, title: null, description: null, error: null});
+  const title = h('input', {class: 'inp', type: 'text', maxlength: youtube.titleMax, 'aria-label': 'YouTube title',
+    value: uploadForm.title !== null ? uploadForm.title : state ? state.title : youtube.defaultTitle});
+  const count = h('span', {class: 'mut sm'}, `${title.value.length}/${youtube.titleMax}`);
+  title.addEventListener('input', () => {
+    uploadForm.title = title.value;
+    count.textContent = `${title.value.length}/${youtube.titleMax}`;
+  });
+  const description = h('textarea', {class: 'inp', rows: 3, 'aria-label': 'YouTube description'},
+    uploadForm.description !== null ? uploadForm.description : state ? state.description : youtube.defaultDescription);
+  description.addEventListener('input', () => { uploadForm.description = description.value; });
+  const busy = Boolean(data.uploading);
+  return h('details', {class: 'gap', open: Boolean(state || uploadForm.error)},
+    h('summary', {}, 'Publish to YouTube…'),
+    state && h('div', {class: 'gap'}, heading),
+    state && state.message && h('div', {class: 'sm problem'}, state.message),
+    state && state.status !== 'failed' && h('details', {}, h('summary', {class: 'mut sm'}, 'Log'), h('pre', {}, run.youtubeLog || '')),
+    youtube.published && h('div', {class: 'sm warning gap'}, 'This clip is already recorded as published: ',
+      link(youtube.published, youtube.published)),
+    h('label', {}, 'Title'), title, count,
+    h('label', {}, 'Description'), description,
+    h('div', {class: 'mut sm gap'}, `Uploads this Lab clip to the channel as a ${youtube.privacy} video, then records it as published in output/publish-decisions.json. Make it public in YouTube Studio. One upload per test render.`),
+    uploadForm.error && h('div', {class: 'sm problem gap'}, uploadForm.error),
+    h('div', {class: 'gap'}, h('button', {class: 'btn p', disabled: busy || !data.python.found,
+      onclick: () => publishToYouTube(run, title.value, description.value)},
+    busy ? 'Another upload is going…' : state ? 'Try the upload again…' : 'Upload to YouTube (private)…')));
+}
+
 function compareBox(data, clip, run) {
   const video = (url, missing) => (url
     ? h('video', {controls: true, preload: 'metadata', src: url})
@@ -542,7 +609,8 @@ function compareBox(data, clip, run) {
     run && h('div', {class: 'mut sm gap'}, runSummary(run)),
     run && run.message && h('div', {class: 'sm problem'}, run.message),
     run && h('details', {class: 'gap', open: run.status === 'failed'}, h('summary', {class: 'mut sm'}, 'Log'),
-      h('pre', {id: 'lab-log'}, run.log || '')));
+      h('pre', {id: 'lab-log'}, run.log || '')),
+    run && run.youtube && youtubeBox(data, run));
 }
 
 function renderLab(data, shownRun) {
@@ -625,7 +693,7 @@ function renderLab(data, shownRun) {
       h('div', {class: 'chips'}, h('span', {class: 'chip on'}, 'Clip'),
         ['Review clips', 'Thumbnail', 'Transcribe', 'Movies', 'Parse'].map(name =>
           h('span', {class: 'chip off', title: 'Not in the Lab yet'}, name))),
-      h('span', {class: 'sp'}), pill('ok', 'Sandbox: writes only to output/lab/')),
+      h('span', {class: 'sp'}), pill('ok', 'Sandbox: a test render writes only to output/lab/')),
     !data.python.found && h('div', {class: 'box gap warning'},
       `The Lab cannot render: no pipeline Python at ${data.python.path}. Start the dashboard with `,
       h('code', {}, '--pipeline-python /path/to/venv/bin/python'), '.'),
@@ -638,7 +706,8 @@ function renderLab(data, shownRun) {
           h('td', {class: 'sm'}, when(run.createdAt)),
           h('td', {}, h('b', {}, run.clip.headline), h('div', {class: 'mut sm'}, run.stem)),
           h('td', {class: 'sm mut wrap'}, runSummary(run)),
-          h('td', {}, pill(RUN_TONES[run.status], RUN_WORDS[run.status])),
+          h('td', {}, pill(RUN_TONES[run.status], RUN_WORDS[run.status]),
+            run.youtube && run.youtube.state && [' ', pill(UPLOAD_TONES[run.youtube.state.status], UPLOAD_WORDS[run.youtube.state.status])]),
           h('td', {class: 'right'},
             h('a', {class: 'btn s', href: `#lab/${run.id}`}, 'Show'), ' ',
             h('button', {class: 'btn s', disabled: run.id === data.active, onclick: () => deleteRun(run)}, 'Delete')))))
@@ -650,6 +719,8 @@ function renderLab(data, shownRun) {
         h('td', {}, 'Renders one clip into its own folder under output/lab/. It reuses the real still, so there is no image request and no cost, unless you ask for a new background. The real clip, the SEO file and state.json are not touched.')),
       h('tr', {}, h('td', {}, h('b', {}, 'Review clips, Thumbnail, Movies, Parse, Transcribe')), h('td', {}, 'Not yet'),
         h('td', {}, 'Each needs its own check first. Thumbnail and Movies read Convex.')),
+      h('tr', {}, h('td', {}, h('b', {}, 'Publish to YouTube')), h('td', {}, 'When you ask'),
+        h('td', {}, 'Uploads one finished test render to the channel as a private video, after you confirm, and records it as published in output/publish-decisions.json. Nothing else leaves this Mac.')),
       h('tr', {}, h('td', {}, h('b', {}, data.neverInLab.map(stageLabel).join(', '))), h('td', {}, 'Never'),
         h('td', {}, 'They write to Convex. The server refuses them here.'))),
   ];
@@ -665,7 +736,7 @@ async function showLab(current, runId) {
   if (labForm.shownRun) {
     try {
       const answer = await api(`/api/lab/run?id=${encodeURIComponent(labForm.shownRun)}`);
-      shownRun = {...answer.run, log: answer.log};
+      shownRun = {...answer.run, log: answer.log, youtubeLog: answer.youtubeLog};
       // Arriving at a run puts the form on its episode and clip, ready to render it again.
       if (arriving) Object.assign(labForm, {stem: shownRun.stem, clip: shownRun.clip.id, start: null, end: null, prompt: null});
     } catch (error) {
@@ -673,19 +744,22 @@ async function showLab(current, runId) {
     }
   }
   current(renderLab(data, shownRun));
-  // While a render runs, keep the log moving, then redraw once it ends.
+  // While a render or an upload runs, keep its log moving, then redraw once it ends.
+  const going = run => run.status === 'running' || run.status === 'ready' || uploading(run);
   const watch = async () => {
     if ((location.hash.slice(1) || 'today').split('/')[0] !== 'lab') return;
     const answer = await api(`/api/lab/run?id=${encodeURIComponent(shownRun.id)}`);
-    if (answer.run.status === 'running' || answer.run.status === 'ready') {
-      const log = document.getElementById('lab-log');
-      if (log) log.textContent = answer.log;
+    if (going(answer.run)) {
+      for (const [id, text] of [['lab-log', answer.log], ['youtube-log', answer.youtubeLog]]) {
+        const log = document.getElementById(id);
+        if (log) log.textContent = text;
+      }
       labPoll = setTimeout(watch, 1000);
     } else {
       route();
     }
   };
-  if (shownRun && (shownRun.status === 'running' || shownRun.status === 'ready')) labPoll = setTimeout(watch, 1000);
+  if (shownRun && going(shownRun)) labPoll = setTimeout(watch, 1000);
 }
 
 // --------------------------------------------------------------------------- Clips

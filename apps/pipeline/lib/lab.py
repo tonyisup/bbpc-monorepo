@@ -527,10 +527,10 @@ def list_runs(config: Dict[str, Any], active: Optional[str] = None) -> List[Dict
     return sorted(runs, key=lambda run: (str(run.get("createdAt")), run["id"]), reverse=True)
 
 
-def log_tail(config: Dict[str, Any], run_id: Any, max_bytes: int = 8000) -> str:
-    """The end of the run's log, starting on a whole line."""
+def log_tail(config: Dict[str, Any], run_id: Any, max_bytes: int = 8000, name: str = "run.log") -> str:
+    """The end of the run's log (``name``: its render's, or its upload's), starting on a whole line."""
     folder = run_dir(config, run_id)
-    log = folder / "run.log" if folder is not None else None
+    log = folder / name if folder is not None else None
     if log is None or not log.is_file():
         return ""
     data = log.read_bytes()

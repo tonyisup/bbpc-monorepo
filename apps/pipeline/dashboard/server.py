@@ -11,7 +11,10 @@ A GET never writes. The POSTs are:
 
 - the Lab's (``/api/lab/...``): they write under the data directory's
   ``output/lab/``, start the pipeline's clip stage on a run folder there, and
-  rewrite ``config.json`` when a draft is applied;
+  rewrite ``config.json`` when a draft is applied. ``/api/lab/youtube`` runs
+  ``scripts/youtube_upload.py``, which uploads a finished test render to the
+  YouTube channel as a private video and records it in
+  ``output/publish-decisions.json``; the page confirms it first;
 - the Shirts tab's (``/api/shirts/...``): they change the shortlist,
   ``output/tshirt/ideas.json``, and Rescan runs ``scripts/scan_phrases.py``,
   which rewrites the report under ``output/phrases/``;
@@ -38,11 +41,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence, Tuple
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from dashboard import views
+from dashboard import upload_runner, views
 from dashboard.lab_runner import DEFAULT_TIMEOUT_SECONDS, LabBusy, LabRunner
 from dashboard.run_runner import ChecksFailed, RunBusy, RunRunner
 from dashboard.scan_runner import DEFAULT_TIMEOUT_SECONDS as SCAN_TIMEOUT_SECONDS, ScanBusy, ScanRunner
-from lib import lab, pipeline_runs, publish_log, shirt_ideas
+from dashboard.upload_runner import DEFAULT_TIMEOUT_SECONDS as UPLOAD_TIMEOUT_SECONDS, UploadBusy, UploadRunner
+from lib import lab, pipeline_runs, publish_log, shirt_ideas, youtube_upload
 from lib.data_dir import data_dir, require_data_dir
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,10 +140,12 @@ def media_file(config: Dict[str, Any], parts: Sequence[str]) -> Optional[Path]:
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, port: int, config_path: Path, runner: LabRunner, scans: ScanRunner, runs: RunRunner):
+    def __init__(self, port: int, config_path: Path, runner: LabRunner, scans: ScanRunner, runs: RunRunner,
+                 uploads: UploadRunner):
         super().__init__((BIND_ADDRESS, port), Handler)
         self.config_path = Path(config_path)
         self.runner = runner
+        self.uploads = uploads
         self.scans = scans
         self.runs = runs
         # One change at a time to the shortlist and to the decisions log: each rewrites its whole file.
@@ -210,6 +216,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(409, {"error": "A render is already running. One at a time.", "active": exc.active})
         except ScanBusy:
             self._json(409, {"error": "A rescan is already running."})
+        except UploadBusy as exc:
+            self._json(409, {"error": "An upload is already going. One at a time.", "active": exc.active})
         except RunBusy as exc:
             self._json(409, {"error": "A run is already going. One at a time.", "active": exc.active})
         except ChecksFailed as exc:
@@ -280,14 +288,17 @@ class Handler(BaseHTTPRequestHandler):
         elif name == "runs/log":
             self._run_log(config, query)
         elif name == "lab":
-            self._json(200, views.lab_view(config, raw, runner.active, runner.python, self._can_render()))
+            self._json(200, views.lab_view(config, raw, runner.active, runner.python, self._can_render(),
+                                           self.server.uploads.active))
         elif name == "lab/run":
             run = lab.load_run(config, (query.get("id") or [""])[0])
             if run is None:
                 self._not_found()
             else:
                 (run,) = [r for r in lab.list_runs(config, runner.active) if r["id"] == run["id"]]
-                self._json(200, {"run": views.lab_run(config, run), "log": lab.log_tail(config, run["id"])})
+                self._json(200, {"run": views.lab_run(config, run, self.server.uploads.active),
+                                 "log": lab.log_tail(config, run["id"]),
+                                 "youtubeLog": lab.log_tail(config, run["id"], name=upload_runner.LOG_FILE)})
         elif name == "clips":
             page = views.clips(config, (query.get("stem") or [None])[0])
             if page is None:
@@ -332,9 +343,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {**applied, "gitDiff": lab.git_diff(self.server.config_path)})
         elif name == "runs":
             self._lab_render(config, raw, payload)
+        elif name == "youtube":
+            self._lab_upload(config, payload)
         elif name == "runs/delete":
             if payload.get("id") == runner.active and runner.active is not None:
                 self._json(409, {"error": "This render is still running.", "active": runner.active})
+            elif payload.get("id") == self.server.uploads.active and self.server.uploads.active is not None:
+                self._json(409, {"error": "This clip is being uploaded.", "active": self.server.uploads.active})
             else:
                 self._json(200, {"deleted": lab.delete_run(config, payload.get("id"))})
         else:
@@ -360,7 +375,28 @@ class Handler(BaseHTTPRequestHandler):
         except BaseException:
             runner.release()
             raise
-        self._json(202, {"run": views.lab_run(config, runner.start(config, run))})
+        self._json(202, {"run": views.lab_run(config, runner.start(config, run), self.server.uploads.active)})
+
+    def _lab_upload(self, config: Dict[str, Any], payload: Dict[str, Any]) -> None:
+        """Upload a finished test render to YouTube. It posts to the channel: only a literal true confirms it."""
+        uploads = self.server.uploads
+        if payload.get("confirmed") is not True:
+            self._json(400, {"error": "Confirm the upload first: it posts to the YouTube channel."})
+            return
+        if not uploads.can_start():
+            raise lab.LabError(
+                f"The pipeline's Python was not found at {uploads.python}. "
+                "Start the dashboard with --pipeline-python pointing at the venv's python."
+            )
+        run_id = payload.get("id")
+        uploads.reserve()
+        try:
+            youtube_upload.prepare(config, run_id, payload.get("title"), payload.get("description"))
+        except BaseException:
+            uploads.release()
+            raise
+        uploads.start(config, run_id, self.server.config_path)
+        self._json(202, {"upload": youtube_upload.load(config, run_id, uploads.active)})
 
     # ----------------------------------------------------------------------- the Runs tab
 
@@ -540,14 +576,17 @@ def make_server(
     scan_timeout: float = SCAN_TIMEOUT_SECONDS,
     run_command: Any = None,
     check_command: Any = None,
+    upload_command: Any = None,
+    upload_timeout: float = UPLOAD_TIMEOUT_SECONDS,
 ) -> DashboardServer:
     """``lab_command`` replaces the pipeline command a Lab render runs, ``scan_command`` the
-    phrase scan a Rescan runs, and ``run_command`` and ``check_command`` a pipeline run and
-    its checks; tests pass stand-ins."""
+    phrase scan a Rescan runs, ``run_command`` and ``check_command`` a pipeline run and
+    its checks, and ``upload_command`` a YouTube upload; tests pass stand-ins."""
     python = Path(pipeline_python or DEFAULT_PIPELINE_PYTHON)
     runner = LabRunner(python, lab_command, lab_timeout)
     runs = RunRunner(python, run_command, check_command)
-    return DashboardServer(port, config_path, runner, ScanRunner(scan_command, scan_timeout), runs)
+    uploads = UploadRunner(python, upload_command, upload_timeout)
+    return DashboardServer(port, config_path, runner, ScanRunner(scan_command, scan_timeout), runs, uploads)
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -555,8 +594,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"port on {BIND_ADDRESS} (default {DEFAULT_PORT})")
     ap.add_argument("--config", default=str(ROOT / "config.json"))
     ap.add_argument("--pipeline-python", default=str(DEFAULT_PIPELINE_PYTHON),
-                    help="python of the pipeline's venv, which runs the Lab's test renders and the Runs tab's "
-                         "checks and runs (default: venv/bin/python)")
+                    help="python of the pipeline's venv, which runs the Lab's test renders and YouTube uploads "
+                         "and the Runs tab's checks and runs (default: venv/bin/python)")
     return ap.parse_args(argv)
 
 
@@ -568,7 +607,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"Pipeline dashboard: http://{BIND_ADDRESS}:{server.server_address[1]}/")
     print(f"  data directory {data_dir()}; Ctrl-C to stop")
     print("  writes only: output/lab/ (Lab), output/tshirt/ideas.json (Shirts), output/phrases/ (Rescan), "
-          "output/publish-decisions.json (Clips), output/runs/ and a pipeline run's own writes (Runs, Convex included)")
+          "output/publish-decisions.json (Clips, and a Lab YouTube upload), output/runs/ and a pipeline run's own "
+          "writes (Runs, Convex included)")
+    print("  sends out only: a Lab clip you confirm uploading (YouTube, private) and a Runs-tab pipeline run")
     if not server.runner.python_found():
         print(f"  no pipeline python at {server.runner.python}: the Lab cannot render and Runs cannot start "
               "(see --pipeline-python)")
