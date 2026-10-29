@@ -483,6 +483,8 @@ class LabRunApiTests(LabServerTestCase):
              "A new background is one paid image request to openrouter (google/gemini-3.1-flash-image)."),
             (dict(clip="candidate-1"), "needs_background",
              "This clip has no still to reuse. Rendering it needs a new background, which is one image request."),
+            (dict(clip="candidate-1", background="nope"), "invalid",
+             "nope is not a background made in the Lab for this clip"),
             (dict(stem="20260112"), "invalid", "20260112 is not an episode the Lab can render"),
             (dict(edits={"start": 50.0, "end": 55.0}), "invalid", "the clip must be 20 to 180 seconds long, not 5"),
         ]
@@ -551,7 +553,8 @@ class LabViewApiTests(LabServerTestCase):
         clips = view["episodes"][0]["clips"]
         self.assertEqual(clips[1], {
             "id": "pick-2", "source": "pick", "index": 2, "headline": "Bit 5", "start": 50.0, "end": 80.0,
-            "imagePrompt": "A cracked film reel in fog", "hasStill": True,
+            "imagePrompt": "A cracked film reel in fog", "hasStill": True, "labBackgrounds": [],
+            "stillUrl": "/media/output/visuals/20260105/02-bit-5.png",
             "realClip": "/media/output/clips/20260105/02-bit-5.mp4",
         })
         self.assertEqual((clips[3]["id"], clips[3]["hasStill"], clips[3]["realClip"]), ("candidate-1", False, None))

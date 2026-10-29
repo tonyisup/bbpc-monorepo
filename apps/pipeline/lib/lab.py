@@ -6,9 +6,10 @@ Real runs keep using ``config.json`` until a draft is applied to it.
 A *run* renders one clip with a draft. It is a folder ``<output_dir>/lab/<run id>/``
 holding a run config (``config.json`` plus the draft, with ``paths.output_dir``
 pointed at the folder), a one-clip SEO file, and a copy of the clip's real
-still. ``pipeline.py <episode> --config <run config> --only clip`` then writes
-only inside that folder, and the episode's real clip, SEO file and
-``state.json`` are never touched.
+still or of a background an earlier run made for the clip.
+``pipeline.py <episode> --config <run config> --only clip`` then writes only
+inside that folder, and the episode's real clip, SEO file and ``state.json``
+are never touched.
 
 Nothing here writes outside ``<output_dir>/lab/`` except ``apply_draft``, which
 rewrites ``config.json``. Standard library only.
@@ -262,9 +263,11 @@ def clip_choices(config: Dict[str, Any], stem: str) -> List[Dict[str, Any]]:
     ``id`` is ``pick-N`` (the ``NN-`` file number) or ``candidate-N`` (the
     position in ``candidateClips``, as ``publish_decisions.py`` counts it).
     ``realClip`` and ``still`` are the pick's rendered clip and background
-    still when they are on disk.
+    still when they are on disk. ``labStills`` are the backgrounds Lab runs
+    made for the clip, newest first.
     """
     output = Path(config.get("paths", {}).get("output_dir", "./output"))
+    made = _lab_stills(config, stem)
     choices: List[Dict[str, Any]] = []
     picked = set()
     for row in publish_log.rendered_clips(config, stem):
@@ -277,7 +280,28 @@ def clip_choices(config: Dict[str, Any], stem: str) -> List[Dict[str, Any]]:
     for index, clip in enumerate(publish_log.candidate_clips(config, stem)):
         if isinstance(clip, dict) and _clip_key(clip) not in picked and _window(clip) is not None:
             choices.append(_choice("candidate", index, clip, None, None))
+    for choice in choices:
+        choice["labStills"] = made.get(choice["id"], [])
     return choices
+
+
+def _lab_stills(config: Dict[str, Any], stem: str) -> Dict[str, List[Dict[str, Any]]]:
+    """By clip id, the stills of finished runs that made a new background for a clip of ``stem``, newest first."""
+    stills: Dict[str, List[Dict[str, Any]]] = {}
+    for run in list_runs(config):
+        if run.get("stem") != stem or not run.get("newBackground") or run.get("status") != "done":
+            continue
+        clip_file = run.get("clipFile")
+        clip = run.get("clip") if isinstance(run.get("clip"), dict) else {}
+        if not isinstance(clip_file, str) or not clip_file.endswith(".mp4"):
+            continue
+        still = lab_dir(config) / run["id"] / "visuals" / stem / f"{Path(clip_file).name[:-len('.mp4')]}.png"
+        if still.is_file():
+            stills.setdefault(str(clip.get("id")), []).append({
+                "run": run["id"], "createdAt": run.get("createdAt"),
+                "imagePrompt": str(clip.get("imagePrompt") or ""), "still": still,
+            })
+    return stills
 
 
 def _number(value: Any) -> Optional[float]:
@@ -362,13 +386,15 @@ def create_run(
     draft: Optional[str] = None,
     edits: Any = None,
     new_background: bool = False,
+    background: Any = None,
     confirm_paid: bool = False,
     now: Optional[_dt.datetime] = None,
 ) -> Dict[str, Any]:
     """Check a render request and build its run folder; raise ``LabError`` when it is refused.
 
-    Nothing is written unless every check passes. The run is left ``ready``:
-    ``run_command`` and ``run_env`` say how to start it.
+    ``background`` is the id of a run whose new background to reuse instead
+    of the real still. Nothing is written unless every check passes. The run
+    is left ``ready``: ``run_command`` and ``run_env`` say how to start it.
     """
     if stage in NEVER_IN_LAB:
         raise LabError(f"{stage} writes to Convex and is never run from the Lab", code="never_in_lab")
@@ -396,7 +422,15 @@ def create_run(
     new_background = bool(new_background)
     provider = settings_schema.value(settings, "visuals_provider")
     paid = new_background and provider in PAID_PROVIDERS
-    if not new_background and choice["still"] is None:
+    reused, reused_prompt = choice["still"], None
+    if background is not None:
+        if new_background:
+            raise LabError("a render either reuses a background or makes a new one, not both")
+        made = next((row for row in choice["labStills"] if row["run"] == background), None)
+        if made is None:
+            raise LabError(f"{background} is not a background made in the Lab for this clip")
+        reused, reused_prompt = made["still"], made["imagePrompt"]
+    if not new_background and reused is None:
         raise LabError("This clip has no still to reuse. Rendering it needs a new background, which is one image request.",
                        code="needs_background")
     if paid and not confirm_paid:
@@ -404,6 +438,8 @@ def create_run(
         raise LabError(f"A new background is one paid image request to {provider} ({model}).", code="confirm_paid")
     paths = stage_status.artifacts(config, stem)
     edited, changed = _edited_clip(choice["clip"], edits, new_background, settings, paths["transcript"])
+    if reused_prompt:
+        edited["imagePrompt"] = reused_prompt  # the prompt the reused background was made from
 
     now = now or _now()
     base = f"{now:%Y%m%d-%H%M%S}-{stem}-{choice['id']}"
@@ -434,7 +470,7 @@ def create_run(
     if not new_background:
         still = folder / "visuals" / stem / f"{clip_file[:-len('.mp4')]}.png"
         still.parent.mkdir(parents=True)
-        shutil.copyfile(choice["still"], still)
+        shutil.copyfile(reused, still)
 
     run = {
         "id": run_id, "createdAt": now.replace(microsecond=0).isoformat(),
@@ -443,7 +479,7 @@ def create_run(
         | {key: edited.get(key) for key in _EDITABLE},
         "edits": changed,
         "draft": draft_ref, "overrides": overrides,
-        "newBackground": new_background, "paid": paid, "provider": provider,
+        "newBackground": new_background, "background": background, "paid": paid, "provider": provider,
         "clipFile": f"clips/{stem}/{clip_file}",
         "realClipFile": choice["realClip"].name if choice["realClip"] else None,
         "status": "ready", "startedAt": None, "finishedAt": None, "returncode": None, "message": None,

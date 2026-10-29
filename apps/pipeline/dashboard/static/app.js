@@ -464,19 +464,26 @@ function renderSettings(data) {
 // --------------------------------------------------------------------------- Lab
 
 // What the form holds, kept across re-renders and polls.
-const labForm = {stem: null, clip: null, start: null, end: null, prompt: null, shownRun: null, error: null};
+// `background` is the still to reuse: 'real', or the id of the Lab run that made it.
+const labForm = {stem: null, clip: null, start: null, end: null, prompt: null, background: null, shownRun: null, error: null};
 let labPoll = null;
 
 const seconds = clip => Math.round(clip.end - clip.start);
 const clipLabel = clip => (clip.source === 'pick'
   ? `${String(clip.index).padStart(2, '0')} · ${clip.headline} · ${seconds(clip)} s`
-  : `c${clip.index} · ${clip.headline} · ${seconds(clip)} s · no still`);
+  : `c${clip.index} · ${clip.headline} · ${seconds(clip)} s · ${clip.labBackgrounds.length ? 'Lab background' : 'no still'}`);
+// The stills a render can reuse: the real one, then those Lab runs made for the clip, newest first.
+const backgrounds = clip => [
+  ...(clip.hasStill ? [{id: 'real', label: 'The real still', url: clip.stillUrl}] : []),
+  ...clip.labBackgrounds.map(made => ({
+    id: made.run, label: `Made in the Lab · ${when(made.createdAt)}`, url: made.url, prompt: made.imagePrompt})),
+];
 // The provider a new background would use: the chosen draft's when it has one, else config.json's.
 const labProvider = (data, draft) => (draft && draft.provider) || data.provider;
 const RUN_WORDS = {ready: 'starting', running: 'rendering', done: 'done', failed: 'failed', interrupted: 'interrupted'};
 const RUN_TONES = {ready: 'in', running: 'in', done: 'ok', failed: 'er', interrupted: 'wa'};
 
-async function render(data, clip, draft, newBackground) {
+async function render(data, clip, draft, newBackground, background) {
   const edits = {};
   if (labForm.start !== null && labForm.start !== clip.start) edits.start = labForm.start;
   if (labForm.end !== null && labForm.end !== clip.end) edits.end = labForm.end;
@@ -486,7 +493,7 @@ async function render(data, clip, draft, newBackground) {
     `This makes ONE PAID image request to ${provider.name} (${provider.model}).\n\nContinue?`)) return;
   const request = confirmPaid => post('/api/lab/runs', {
     stem: labForm.stem, clip: clip.id, stage: 'clip', draft: draft ? draft.name : null, edits,
-    newBackground, confirmPaid,
+    newBackground, confirmPaid, background: !newBackground && background && background.id !== 'real' ? background.id : null,
   });
   let answer = await request(newBackground && provider.paid);
   // The server decides what is paid; if it still asks (config.json changed since the page loaded), ask Tony too.
@@ -520,7 +527,8 @@ function runSummary(run) {
     run.draft ? `draft "${run.draft.title}"` : 'config.json as it was',
     changes.length ? changes.join(', ') : null,
     edits.length ? `clip edits: ${edits.join(', ')}` : null,
-    run.newBackground ? `new background (${run.provider}${run.paid ? ', paid' : ''})` : 'reused still',
+    run.newBackground ? `new background (${run.provider}${run.paid ? ', paid' : ''})`
+      : run.background ? 'reused a Lab background' : 'reused still',
   ].filter(Boolean).join(' · ');
 }
 
@@ -553,7 +561,9 @@ function renderLab(data, shownRun) {
   const episode = episodes.find(ep => ep.stem === labForm.stem) || episodes[0];
   labForm.stem = episode.stem;
   const clip = episode.clips.find(c => c.id === labForm.clip) || episode.clips[0];
-  if (labForm.clip !== clip.id) Object.assign(labForm, {clip: clip.id, start: null, end: null, prompt: null});
+  if (labForm.clip !== clip.id) Object.assign(labForm, {clip: clip.id, start: null, end: null, prompt: null, background: null});
+  const stills = backgrounds(clip);
+  const still = stills.find(option => option.id === labForm.background) || stills[0] || null;
   const draft = chosenDraft(data.drafts);
   const provider = labProvider(data, draft);
   const busy = Boolean(data.active);
@@ -575,6 +585,10 @@ function renderLab(data, shownRun) {
     input.addEventListener('change', () => { labForm[field] = input.value === '' ? null : Number(input.value); });
     return input;
   };
+  // Unlike the pickers above, choosing a background keeps the run that is on show.
+  const backgroundPicker = h('select', {class: 'inp', 'aria-label': 'Background'}, stills.map(option =>
+    h('option', {value: option.id, selected: still && option.id === still.id}, option.label)));
+  backgroundPicker.addEventListener('change', () => { labForm.background = backgroundPicker.value; route(); });
   const prompt = h('textarea', {class: 'inp', rows: 4, 'aria-label': 'Image prompt'},
     labForm.prompt !== null ? labForm.prompt : clip.imagePrompt);
   prompt.addEventListener('change', () => { labForm.prompt = prompt.value; });
@@ -585,7 +599,7 @@ function renderLab(data, shownRun) {
       value => Object.assign(labForm, {stem: value, clip: null})),
     h('label', {}, 'Clip'),
     pick(episode.clips.map(c => [c.id, clipLabel(c)]), clip.id, 'Clip',
-      value => Object.assign(labForm, {clip: value, start: null, end: null, prompt: null})),
+      value => Object.assign(labForm, {clip: value, start: null, end: null, prompt: null, background: null})),
     h('label', {}, 'Window, in seconds of the episode'),
     h('div', {class: 'pair'}, number(labForm.start !== null ? labForm.start : clip.start, 'start'), 'to',
       number(labForm.end !== null ? labForm.end : clip.end, 'end')),
@@ -601,14 +615,17 @@ function renderLab(data, shownRun) {
       : h('div', {class: 'mut sm gap'}, 'Renders with config.json as it is.'),
     draft && draft.problems.length > 0 && h('div', {class: 'sm problem'}, draft.problems.join(' ')),
     h('div', {class: 'gap'}, h('a', {href: '#settings'}, draft ? 'Edit this draft in Settings' : 'Make a draft in Settings')),
+    still && h('label', {}, 'Background'),
+    stills.length > 1 && backgroundPicker,
+    still && still.url && h('img', {class: 'still gap', src: still.url, alt: '', title: still.prompt || still.label}),
     h('div', {class: 'bar gap'},
-      h('button', {class: 'btn p', disabled: !canRender || !clip.hasStill, onclick: () => render(data, clip, draft, false)},
+      h('button', {class: 'btn p', disabled: !canRender || !still, onclick: () => render(data, clip, draft, false, still)},
         busy ? 'Rendering…' : 'Render test clip')),
-    h('div', {class: 'mut sm gap'}, clip.hasStill
-      ? '1 clip · local ffmpeg · reuses the real still · no network, no cost'
+    h('div', {class: 'mut sm gap'}, still
+      ? `1 clip · local ffmpeg · reuses ${still.id === 'real' ? 'the real still' : 'the background made in the Lab'} · no network, no cost`
       : 'This clip was never rendered, so there is no still to reuse. It needs a new background.'),
     labForm.error && h('div', {class: 'sm problem gap'}, labForm.error),
-    h('details', {class: 'gap', open: !clip.hasStill},
+    h('details', {class: 'gap', open: !still},
       h('summary', {}, 'New background…'),
       h('label', {}, 'Image prompt for this test (the SEO file is not edited)'),
       prompt,
@@ -647,7 +664,7 @@ function renderLab(data, shownRun) {
     h('table', {},
       h('tr', {}, ['Stage', 'In the Lab', 'A test run'].map(name => h('th', {}, name))),
       h('tr', {}, h('td', {}, h('b', {}, 'Clip')), h('td', {}, 'Yes'),
-        h('td', {}, 'Renders one clip into its own folder under output/lab/. It reuses the real still, so there is no image request and no cost, unless you ask for a new background. The real clip, the SEO file and state.json are not touched.')),
+        h('td', {}, 'Renders one clip into its own folder under output/lab/. It reuses the real still, or a background an earlier test render made, so there is no image request and no cost, unless you ask for a new background. The real clip, the SEO file and state.json are not touched.')),
       h('tr', {}, h('td', {}, h('b', {}, 'Review clips, Thumbnail, Movies, Parse, Transcribe')), h('td', {}, 'Not yet'),
         h('td', {}, 'Each needs its own check first. Thumbnail and Movies read Convex.')),
       h('tr', {}, h('td', {}, h('b', {}, data.neverInLab.map(stageLabel).join(', '))), h('td', {}, 'Never'),
@@ -666,8 +683,13 @@ async function showLab(current, runId) {
     try {
       const answer = await api(`/api/lab/run?id=${encodeURIComponent(labForm.shownRun)}`);
       shownRun = {...answer.run, log: answer.log};
-      // Arriving at a run puts the form on its episode and clip, ready to render it again.
-      if (arriving) Object.assign(labForm, {stem: shownRun.stem, clip: shownRun.clip.id, start: null, end: null, prompt: null});
+      // Arriving at a run puts the form on its episode, clip, window and background, ready to render it again.
+      if (arriving) {
+        Object.assign(labForm, {stem: shownRun.stem, clip: shownRun.clip.id,
+          start: shownRun.clip.start ?? null, end: shownRun.clip.end ?? null,
+          prompt: shownRun.edits.imagePrompt ?? null,
+          background: shownRun.newBackground ? shownRun.id : shownRun.background || null});
+      }
     } catch (error) {
       labForm.shownRun = null; // deleted
     }
@@ -1363,7 +1385,8 @@ async function route() {
       current(renderClips(data));
     } else if (known === 'lab' && argument === 'clip' && rest.length === 2) {
       // `#lab/clip/<stem>/<clip id>`: the Clips tab's "Open in Lab". Put the form on that clip, then be plain #lab.
-      Object.assign(labForm, {stem: rest[0], clip: rest[1], start: null, end: null, prompt: null, shownRun: null, error: null});
+      Object.assign(labForm, {stem: rest[0], clip: rest[1], start: null, end: null, prompt: null, background: null,
+        shownRun: null, error: null});
       history.replaceState(null, '', '#lab');
       await showLab(current, null);
     } else if (known === 'lab') {

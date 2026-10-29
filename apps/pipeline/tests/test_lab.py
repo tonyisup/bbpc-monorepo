@@ -268,6 +268,69 @@ class CreateRunTests(LabTestCase):
             "This clip has no still to reuse. Rendering it needs a new background, which is one image request.",
         ))
 
+    def lab_background(self, clip="candidate-1", status=0, still=True, now=NOW, **request):
+        """A Lab run that made a new background for ``clip``, finished as the pipeline would leave it."""
+        run = lab.create_run(self.config, self.raw, stem=STEM, clip=clip, new_background=True, confirm_paid=True,
+                             now=now, **request)
+        folder = self.lab / run["id"]
+        if still:
+            dashboard_fixture.write(folder / run["clipFile"].replace("clips/", "visuals/", 1).replace(".mp4", ".png"),
+                                    data=f"\x89PNG lab {run['id']}".encode())
+        dashboard_fixture.write(folder / run["clipFile"], data=b"lab video")
+        return lab.finish_run(self.config, run["id"], status)
+
+    def test_a_background_made_in_the_lab_can_be_reused_for_the_same_clip(self):
+        first = self.lab_background(edits={"imagePrompt": "A canoe among stars"})
+        second = self.lab_background(now=NOW + datetime.timedelta(minutes=5))
+        self.lab_background(now=NOW + datetime.timedelta(minutes=6), status=1)   # failed: not offered
+        self.lab_background(now=NOW + datetime.timedelta(minutes=7), still=False)
+        self.lab_background(clip="candidate-2", now=NOW + datetime.timedelta(minutes=8))
+        candidate = next(c for c in lab.clip_choices(self.config, STEM) if c["id"] == "candidate-1")
+        self.assertIsNone(candidate["still"])
+        self.assertEqual(candidate["labStills"], [
+            {"run": second["id"], "createdAt": second["createdAt"], "imagePrompt": "A cracked film reel in fog",
+             "still": self.lab / second["id"] / "visuals" / STEM / "01-bit-2.png"},
+            {"run": first["id"], "createdAt": first["createdAt"], "imagePrompt": "A canoe among stars",
+             "still": self.lab / first["id"] / "visuals" / STEM / "01-bit-2.png"},
+        ])
+
+        before = self.outside_lab()
+        later = NOW + datetime.timedelta(minutes=10)
+        run = lab.create_run(self.config, self.raw, stem=STEM, clip="candidate-1", background=first["id"],
+                             edits={"start": 15.0, "end": 45.0}, now=later)
+        self.assertEqual({k: run[k] for k in ("paid", "newBackground", "background", "edits")}, {
+            "paid": False, "newBackground": False, "background": first["id"], "edits": {"start": 15.0, "end": 45.0},
+        })
+        self.assertEqual(run["clip"]["imagePrompt"], "A canoe among stars")  # the prompt the background was made from
+        folder = self.lab / run["id"]
+        self.assertEqual((folder / "visuals" / STEM / "01-bit-2.png").read_bytes(),
+                         f"\x89PNG lab {first['id']}".encode())
+        self.assertIs(json.loads((folder / "config.json").read_text())["settings"]["local_visual_reuse_cached_still"], True)
+        self.assertEqual(lab.run_env(run, {"OPENROUTER_API_KEY": "sk"}), {"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": ""})
+        self.assertEqual(self.outside_lab(), before)
+        # A render that reused a background made none, so it is not offered as one.
+        lab.finish_run(self.config, run["id"], 0)
+        candidate = next(c for c in lab.clip_choices(self.config, STEM) if c["id"] == "candidate-1")
+        self.assertEqual([row["run"] for row in candidate["labStills"]], [second["id"], first["id"]])
+
+    def test_only_a_background_made_for_this_clip_can_be_reused(self):
+        other = self.lab_background(clip="candidate-2")
+        made = self.lab_background(now=NOW + datetime.timedelta(minutes=1))
+        for background in (other["id"], "../clips", "nope", 7):
+            with self.subTest(background=background):
+                error = self.refused(clip="candidate-1", background=background)
+                self.assertEqual(str(error), f"{background} is not a background made in the Lab for this clip")
+        self.assertEqual(str(self.refused(clip="candidate-1", background=made["id"], new_background=True,
+                                          confirm_paid=True)),
+                         "a render either reuses a background or makes a new one, not both")
+        # A pick with its real still can still try a background the Lab made for it.
+        pick = self.lab_background(clip="pick-2", now=NOW + datetime.timedelta(minutes=2))
+        run = lab.create_run(self.config, self.raw, stem=STEM, clip="pick-2", background=pick["id"],
+                             now=NOW + datetime.timedelta(minutes=3))
+        self.assertEqual((self.lab / run["id"] / "visuals" / STEM / "01-bit-5.png").read_bytes(),
+                         f"\x89PNG lab {pick['id']}".encode())
+        self.assertIsNone(self.run_for()["background"])  # the real still
+
     def test_a_new_background_from_a_paid_provider_must_be_confirmed(self):
         error = self.refused(new_background=True)
         self.assertEqual((error.code, str(error)), (
