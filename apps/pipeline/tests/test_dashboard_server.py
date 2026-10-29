@@ -613,6 +613,7 @@ class YouTubeApiTests(YouTubeTestCase):
         self.assertEqual(run["youtube"], {
             "state": None, "privacy": "private", "defaultTitle": "Bad Boys Podcast - 801 - Alpha - Bit 5",
             "defaultDescription": "From Bad Boys Podcast episode 801: Alpha", "titleMax": 100, "published": None,
+            "episodeUrl": None,
         })
         self.assertEqual(self.api("/api/lab")["runs"][0]["youtube"], run["youtube"])
 
@@ -634,6 +635,14 @@ class YouTubeApiTests(YouTubeTestCase):
         self.assertEqual((status, answer.get("error")),
                          (400, "this clip is already on YouTube: https://youtube.com/shorts/NEWVIDEO_01"))
         self.assertEqual(self.outside_lab(), before)
+
+    def test_the_full_episode_given_with_an_upload_is_linked_and_offered_for_the_next(self):
+        run = self.rendered()
+        status, answer = self.publish(run["id"], episode="https://youtu.be/EPISODE_801")
+        self.assertEqual((status, answer["upload"]["episodeUrl"]), (202, "https://youtu.be/EPISODE_801"))
+        self.assertTrue(answer["upload"]["description"].endswith("Full episode: https://youtu.be/EPISODE_801"))
+        self.wait_for_upload(run["id"])
+        self.assertEqual(self.rendered("pick-1")["youtube"]["episodeUrl"], "https://youtu.be/EPISODE_801")
 
     def test_the_title_is_checked_and_only_a_finished_render_is_uploaded(self):
         run = self.rendered()

@@ -182,7 +182,8 @@ data directory:
 - the Lab's test renders and drafts under `output/lab/`, and `config.json`
   when you apply a draft;
 - publish decisions, `output/publish-decisions.json` (from the Clips tab, and
-  after a Lab clip is uploaded to YouTube);
+  after a Lab clip is uploaded to YouTube), and each episode's full-length
+  YouTube link, `output/episode-videos.json`, given with a Lab upload;
 - the T-shirt shortlist, `output/tshirt/ideas.json`;
 - the phrase report under `output/phrases/`, when you press Rescan;
 - a run's record and log under `output/runs/`, and whatever the pipeline run
@@ -273,11 +274,20 @@ as the pick or candidate it came from, or, when the Lab changed its start or
 end, as an untracked Short named by its headline. Then check the video in
 YouTube Studio (the page links to it) and make it public there. Each test
 render is uploaded once; a failed upload can be tried again. One upload at a
-time, and a render cannot be deleted while it is uploading. The same upload
-from a terminal:
+time, and a render cannot be deleted while it is uploading.
+
+Every upload is a Short: Lab clips are 1080×1920 and at most three minutes, so
+YouTube classifies them by itself (its API has no Shorts switch). "Full episode
+on YouTube" takes the episode's full-length video; the description then ends
+with `Full episode: <link>`, and the link is remembered in
+`output/episode-videos.json` for the episode's other clips. YouTube's API
+cannot set a Short's **Related video**, so that one stays a Studio step: after
+the upload, "Open in YouTube Studio and copy the episode link" puts the link on
+the clipboard to paste into Related video. The same upload from a terminal:
 
 ```bash
-venv/bin/python scripts/youtube_upload.py <run id> --title "Bad Boys Podcast - 801 - Alpha - Bit 5"
+venv/bin/python scripts/youtube_upload.py <run id> --title "Bad Boys Podcast - 801 - Alpha - Bit 5" \
+  --episode https://youtu.be/<full episode>
 ```
 
 The upload is `scripts/youtube_upload.py`, under the venv's python because it

@@ -77,6 +77,13 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(youtube_upload.default_description(801, "Alpha"), "From Bad Boys Podcast episode 801: Alpha")
         self.assertEqual(youtube_upload.default_description(None, None), "From Bad Boys Podcast")
 
+    def test_the_full_episode_is_linked_at_the_end_of_the_description_once(self):
+        link = youtube_upload.with_episode_link
+        self.assertEqual(link("From episode 801", "EPISODE_801"), "From episode 801\n\nFull episode: https://youtu.be/EPISODE_801")
+        self.assertEqual(link("", "EPISODE_801"), "Full episode: https://youtu.be/EPISODE_801")
+        self.assertEqual(link("Watch https://youtu.be/EPISODE_801", "EPISODE_801"), "Watch https://youtu.be/EPISODE_801")
+        self.assertEqual(link("From episode 801", None), "From episode 801")
+
     def test_youtube_limits_are_checked_before_anything_is_sent(self):
         cases = [
             (("", "d"), ["the title is empty"]),
@@ -169,8 +176,9 @@ class UploadTestCase(unittest.TestCase):
         dashboard_fixture.write(lab.lab_dir(self.config) / run["id"] / run["clipFile"], data=b"lab video")
         return lab.finish_run(self.config, run["id"], 0)
 
-    def prepare(self, run, title="Bad Boys Podcast - 801 - Alpha - Bit 5", description="From episode 801", active=None):
-        return youtube_upload.prepare(self.config, run["id"], title, description, active=active, now=NOW)
+    def prepare(self, run, title="Bad Boys Podcast - 801 - Alpha - Bit 5", description="From episode 801", active=None,
+                episode=None):
+        return youtube_upload.prepare(self.config, run["id"], title, description, active=active, now=NOW, episode=episode)
 
     def refused(self, run, **kwargs):
         with self.assertRaises(youtube_upload.UploadError) as caught:
@@ -194,7 +202,7 @@ class PrepareTests(UploadTestCase):
         state = self.prepare(run)
         self.assertEqual(state, {
             "status": "ready", "title": "Bad Boys Podcast - 801 - Alpha - Bit 5", "description": "From episode 801",
-            "privacy": "private", "requestedAt": "2026-01-20T12:30:05+00:00", "finishedAt": None,
+            "privacy": "private", "episodeUrl": None, "requestedAt": "2026-01-20T12:30:05+00:00", "finishedAt": None,
             "videoId": None, "url": None, "studioUrl": None, "decision": None, "message": None,
         })
         self.assertEqual(json.loads((lab.lab_dir(self.config) / run["id"] / "youtube.json").read_text()), state)
@@ -218,6 +226,29 @@ class PrepareTests(UploadTestCase):
         self.assertEqual(refused.problems, ["the title is 101 characters; YouTube allows 100",
                                             "the description cannot contain < or >"])
         self.assertIsNone(youtube_upload.load(self.config, run["id"]))
+
+    def test_the_full_episode_is_linked_and_remembered_for_the_episodes_other_clips(self):
+        first = self.prepare(self.rendered("pick-1"), episode="https://www.youtube.com/watch?v=EPISODE_801&t=3")
+        self.assertEqual((first["description"], first["episodeUrl"]), (
+            "From episode 801\n\nFull episode: https://youtu.be/EPISODE_801", "https://youtu.be/EPISODE_801"))
+        self.assertEqual(json.loads((self.root / "output" / "episode-videos.json").read_text()), {STEM: "EPISODE_801"})
+        second = self.prepare(self.rendered("pick-2"))
+        self.assertEqual(second["description"], "From episode 801\n\nFull episode: https://youtu.be/EPISODE_801")
+        self.assertEqual(youtube_upload.view(self.config, self.rendered("pick-2"), 801, "Alpha")["episodeUrl"],
+                         "https://youtu.be/EPISODE_801")
+
+    def test_without_an_episode_link_the_description_is_left_alone(self):
+        state = self.prepare(self.rendered())
+        self.assertEqual((state["description"], state["episodeUrl"]), ("From episode 801", None))
+        self.assertFalse((self.root / "output" / "episode-videos.json").exists())
+
+    def test_an_episode_link_that_is_not_youtube_is_refused_and_not_remembered(self):
+        run = self.rendered()
+        refused = self.refused(run, title="", episode="https://vimeo.com/123")
+        self.assertEqual(refused.problems, ["the title is empty", "the full episode's link is not a YouTube URL or video ID"])
+        self.assertEqual(self.refused(run, episode=801).problems, ["the full episode's link must be text"])
+        self.assertIsNone(youtube_upload.load(self.config, run["id"]))
+        self.assertFalse((self.root / "output" / "episode-videos.json").exists())
 
     def test_a_clip_is_uploaded_once(self):
         run = self.rendered()
@@ -271,6 +302,13 @@ class RunUploadTests(UploadTestCase):
             "source": "pick", "file": "02-bit-5.mp4", "decision": "published", "youtubeId": "NEWVIDEO_01",
             "start": 50.0, "end": 80.0,
         })
+
+    def test_the_log_says_what_to_set_the_related_video_to(self):
+        run = self.rendered()
+        self.prepare(run, episode="EPISODE_801")
+        with mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.upload(run)
+        self.assertIn("set its Related video to the full episode: https://youtu.be/EPISODE_801", out.getvalue())
 
     def test_an_uploaded_candidate_is_recorded_as_that_candidate(self):
         run = self.rendered("candidate-1", new_background=True)
@@ -333,7 +371,7 @@ class ViewTests(UploadTestCase):
             "state": None, "privacy": "private",
             "defaultTitle": "Bad Boys Podcast - 801 - Alpha - Bit 1",
             "defaultDescription": "From Bad Boys Podcast episode 801: Alpha",
-            "titleMax": 100, "published": "https://youtube.com/shorts/abcdefghijk",
+            "titleMax": 100, "published": "https://youtube.com/shorts/abcdefghijk", "episodeUrl": None,
         })
         self.assertIsNone(youtube_upload.view(self.config, self.rendered("pick-2"), 801, "Alpha")["published"])
 
