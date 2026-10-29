@@ -369,6 +369,7 @@ class Handler(BaseHTTPRequestHandler):
                 stem=payload.get("stem"), clip=payload.get("clip"), stage=payload.get("stage"),
                 draft=payload.get("draft"), edits=payload.get("edits"),
                 new_background=payload.get("newBackground") is True,
+                background=payload.get("background"),
                 # Only a literal true confirms spending money.
                 confirm_paid=payload.get("confirmPaid") is True,
             )

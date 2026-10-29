@@ -292,6 +292,22 @@ class LabViewTests(ViewsTestCase):
             "tight": {"name": "openrouter", "model": "google/gemini-3.1-flash-image", "paid": True},
         })
 
+    def test_a_clip_lists_the_backgrounds_the_lab_made_for_it(self):
+        run = lab.create_run(self.config, self.raw, stem="20260105", clip="candidate-1", new_background=True,
+                             confirm_paid=True)
+        folder = lab.lab_dir(self.config) / run["id"]
+        dashboard_fixture.write(folder / "visuals/20260105/01-bit-2.png", data=b"png")
+        dashboard_fixture.write(folder / run["clipFile"], data=b"v")
+        lab.finish_run(self.config, run["id"], 0)
+        clips = views.lab_view(self.config, self.raw)["episodes"][0]["clips"]
+        candidate = next(c for c in clips if c["id"] == "candidate-1")
+        self.assertEqual((candidate["hasStill"], candidate["stillUrl"]), (False, None))
+        self.assertEqual(candidate["labBackgrounds"], [{
+            "run": run["id"], "createdAt": run["createdAt"], "imagePrompt": "A cracked film reel in fog",
+            "url": f"/media/output/lab/{run['id']}/visuals/20260105/01-bit-2.png",
+        }])
+        self.assertEqual(next(c for c in clips if c["id"] == "candidate-2")["labBackgrounds"], [])
+
     def test_a_run_is_shown_with_its_clip_once_rendered_beside_the_real_clip(self):
         run = lab.create_run(self.config, self.raw, stem="20260105", clip="pick-2")
         shown = views.lab_run(self.config, run)

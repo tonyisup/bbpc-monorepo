@@ -332,6 +332,12 @@ def lab_view(
             "clips": [
                 {key: choice[key] for key in ("id", "source", "index", "headline", "start", "end", "imagePrompt")}
                 | {"hasStill": choice["still"] is not None,
+                   "stillUrl": media_url(config, choice["still"]) if choice["still"] else None,
+                   "labBackgrounds": [
+                       {key: made[key] for key in ("run", "createdAt", "imagePrompt")}
+                       | {"url": media_url(config, made["still"])}
+                       for made in choice["labStills"]
+                   ],
                    "realClip": media_url(config, choice["realClip"]) if choice["realClip"] else None}
                 for choice in lab.clip_choices(config, stem)
             ],
