@@ -23,7 +23,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - ✅ **Brand Logo:** Composited onto clip backgrounds.
 - ✅ **Laughter Detection:** Run before the Cowork hand-off; its timestamps go to Cowork as places to read closely (`output/laughter/<stem>.laughter.json`).
 - ✅ **Thumbnail Generation:** 1920x1920 episode thumbnails from reviewed movie posters + BBPC logo.
-- ✅ **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Clips, Shirts, the clip Lab, Runs and Settings.
+- ✅ **Dashboard:** Local page (`python3 -m dashboard`) with Today, Episode, Clips, Shirts, the clip Lab (which can publish a clip to YouTube), Runs and Settings.
 - ✅ **T-shirt shortlist:** `output/tshirt/ideas.json`, kept by `scripts/shirt_ideas.py` and the dashboard's Shirts tab, with licensing flags.
 
 ## Completed Tasks
@@ -56,7 +56,8 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [x] **Shirts tab, ignore from the page:** "Ignore…" on a phrase of the report, and `scripts/shirt_ideas.py ignore`, add it to `output/phrases/ignore.txt` (`phrase_scan.add_ignored`); the next Rescan leaves it out.
 - [x] **Laughter → Cowork:** before the hand-off the pipeline writes the detector's times to `output/laughter/<stem>.laughter.json` (`lib/laughter_hints.py`); the headless prompt carries them and `--pending` lists the file.
 - [x] **Advanced Captions:** `caption_style` `pop` (each word appears as it is said) and `highlight` (the word being said in `caption_highlight_color`) follow the word timings; `chunk` stays the default, and a Lab draft can try either.
-- [ ] **Social Upload:** Integrate automated upload to TikTok/Instagram/YouTube APIs.
+- [x] **YouTube upload:** the Lab's "Publish to YouTube" uploads a finished test render as a private video (`lib/youtube_upload.py`, `scripts/youtube_upload.py`, one-time sign-in with `scripts/youtube_auth.py`) and records it as published.
+- [ ] **Social Upload:** TikTok and Instagram.
 - [ ] **Web Integration:** Sync clip paths to the Next.js frontend content directory.
 
 ## Maintenance

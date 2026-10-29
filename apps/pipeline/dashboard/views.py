@@ -16,7 +16,7 @@ from urllib.parse import quote
 
 from lib import (
     cowork_handoff, cowork_headless, lab, phrase_scan, pipeline_runs, publish_log, settings_schema, shirt_ideas,
-    stage_status, visual_prompts,
+    stage_status, visual_prompts, youtube_upload,
 )
 from lib.data_dir import data_dir, resolve_data_paths
 
@@ -298,15 +298,18 @@ def settings(raw_config: Dict[str, Any], config: Optional[Dict[str, Any]] = None
 
 # --------------------------------------------------------------------------- Lab
 
-def lab_run(config: Dict[str, Any], run: Dict[str, Any]) -> Dict[str, Any]:
-    """A run record plus the URLs of its clip and of the real clip it is compared with."""
+def lab_run(config: Dict[str, Any], run: Dict[str, Any], uploading: Optional[str] = None) -> Dict[str, Any]:
+    """A run record plus the URLs of its clip and of the real clip it is compared with, and what
+    uploading it to YouTube would send (None until it has rendered). ``uploading`` is the upload in progress."""
     output = Path(config.get("paths", {}).get("output_dir", "./output"))
     rendered = lab.lab_dir(config) / run["id"] / run["clipFile"]
     real = output / "clips" / run["stem"] / run["realClipFile"] if run.get("realClipFile") else None
+    number, title = _identity(config, run["stem"])
     return {
         **run,
         "clipUrl": media_url(config, rendered) if rendered.is_file() else None,
         "realClipUrl": media_url(config, real) if real is not None and real.is_file() else None,
+        "youtube": youtube_upload.view(config, run, number, title, uploading),
     }
 
 
@@ -316,8 +319,10 @@ def lab_view(
     active: Optional[str] = None,
     python: Optional[Path] = None,
     python_found: bool = False,
+    uploading: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """The Lab tab: what can be rendered, the drafts, and past runs. ``active`` is the run in progress."""
+    """The Lab tab: what can be rendered, the drafts, and past runs. ``active`` is the run in progress,
+    ``uploading`` the run whose YouTube upload is."""
     configured = raw_config.get("settings") if isinstance(raw_config.get("settings"), dict) else {}
     episodes_ = []
     for stem in reversed(lab.lab_episodes(config)):
@@ -342,8 +347,9 @@ def lab_view(
         },
         "episodes": episodes_,
         "drafts": lab.list_drafts(config, raw_config),
-        "runs": [lab_run(config, run) for run in lab.list_runs(config, active)],
+        "runs": [lab_run(config, run, uploading) for run in lab.list_runs(config, active)],
         "active": active,
+        "uploading": uploading,
     }
 
 
