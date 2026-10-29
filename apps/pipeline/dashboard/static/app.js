@@ -538,17 +538,17 @@ const UPLOAD_WORDS = {ready: 'starting upload', uploading: 'uploading', done: 'o
   interrupted: 'upload interrupted'};
 const UPLOAD_TONES = {ready: 'in', uploading: 'in', done: 'ok', failed: 'er', interrupted: 'wa'};
 // What the upload form holds for the run on show, kept across re-renders.
-const uploadForm = {run: null, title: null, description: null, error: null};
+const uploadForm = {run: null, title: null, description: null, episode: null, error: null, copied: false};
 const uploading = run => Boolean(run && run.youtube && run.youtube.state
   && (run.youtube.state.status === 'ready' || run.youtube.state.status === 'uploading'));
 
-async function publishToYouTube(run, title, description) {
+async function publishToYouTube(run, title, description, episode) {
   const already = run.youtube.published
     ? `This clip is already recorded as published (${run.youtube.published}). The new video replaces it in the decisions log.\n\n`
     : '';
   if (!window.confirm(`Upload this Lab clip to the YouTube channel as a PRIVATE video?\n\n${title}\n\n${already}`
     + 'It is then recorded as published in output/publish-decisions.json. Make it public in YouTube Studio.')) return;
-  const answer = await post('/api/lab/youtube', {id: run.id, title, description, confirmed: true});
+  const answer = await post('/api/lab/youtube', {id: run.id, title, description, episode, confirmed: true});
   uploadForm.error = answer.ok ? null : (answer.body.problems || [answer.body.error]).join(' ');
   route();
 }
@@ -560,10 +560,22 @@ function youtubeBox(data, run) {
   const heading = h('div', {class: 'bar'}, h('b', {}, 'YouTube'), h('span', {class: 'sp'}),
     state && pill(UPLOAD_TONES[state.status], UPLOAD_WORDS[state.status]));
   if (state && state.status === 'done') {
+    // YouTube's API cannot set a Short's Related video: opening Studio copies the episode's link to paste there.
+    const studio = link(state.studioUrl, state.episodeUrl ? 'Open in YouTube Studio and copy the episode link' : 'Open in YouTube Studio');
+    if (state.episodeUrl) {
+      studio.addEventListener('click', () => {
+        navigator.clipboard.writeText(state.episodeUrl).then(() => {
+          Object.assign(uploadForm, {run: run.id, copied: true});
+          route();
+        }, () => {});
+      });
+    }
     return h('div', {class: 'gap'}, heading,
       // Links to click, not something the page loads: the addresses come from the server.
-      h('div', {class: 'sm gap'}, link(state.url, state.url), ' · ', link(state.studioUrl, 'Open in YouTube Studio'),
-        ' to check it and make it public.'),
+      h('div', {class: 'sm gap'}, link(state.url, state.url), ' · ', studio,
+        state.episodeUrl ? ' to set its Related video and make it public.' : ' to check it and make it public.'),
+      state.episodeUrl && h('div', {class: 'mut sm'}, 'Related video: the full episode, ', link(state.episodeUrl, state.episodeUrl),
+        uploadForm.copied && uploadForm.run === run.id ? ' (copied)' : ''),
       state.decision && h('div', {class: 'mut sm'}, `Recorded as published (${state.decision.source}: ${state.decision.headline}).`),
       state.message && h('div', {class: 'sm warning'}, state.message));
   }
@@ -571,7 +583,9 @@ function youtubeBox(data, run) {
     return h('div', {class: 'gap'}, heading, h('div', {class: 'mut sm'}, `Uploading "${state.title}" as a private video…`),
       h('pre', {id: 'youtube-log'}, run.youtubeLog || ''));
   }
-  if (uploadForm.run !== run.id) Object.assign(uploadForm, {run: run.id, title: null, description: null, error: null});
+  if (uploadForm.run !== run.id) {
+    Object.assign(uploadForm, {run: run.id, title: null, description: null, episode: null, error: null, copied: false});
+  }
   const title = h('input', {class: 'inp', type: 'text', maxlength: youtube.titleMax, 'aria-label': 'YouTube title',
     value: uploadForm.title !== null ? uploadForm.title : state ? state.title : youtube.defaultTitle});
   const count = h('span', {class: 'mut sm'}, `${title.value.length}/${youtube.titleMax}`);
@@ -582,6 +596,9 @@ function youtubeBox(data, run) {
   const description = h('textarea', {class: 'inp', rows: 3, 'aria-label': 'YouTube description'},
     uploadForm.description !== null ? uploadForm.description : state ? state.description : youtube.defaultDescription);
   description.addEventListener('input', () => { uploadForm.description = description.value; });
+  const episode = h('input', {class: 'inp', type: 'text', placeholder: 'YouTube URL or video ID of the full episode', 'aria-label': 'Full episode on YouTube',
+    value: uploadForm.episode !== null ? uploadForm.episode : (state && state.episodeUrl) || youtube.episodeUrl || ''});
+  episode.addEventListener('input', () => { uploadForm.episode = episode.value; });
   const busy = Boolean(data.uploading);
   return h('details', {class: 'gap', open: Boolean(state || uploadForm.error)},
     h('summary', {}, 'Publish to YouTube…'),
@@ -592,10 +609,13 @@ function youtubeBox(data, run) {
       link(youtube.published, youtube.published)),
     h('label', {}, 'Title'), title, count,
     h('label', {}, 'Description'), description,
+    h('label', {}, 'Full episode on YouTube'), episode,
+    h('div', {class: 'mut sm'}, 'The description ends with "Full episode: <link>". Remembered for this episode’s other clips. '
+      + 'YouTube’s API cannot set a Short’s Related video, so after the upload the page copies this link for you to paste in Studio.'),
     h('div', {class: 'mut sm gap'}, `Uploads this Lab clip to the channel as a ${youtube.privacy} video, then records it as published in output/publish-decisions.json. Make it public in YouTube Studio. One upload per test render.`),
     uploadForm.error && h('div', {class: 'sm problem gap'}, uploadForm.error),
     h('div', {class: 'gap'}, h('button', {class: 'btn p', disabled: busy || !data.python.found,
-      onclick: () => publishToYouTube(run, title.value, description.value)},
+      onclick: () => publishToYouTube(run, title.value, description.value, episode.value)},
     busy ? 'Another upload is going…' : state ? 'Try the upload again…' : 'Upload to YouTube (private)…')));
 }
 

@@ -12,6 +12,13 @@ Every upload is private: YouTube keeps videos uploaded through an API project
 that has not passed its audit private anyway. Tony makes a Short public in
 YouTube Studio.
 
+Clips render 1080x1920 and at most three minutes long, so YouTube makes every
+upload a Short by itself; the API has no switch for it. Nor can the API set a
+Short's "Related video", so the full episode is linked the two ways it can be:
+the description ends with its link, and the Lab copies that link for pasting
+into Related video in Studio. Tony gives the episode's link with its first
+upload; ``output/episode-videos.json`` remembers it for the episode's others.
+
 The dashboard imports this module for ``prepare``, ``load``, ``finish`` and
 ``view``, which never read ``.env`` or touch the network; only the script
 passes credentials in. Standard library only.
@@ -40,6 +47,7 @@ SHOW_NAME = "Bad Boys Podcast"
 TOKEN_TIMEOUT_SECONDS = 30.0
 UPLOAD_TIMEOUT_SECONDS = 1200.0
 STATE_FILE = "youtube.json"
+EPISODES_FILE = "episode-videos.json"  # in output/: each episode's full-length video ID, by stem
 Opener = Callable[..., Any]  # urllib.request.urlopen, or a stand-in in tests
 _JUDGE = object()  # load()'s default: report the status as written
 
@@ -73,6 +81,19 @@ def default_title(number: Optional[int], episode_title: Optional[str], headline:
 def default_description(number: Optional[int], episode_title: Optional[str]) -> str:
     episode = f" episode {number}" if number else ""
     return f"From {SHOW_NAME}{episode}" + (f": {episode_title}" if episode_title else "")
+
+
+def episode_url(video_id: str) -> str:
+    """Where the full episode is watched."""
+    return f"https://youtu.be/{video_id}"
+
+
+def with_episode_link(description: str, video_id: Optional[str]) -> str:
+    """The description ending with the full episode's link, unless it already links to it."""
+    if not video_id or video_id in description:
+        return description
+    line = f"Full episode: {episode_url(video_id)}"
+    return f"{description}\n\n{line}" if description else line
 
 
 def check_metadata(title: Any, description: Any) -> List[str]:
@@ -201,17 +222,51 @@ def _save(config: Dict[str, Any], run_id: str, state: Dict[str, Any]) -> Dict[st
     return state
 
 
+def _episodes_path(config: Dict[str, Any]) -> Path:
+    return Path(config.get("paths", {}).get("output_dir", "./output")) / EPISODES_FILE
+
+
+def episode_video(config: Dict[str, Any], stem: str) -> Optional[str]:
+    """The full episode's YouTube video ID, as last given for this episode, or None."""
+    videos = lab._read_json(_episodes_path(config))
+    value = videos.get(stem) if isinstance(videos, dict) else None
+    try:
+        return publish_log.youtube_id(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+
+
+def remember_episode_video(config: Dict[str, Any], stem: str, video_id: str) -> None:
+    videos = lab._read_json(_episodes_path(config))
+    videos = videos if isinstance(videos, dict) else {}
+    if videos.get(stem) != video_id:
+        lab._write_json(_episodes_path(config), {**videos, stem: video_id})
+
+
+def _episode_id(config: Dict[str, Any], stem: str, episode: Any) -> Optional[str]:
+    """The full episode's video ID from what the form gave (a URL or ID), or as remembered when it gave none."""
+    if episode is None or (isinstance(episode, str) and not episode.strip()):
+        return episode_video(config, stem)
+    if not isinstance(episode, str):
+        raise ValueError("the full episode's link must be text")
+    try:
+        return publish_log.youtube_id(episode)
+    except ValueError:
+        raise ValueError("the full episode's link is not a YouTube URL or video ID") from None
+
+
 def _uploadable(config: Dict[str, Any], run: Mapping[str, Any]) -> bool:
     return run.get("status") == "done" and (lab.lab_dir(config) / run["id"] / run["clipFile"]).is_file()
 
 
 def prepare(config: Dict[str, Any], run_id: Any, title: Any, description: Any,
-            active: Optional[str] = None, now: Optional[_dt.datetime] = None) -> Dict[str, Any]:
+            active: Optional[str] = None, now: Optional[_dt.datetime] = None, episode: Any = None) -> Dict[str, Any]:
     """Check an upload and write it down as ``ready``; raise ``UploadError`` when it is refused.
 
     ``active`` is the upload in progress. A clip is uploaded once: one that is
     on YouTube, or on its way, is refused. A failed or interrupted one may be
-    tried again.
+    tried again. ``episode`` is the full episode's YouTube URL or ID; without
+    one, the episode's remembered link is used. The description ends with it.
     """
     run = lab.load_run(config, run_id)
     if run is None:
@@ -224,13 +279,23 @@ def prepare(config: Dict[str, Any], run_id: Any, title: Any, description: Any,
     if state and state.get("status") in ("ready", "uploading"):
         raise UploadError("this clip is already being uploaded")
     title = " ".join(title.split()) if isinstance(title, str) else title
-    description = description.strip() if isinstance(description, str) else description
-    problems = check_metadata(title, description)
+    problems: List[str] = []
+    try:
+        episode_id = _episode_id(config, run["stem"], episode)
+    except ValueError as exc:
+        episode_id = None
+        problems.append(str(exc))
+    if isinstance(description, str):
+        description = with_episode_link(description.strip(), episode_id)
+    problems = check_metadata(title, description) + problems
     if problems:
         raise UploadError("YouTube would not accept this title or description", problems)
+    if episode_id:
+        remember_episode_video(config, run["stem"], episode_id)
     stamp = (now or _dt.datetime.now(_dt.timezone.utc)).replace(microsecond=0).isoformat()
     return _save(config, run_id, {
         "status": "ready", "title": title, "description": description, "privacy": PRIVACY,
+        "episodeUrl": episode_url(episode_id) if episode_id else None,
         "requestedAt": stamp, "finishedAt": None,
         "videoId": None, "url": None, "studioUrl": None, "decision": None, "message": None,
     })
@@ -297,6 +362,8 @@ def run_upload(config: Dict[str, Any], run_id: str, env: Mapping[str, str],
         "studioUrl": f"https://studio.youtube.com/video/{video_id}/edit", "finishedAt": _now(),
     })
     print(f"Uploaded: {state['url']} (private)")
+    if state.get("episodeUrl"):
+        print(f"In YouTube Studio, set its Related video to the full episode: {state['episodeUrl']}")
     try:
         decision = record_decision(config, run, video_id)
     except (OSError, ValueError) as exc:
@@ -328,7 +395,8 @@ def view(config: Dict[str, Any], run: Mapping[str, Any], number: Optional[int], 
     """What the Lab shows about uploading a run: None until its render has finished.
 
     ``published`` is the Short this clip is already recorded as, if any, so
-    the page can say so before a second upload.
+    the page can say so before a second upload. ``episodeUrl`` is the full
+    episode's remembered link, if any.
     """
     if not _uploadable(config, run):
         return None
@@ -336,6 +404,7 @@ def view(config: Dict[str, Any], run: Mapping[str, Any], number: Optional[int], 
     published = next((row for row in publish_log.load(config)["decisions"]
                       if row.get("decision") == "published" and row.get("youtubeId") and row["stem"] == run["stem"]
                       and row["source"] != "untracked" and _same_clip(row, clip)), None)
+    episode_id = episode_video(config, run["stem"])
     return {
         "state": load(config, run["id"], active),
         "privacy": PRIVACY,
@@ -343,4 +412,5 @@ def view(config: Dict[str, Any], run: Mapping[str, Any], number: Optional[int], 
         "defaultDescription": default_description(number, episode_title),
         "titleMax": TITLE_MAX_CHARS,
         "published": publish_log.short_url(published["youtubeId"]) if published else None,
+        "episodeUrl": episode_url(episode_id) if episode_id else None,
     }

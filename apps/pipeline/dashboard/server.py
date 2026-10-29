@@ -392,7 +392,8 @@ class Handler(BaseHTTPRequestHandler):
         run_id = payload.get("id")
         uploads.reserve()
         try:
-            youtube_upload.prepare(config, run_id, payload.get("title"), payload.get("description"))
+            youtube_upload.prepare(config, run_id, payload.get("title"), payload.get("description"),
+                                   episode=payload.get("episode"))
         except BaseException:
             uploads.release()
             raise
