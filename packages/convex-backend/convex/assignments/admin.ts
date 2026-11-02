@@ -4,7 +4,8 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 
-import type { Doc } from "../_generated/dataModel.js";
+import type { Doc, Id } from "../_generated/dataModel.js";
+import type { MutationCtx } from "../_generated/server.js";
 import { adminMutation, adminQuery } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
@@ -12,9 +13,11 @@ import {
   enqueueUploadThingDelete,
   findUploadThingDeleteIntent,
 } from "../sideEffects/intents.js";
+import { normalizeUserSyllabus } from "../syllabus/writeModel.js";
 import {
   MAX_ASSIGNMENTS_PER_EPISODE,
   MAX_ASSIGNMENT_AUDIO_PAGE_SIZE,
+  MAX_ASSIGNMENT_SYLLABUS_LINKS,
   MAX_ASSIGNMENT_WORKBENCH_GUESSES,
   MAX_ASSIGNMENT_WORKBENCH_REVIEWS,
   MAX_ASSIGNMENT_WORKBENCH_WAGERS,
@@ -444,16 +447,53 @@ export const create = adminMutation({
   },
 });
 
+async function unlinkOtherUsersSyllabusEntries(
+  ctx: MutationCtx,
+  assignmentId: Id<"assignments">,
+  userId: Id<"users">,
+): Promise<number> {
+  const entries = await ctx.db
+    .query("syllabusEntries")
+    .withIndex("by_assignmentId", (index) =>
+      index.eq("assignmentId", assignmentId),
+    )
+    .take(MAX_ASSIGNMENT_SYLLABUS_LINKS + 1);
+  if (entries.length > MAX_ASSIGNMENT_SYLLABUS_LINKS) {
+    domainError(
+      "CONFLICT",
+      "Assignment syllabus links exceed the reassignment limit.",
+      {
+        details: {
+          limit: MAX_ASSIGNMENT_SYLLABUS_LINKS,
+          relationship: "syllabus entries",
+        },
+      },
+    );
+  }
+  const unlinked = entries.filter((entry) => entry.userId !== userId);
+  for (const entry of unlinked) {
+    await ctx.db.patch("syllabusEntries", entry._id, {
+      assignmentId: undefined,
+    });
+  }
+  for (const ownerId of new Set(unlinked.map((entry) => entry.userId))) {
+    await normalizeUserSyllabus(ctx, ownerId);
+  }
+  return unlinked.length;
+}
+
 export const updateIdentity = adminMutation({
   args: {
     id: v.id("assignments"),
     type: v.string(),
     playable: v.boolean(),
     slug: v.string(),
+    userId: v.optional(v.id("users")),
     expected: v.object({
       type: assignmentTypeValidator,
       playable: v.boolean(),
       slug: v.union(v.string(), v.null()),
+      userId: v.optional(v.id("users")),
     }),
   },
   returns: assignmentDetailValidator,
@@ -462,7 +502,9 @@ export const updateIdentity = adminMutation({
     if (
       assignment.type !== args.expected.type ||
       assignment.playable !== args.expected.playable ||
-      nullable(assignment.slug) !== args.expected.slug
+      nullable(assignment.slug) !== args.expected.slug ||
+      (args.expected.userId !== undefined &&
+        assignment.userId !== args.expected.userId)
     ) {
       domainError(
         "CONFLICT",
@@ -470,7 +512,11 @@ export const updateIdentity = adminMutation({
       );
     }
     const type = validateAssignmentType(args.type);
-    const parents = await requireAssignmentParents(ctx, assignment);
+    const userId = args.userId ?? assignment.userId;
+    const parents = await requireAssignmentParents(ctx, {
+      ...assignment,
+      userId,
+    });
     const slug =
       args.slug.length === 0
         ? await allocateAssignmentSlug(ctx, {
@@ -486,10 +532,13 @@ export const updateIdentity = adminMutation({
     const updated = {
       ...assignment,
       ...slug,
+      userId,
       type,
       playable: args.playable,
     };
+    const userChanged = assignment.userId !== userId;
     if (
+      !userChanged &&
       assignment.type === updated.type &&
       assignment.playable === updated.playable &&
       nullable(assignment.slug) === updated.slug
@@ -498,9 +547,13 @@ export const updateIdentity = adminMutation({
     }
     await ctx.db.patch("assignments", assignment._id, {
       ...slug,
+      userId,
       type,
       playable: args.playable,
     });
+    const unlinkedSyllabusEntries = userChanged
+      ? await unlinkOtherUsersSyllabusEntries(ctx, assignment._id, userId)
+      : 0;
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
       action: "assignments.admin.identityUpdated",
@@ -512,6 +565,13 @@ export const updateIdentity = adminMutation({
         playable: args.playable,
         slug: updated.slug,
         regenerated: args.slug.length === 0,
+        ...(userChanged
+          ? {
+              previousUserId: assignment.userId,
+              userId,
+              unlinkedSyllabusEntries,
+            }
+          : {}),
       },
     });
     return await hydrateAssignment(ctx, updated);

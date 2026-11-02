@@ -1557,11 +1557,13 @@ export type PublicApiType = {
             playable: boolean;
             slug: string | null;
             type: "HOMEWORK" | "EXTRA_CREDIT" | "BONUS";
+            userId?: Id<"users">;
           };
           id: Id<"assignments">;
           playable: boolean;
           slug: string;
           type: string;
+          userId?: Id<"users">;
         },
         {
           episode: {

@@ -389,6 +389,7 @@ export function ConvexAssignmentDetailPage() {
   const [slugDraft, setSlugDraft] = useState("");
   const [typeDraft, setTypeDraft] = useState<ConvexAssignmentType>("HOMEWORK");
   const [playableDraft, setPlayableDraft] = useState(true);
+  const [userDraft, setUserDraft] = useState("");
   const [reviewUserId, setReviewUserId] = useState("");
   const [reviewRatingId, setReviewRatingId] = useState("none");
   const [guessReviewId, setGuessReviewId] = useState("");
@@ -448,6 +449,7 @@ export function ConvexAssignmentDetailPage() {
     setSlugDraft(workbench.assignment.slug ?? "");
     setTypeDraft(workbench.assignment.type);
     setPlayableDraft(workbench.assignment.playable);
+    setUserDraft(workbench.assignment.user.id);
     setGuessReviewId(workbench.reviews[0]?.id ?? "");
   }, [workbench]);
 
@@ -669,11 +671,54 @@ export function ConvexAssignmentDetailPage() {
           <CardHeader>
             <CardTitle>Assignment identity</CardTitle>
             <CardDescription>
-              Slug, type, and playable writes include the exact loaded value so
-              concurrent changes fail closed.
+              User, slug, type, and playable writes include the exact loaded
+              value so concurrent changes fail closed.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-2 md:col-span-2">
+              <Label htmlFor="assignment-user">Assigned user</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+                  id="assignment-user"
+                  onChange={(event) => setUserDraft(event.target.value)}
+                  value={userDraft}
+                >
+                  {!sortedUsers.some(
+                    (user) => user.id === assignment.user.id
+                  ) && (
+                    <option value={assignment.user.id}>
+                      {assignment.user.name ?? assignment.user.id}
+                    </option>
+                  )}
+                  {sortedUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {userLabel(user)}
+                      {user.status === "disabled" ? " (disabled)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {userCursor !== null && (
+                  <Button
+                    disabled={loadingSelectors || busy !== null}
+                    onClick={() => void loadMoreSelectors("users")}
+                    variant="outline"
+                  >
+                    Load more users
+                  </Button>
+                )}
+              </div>
+              {userDraft !== assignment.user.id && (
+                <p className="text-xs text-muted-foreground">
+                  Saving unlinks this assignment from the previous user&apos;s
+                  syllabus, returning that entry to pending.
+                  {slugDraft !== "" &&
+                    slugDraft === (assignment.slug ?? "") &&
+                    " The slug still names the previous user; clear it to generate a new one."}
+                </p>
+              )}
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="assignment-slug">Canonical slug</Label>
               <Input
@@ -744,7 +789,8 @@ export function ConvexAssignmentDetailPage() {
               <Button
                 disabled={
                   busy !== null ||
-                  (slugDraft === (assignment.slug ?? "") &&
+                  (userDraft === assignment.user.id &&
+                    slugDraft === (assignment.slug ?? "") &&
                     typeDraft === assignment.type &&
                     playableDraft === assignment.playable)
                 }
@@ -759,6 +805,7 @@ export function ConvexAssignmentDetailPage() {
                           slug: slugDraft,
                           type: typeDraft,
                           playable: playableDraft,
+                          userId: userDraft,
                         }
                       );
                       if (
