@@ -32,17 +32,20 @@ the lifecycle state and identity mappings; verify both before testing sign-in.
 
 A restore from production copies production's sign-in links, so a staging sign-in
 for an already linked member fails with `IDENTITY_CONFLICT`. After such a restore,
-run the internal `identity/maintenance:resetStagingAuth` with the restored
-`systemState` run ID and API version and a batch ID for the audit trail:
+run the internal `identity/maintenance:resetStagingAuth`. It takes no arguments:
+it reads the run ID and API version from the restored `systemState` and generates
+a batch ID for the audit trail.
 
 ```sh
-npx convex run --deployment merry-shepherd-928 identity/maintenance:resetStagingAuth \
-  '{"cutoverRunId":"<run ID>","clientApiVersion":"<API version>","batchId":"restore-YYYYMMDD"}'
+npx convex run --deployment merry-shepherd-928 identity/maintenance:resetStagingAuth
 ```
+
+To pick the batch ID yourself, pass `'{"batchId":"restore-YYYYMMDD"}'`.
 
 It deletes the `authIdentities` and `servicePrincipals` rows that staging's own
 `CLERK_JWT_ISSUER_DOMAIN` did not issue and every `impersonationSessions` row, up to
-500 rows per run; repeat it until it returns `done: true`. Members, roles and role
+500 rows per transaction. A run that returns `done: false` schedules the remaining
+batches itself under the same batch ID. Members, roles and role
 memberships stay, so the next staging sign-in links by verified email and keeps its
 roles. It refuses every deployment but staging, and a repeat run changes nothing.
 The reset removes pipeline principals copied from production but preserves those

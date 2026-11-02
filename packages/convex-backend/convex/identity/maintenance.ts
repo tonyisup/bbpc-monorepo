@@ -1,9 +1,14 @@
 import { v } from "convex/values";
 
+import { internal } from "../_generated/api.js";
 import type { MutationCtx } from "../_generated/server.js";
-import { internalAppMutation } from "../functions.js";
+import { internalControlMutation } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import { domainError } from "../lib/errors.js";
+import {
+  getSystemState,
+  requireApplicationWritesEnabled,
+} from "../lib/writeGate.js";
 
 // Rows removed per call; a restore's worth of links takes a few calls.
 const RESET_BATCH_SIZE = 500;
@@ -68,10 +73,13 @@ async function deleteForeignRows(
  * removes every link and service principal that this deployment's issuer did
  * not issue, and every impersonation session. Members, roles and role
  * memberships stay, so the next staging sign-in links by verified email and
- * keeps its roles. Run it until `done` is true; a repeat run changes nothing.
+ * keeps its roles. It takes no arguments: the run ID and API version come from
+ * the restored `systemState`, and the batch ID defaults to one per run. A run
+ * that returns `done: false` schedules the rest itself; a repeat run changes
+ * nothing.
  */
-export const resetStagingAuth = internalAppMutation({
-  args: { batchId: v.string() },
+export const resetStagingAuth = internalControlMutation({
+  args: { batchId: v.optional(v.string()) },
   returns: v.object({
     authIdentitiesDeleted: v.number(),
     servicePrincipalsDeleted: v.number(),
@@ -79,7 +87,14 @@ export const resetStagingAuth = internalAppMutation({
     done: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const issuer = requireStagingAuthReset(args.batchId);
+    const batchId = args.batchId ?? `staging-auth-reset-${String(Date.now())}`;
+    const issuer = requireStagingAuthReset(batchId);
+    const actor = { kind: "internal" as const, label: "staging-auth-reset" };
+    // A missing state fails before the version is compared.
+    const systemState = await requireApplicationWritesEnabled(ctx, {
+      actor,
+      clientApiVersion: (await getSystemState(ctx))?.apiVersion ?? "",
+    });
     let remaining = RESET_BATCH_SIZE;
     const authIdentitiesDeleted = await deleteForeignRows(
       ctx,
@@ -111,25 +126,33 @@ export const resetStagingAuth = internalAppMutation({
 
     if (remaining < RESET_BATCH_SIZE) {
       await writeAuditEvent(ctx, {
-        actor: ctx.actor,
+        actor,
         action: "identity.stagingAuthReset",
         targetType: "systemState",
-        targetId: ctx.systemState._id,
-        cutoverRunId: ctx.systemState.cutoverRunId,
+        targetId: systemState._id,
+        cutoverRunId: systemState.cutoverRunId,
         metadata: {
-          batchId: args.batchId,
+          batchId,
           authIdentitiesDeleted,
           servicePrincipalsDeleted,
           impersonationSessionsDeleted: impersonationSessions.length,
         },
       });
     }
+    // A full batch may have left rows behind.
+    const done = remaining > 0;
+    if (!done) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.identity.maintenance.resetStagingAuth,
+        { batchId },
+      );
+    }
     return {
       authIdentitiesDeleted,
       servicePrincipalsDeleted,
       impersonationSessionsDeleted: impersonationSessions.length,
-      // A full batch may have left rows behind.
-      done: remaining > 0,
+      done,
     };
   },
 });
