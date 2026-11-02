@@ -10,11 +10,12 @@ const mocks = vi.hoisted(() => ({
   ratings: vi.fn(),
   review: vi.fn(),
   guess: vi.fn(),
+  identity: vi.fn(),
   error: vi.fn(),
 }));
 vi.mock("convex/react", () => ({ useConvex: () => mocks.client }));
 vi.mock("next/router", () => ({
-  useRouter: () => ({ query: { slug: "assignment-one" } }),
+  useRouter: () => ({ query: { slug: "assignment-one" }, replace: vi.fn() }),
 }));
 vi.mock("next/head", () => ({ default: () => null }));
 vi.mock("next/link", () => ({
@@ -32,6 +33,7 @@ vi.mock("@/convex/assignmentDetails", () => ({
   loadConvexAssignmentAudioPage: mocks.audio,
   createConvexAssignmentReview: mocks.review,
   createConvexAssignmentGuess: mocks.guess,
+  updateConvexAssignmentIdentity: mocks.identity,
 }));
 vi.mock("@/components/ui/checkbox", () => ({
   Checkbox: () => <input type="checkbox" />,
@@ -190,4 +192,30 @@ test("failed pagination keeps loaded choices and retries the same cursor", async
     "users-page-2",
   ]);
   expect(options("review-user")).toContain(lastUser.id);
+});
+
+test("reassigns the assignment to a user from a later page", async () => {
+  await render();
+  expect(renderer.root.findByProps({ id: "assignment-user" }).props.value).toBe(
+    firstUser.id
+  );
+  expect(requiredButton("Save identity").props.disabled).toBe(true);
+  await act(async () => {
+    requiredButton("Load more users").props.onClick();
+  });
+  expect(options("assignment-user")).toEqual([firstUser.id, lastUser.id]);
+  select("assignment-user", lastUser.id);
+  expect(requiredButton("Save identity").props.disabled).toBe(false);
+  mocks.identity.mockResolvedValue({ slug: "assignment-one" });
+  await act(async () => {
+    requiredButton("Save identity").props.onClick();
+  });
+  expect(mocks.identity).toHaveBeenCalledWith(
+    mocks.client,
+    expect.objectContaining({
+      userId: lastUser.id,
+      slug: "assignment-one",
+      assignment: expect.objectContaining({ user: firstUser }),
+    })
+  );
 });

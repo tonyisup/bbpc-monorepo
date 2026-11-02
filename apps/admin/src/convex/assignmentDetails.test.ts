@@ -241,6 +241,7 @@ describe("Convex assignment detail adapter", () => {
         type: "BONUS",
         playable: true,
         slug: "new-slug",
+        userId: "user-2",
       })
     ).resolves.toEqual(updated);
     expect(mutation).toHaveBeenCalledOnce();
@@ -250,10 +251,12 @@ describe("Convex assignment detail adapter", () => {
       type: "BONUS",
       playable: true,
       slug: "new-slug",
+      userId: "user-2",
       expected: {
         type: assignment.type,
         playable: assignment.playable,
         slug: assignment.slug,
+        userId: assignment.user.id,
       },
     });
   });

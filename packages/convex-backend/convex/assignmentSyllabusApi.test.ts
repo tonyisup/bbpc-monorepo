@@ -1026,6 +1026,100 @@ describe("assignment and syllabus API", () => {
     ).resolves.toBeNull();
   });
 
+  test("reassigns an assignment to another user and releases the previous owner's syllabus link", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const movieId = await seedMovie(t, "reassign");
+    const episodeId = await seedEpisode(t, 40);
+    const assignmentId = await seedAssignment(t, {
+      userId: memberId,
+      movieId,
+      episodeId,
+      slug: "reassign-me",
+    });
+    const memberEntryId = await seedSyllabusEntry(t, {
+      userId: memberId,
+      movieId,
+      order: 1,
+      assignmentId,
+    });
+    await advanceToS3(t);
+    const admin = t.withIdentity(ADMIN_IDENTITY);
+    const expected = {
+      type: "HOMEWORK" as const,
+      playable: false,
+      slug: "reassign-me",
+      userId: memberId,
+    };
+
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.updateIdentity, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        type: "HOMEWORK",
+        playable: false,
+        slug: "reassign-me",
+        userId: memberId,
+        expected: { ...expected, userId: otherId },
+      }),
+      "CONFLICT",
+    );
+
+    const reassigned = await admin.mutation(
+      api.assignments.admin.updateIdentity,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        type: "HOMEWORK",
+        playable: false,
+        slug: "",
+        userId: otherId,
+        expected,
+      },
+    );
+    expect(reassigned).toMatchObject({
+      user: { id: otherId, name: "Other Member" },
+      slug: "episode-40-other-member-homework-movie-reassign",
+    });
+    const memberEntry = await t.run(async (ctx) => {
+      return await ctx.db.get("syllabusEntries", memberEntryId);
+    });
+    expect(memberEntry?.assignmentId).toBeUndefined();
+    const audit = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("auditEvents")
+        .filter((query) =>
+          query.eq(
+            query.field("action"),
+            "assignments.admin.identityUpdated",
+          ),
+        )
+        .unique();
+    });
+    expect(audit).toMatchObject({
+      targetId: assignmentId,
+      metadata: {
+        previousUserId: memberId,
+        userId: otherId,
+        unlinkedSyllabusEntries: 1,
+        regenerated: true,
+      },
+    });
+
+    await expectDomainError(
+      admin.mutation(api.assignments.admin.updateIdentity, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: assignmentId,
+        type: "HOMEWORK",
+        playable: false,
+        slug: reassigned.slug ?? "",
+        userId: memberId,
+        expected,
+      }),
+      "CONFLICT",
+    );
+  });
+
   test("keeps pending syllabus entries canonical across all insertion positions and assignment", async () => {
     const t = createTestBackend();
     await seedActors(t);

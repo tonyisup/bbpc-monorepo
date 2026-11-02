@@ -250,6 +250,7 @@ export async function updateConvexAssignmentIdentity(
     slug: string;
     type: ConvexAssignmentType;
     playable: boolean;
+    userId: string;
   }
 ): Promise<ConvexAssignmentWorkbench["assignment"]> {
   return assignmentSchema.parse(
@@ -259,10 +260,12 @@ export async function updateConvexAssignmentIdentity(
       type: input.type,
       playable: input.playable,
       slug: input.slug,
+      userId: documentId("users", input.userId),
       expected: {
         type: input.assignment.type,
         playable: input.assignment.playable,
         slug: input.assignment.slug,
+        userId: documentId("users", input.assignment.user.id),
       },
     })
   );
