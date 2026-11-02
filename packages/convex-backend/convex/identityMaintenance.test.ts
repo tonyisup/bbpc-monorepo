@@ -14,11 +14,8 @@ const STAGING_ISSUER = "https://m.staging.example.test";
 // Production issuers that sort on either side of the staging issuer.
 const EARLIER_ISSUER = "https://a.production.example.test";
 const LATER_ISSUER = "https://z.production.example.test";
-const gate = {
-  cutoverRunId: "auth-reset-test",
-  clientApiVersion: BBPC_API_VERSION,
-  batchId: "restore-test",
-};
+const CUTOVER_RUN_ID = "auth-reset-test";
+const gate = { batchId: "restore-test" };
 const reset = internal.identity.maintenance.resetStagingAuth;
 
 beforeEach(() => {
@@ -66,7 +63,7 @@ async function setup() {
       singletonKey: "global",
       cutoverStage: "S4",
       applicationWriteMode: "enabled",
-      cutoverRunId: gate.cutoverRunId,
+      cutoverRunId: CUTOVER_RUN_ID,
       apiVersion: BBPC_API_VERSION,
       initializedAt: 1,
       updatedAt: 1,
@@ -177,7 +174,7 @@ test("removes what another issuer issued and keeps members, roles and staging li
     {
       action: "identity.stagingAuthReset",
       actorType: "internal",
-      cutoverRunId: gate.cutoverRunId,
+      cutoverRunId: CUTOVER_RUN_ID,
       metadata: {
         batchId: gate.batchId,
         authIdentitiesDeleted: 2,
@@ -186,6 +183,19 @@ test("removes what another issuer issued and keeps members, roles and staging li
       },
     },
   ]);
+});
+
+test("runs without arguments and records a generated batch ID", async () => {
+  const { t, stagingLinkId } = await setup();
+
+  expect(await t.mutation(reset, {})).toMatchObject({ done: true });
+
+  const after = await rows(t);
+  expect(after.authIdentities.map((row) => row._id)).toEqual([stagingLinkId]);
+  expect(after.audits).toHaveLength(1);
+  expect(after.audits[0]?.metadata?.batchId).toMatch(
+    /^staging-auth-reset-\d+$/u,
+  );
 });
 
 test("a repeat run changes nothing and writes no second audit event", async () => {
@@ -229,7 +239,8 @@ test("the deployment's issuer matches with or without a trailing slash", async (
   ]);
 });
 
-test("a full batch reports more work and the next run finishes it", async () => {
+test("a full batch reports more work and schedules the rest", async () => {
+  vi.useFakeTimers();
   const { t, adminId, stagingLinkId } = await setup();
   await t.run(async (ctx) => {
     for (let index = 0; index < 499; index += 1) {
@@ -247,15 +258,22 @@ test("a full batch reports more work and the next run finishes it", async () => 
     impersonationSessionsDeleted: 0,
     done: false,
   });
-  expect(await t.mutation(reset, gate)).toEqual({
-    authIdentitiesDeleted: 1,
-    servicePrincipalsDeleted: 2,
-    impersonationSessionsDeleted: 1,
-    done: true,
-  });
+  await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+  vi.useRealTimers();
+
   const after = await rows(t);
   expect(after.authIdentities.map((row) => row._id)).toEqual([stagingLinkId]);
-  expect(after.audits).toHaveLength(2);
+  expect(after.servicePrincipals).toHaveLength(1);
+  expect(after.sessions).toEqual([]);
+  expect(after.audits.map((audit) => audit.metadata)).toMatchObject([
+    { batchId: gate.batchId, authIdentitiesDeleted: 500 },
+    {
+      batchId: gate.batchId,
+      authIdentitiesDeleted: 1,
+      servicePrincipalsDeleted: 2,
+      impersonationSessionsDeleted: 1,
+    },
+  ]);
 });
 
 test("refuses any deployment that is not the staging target", async () => {
@@ -271,7 +289,7 @@ test("refuses any deployment that is not the staging target", async () => {
   expect(await rows(t)).toEqual(before);
 });
 
-test("refuses a missing issuer, an unusable batch ID and a mismatched gate", async () => {
+test("refuses a missing issuer, an unusable batch ID and a read-only deployment", async () => {
   const { t } = await setup();
   const before = await rows(t);
 
@@ -279,19 +297,24 @@ test("refuses a missing issuer, an unusable batch ID and a mismatched gate", asy
     t.mutation(reset, { ...gate, batchId: "not a batch id" }),
     "VALIDATION_FAILED",
   );
-  await expect(
-    t.mutation(reset, { ...gate, cutoverRunId: "another-run" }),
-  ).rejects.toThrow("Scheduled write cutover run mismatch");
-  await expectDomainError(
-    t.mutation(reset, { ...gate, clientApiVersion: "stale" }),
-    "STALE_CLIENT",
-  );
   // A blank value, or one without the scheme a stored issuer carries, would
   // make every row look foreign.
   for (const issuer of ["/", "m.staging.example.test", `${STAGING_ISSUER}/path`]) {
     vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", issuer);
     await expectDomainError(t.mutation(reset, gate), "FORBIDDEN");
   }
-
+  vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", STAGING_ISSUER);
   expect(await rows(t)).toEqual(before);
+
+  await t.run(async (ctx) => {
+    const state = await ctx.db.query("systemState").unique();
+    if (state !== null) {
+      await ctx.db.patch("systemState", state._id, {
+        applicationWriteMode: "disabled",
+      });
+    }
+  });
+  const readOnly = await rows(t);
+  await expectDomainError(t.mutation(reset, gate), "WRITE_DISABLED");
+  expect(await rows(t)).toEqual(readOnly);
 });
