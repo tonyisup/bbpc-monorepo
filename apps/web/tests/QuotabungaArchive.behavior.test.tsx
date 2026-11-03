@@ -45,7 +45,7 @@ import QuotabungaArchiveLoading from "@/app/game/quotabunga/loading";
 import { QuotabungaChampionBand } from "@/app/game/quotabunga/QuotabungaChampionBand";
 import { QuotabungaLedger } from "@/app/game/quotabunga/QuotabungaLedger";
 import { QuotabungaRoundRow } from "@/app/game/quotabunga/QuotabungaRoundRow";
-import { SeasonTabLabel } from "@/app/game/quotabunga/SeasonTabLabel";
+import { SeasonTabLabel } from "@/components/SeasonTabLabel";
 import {
   archiveStats,
   clipDurationLabel,

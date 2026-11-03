@@ -21,7 +21,7 @@ test("the public game page reads bounded runtime-validated Convex data directly"
   assert.match(adapter, /api\.games\.public\.predictionScoring/u);
   assert.match(adapter, /api\.games\.public\.currentPerformance/u);
   assert.match(adapter, /predictionScoringSchema\.parse/u);
-  assert.match(adapter, /currentPerformanceSchema\.parse/u);
+  assert.match(adapter, /seasonPerformanceSchema\s*\.nullable\(\)\s*\.parse/u);
   assert.doesNotMatch(gamePage, /BBPC_BACKEND|server\/sql|trpc/u);
   assert.match(
     gamePage,

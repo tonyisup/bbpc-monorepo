@@ -318,7 +318,8 @@ export const currentQuoteSubmissionValidator = v.object({
   ),
 });
 
-export const quoteArchiveSeasonValidator = v.object({
+/** A season as the public archives list it: Quotabunga and the standings. */
+export const archiveSeasonValidator = v.object({
   id: v.id("seasons"),
   title: v.string(),
   startedOn: nullableStringValidator,
@@ -374,7 +375,7 @@ export const quoteArchiveListenerValidator = v.object({
 });
 
 export const quoteArchiveSeasonDetailValidator = v.object({
-  season: quoteArchiveSeasonValidator,
+  season: archiveSeasonValidator,
   rounds: v.array(quoteArchiveRoundValidator),
   listeners: v.array(quoteArchiveListenerValidator),
 });

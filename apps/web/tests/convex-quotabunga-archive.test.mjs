@@ -6,13 +6,15 @@ import test from "node:test";
 const read = async (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-const [adapter, page, gamePage, roundRow, routes] = await Promise.all([
-  read("src/server/convex/quotabunga.ts"),
-  read("src/app/game/quotabunga/page.tsx"),
-  read("src/app/game/page.tsx"),
-  read("src/app/game/quotabunga/QuotabungaRoundRow.tsx"),
-  read("src/lib/routes.ts"),
-]);
+const [adapter, page, gamePage, roundRow, routes, seasonTabs] =
+  await Promise.all([
+    read("src/server/convex/quotabunga.ts"),
+    read("src/app/game/quotabunga/page.tsx"),
+    read("src/app/game/page.tsx"),
+    read("src/app/game/quotabunga/QuotabungaRoundRow.tsx"),
+    read("src/lib/routes.ts"),
+    read("src/components/SeasonTabs.tsx"),
+  ]);
 
 test("the Quotabunga archive reads runtime-validated public Convex data on the server", () => {
   assert.match(adapter, /import "server-only"/u);
@@ -83,7 +85,7 @@ test("the archive page shares one clip player and rounds the clock to cache", ()
   assert.ok(page.indexOf("<SeasonTabs") < page.indexOf("<ClipPlaybackProvider"));
   assert.match(page, /key=\{winner\.entry\.id\}/u);
   assert.match(page, /Math\.floor\(Date\.now\(\) \/ 60_000\) \* 60_000/u);
-  assert.match(page, /<SeasonTabLabel>/u);
+  assert.match(seasonTabs, /<SeasonTabLabel>/u);
 });
 
 test("the game page says results wait for the published episode", () => {

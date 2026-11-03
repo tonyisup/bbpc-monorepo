@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CurrentSeasonBadge } from "@/components/SeasonSummary";
+import { SeasonTabs } from "@/components/SeasonTabs";
 import { getPacificTodayPlainDate } from "@/lib/dates";
 import {
   ALL_SEASONS,
@@ -14,20 +15,15 @@ import {
   selectSeasonView,
 } from "@/lib/quotabungaArchive";
 import { getQuotabungaArchivePath } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 import {
   getQuotabungaSeason,
   getQuotabungaSeasons,
 } from "@/server/convex/quotabunga";
-import type {
-  QuotabungaSeason,
-  QuotabungaSeasonDetail,
-} from "@/types/quotabunga";
+import type { QuotabungaSeasonDetail } from "@/types/quotabunga";
 
 import { ClipPlaybackProvider } from "./ClipPlayback";
 import { QuotabungaChampionBand } from "./QuotabungaChampionBand";
 import { QuotabungaLedger } from "./QuotabungaLedger";
-import { SeasonTabLabel } from "./SeasonTabLabel";
 
 export const metadata: Metadata = {
   title: "Quotabunga | BBPC",
@@ -37,51 +33,6 @@ export const metadata: Metadata = {
 
 const SEASON_ROUNDS_SHOWN = 8;
 const ALL_SEASONS_ROUNDS_SHOWN = 3;
-
-function SeasonTabs({
-  seasons,
-  selected,
-}: {
-  seasons: QuotabungaSeason[];
-  selected: string;
-}) {
-  const tabs = [
-    ...seasons.map((season) => ({
-      key: season.id,
-      label: season.title,
-      isCurrent: season.isCurrent,
-    })),
-    { key: ALL_SEASONS, label: "All seasons", isCurrent: false },
-  ];
-  return (
-    <nav aria-label="Seasons" className="max-w-full overflow-x-auto">
-      <ul className="inline-flex gap-1 rounded-[10px] border border-white/[0.12] bg-[color:var(--bbpc-surface)] p-1">
-        {tabs.map((tab) => (
-          <li key={tab.key}>
-            <Link
-              href={getQuotabungaArchivePath(tab.key)}
-              aria-current={tab.key === selected ? "page" : undefined}
-              className={cn(
-                "flex h-11 items-center whitespace-nowrap rounded-[7px] px-3.5 text-sm font-semibold text-zinc-400 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 lg:h-9",
-                tab.key === selected &&
-                  "bg-[color:var(--bbpc-surface-raised)] text-white shadow-[inset_0_0_0_1px_var(--bbpc-border)]"
-              )}
-            >
-              <SeasonTabLabel>
-                {tab.label}
-                {tab.isCurrent && (
-                  <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-red-300">
-                    Current
-                  </span>
-                )}
-              </SeasonTabLabel>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
 
 // A season with no rounds has no open round either (an open round always
 // gets a row), so there is nothing to send the listener to from here.
@@ -227,7 +178,20 @@ export default async function QuotabungaArchivePage({
       ) : (
         <>
           <SeasonTabs
-            seasons={seasons}
+            tabs={[
+              ...seasons.map((season) => ({
+                key: season.id,
+                label: season.title,
+                isCurrent: season.isCurrent,
+                href: getQuotabungaArchivePath(season.id),
+              })),
+              {
+                key: ALL_SEASONS,
+                label: "All seasons",
+                isCurrent: false,
+                href: getQuotabungaArchivePath(ALL_SEASONS),
+              },
+            ]}
             selected={view.kind === "all" ? ALL_SEASONS : view.season.id}
           />
           {/* Keyed by the view, so changing season starts with nothing

@@ -108,19 +108,23 @@ export const buildSummaryRows = (
 
 export default function GamePerformanceTracking({
   data,
+  showSummary = true,
 }: {
   data: GamePerformanceData | null;
+  /** Off where the page already lists the standings beside the chart. */
+  showSummary?: boolean;
 }) {
   if (!data) {
     return null;
   }
 
+  const today = getPacificTodayPlainDate();
   const chartData = buildChartData(data.points, data.userSummary);
   const summary = buildSummaryRows(
     chartData,
     data.points,
     data.userSummary,
-    getPacificTodayPlainDate()
+    today
   );
   const progress = getSeasonProgress(data);
 
@@ -134,7 +138,10 @@ export default function GamePerformanceTracking({
         <CardDescription className="text-base text-zinc-400">
           Cumulative point progression throughout {data.season.title}.
           {data.season.endedOn && (
-            <p>This season ends on {formatPlainDate(data.season.endedOn)}.</p>
+            <p>
+              This season {data.season.endedOn < today ? "ended" : "ends"} on{" "}
+              {formatPlainDate(data.season.endedOn)}.
+            </p>
           )}
         </CardDescription>
         {progress !== null && (
@@ -146,8 +153,8 @@ export default function GamePerformanceTracking({
       <CardContent className="pt-4">
         {chartData.length === 0 ? (
           <div className="flex h-[320px] items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-950/60 px-6 text-center text-sm text-zinc-400">
-            Point history will appear here once the current season has recorded
-            scoring activity.
+            Point history will appear here once the season has recorded scoring
+            activity.
           </div>
         ) : (
           <div className="space-y-6">
@@ -244,56 +251,58 @@ export default function GamePerformanceTracking({
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/60">
-              <table
-                className="min-w-full text-left text-sm"
-                aria-label="Performance tracking summary table"
-              >
-                <caption className="caption-top px-4 py-3 text-left text-sm font-semibold text-zinc-200">
-                  Performance tracking summary
-                </caption>
-                <thead className="border-b border-zinc-800 text-xs uppercase tracking-[0.2em] text-zinc-500">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Player</th>
-                    <th className="px-4 py-3 font-semibold">Current</th>
-                    <th className="px-4 py-3 font-semibold">Peak</th>
-                    <th className="px-4 py-3 font-semibold">
-                      Last Episode
-                      {summary.lastEpisodeLabel !== null && (
-                        <span className="ml-1 font-normal normal-case tracking-normal text-zinc-400">
-                          ({summary.lastEpisodeLabel})
-                        </span>
-                      )}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.rows.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="border-b border-zinc-900 last:border-b-0"
-                    >
-                      <th
-                        scope="row"
-                        className="px-4 py-3 font-semibold text-zinc-100"
-                      >
-                        {user.name}
+            {showSummary && (
+              <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/60">
+                <table
+                  className="min-w-full text-left text-sm"
+                  aria-label="Performance tracking summary table"
+                >
+                  <caption className="caption-top px-4 py-3 text-left text-sm font-semibold text-zinc-200">
+                    Performance tracking summary
+                  </caption>
+                  <thead className="border-b border-zinc-800 text-xs uppercase tracking-[0.2em] text-zinc-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Player</th>
+                      <th className="px-4 py-3 font-semibold">Current</th>
+                      <th className="px-4 py-3 font-semibold">Peak</th>
+                      <th className="px-4 py-3 font-semibold">
+                        Last Episode
+                        {summary.lastEpisodeLabel !== null && (
+                          <span className="ml-1 font-normal normal-case tracking-normal text-zinc-400">
+                            ({summary.lastEpisodeLabel})
+                          </span>
+                        )}
                       </th>
-                      <td className="px-4 py-3 text-zinc-300">
-                        {user.latestScore}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-300">
-                        {user.peakScore}
-                      </td>
-                      <td className="px-4 py-3 text-zinc-300">
-                        {user.lastEpisodeScore > 0 ? "+" : ""}
-                        {user.lastEpisodeScore}
-                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {summary.rows.map((user) => (
+                      <tr
+                        key={user.id}
+                        className="border-b border-zinc-900 last:border-b-0"
+                      >
+                        <th
+                          scope="row"
+                          className="px-4 py-3 font-semibold text-zinc-100"
+                        >
+                          {user.name}
+                        </th>
+                        <td className="px-4 py-3 text-zinc-300">
+                          {user.latestScore}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300">
+                          {user.peakScore}
+                        </td>
+                        <td className="px-4 py-3 text-zinc-300">
+                          {user.lastEpisodeScore > 0 ? "+" : ""}
+                          {user.lastEpisodeScore}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

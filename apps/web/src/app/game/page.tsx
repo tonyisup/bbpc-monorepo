@@ -4,7 +4,10 @@ import { Episode } from "@/components/Episode";
 import RatingIcon from "@/components/RatingIcon";
 import { SeasonStandingsDisclosure } from "@/components/SeasonStandingsDisclosure";
 import { getPacificTodayPlainDate } from "@/lib/dates";
-import { getQuotabungaArchivePath } from "@/lib/routes";
+import {
+  getQuotabungaArchivePath,
+  getStandingsArchivePath,
+} from "@/lib/routes";
 import { getNextScheduledEpisode } from "@/server/convex/episodes";
 import {
   getConvexCurrentPerformance,
@@ -45,7 +48,13 @@ export default async function GamePage() {
           Predict the hosts&apos; ratings, send in a memorable quote, and climb
           the season standings.
         </p>
-        <p className="mt-3">
+        <p className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+          <Link
+            href={getStandingsArchivePath()}
+            className="rounded font-semibold text-red-300 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            Past season standings
+          </Link>
           <Link
             href={getQuotabungaArchivePath()}
             className="rounded font-semibold text-red-300 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
@@ -111,6 +120,15 @@ export default async function GamePage() {
               <p>
                 The winner picks a movie and joins the hosts to discuss it on
                 the show.
+              </p>
+              <p>
+                <Link
+                  href={getStandingsArchivePath()}
+                  className="font-semibold text-red-300 underline"
+                >
+                  See every past season&apos;s standings
+                </Link>
+                .
               </p>
             </div>
           </details>
