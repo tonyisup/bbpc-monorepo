@@ -68,6 +68,7 @@ import type * as games_quotes from "../games/quotes.js";
 import type * as games_readModel from "../games/readModel.js";
 import type * as games_resultEmbargo from "../games/resultEmbargo.js";
 import type * as games_roundWindow from "../games/roundWindow.js";
+import type * as games_seasonArchiveReadModel from "../games/seasonArchiveReadModel.js";
 import type * as games_seasonTimelineReadModel from "../games/seasonTimelineReadModel.js";
 import type * as games_seasons from "../games/seasons.js";
 import type * as games_tagReadModel from "../games/tagReadModel.js";
@@ -241,6 +242,7 @@ declare const fullApi: ApiFromModules<{
   "games/readModel": typeof games_readModel;
   "games/resultEmbargo": typeof games_resultEmbargo;
   "games/roundWindow": typeof games_roundWindow;
+  "games/seasonArchiveReadModel": typeof games_seasonArchiveReadModel;
   "games/seasonTimelineReadModel": typeof games_seasonTimelineReadModel;
   "games/seasons": typeof games_seasons;
   "games/tagReadModel": typeof games_tagReadModel;

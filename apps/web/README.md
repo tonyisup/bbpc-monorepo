@@ -57,6 +57,12 @@ appear once its episode is published. Deploy the backend with
 `games.public.quotabungaSeasons` and `quotabungaSeason` first; until then the page
 shows its error state.
 
+The public standings at `/game/standings`, linked from `/game`, show each WTFIR
+season's champion, ranked standings, and points chart. `?season=<id>` picks a season;
+anything else opens on the newest finished season, or the current one when none has
+finished. It needs no keys. Deploy the backend with `games.public.standingsSeasons` and
+`seasonStandings` first; until then the page shows its error state.
+
 The app consumes the shared Convex client contract from the private
 `@tonyisup/bbpc-convex-api` workspace package. Contract and backend changes can
 therefore be tested atomically from the repository root with `pnpm run check`.

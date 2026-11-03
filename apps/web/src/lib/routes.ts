@@ -23,3 +23,10 @@ export function getQuotabungaArchivePath(season?: string) {
     ? "/game/quotabunga"
     : `/game/quotabunga?season=${encodeURIComponent(season)}`;
 }
+
+/** Every season's WTFIR standings, on one season when given. */
+export function getStandingsArchivePath(season?: string) {
+  return season === undefined
+    ? "/game/standings"
+    : `/game/standings?season=${encodeURIComponent(season)}`;
+}

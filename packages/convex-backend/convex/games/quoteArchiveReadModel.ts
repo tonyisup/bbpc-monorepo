@@ -4,42 +4,29 @@ import type { Doc, Id } from "../_generated/dataModel.js";
 import type { QueryCtx } from "../_generated/server.js";
 import { domainError } from "../lib/errors.js";
 import { isPublishedEpisode } from "../lib/transcriptVisibility.js";
-import {
-  MAX_QUOTE_SUBMISSIONS_PER_SEASON,
-  MAX_SEASONS_TO_INSPECT,
-} from "./limits.js";
+import { MAX_QUOTE_SUBMISSIONS_PER_SEASON } from "./limits.js";
 import { findSubmissionEpisode } from "./quoteReadModel.js";
 import { quotePlacementAdjustment } from "./quoteWriteModel.js";
 import { findCurrentSeason } from "./readModel.js";
 import { isEpisodeRoundOpen } from "./roundWindow.js";
+import {
+  type ArchiveSeason,
+  listArchiveSeasons,
+  toArchiveSeason,
+} from "./seasonArchiveReadModel.js";
 import type {
   quoteArchiveEntryValidator,
   quoteArchiveListenerValidator,
   quoteArchiveRoundValidator,
   quoteArchiveSeasonDetailValidator,
-  quoteArchiveSeasonValidator,
 } from "./validators.js";
 
 type ArchiveReadContext = Pick<QueryCtx, "db">;
-type ArchiveSeason = Infer<typeof quoteArchiveSeasonValidator>;
 type ArchiveEntry = Infer<typeof quoteArchiveEntryValidator>;
 type ArchiveRound = Infer<typeof quoteArchiveRoundValidator>;
 type ArchiveListener = Infer<typeof quoteArchiveListenerValidator>;
 type ArchiveSeasonDetail = Infer<typeof quoteArchiveSeasonDetailValidator>;
 type Placement = 1 | 2 | 3;
-
-function toArchiveSeason(
-  season: Doc<"seasons">,
-  isCurrent: boolean,
-): ArchiveSeason {
-  return {
-    id: season._id,
-    title: season.title,
-    startedOn: season.startedOn ?? null,
-    endedOn: season.endedOn ?? null,
-    isCurrent,
-  };
-}
 
 function placementOf(submission: Doc<"quoteSubmissions">): Placement | null {
   const { placement } = submission;
@@ -71,36 +58,15 @@ export async function listQuoteArchiveSeasons(
   ctx: ArchiveReadContext,
   today: string,
 ): Promise<ArchiveSeason[]> {
-  const [seasons, current] = await Promise.all([
-    ctx.db
-      .query("seasons")
-      .withIndex("by_startedOn")
-      .order("desc")
-      .take(MAX_SEASONS_TO_INSPECT + 1),
-    findCurrentSeason(ctx, today),
-  ]);
-  if (seasons.length > MAX_SEASONS_TO_INSPECT) {
-    domainError(
-      "CONFLICT",
-      "Season list exceeds its bounded inspection limit.",
-      { details: { limit: MAX_SEASONS_TO_INSPECT } },
-    );
-  }
-  const listed = await Promise.all(
-    seasons.map(async (season) => {
-      const isCurrent = season._id === current?._id;
-      const hasQuotes =
-        isCurrent ||
-        (await ctx.db
-          .query("quoteSubmissions")
-          .withIndex("by_seasonId", (index) =>
-            index.eq("seasonId", season._id),
-          )
-          .first()) !== null;
-      return hasQuotes ? [toArchiveSeason(season, isCurrent)] : [];
-    }),
+  return await listArchiveSeasons(
+    ctx,
+    today,
+    async (seasonId) =>
+      (await ctx.db
+        .query("quoteSubmissions")
+        .withIndex("by_seasonId", (index) => index.eq("seasonId", seasonId))
+        .first()) !== null,
   );
-  return listed.flat();
 }
 
 /**

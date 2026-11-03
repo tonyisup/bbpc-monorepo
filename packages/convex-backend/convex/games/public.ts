@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 
+import type { Doc } from "../_generated/dataModel.js";
+import type { QueryCtx } from "../_generated/server.js";
 import { anonymousQuery } from "../functions.js";
 import { loadSeasonPerformance } from "./memberSeasonReadModel.js";
 import {
@@ -12,11 +14,12 @@ import {
   hydrateSeason,
 } from "./readModel.js";
 import { loadResultEmbargo } from "./resultEmbargo.js";
+import { listStandingsSeasons } from "./seasonArchiveReadModel.js";
 import {
+  archiveSeasonValidator,
   currentPerformanceValidator,
   predictionScoringValidator,
   quoteArchiveSeasonDetailValidator,
-  quoteArchiveSeasonValidator,
   seasonValidator,
 } from "./validators.js";
 import { validatePlainDate } from "./writeModel.js";
@@ -89,31 +92,61 @@ export const currentPerformance = anonymousQuery({
   handler: async (ctx, args) => {
     const today = validatePlainDate(args.today, "Current date");
     const season = await findCurrentSeason(ctx, today);
-    if (season === null) {
-      return null;
-    }
-    // Standings move when an episode is published, not when it is recorded.
-    const performance = await loadSeasonPerformance(
+    return season === null
+      ? null
+      : await loadSeasonStandings(ctx, season, today, "Current performance");
+  },
+});
+
+/** Standings move when an episode is published, not when it is recorded. */
+async function loadSeasonStandings(
+  ctx: Pick<QueryCtx, "db">,
+  season: Doc<"seasons">,
+  today: string,
+  label: string,
+) {
+  const performance = await loadSeasonPerformance(
+    ctx,
+    season._id,
+    label,
+    await loadResultEmbargo(ctx),
+  );
+  return {
+    season: await hydrateSeason(ctx, season),
+    recordedEpisodeCount: await countSeasonEpisodesThrough(
       ctx,
-      season._id,
-      "Current performance",
-      await loadResultEmbargo(ctx),
-    );
-    return {
-      season: await hydrateSeason(ctx, season),
-      recordedEpisodeCount: await countSeasonEpisodesThrough(
-        ctx,
-        season,
-        today,
-      ),
-      ...performance,
-    };
+      season,
+      today,
+    ),
+    ...performance,
+  };
+}
+
+export const standingsSeasons = anonymousQuery({
+  args: { today: v.string() },
+  returns: v.array(archiveSeasonValidator),
+  handler: async (ctx, args) => {
+    const today = validatePlainDate(args.today, "Current date");
+    return await listStandingsSeasons(ctx, today);
+  },
+});
+
+/** Any season's standings, in the same shape as currentPerformance. */
+export const seasonStandings = anonymousQuery({
+  args: { seasonId: v.id("seasons"), today: v.string() },
+  returns: v.union(currentPerformanceValidator, v.null()),
+  handler: async (ctx, args) => {
+    const today = validatePlainDate(args.today, "Current date");
+    const season = await ctx.db.get("seasons", args.seasonId);
+    return season === null
+      ? null
+      : await loadSeasonStandings(ctx, season, today, "Season standings");
   },
 });
 
 export const quotabungaSeasons = anonymousQuery({
   args: { today: v.string() },
-  returns: v.array(quoteArchiveSeasonValidator),
+  returns: v.array(archiveSeasonValidator),
   handler: async (ctx, args) => {
     const today = validatePlainDate(args.today, "Current date");
     return await listQuoteArchiveSeasons(ctx, today);

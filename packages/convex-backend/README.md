@@ -716,6 +716,20 @@ the caller's `YYYY-MM-DD` date.
   an unrevealed round reads as `open` or `locked`. More than 2000 submissions in one
   season fail with `CONFLICT`.
 
+### Public standings
+
+Two anonymous queries back the public standings page at `/game/standings`. `today` is
+the caller's `YYYY-MM-DD` date.
+
+- `games.public.standingsSeasons({ today })` lists every season with a point, plus the
+  current season, newest start date first, in the same row shape as
+  `quotabungaSeasons`. It inspects at most 100 seasons and fails with `CONFLICT`
+  beyond that.
+- `games.public.seasonStandings({ seasonId, today })` returns that season's standings
+  in the same shape as `currentPerformance`, or `null` for an unknown season. Points
+  for unpublished episodes are left out, as they are from `currentPerformance`, and
+  more than 2000 points in one season fail with `CONFLICT`.
+
 ## Season progress API
 
 A season can declare an optional `episodeCount`, a whole number from 1 through 500.

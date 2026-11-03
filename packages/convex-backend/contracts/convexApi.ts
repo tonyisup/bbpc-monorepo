@@ -8246,6 +8246,53 @@ export type PublicApiType = {
           title: string;
         }>
       >;
+      seasonStandings: FunctionReference<
+        "query",
+        "public",
+        { seasonId: Id<"seasons">; today: string },
+        {
+          points: Array<{
+            earnedAt: number;
+            pointValue: number;
+            userId: Id<"users">;
+          }>;
+          recordedEpisodeCount: number | null;
+          season: {
+            description: string | null;
+            endedOn: string | null;
+            episodeCount: number | null;
+            gameType: {
+              description: string | null;
+              id: Id<"gameTypes">;
+              lookupId: string;
+              title: string;
+            };
+            id: Id<"seasons">;
+            startedOn: string | null;
+            title: string;
+          };
+          userSummary: Array<{
+            total: number;
+            user: {
+              id: Id<"users">;
+              image: string | null;
+              name: string | null;
+            };
+          }>;
+        } | null
+      >;
+      standingsSeasons: FunctionReference<
+        "query",
+        "public",
+        { today: string },
+        Array<{
+          endedOn: string | null;
+          id: Id<"seasons">;
+          isCurrent: boolean;
+          startedOn: string | null;
+          title: string;
+        }>
+      >;
     };
     quotes: {
       awardPlacements: FunctionReference<

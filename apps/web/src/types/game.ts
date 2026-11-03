@@ -23,3 +23,12 @@ export interface GamePerformanceData {
     pointValue: number;
   }>;
 }
+
+/** A season the public standings can show, as the backend lists it. */
+export interface StandingsSeason {
+  id: string;
+  title: string;
+  startedOn: string | null;
+  endedOn: string | null;
+  isCurrent: boolean;
+}
