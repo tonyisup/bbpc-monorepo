@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DurableRecordingStore } from './durable-store';
 
@@ -14,6 +14,8 @@ function takeInput(id: string, startedAt = 1_000) {
     mimeTypes: { mic: 'audio/webm;codecs=opus', sounders: 'audio/webm;codecs=opus' },
   };
 }
+
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('durable recording store', () => {
   it('keeps every chunk in order across a reopened database, as after a reload', async () => {
@@ -59,6 +61,8 @@ describe('durable recording store', () => {
   });
 
   it('treats a capturing take as abandoned once its chunks stop, without Web Locks', async () => {
+    // Some runtimes (and test environments) provide navigator.locks; this case is about those that do not.
+    vi.stubGlobal('navigator', { ...globalThis.navigator, locks: undefined });
     const store = new DurableRecordingStore(new IDBFactory());
     const take = await store.beginTake(takeInput('take-1', Date.now()));
     expect(await store.isTakeLive(take)).toBe(true);

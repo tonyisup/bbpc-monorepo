@@ -8,11 +8,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    if (req.query.refresh === '1') {
-      return res.status(409).json({
-        message: 'Sounder refresh now requires the authenticated BBPC administrator workflow.',
-      });
-    }
     const sounders = await querySharedConvex(recordingApi.sounders.list, {});
 
     res.status(200).json({

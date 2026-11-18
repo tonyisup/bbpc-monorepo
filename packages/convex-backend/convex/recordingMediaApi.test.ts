@@ -4,7 +4,10 @@ import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 
-import { BBPC_API_VERSION } from "../contracts/index.js";
+import {
+  BBPC_API_VERSION,
+  recordingTakeBlobName,
+} from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
 import schema from "./schema.js";
 
@@ -156,12 +159,19 @@ async function createHostSession(
 }
 
 // Mirrors the upload route's blob naming, which the backend requires.
+// The name the upload route gives one track of a participant's take.
 function participantBlobName(
   grant: { publicSessionId: string; clientId: string },
-  label: string,
+  startedAt = 1_001,
   trackType: "mic" | "sounders" = "mic",
 ): string {
-  return `${grant.publicSessionId}/${label}/Media-Host-${grant.clientId}-${trackType}.webm`;
+  return recordingTakeBlobName({
+    sessionId: grant.publicSessionId,
+    clientId: grant.clientId,
+    startedAt,
+    trackType,
+    extension: "webm",
+  });
 }
 
 async function joinGuest(
@@ -205,7 +215,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: participantBlobName(first.grant, "host-mic"),
+      blobName: participantBlobName(first.grant),
       url: "https://audio.example.test/host-mic.webm",
       size: 123,
       contentType: "audio/webm",
@@ -276,7 +286,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: participantBlobName(host.grant, "owner"),
+      blobName: participantBlobName(host.grant),
       url: "https://audio.example.test/owner-mic.webm",
       size: 123,
       contentType: "audio/webm",
@@ -303,7 +313,8 @@ describe("shared recording media and catalogs", () => {
         ...guest,
         ...ownerUpload,
         hostName: "Guest",
-        blobName: participantBlobName(host.grant, "later"),
+        startedAt: 2_002,
+        blobName: participantBlobName(host.grant, 2_002),
       }),
       "FORBIDDEN",
     );
@@ -313,11 +324,22 @@ describe("shared recording media and catalogs", () => {
         ...guest,
         ...ownerUpload,
         hostName: "Guest",
-        blobName: participantBlobName(guest, "guest"),
+        blobName: participantBlobName(guest),
         url: "https://audio.example.test/guest-mic.webm",
       },
     );
     expect(guestUploadId).not.toBe(ownerUploadId);
+    // A name that merely contains the guest's namespace, with `..` segments
+    // that storage collapses onto someone else's take, is refused.
+    await expectDomainError(
+      t.mutation(api.recording.recordings.saveUpload, {
+        ...guest,
+        ...ownerUpload,
+        hostName: "Guest",
+        blobName: `${guest.publicSessionId}/-${guest.clientId}-mic./../../${participantBlobName(host.grant)}`,
+      }),
+      "FORBIDDEN",
+    );
 
     const listed = await t.query(
       api.recording.recordings.listBySession,
@@ -350,7 +372,7 @@ describe("shared recording media and catalogs", () => {
     ).toEqual(
       expect.arrayContaining([
         [ownerUpload.blobName, host.grant.clientId],
-        [participantBlobName(guest, "guest"), guest.clientId],
+        [participantBlobName(guest), guest.clientId],
       ]),
     );
   });
@@ -366,7 +388,7 @@ describe("shared recording media and catalogs", () => {
     await seedS3(t);
     const host = await createHostSession(t, "upload_legacy");
     const guest = await joinGuest(t, host, "upload_legacy");
-    const blobName = participantBlobName(host.grant, "legacy");
+    const blobName = participantBlobName(host.grant);
     const legacyId = await t.run(async (ctx) =>
       await ctx.db.insert("recordingUploads", {
         publicSessionId: host.input.publicId,
@@ -676,7 +698,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: participantBlobName(session.grant, "valid"),
+      blobName: participantBlobName(session.grant),
       url: "https://audio.example.test/valid.webm",
       size: 123,
       contentType: "audio/webm",
@@ -702,35 +724,50 @@ describe("shared recording media and catalogs", () => {
       );
     }
 
-    await t.run(async (ctx) => {
-      for (let index = 0; index < 100; index += 1) {
-        await ctx.db.insert("recordingUploads", {
-          publicSessionId: session.input.publicId,
-          episode: session.input.episode,
-          hostName: `Host ${String(index).padStart(3, "0")}`,
-          trackType: "mic",
-          startedAt: 2_000,
-          blobName: `session/capacity-${String(index)}.webm`,
-          url: `https://audio.example.test/capacity-${String(index)}.webm`,
-          size: 1,
-          contentType: "audio/webm",
-          uploadedAt: 2_001,
-        });
-      }
-    });
+    const fillUploads = async (count: number, clientId?: string) => {
+      await t.run(async (ctx) => {
+        for (let index = 0; index < count; index += 1) {
+          await ctx.db.insert("recordingUploads", {
+            publicSessionId: session.input.publicId,
+            ...(clientId === undefined ? {} : { clientId }),
+            episode: session.input.episode,
+            hostName: `Host ${String(index).padStart(4, "0")}`,
+            trackType: "mic",
+            startedAt: 2_000,
+            blobName: `session/capacity-${clientId ?? "other"}-${String(index)}.webm`,
+            url: `https://audio.example.test/capacity-${String(index)}.webm`,
+            size: 1,
+            contentType: "audio/webm",
+            uploadedAt: 2_001,
+          });
+        }
+      });
+    };
+    const nextUpload = {
+      ...session.grant,
+      ...upload,
+      startedAt: 1_500,
+      blobName: participantBlobName(session.grant, 1_500),
+    };
+    // Other participants' uploads do not use up this participant's allowance.
+    await fillUploads(300);
+    await t.mutation(api.recording.recordings.saveUpload, nextUpload);
+    await fillUploads(199, session.grant.clientId);
     await expectDomainError(
       t.mutation(api.recording.recordings.saveUpload, {
-        ...session.grant,
-        ...upload,
-        blobName: participantBlobName(session.grant, "over-capacity"),
+        ...nextUpload,
+        startedAt: 1_600,
+        blobName: participantBlobName(session.grant, 1_600),
       }),
       "CONFLICT",
     );
+    await fillUploads(500);
     await t.run(async (ctx) => {
       await ctx.db.insert("recordingUploads", {
         publicSessionId: session.input.publicId,
         episode: session.input.episode,
         hostName: "Overflow",
+        clientId: "client_overflow",
         trackType: "sounders",
         startedAt: 3_000,
         blobName: "session/direct-overflow.webm",
@@ -766,7 +803,7 @@ describe("shared recording media and catalogs", () => {
       hostName: "Media Host",
       trackType: "mic" as const,
       startedAt: 1_001,
-      blobName: participantBlobName(first.grant, "ambiguous"),
+      blobName: participantBlobName(first.grant),
       url: "https://audio.example.test/ambiguous.webm",
       size: 123,
       contentType: "audio/webm",

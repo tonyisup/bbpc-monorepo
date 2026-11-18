@@ -20,7 +20,7 @@ TURN_STATIC_AUTH_SECRET=<same secret as coturn>
 TURN_TTL_SECONDS=3600
 ```
 
-If the Mac LAN IP changes, update `TURN_URLS` and `STUN_URLS` in `.env.local`, then restart `npm run dev`. Coturn itself can continue using the same shared secret.
+If the Mac LAN IP changes, update `TURN_URLS` and `STUN_URLS` in `.env.local`, then restart `pnpm run dev:recording`. Coturn itself can continue using the same shared secret.
 
 Local coturn is useful for implementation and same-LAN device testing. It is not a production substitute unless ports are forwarded and the advertised URL is reachable from the public internet.
 
@@ -44,7 +44,6 @@ TURN_URLS=turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?tr
 STUN_URLS=stun:turn.example.com:3478
 TURN_STATIC_AUTH_SECRET=<same secret as coturn>
 TURN_TTL_SECONDS=3600
-NEXT_PUBLIC_RTC_AUDIO_ENABLED=true
 ```
 
 For `turns:` URLs on port `5349`, install a valid TLS certificate and set `cert=` and `pkey=` in the coturn config.

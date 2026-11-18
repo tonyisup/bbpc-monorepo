@@ -29,7 +29,13 @@ interface UploadSnapshot {
 }
 const emptySnapshot: UploadSnapshot = { pending: null, status: 'idle', error: null, notice: null, progress: null };
 const recoveries = new Map<string, UploadSnapshot>();
+// The latest look for takes left on this device, per session.
 const restoring = new Map<string, Promise<void>>();
+function restore(sessionId: string): Promise<void> {
+  const next = (restoring.get(sessionId) ?? Promise.resolve()).then(() => restoreFromDevice(sessionId));
+  restoring.set(sessionId, next);
+  return next;
+}
 const listeners = new Set<() => void>();
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -75,6 +81,7 @@ async function restoreFromDevice(sessionId: string): Promise<void> {
         startedAt: take.startedAt,
         durationMs: take.durationMs ?? take.lastChunkAt - take.startedAt,
         takeId: take.id,
+        savedOnDevice: true,
       };
       const uploaded = TRACK_TYPES.filter(track => take.tracks[track].committed);
       setSnapshot(sessionId, {
@@ -101,13 +108,19 @@ export function useRecordingUpload(sessionId: string, episode: string, hostName:
   );
 
   useEffect(() => {
-    if (!restoring.has(sessionId)) restoring.set(sessionId, restoreFromDevice(sessionId));
+    if (!restoring.has(sessionId)) void restore(sessionId);
   }, [sessionId]);
 
   const retain = useCallback((tracks: RecordingTracks) => {
     const existing = recoveries.get(sessionId)?.pending;
     if (existing?.tracks === tracks) return;
-    if (existing) throw new Error('Upload or discard the pending recording before replacing it.');
+    if (existing) {
+      // A take found on this device can be offered while another is being
+      // captured, so two can meet here. One saved on the device waits there
+      // and is offered again once the other has uploaded.
+      if (tracks.savedOnDevice) return;
+      if (!existing.tracks.savedOnDevice) throw new Error('Upload or discard the pending recording before replacing it.');
+    }
     setSnapshot(sessionId, { pending: pendingFor(tracks, episode, hostName), status: 'idle', error: null, notice: null, progress: null });
   }, [episode, hostName, sessionId]);
 
@@ -158,7 +171,7 @@ export function useRecordingUpload(sessionId: string, episode: string, hostName:
         if (store && takeId) await store.deleteTake(takeId).catch(() => {});
         setSnapshot(sessionId, { pending: null, status: 'done', error: null, notice: null, progress: null });
         // Another take may still be waiting on this device.
-        void restoreFromDevice(sessionId);
+        void restore(sessionId);
       }
       return !failure;
     };
@@ -192,10 +205,12 @@ export function useRecordingUpload(sessionId: string, episode: string, hostName:
     notifyRecoveryChange();
     const store = durableRecordingStore();
     if (store && takeId) {
-      void store.deleteTake(takeId).catch(() => {}).then(() => restoreFromDevice(sessionId));
+      void store.deleteTake(takeId).catch(() => {}).then(() => restore(sessionId));
     }
   }, [sessionId]);
 
   return { pending, status, error, notice, progress, retain, upload, retry, download, discard,
-    hasPending: () => !!recoveries.get(sessionId)?.pending };
+    hasPending: () => !!recoveries.get(sessionId)?.pending,
+    /** Resolves once this device has been checked for takes left by an earlier page load. */
+    whenRestored: () => restoring.get(sessionId) ?? Promise.resolve() };
 }

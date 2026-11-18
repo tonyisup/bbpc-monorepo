@@ -451,9 +451,7 @@ Manual E2E checklist:
 
 ## Rollback Plan
 
-Gate the audio room behind an environment flag such as `NEXT_PUBLIC_RTC_AUDIO_ENABLED`.
-
-If unstable, disable the flag. Existing recording, sounders, notes, segments, edit cues, and merge export continue to work. The rollback does not require a data migration because `rtcPresence` and `rtcSignals` are additive and ephemeral.
+The original plan gated the audio room behind `NEXT_PUBLIC_RTC_AUDIO_ENABLED`. That flag was removed in November 2026, when the app became the show's call platform rather than a companion to a separate call: roll back by redeploying an earlier build instead. `rtcPresence` and `rtcSignals` are additive and ephemeral, so no data migration is needed.
 
 ## Effort Estimate
 
