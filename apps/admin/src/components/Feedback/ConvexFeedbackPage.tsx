@@ -233,6 +233,7 @@ export function ConvexFeedbackPage() {
   const [hasMore, setHasMore] = useState(false);
   const [counts, setCounts] = useState<ConvexAdminFeedbackCounts | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [revision, setRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -242,6 +243,7 @@ export function ConvexFeedbackPage() {
   useEffect(() => {
     let active = true;
     setLoadFailed(false);
+    setLoading(true);
     void Promise.all([
       loadConvexAdminFeedback(convex, status),
       loadConvexAdminFeedbackCounts(convex),
@@ -251,9 +253,12 @@ export function ConvexFeedbackPage() {
         setItems(page.items);
         setHasMore(page.hasMore);
         setCounts(nextCounts);
+        setLoading(false);
       })
       .catch(() => {
-        if (active) setLoadFailed(true);
+        if (!active) return;
+        setLoadFailed(true);
+        setLoading(false);
       });
     return () => {
       active = false;
@@ -279,12 +284,18 @@ export function ConvexFeedbackPage() {
     setStatus(next);
   };
 
-  // The item leaves this tab, so select its neighbour to keep triage moving.
+  // The item leaves this tab. If it was selected, select its neighbour to keep
+  // triage moving; a selection made while the request ran stays put. The
+  // reload then refills the page from older feedback and supersedes any load
+  // that started before the change.
   const removeFromList = (id: string) => {
     const index = visible.findIndex((item) => item.id === id);
     const neighbour = visible[index + 1] ?? visible[index - 1] ?? null;
-    setSelectedId(neighbour?.id ?? null);
+    setSelectedId((current) =>
+      current === null || current === id ? neighbour?.id ?? null : current
+    );
     setItems((current) => current?.filter((item) => item.id !== id) ?? null);
+    refresh();
   };
 
   const moveTo = (item: ConvexAdminFeedback, next: ConvexFeedbackStatus) => {
@@ -293,9 +304,6 @@ export function ConvexFeedbackPage() {
       .then(() => {
         toast.success(`Moved to ${FEEDBACK_STATUS_LABELS[next]}.`);
         removeFromList(item.id);
-        void loadConvexAdminFeedbackCounts(convex)
-          .then(setCounts)
-          .catch(() => undefined);
       })
       .catch((error: unknown) => toast.error(mutationFailureMessage(error)))
       .finally(() => setPending(false));
@@ -307,9 +315,6 @@ export function ConvexFeedbackPage() {
       .then(() => {
         toast.success("Feedback deleted.");
         removeFromList(item.id);
-        void loadConvexAdminFeedbackCounts(convex)
-          .then(setCounts)
-          .catch(() => undefined);
       })
       .catch((error: unknown) => toast.error(mutationFailureMessage(error)))
       .finally(() => setPending(false));
@@ -418,7 +423,7 @@ export function ConvexFeedbackPage() {
               Try again
             </Button>
           </div>
-        ) : items === null ? (
+        ) : items === null || (visible.length === 0 && hasMore && loading) ? (
           <div className="rounded-md border bg-card p-16 text-center">
             <Loader2 className="mx-auto h-7 w-7 animate-spin text-muted-foreground" />
           </div>
@@ -433,7 +438,7 @@ export function ConvexFeedbackPage() {
             <p className="text-sm text-muted-foreground">
               {status === "new" && category === "all"
                 ? "New feedback from listeners shows up here."
-                : `No ${category === "all" ? "" : `${FEEDBACK_CATEGORY_LABELS[category].toLowerCase()} `}feedback is ${FEEDBACK_STATUS_LABELS[status].toLowerCase()}.`}
+                : `No ${category === "all" ? "" : `${FEEDBACK_CATEGORY_LABELS[category].toLowerCase()} `}feedback ${hasMore ? "in the newest 100 here" : `is ${FEEDBACK_STATUS_LABELS[status].toLowerCase()}`}.`}
             </p>
           </div>
         ) : (

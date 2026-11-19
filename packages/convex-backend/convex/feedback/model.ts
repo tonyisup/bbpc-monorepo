@@ -8,6 +8,7 @@ export const FEEDBACK_RATE_WINDOW_MS = 60 * 60 * 1000;
 export const MAX_FEEDBACK_PER_WINDOW = 5;
 export const MAX_ADMIN_FEEDBACK_PAGE = 100;
 export const FEEDBACK_COUNT_CAP = 99;
+export const FEEDBACK_SUBMITTED_AUDIT_ACTION = "feedback.member.submitted";
 
 export type FeedbackCategory = Doc<"feedback">["category"];
 export type FeedbackStatus = Doc<"feedback">["status"];
@@ -30,7 +31,8 @@ export function validateFeedbackMessage(value: string): string {
   return message;
 }
 
-// A site-relative path only: the page the listener was on, never a full URL.
+// A site-relative path only: the page the listener was on, never a full URL,
+// query string or fragment, which can carry search terms or tokens.
 export function validateFeedbackPagePath(value: string | null): string | null {
   if (value === null) {
     return null;
@@ -41,7 +43,7 @@ export function validateFeedbackPagePath(value: string | null): string | null {
     path.length > MAX_FEEDBACK_PAGE_PATH_LENGTH ||
     !path.startsWith("/") ||
     path.startsWith("//") ||
-    /[\s\\]/.test(path)
+    /[\s\\?#]/.test(path)
   ) {
     domainError(
       "VALIDATION_FAILED",
@@ -51,28 +53,37 @@ export function validateFeedbackPagePath(value: string | null): string | null {
   return path;
 }
 
+// Counts accepted submissions from the audit log rather than the feedback
+// table, so an administrator deleting a message does not hand its sender
+// capacity back before the window ends. Audit events are never deleted.
 export async function assertFeedbackRateLimit(
   ctx: Pick<QueryCtx, "db">,
   userId: Id<"users">,
   now: number,
 ): Promise<void> {
-  const recent = await ctx.db
-    .query("feedback")
-    .withIndex("by_submittedByUserId_and_createdAt", (index) =>
+  const recentEvents = ctx.db
+    .query("auditEvents")
+    .withIndex("by_actorUserId_and_createdAt", (index) =>
       index
-        .eq("submittedByUserId", userId)
+        .eq("actorUserId", userId)
         .gt("createdAt", now - FEEDBACK_RATE_WINDOW_MS),
-    )
-    .take(MAX_FEEDBACK_PER_WINDOW);
-  if (recent.length >= MAX_FEEDBACK_PER_WINDOW) {
-    domainError(
-      "CONFLICT",
-      "You have sent a lot of feedback recently. Try again later.",
-      {
-        retryable: true,
-        details: { limit: MAX_FEEDBACK_PER_WINDOW },
-      },
     );
+  let accepted = 0;
+  for await (const event of recentEvents) {
+    if (event.action !== FEEDBACK_SUBMITTED_AUDIT_ACTION) {
+      continue;
+    }
+    accepted += 1;
+    if (accepted >= MAX_FEEDBACK_PER_WINDOW) {
+      domainError(
+        "CONFLICT",
+        "You have sent a lot of feedback recently. Try again later.",
+        {
+          retryable: true,
+          details: { limit: MAX_FEEDBACK_PER_WINDOW },
+        },
+      );
+    }
   }
 }
 

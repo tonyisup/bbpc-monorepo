@@ -21,14 +21,15 @@ const submitResultSchema = z.object({
 
 const submitReference = api.feedback.member.submit;
 
-// Only the path is sent: query strings can carry search terms or tokens.
+// Only the path is sent: query strings and fragments can carry search terms
+// or tokens, and the backend rejects them.
 export function toFeedbackPagePath(pathname: string | null): string | null {
   if (
     pathname === null ||
     !pathname.startsWith("/") ||
     pathname.startsWith("//") ||
     pathname.length > FEEDBACK_PAGE_PATH_MAX_LENGTH ||
-    /[\s\\]/u.test(pathname)
+    /[\s\\?#]/u.test(pathname)
   ) {
     return null;
   }

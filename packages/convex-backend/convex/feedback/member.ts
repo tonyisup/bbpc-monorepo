@@ -2,6 +2,7 @@ import { authenticatedMutation } from "../functions.js";
 import { writeAuditEvent } from "../lib/audit.js";
 import {
   assertFeedbackRateLimit,
+  FEEDBACK_SUBMITTED_AUDIT_ACTION,
   validateFeedbackMessage,
   validateFeedbackPagePath,
 } from "./model.js";
@@ -32,7 +33,7 @@ export const submit = authenticatedMutation({
     });
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
-      action: "feedback.member.submitted",
+      action: FEEDBACK_SUBMITTED_AUDIT_ACTION,
       targetType: "feedback",
       targetId: id,
       cutoverRunId: ctx.systemState.cutoverRunId,

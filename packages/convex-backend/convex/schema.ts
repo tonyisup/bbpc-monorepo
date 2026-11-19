@@ -362,11 +362,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_status_and_createdAt", ["status", "createdAt"])
-    .index("by_submittedByUserId_and_createdAt", [
-      "submittedByUserId",
-      "createdAt",
-    ]),
+    .index("by_status_and_createdAt", ["status", "createdAt"]),
 
   merchItems: defineTable({
     title: v.string(),

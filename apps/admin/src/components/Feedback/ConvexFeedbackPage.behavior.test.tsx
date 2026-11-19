@@ -149,11 +149,13 @@ describe("admin feedback inbox", () => {
     expect(selectedDetail()).toContain("/history");
   });
 
-  test("marks feedback reviewed and moves on to the next item", async () => {
-    mocks.load.mockResolvedValue({
-      items: [feedback("a"), feedback("b")],
-      hasMore: false,
-    });
+  test("marks feedback reviewed, moves on and reloads", async () => {
+    mocks.load
+      .mockResolvedValueOnce({
+        items: [feedback("a"), feedback("b")],
+        hasMore: false,
+      })
+      .mockResolvedValue({ items: [feedback("b")], hasMore: false });
     mocks.counts.mockResolvedValue(COUNTS);
     mocks.setStatus.mockResolvedValue(feedback("a", { status: "reviewed" }));
     await render();
@@ -164,7 +166,92 @@ describe("admin feedback inbox", () => {
     expect(toast.success).toHaveBeenCalledWith("Moved to Reviewed.");
     expect(text()).not.toContain("Listener a");
     expect(selectedDetail()).toContain("Message b");
+    expect(mocks.load).toHaveBeenCalledTimes(2);
     expect(mocks.counts).toHaveBeenCalledTimes(2);
+  });
+
+  test("keeps a selection made while a change is in flight", async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    mocks.load
+      .mockResolvedValueOnce({
+        items: [feedback("a"), feedback("b"), feedback("c")],
+        hasMore: false,
+      })
+      .mockResolvedValue({
+        items: [feedback("b"), feedback("c")],
+        hasMore: false,
+      });
+    mocks.counts.mockResolvedValue(COUNTS);
+    mocks.setStatus.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    await render();
+
+    await click("Mark reviewed");
+    await click("Listener c");
+    await act(async () => {
+      finish(feedback("a", { status: "reviewed" }));
+    });
+    await act(() => Promise.resolve());
+
+    expect(selectedDetail()).toContain("Message c");
+  });
+
+  test("refills the page instead of claiming the inbox is empty", async () => {
+    mocks.load
+      .mockResolvedValueOnce({ items: [feedback("a")], hasMore: true })
+      .mockResolvedValue({ items: [feedback("old")], hasMore: false });
+    mocks.counts.mockResolvedValue(COUNTS);
+    mocks.setStatus.mockResolvedValue(feedback("a", { status: "archived" }));
+    await render();
+    expect(text()).toContain("Showing the newest 100.");
+
+    await click("Archive");
+
+    expect(text()).not.toContain("You're all caught up.");
+    expect(text()).toContain("Listener old");
+  });
+
+  test("an empty category on a truncated page is not stuck loading", async () => {
+    mocks.load.mockResolvedValue({ items: [feedback("a")], hasMore: true });
+    mocks.counts.mockResolvedValue(COUNTS);
+    await render();
+
+    await click("Praise");
+
+    expect(text()).toContain("Nothing here.");
+    expect(text()).toContain("No praise feedback in the newest 100 here.");
+    expect(mocks.load).toHaveBeenCalledTimes(1);
+  });
+
+  test("a change supersedes a reload already in flight", async () => {
+    let staleLoad: (value: unknown) => void = () => undefined;
+    mocks.load
+      .mockResolvedValueOnce({
+        items: [feedback("a"), feedback("b")],
+        hasMore: false,
+      })
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          staleLoad = resolve;
+        })
+      )
+      .mockResolvedValue({ items: [feedback("b")], hasMore: false });
+    mocks.counts.mockResolvedValue(COUNTS);
+    mocks.setStatus.mockResolvedValue(feedback("a", { status: "reviewed" }));
+    await render();
+
+    await click("Refresh");
+    await click("Mark reviewed");
+    await act(async () => {
+      staleLoad({ items: [feedback("a"), feedback("b")], hasMore: false });
+    });
+    await act(() => Promise.resolve());
+
+    expect(text()).not.toContain("Listener a");
+    expect(text()).toContain("Listener b");
   });
 
   test("filters by category and switches status tabs", async () => {

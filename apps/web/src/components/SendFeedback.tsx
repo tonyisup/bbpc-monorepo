@@ -300,11 +300,12 @@ export function SendFeedback() {
                             key={option.value}
                             type="button"
                             aria-pressed={selected}
+                            disabled={sending}
                             onClick={() =>
                               setCategory(selected ? null : option.value)
                             }
                             className={cn(
-                              "flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500",
+                              "flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50",
                               selected
                                 ? "border-red-500/60 bg-red-500/15 text-red-100"
                                 : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/25 hover:text-white"
@@ -333,11 +334,12 @@ export function SendFeedback() {
                         setError(null);
                       }}
                       onKeyDown={onKeyDown}
+                      disabled={sending}
                       placeholder={placeholder}
                       rows={5}
                       aria-invalid={tooLong}
                       aria-describedby={`${fieldId}-hint`}
-                      className="w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-base text-zinc-100 placeholder:text-zinc-500 focus-visible:border-red-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 sm:text-sm"
+                      className="w-full resize-y rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-base text-zinc-100 placeholder:text-zinc-500 focus-visible:border-red-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
                     />
                     <div
                       id={`${fieldId}-hint`}

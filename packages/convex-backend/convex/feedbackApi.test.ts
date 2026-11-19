@@ -192,6 +192,8 @@ describe("feedback submission", () => {
       { pagePath: "//evil.example/path" },
       { pagePath: "https://example.test/history" },
       { pagePath: "/has space" },
+      { pagePath: "/history?token=secret" },
+      { pagePath: "/history#transcript" },
       { pagePath: `/${"x".repeat(300)}` },
     ]) {
       await expectDomainError(submit(overrides), "VALIDATION_FAILED");
@@ -221,6 +223,21 @@ describe("feedback submission", () => {
         api.feedback.member.submit,
         submission({ message: `Note ${String(index)}` }),
       );
+    }
+    await expectDomainError(
+      asMember(t).mutation(api.feedback.member.submit, submission()),
+      "CONFLICT",
+    );
+    // Deleting a message does not hand capacity back within the window.
+    const { items } = await asAdmin(t).query(api.feedback.admin.list, {
+      status: "new",
+    });
+    expect(items).toHaveLength(MAX_FEEDBACK_PER_WINDOW);
+    for (const item of items.slice(0, 1)) {
+      await asAdmin(t).mutation(api.feedback.admin.remove, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: item.id,
+      });
     }
     await expectDomainError(
       asMember(t).mutation(api.feedback.member.submit, submission()),

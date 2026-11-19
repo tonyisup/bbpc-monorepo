@@ -64,6 +64,7 @@ vi.mock("@/components/ui/dialog", () => {
 });
 
 import { SendFeedback } from "@/components/SendFeedback";
+import { toFeedbackPagePath } from "@/convex/feedback";
 
 let renderer: ReactTestRenderer | null = null;
 
@@ -273,6 +274,27 @@ describe("send feedback", () => {
     });
   });
 
+  test("locks the draft while it is sending", async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    mocks.submit.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    render();
+    await click("Send feedback");
+    typeMessage("Sending this");
+    await submitForm();
+
+    expect(root().findByType("textarea").props.disabled).toBe(true);
+    expect(button("Bug").props.disabled).toBe(true);
+
+    await act(async () => {
+      finish({ id: "feedback-1", createdAt: 1 });
+    });
+    expect(text()).toContain("Thanks for the feedback");
+  });
+
   test("keeps the draft and explains a rate limit", async () => {
     mocks.submit.mockRejectedValue(new Error("limited"));
     mocks.errorCode.mockReturnValue("CONFLICT");
@@ -295,5 +317,23 @@ describe("send feedback", () => {
     expect(root().findByType("textarea").props["aria-invalid"]).toBe(true);
     await submitForm();
     expect(mocks.submit).not.toHaveBeenCalled();
+  });
+});
+
+describe("feedback page path", () => {
+  test("keeps plain site paths and drops anything else", () => {
+    expect(toFeedbackPagePath("/history")).toBe("/history");
+    expect(toFeedbackPagePath("/game/standings")).toBe("/game/standings");
+    for (const value of [
+      null,
+      "history",
+      "//evil.example/path",
+      "/history?token=secret",
+      "/history#transcript",
+      "/has space",
+      `/${"x".repeat(300)}`,
+    ]) {
+      expect(toFeedbackPagePath(value)).toBeNull();
+    }
   });
 });
