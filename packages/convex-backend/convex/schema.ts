@@ -1,6 +1,10 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { announcementSeverityValidator } from "./announcements/validators.js";
+import {
+  feedbackCategoryValidator,
+  feedbackStatusValidator,
+} from "./feedback/validators.js";
 import { movieLinkPreferenceValidator } from "./lib/movieLinkPreference.js";
 
 import {
@@ -348,6 +352,17 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_endsAt", ["endsAt"]),
+
+  feedback: defineTable({
+    category: feedbackCategoryValidator,
+    message: v.string(),
+    pagePath: v.optional(v.string()),
+    status: feedbackStatusValidator,
+    submittedByUserId: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status_and_createdAt", ["status", "createdAt"]),
 
   merchItems: defineTable({
     title: v.string(),

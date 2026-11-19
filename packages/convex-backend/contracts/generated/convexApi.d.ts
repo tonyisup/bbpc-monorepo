@@ -754,6 +754,70 @@ export type PublicApiType = {
             }>>;
         };
     };
+    feedback: {
+        admin: {
+            list: FunctionReference<"query", "public", {
+                status: "new" | "reviewed" | "archived";
+            }, {
+                items: Array<{
+                    id: Id<"feedback">;
+                    category: "bug" | "idea" | "praise" | "other";
+                    message: string;
+                    pagePath: string | null;
+                    status: "new" | "reviewed" | "archived";
+                    createdAt: number;
+                    updatedAt: number;
+                    submitter: {
+                        id: Id<"users">;
+                        name: string | null;
+                        email: string | null;
+                    } | null;
+                }>;
+                hasMore: boolean;
+            }>;
+            counts: FunctionReference<"query", "public", Record<string, never>, {
+                new: number;
+                reviewed: number;
+                archived: number;
+                cap: number;
+            }>;
+            setStatus: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"feedback">;
+                status: "new" | "reviewed" | "archived";
+            }, {
+                id: Id<"feedback">;
+                category: "bug" | "idea" | "praise" | "other";
+                message: string;
+                pagePath: string | null;
+                status: "new" | "reviewed" | "archived";
+                createdAt: number;
+                updatedAt: number;
+                submitter: {
+                    id: Id<"users">;
+                    name: string | null;
+                    email: string | null;
+                } | null;
+            }>;
+            remove: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                id: Id<"feedback">;
+            }, {
+                id: Id<"feedback">;
+            }>;
+        };
+        member: {
+            submit: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                category: "bug" | "idea" | "praise" | "other";
+                message: string;
+                pagePath: string | null;
+            }, {
+                id: Id<"feedback">;
+                createdAt: number;
+            }>;
+        };
+    };
     merch: {
         admin: {
             list: FunctionReference<"query", "public", Record<string, never>, Array<{

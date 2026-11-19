@@ -21,6 +21,7 @@ import {
 	Quote,
 	RotateCcw,
 	Megaphone,
+	MessageSquare,
 	Shirt
 } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -125,6 +126,12 @@ export function Sidebar({ className }: SidebarProps) {
 					icon: ShieldAlert,
 					href: "/role",
 					active: pathname.startsWith("/role"),
+				},
+				{
+					label: "Feedback",
+					icon: MessageSquare,
+					href: "/feedback",
+					active: pathname.startsWith("/feedback"),
 				},
 				{
 					label: "Tags & Votes",
