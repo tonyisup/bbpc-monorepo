@@ -132,6 +132,81 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
+function floatingButton(): ReactTestInstance {
+  return root().find(
+    (node) => node.type === "button" && "data-expanded" in node.props
+  );
+}
+
+describe("floating feedback button", () => {
+  test("expands only after scrolling down to the footer", () => {
+    let callback: ((entries: Array<{ isIntersecting: boolean }>) => void) | null =
+      null;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(next: typeof callback) {
+          callback = next;
+        }
+        observe = observe;
+        disconnect = disconnect;
+      }
+    );
+    const scrollListeners = new Set<() => void>();
+    const fakeWindow = {
+      scrollY: 0,
+      addEventListener: (_type: string, listener: () => void) =>
+        scrollListeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) =>
+        scrollListeners.delete(listener),
+    };
+    vi.stubGlobal("window", fakeWindow);
+    const scrollTo = (y: number) => {
+      fakeWindow.scrollY = y;
+      act(() => scrollListeners.forEach((listener) => listener()));
+    };
+
+    act(() => {
+      renderer = create(<SendFeedback />, {
+        createNodeMock: () => ({}),
+      });
+    });
+
+    expect(observe).toHaveBeenCalledTimes(1);
+    expect(floatingButton().props["data-expanded"]).toBe(false);
+    expect(floatingButton().props["aria-label"]).toBe("Send feedback");
+    expect(floatingButton().props.title).toBe("Send feedback");
+
+    // While the page loads, the footer is briefly on screen at the top.
+    act(() => callback?.([{ isIntersecting: true }]));
+    expect(floatingButton().props["data-expanded"]).toBe(false);
+    act(() => callback?.([{ isIntersecting: false }]));
+
+    scrollTo(1200);
+    expect(floatingButton().props["data-expanded"]).toBe(false);
+    act(() => callback?.([{ isIntersecting: true }]));
+    expect(floatingButton().props["data-expanded"]).toBe(true);
+    expect(floatingButton().props.title).toBeUndefined();
+
+    // Navigating scrolls back to the top.
+    scrollTo(0);
+    expect(floatingButton().props["data-expanded"]).toBe(false);
+
+    act(() => renderer?.unmount());
+    renderer = null;
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(scrollListeners.size).toBe(0);
+    vi.unstubAllGlobals();
+  });
+
+  test("stays collapsed where IntersectionObserver is missing", () => {
+    render();
+    expect(floatingButton().props["data-expanded"]).toBe(false);
+  });
+});
+
 describe("send feedback", () => {
   test("asks signed-out visitors to sign in", async () => {
     mocks.auth = { accountStatus: "not-applicable", user: null };

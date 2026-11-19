@@ -11,7 +11,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useId, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
 
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import {
@@ -65,6 +72,42 @@ const CATEGORIES: ReadonlyArray<{
 // Show the counter only once it matters.
 const COUNTER_THRESHOLD = FEEDBACK_MESSAGE_MAX_LENGTH - 200;
 
+// True while the element is on screen. Without IntersectionObserver (old
+// browsers, tests) the button simply stays collapsed.
+function useInView(ref: RefObject<HTMLElement>): boolean {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      setInView(entries.some((entry) => entry.isIntersecting));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return inView;
+}
+
+// True once the page is scrolled down from the top. While a page loads its
+// footer is briefly on screen; requiring a scroll keeps the button from
+// expanding and collapsing again as the content fills in. Navigation scrolls
+// back to the top, which resets it.
+function useScrolledFromTop(): boolean {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const update = () => setScrolled(window.scrollY > 0);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
+  return scrolled;
+}
+
 function failureMessage(error: unknown): string {
   switch (getConvexDomainErrorCode(error)) {
     case "CONFLICT":
@@ -95,6 +138,12 @@ export function SendFeedback() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // Sits at the top of the footer: scrolling down to the footer expands the
+  // button. Pages too short to scroll keep the compact icon.
+  const footerSentinel = useRef<HTMLDivElement>(null);
+  const footerInView = useInView(footerSentinel);
+  const scrolledFromTop = useScrolledFromTop();
+  const expanded = footerInView && scrolledFromTop;
 
   // Matches what the backend counts: trimmed, NFC-normalized text.
   const length = message.trim().normalize("NFC").length;
@@ -134,23 +183,40 @@ export function SendFeedback() {
     }
   };
 
-  const trigger = (
-    <button
-      type="button"
-      onClick={user === null ? signIn : () => setOpen(true)}
-      className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 text-sm font-medium text-zinc-200 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-    >
-      <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
-      {user === null ? "Sign in to send feedback" : "Send feedback"}
-    </button>
-  );
+  const label = user === null ? "Sign in to send feedback" : "Send feedback";
 
   return (
-    <div className="flex flex-col items-center gap-2 px-4 pb-6 text-center">
-      <p className="text-sm text-zinc-400">
-        Found a bug or have an idea for the site?
-      </p>
-      {trigger}
+    <>
+      <div ref={footerSentinel} aria-hidden="true" className="h-px w-full" />
+      <button
+        type="button"
+        aria-label={label}
+        title={expanded ? undefined : label}
+        data-expanded={expanded}
+        onClick={user === null ? signIn : () => setOpen(true)}
+        className={cn(
+          "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-12 items-center rounded-full border shadow-lg shadow-black/40 backdrop-blur transition-[padding,background-color,border-color,color] duration-300 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:transition-none sm:right-6",
+          expanded
+            ? "border-red-500 bg-red-600 pl-4 pr-5 text-white hover:bg-red-500"
+            : "border-white/15 bg-zinc-900/90 px-3.5 text-zinc-100 hover:border-red-500/50 hover:text-red-200"
+        )}
+      >
+        <MessageSquarePlus className="h-5 w-5 shrink-0" aria-hidden="true" />
+        {/* Animating grid columns from 0fr to 1fr grows the label to its natural width. */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "grid transition-[grid-template-columns,opacity,margin] duration-300 ease-out motion-reduce:transition-none",
+            expanded
+              ? "ml-2 grid-cols-[1fr] opacity-100"
+              : "ml-0 grid-cols-[0fr] opacity-0"
+          )}
+        >
+          <span className="overflow-hidden whitespace-nowrap text-sm font-semibold">
+            {label}
+          </span>
+        </span>
+      </button>
       {user !== null && (
         <Dialog
           open={open}
@@ -350,6 +416,6 @@ export function SendFeedback() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </>
   );
 }
