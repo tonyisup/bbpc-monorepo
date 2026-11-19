@@ -4,6 +4,7 @@ import { useConvex } from "convex/react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { track } from "@/lib/analytics";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ export function MovieLinkPreferenceForm({
     setError(null);
     try {
       await updateConvexMovieLinkPreference(convex, preference);
+      track("movie_link_preference_saved", { preference });
       toast.success("Movie link preference saved.");
       refreshAccount();
     } catch (error) {

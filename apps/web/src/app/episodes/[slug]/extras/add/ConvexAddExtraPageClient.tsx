@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { track } from "@/lib/analytics";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import { MovieYearSearchHint } from "@/components/MovieYearSearchHint";
 import { Button } from "@/components/ui/button";
@@ -321,6 +322,11 @@ export function ConvexAddExtraPageClient({
             : await upsertConvexExtraShow(convex, result.item, result.year);
         await addMyConvexShowExtra(convex, episodeId, show.id);
       }
+      track("extra_added", {
+        episode_id: episodeId,
+        kind: result.kind,
+        source: result.source === "catalog" ? "catalog" : "tmdb",
+      });
       router.push(getEpisodePath(episodeSlug ?? episodeId));
     } catch (error) {
       setErrorMessage(saveError(error));

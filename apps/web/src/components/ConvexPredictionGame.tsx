@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { track } from "@/lib/analytics";
 import RatingIcon from "@/components/RatingIcon";
 import { ConvexAssignmentGamblingBoard } from "@/components/ConvexAssignmentGamblingBoard";
 import {
@@ -193,6 +194,7 @@ function ConvexAssignmentVoiceMessages({
           createdAt: Date.now(),
         })
       );
+      track("assignment_audio_sent", { assignment_id: assignmentId });
       resetRecording();
       await reload();
       toast.success("Voice message submitted");
@@ -206,6 +208,7 @@ function ConvexAssignmentVoiceMessages({
           if (
             adopted.some((message) => message.fileKey === uploadedFile?.key)
           ) {
+            track("assignment_audio_sent", { assignment_id: assignmentId });
             setMessages(adopted);
             resetRecording();
             toast.success("Voice message submitted");
@@ -244,6 +247,7 @@ function ConvexAssignmentVoiceMessages({
         clientApiVersion: BBPC_CLIENT_API_VERSION,
         id: documentId("assignmentAudioMessages", id),
       });
+      track("assignment_audio_deleted", { assignment_id: assignmentId });
       setMessages((current) => current.filter((message) => message.id !== id));
       toast.success("Recording deleted");
     } catch {
@@ -913,6 +917,11 @@ const ConvexAssignmentPrediction: FC<ConvexAssignmentPredictionProps> = ({
         assignmentId: assignment.id,
         hostId,
         ratingId,
+      });
+      track("prediction_submitted", {
+        assignment_id: assignment.id,
+        host_id: hostId,
+        changed: previousGuess !== undefined,
       });
       onGuessSaved(saved);
       setLastSavedHostId(hostId);

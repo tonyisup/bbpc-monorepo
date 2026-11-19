@@ -4,6 +4,7 @@ import { useConvex } from "convex/react";
 import { Coins, Lock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FC } from "react";
 
+import { track } from "@/lib/analytics";
 import BettingCoin, {
   type ExistingWager,
   type WagerInput,
@@ -213,6 +214,12 @@ export const ConvexAssignmentGamblingBoard: FC<{
     setIsSaving(true);
     try {
       await submitConvexWager(convex, input);
+      track("wager_placed", {
+        assignment_id: input.assignmentId,
+        gambling_type_id: input.gamblingTypeId,
+        points: input.points,
+        has_target: input.targetUserId !== undefined,
+      });
       await reload();
     } catch (error) {
       await reload();

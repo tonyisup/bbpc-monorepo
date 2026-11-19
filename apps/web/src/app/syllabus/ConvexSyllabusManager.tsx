@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { track } from "@/lib/analytics";
 import MovieInlinePreview from "@/components/MovieInlinePreview";
 import { MovieYearSearchHint } from "@/components/MovieYearSearchHint";
 import { Button } from "@/components/ui/button";
@@ -320,6 +321,11 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
           ? result.movie
           : await upsertConvexTmdbMovie(convex, result.movie, result.year);
       await addConvexSyllabusEntry(convex, movie.id, insertPosition);
+      track("syllabus_movie_added", {
+        movie_id: movie.id,
+        position: insertPosition,
+        source: result.kind === "catalog" ? "catalog" : "tmdb",
+      });
       invalidateSearch();
       setSearchInput("");
       setShowSearch(false);
@@ -336,6 +342,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
     setErrorMessage(null);
     try {
       await removeConvexSyllabusEntry(convex, id);
+      track("syllabus_movie_removed", {});
       setEntries((current) => current.filter((entry) => entry.id !== id));
       discardNotesDraft(id);
       if (editingNotes === id) setEditingNotes(null);
@@ -359,6 +366,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         convex,
         reorderedPending.map((entry) => entry.id)
       );
+      track("syllabus_reordered", { pending_count: reorderedPending.length });
       await reload();
     } catch (error) {
       setEntries(previousEntries);
@@ -399,6 +407,7 @@ export function ConvexSyllabusManager({ appUserId }: { appUserId: string }) {
         id,
         notesText.trim() || null
       );
+      track("syllabus_notes_saved", { has_notes: notesText.trim().length > 0 });
       setEntries((current) =>
         current.map((entry) => (entry.id === id ? updated : entry))
       );

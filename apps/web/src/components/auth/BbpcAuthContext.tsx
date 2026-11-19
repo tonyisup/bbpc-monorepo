@@ -18,6 +18,7 @@ import {
   getConvexIdentityIssue,
   resolveConvexIdentity,
 } from "@/convex/identity";
+import { resetAnalytics, track } from "@/lib/analytics";
 import type { MovieLinkPreference } from "@/utils/movieLinks";
 
 export type BbpcAuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -155,11 +156,18 @@ export function ClerkBbpcAuthProvider({
   ]);
 
   const signIn = useCallback(() => {
+    // Sign-in leaves the page, so send this event without batching.
+    track(
+      "sign_in_started",
+      { page_path: window.location.pathname },
+      { sendInstantly: true }
+    );
     void clerk.redirectToSignIn({
       redirectUrl: window.location.href,
     });
   }, [clerk]);
   const signOut = useCallback(() => {
+    resetAnalytics();
     void clerk.signOut({
       redirectUrl: window.location.pathname,
     });

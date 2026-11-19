@@ -4,6 +4,7 @@ import { useConvex } from "convex/react";
 import { Camera } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { track } from "@/lib/analytics";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -138,6 +139,7 @@ export function ConvexProfileForm({
           throw new ProfileImageAdoptionError(cleanupQueued);
         }
       }
+      track("profile_updated", { changed_image: temporaryImage !== null });
       clearTemporaryImage();
       setIsEditing(false);
       setSaved(true);
