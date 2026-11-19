@@ -56,7 +56,13 @@ vi.mock("@/components/ui/avatar", () => {
   const Pass = ({ children }: { children?: React.ReactNode }) => (
     <span>{children}</span>
   );
-  return { Avatar: Pass, AvatarFallback: Pass, AvatarImage: () => null };
+  return {
+    Avatar: Pass,
+    AvatarFallback: Pass,
+    AvatarImage: ({ src }: { src?: string }) => (
+      <span data-testid="avatar-image" data-src={src} />
+    ),
+  };
 });
 vi.mock("@/components/ui/navigation-menu", () => {
   const Pass = ({ children }: { children?: React.ReactNode }) => (
@@ -199,6 +205,30 @@ describe("NavMenu game point badge", () => {
           node.type === "a" && String(node.props.href).includes("teepublic.com")
       )
     ).toHaveLength(0);
+  });
+
+  test("shows the signed-in avatar on the desktop Profile link", async () => {
+    mocks.user = {
+      appUserId: "user-1",
+      name: "Ada",
+      image: "https://example.com/ada.png",
+    };
+    const rendered = await render();
+
+    const profileLinks = rendered.root.findAll(
+      (node) => node.type === "a" && node.props.href === "/profile"
+    );
+    expect(profileLinks).toHaveLength(2);
+    const desktopProfile = profileLinks[0];
+    if (desktopProfile === undefined) {
+      throw new Error("Desktop Profile link is missing.");
+    }
+    expect(text(desktopProfile)).toContain("Profile");
+    expect(
+      desktopProfile.findByProps({ "data-testid": "avatar-image" }).props[
+        "data-src"
+      ]
+    ).toBe("https://example.com/ada.png");
   });
 
   test("does not query points for signed-out visitors", async () => {
