@@ -35,6 +35,7 @@ export function MerchItemCard({ item }: { item: MerchItem }) {
   return (
     <a
       href={item.url}
+      data-attr="merch-item"
       target="_blank"
       rel="noopener noreferrer"
       className="bbpc-panel group flex h-full flex-col overflow-hidden transition-colors hover:border-red-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
@@ -75,6 +76,7 @@ export function MerchSpotlight({ item }: { item: MerchItem }) {
   return (
     <a
       href={item.url}
+      data-attr="merch-spotlight"
       target="_blank"
       rel="noopener noreferrer"
       className="bbpc-panel group block overflow-hidden shadow-2xl shadow-red-950/40 transition-colors hover:border-red-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"

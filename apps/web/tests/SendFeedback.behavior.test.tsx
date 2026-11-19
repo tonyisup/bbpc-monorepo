@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   submit: vi.fn<(client: unknown, input: unknown) => Promise<unknown>>(),
   errorCode: vi.fn<(error: unknown) => string | null>(() => null),
   signIn: vi.fn(),
+  track: vi.fn(),
   auth: {
     accountStatus: "ready",
     user: { name: "Listener" } as null | { name: string },
@@ -34,6 +35,7 @@ vi.mock("@tonyisup/bbpc-convex-api", () => ({
 vi.mock("@/convex/identity", () => ({
   getConvexDomainErrorCode: mocks.errorCode,
 }));
+vi.mock("@/lib/analytics", () => ({ track: mocks.track }));
 vi.mock("@/lib/utils", () => ({
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(" "),
@@ -243,6 +245,11 @@ describe("send feedback", () => {
       pagePath: "/history",
     });
     expect(text()).toContain("Thanks for the feedback");
+    // The event carries the category and page, never the message text.
+    expect(mocks.track).toHaveBeenCalledWith("feedback_submitted", {
+      category: "bug",
+      page_path: "/history",
+    });
 
     await click("Send more");
     expect(root().findByType("textarea").props.value).toBe("");
@@ -306,6 +313,7 @@ describe("send feedback", () => {
 
     expect(text()).toContain("You've sent a lot of feedback in the last hour");
     expect(root().findByType("textarea").props.value).toBe("One more thing");
+    expect(mocks.track).not.toHaveBeenCalled();
   });
 
   test("blocks messages over the limit", async () => {

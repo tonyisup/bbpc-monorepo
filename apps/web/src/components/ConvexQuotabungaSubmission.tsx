@@ -23,6 +23,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { track } from "@/lib/analytics";
 import { QuotabungaClipFields } from "@/components/QuotabungaClipFields";
 import {
   formatClipTime,
@@ -574,6 +575,13 @@ export function ConvexQuotabungaSubmission({
           : { clipEndSeconds: parsedClipEnd }),
         listenerNotes: normalizedNotes || null,
       });
+      track("quotabunga_submitted", {
+        episode_id: episodeId,
+        first_entry: isFirstEntry,
+        source_type: sourceType,
+        has_clip: youtube !== null || normalizedClipUrl.length > 0,
+        has_notes: normalizedNotes.length > 0,
+      });
       // Set before the reload renders the saved entry, so focus lands on its
       // Edit button in that same render and never later.
       pendingFocusRef.current = "edit";
@@ -602,6 +610,7 @@ export function ConvexQuotabungaSubmission({
     setHasLoadFailed(false);
     try {
       await withdrawConvexQuotabunga(convex, episodeId);
+      track("quotabunga_withdrawn", { episode_id: episodeId });
       resetForm();
       pendingFocusRef.current = "quote";
       await reload();

@@ -58,6 +58,7 @@ export function ListenHere() {
               <a
                 key={platform.label}
                 href={platform.href}
+                data-attr={`listen-${platform.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-zinc-200 transition-colors hover:border-red-500/30 hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"

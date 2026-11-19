@@ -21,6 +21,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { track } from "@/lib/analytics";
 import { VoiceVisualizer } from "@/components/common/VoiceVisualizer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -190,6 +191,10 @@ function ConvexEpisodeVoiceMailRecorder({ episode }: { episode: Episode }) {
           ...(notes.trim().length === 0 ? {} : { notes: notes.trim() }),
         })
       );
+      track("voicemail_sent", {
+        episode_id: episode.id,
+        has_notes: notes.trim().length > 0,
+      });
       setNotes("");
       resetRecording();
       await reload();
@@ -204,6 +209,10 @@ function ConvexEpisodeVoiceMailRecorder({ episode }: { episode: Episode }) {
             (message) => message.fileKey === uploadedFile?.key
           )
         ) {
+          track("voicemail_sent", {
+            episode_id: episode.id,
+            has_notes: notes.trim().length > 0,
+          });
           setMessages(adopted.messages);
           setUsage(adopted.usage);
           setNotes("");
@@ -242,6 +251,7 @@ function ConvexEpisodeVoiceMailRecorder({ episode }: { episode: Episode }) {
         clientApiVersion: BBPC_CLIENT_API_VERSION,
         id: documentId("episodeAudioMessages", message.id),
       });
+      track("voicemail_deleted", { episode_id: episode.id });
       setMessages((current) =>
         current.filter((candidate) => candidate.id !== message.id)
       );

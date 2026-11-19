@@ -1,3 +1,4 @@
+import { track } from "@/lib/analytics";
 import type { CompleteEpisode } from "@/types/episode";
 import {
   useTranscriptSearch as useSharedTranscriptSearch,
@@ -23,7 +24,13 @@ async function searchTranscripts(
   );
   if (!response.ok)
     throw new Error("Transcript search is unavailable. Try again.");
-  return (await response.json()) as TranscriptSearchResponse;
+  const body = (await response.json()) as TranscriptSearchResponse;
+  track("transcript_searched", {
+    query_length: query.length,
+    result_count: body.results.length,
+    limited: body.limited,
+  });
+  return body;
 }
 
 export function useTranscriptSearch(query: string) {
