@@ -139,7 +139,7 @@ class ValueTests(unittest.TestCase):
             ("review_clip_max_per_movie", 2.5, ["review_clip_max_per_movie must be a whole number, not 2.5"]),
             ("review_clip_max_per_movie", True, ["review_clip_max_per_movie must be a whole number, not True"]),
             ("brand_logo_enabled", "yes", ["brand_logo_enabled must be true or false, not 'yes'"]),
-            ("visuals_provider", "dalle", ["visuals_provider must be one of openrouter, openai, local, not 'dalle'"]),
+            ("visuals_provider", "dalle", ["visuals_provider must be one of openrouter, openai, local, moss, not 'dalle'"]),
             ("visual_style_suffix", 5, ["visual_style_suffix must be text, not 5"]),
             ("local_visual_python", None, []),
             ("review_clip_max_seconds", None, ["review_clip_max_seconds must be a number, not None"]),
@@ -168,7 +168,7 @@ class ConfigCheckTests(unittest.TestCase):
     def test_the_checked_in_config_leaves_most_settings_to_their_defaults_and_carries_one_unread_key(self):
         config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
         check = settings_schema.config_check(config["settings"])
-        self.assertEqual(len(check["notInConfig"]), 32)
+        self.assertEqual(len(check["notInConfig"]), 37)
         for key in ("review_clip_max_seconds", "min_clip_duration_seconds", "visual_timeout_seconds",
                     "cowork_headless_model", "caption_font_size", "clip_zoom_amount"):
             self.assertIn(key, check["notInConfig"])
@@ -285,6 +285,7 @@ class DraftableTests(unittest.TestCase):
             "visuals_provider", "openrouter_visual_model", "openai_visual_model", "openai_image_size",
             "openai_image_quality", "local_visual_model", "local_visual_steps", "local_visual_seed",
             "local_visual_width", "local_visual_height",
+            "moss_visual_quality", "moss_visual_seed", "moss_visual_width", "moss_visual_height",
             "brand_logo_enabled", "brand_logo_path", "brand_logo_margin_px",
             "brand_logo_max_width_fraction", "brand_logo_max_height_fraction",
             "caption_style", "caption_highlight_color",

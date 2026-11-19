@@ -274,6 +274,100 @@ class ClipperLocalVisualsTests(unittest.TestCase):
             self.assertNotIn("style", calls[0].kwargs)
             self.assertNotIn("quality", calls[1].kwargs)
 
+    def _moss_checkout(self, root):
+        moss_dir = Path(root) / "moss-image-app"
+        for name in clipper.MOSS_FILES:
+            (moss_dir / name).parent.mkdir(parents=True, exist_ok=True)
+            (moss_dir / name).write_text("")
+        return moss_dir
+
+    def _moss_config(self, moss_dir, **settings):
+        return {"settings": {"moss_dir": str(moss_dir), **settings}}
+
+    def test_generate_background_image_moss_runs_its_client_against_a_running_backend(self):
+        with tempfile.TemporaryDirectory() as td:
+            moss_dir = self._moss_checkout(td)
+            out = Path(td) / "visuals" / "image.png"
+
+            def made(cmd, **kwargs):
+                Path(cmd[cmd.index("-o") + 1]).write_bytes(b"png")
+                return mock.Mock(returncode=0)
+
+            config = self._moss_config(moss_dir, moss_visual_quality="draft", moss_visual_seed=7)
+            with mock.patch("lib.clipper._moss_backend_ready", return_value=True), mock.patch(
+                "lib.clipper.subprocess.Popen"
+            ) as popen, mock.patch("lib.clipper.subprocess.run", side_effect=made) as run:
+                self.assertTrue(clipper._generate_background_image_moss("-a reel of film", out, config))
+
+            popen.assert_not_called()  # a running backend is used, not a second one
+            cmd = run.call_args.args[0]
+            self.assertEqual(cmd[:2], [str(moss_dir.resolve() / ".venv/bin/python"),
+                                       str(moss_dir.resolve() / "moss_client.py")])
+            self.assertEqual(cmd[-2:], ["--", "-a reel of film"])  # a prompt is never read as an option
+            for flag, value in (("--width", "720"), ("--height", "1280"), ("--seed", "7"), ("--quality", "draft"),
+                                ("-o", str(out.resolve()))):
+                self.assertEqual(cmd[cmd.index(flag) + 1], value)
+            self.assertEqual(run.call_args.kwargs["cwd"], moss_dir.resolve())
+            self.assertEqual(run.call_args.kwargs["timeout"], clipper.MOSS_TIMEOUT_SECONDS["draft"])
+            self.assertTrue(out.is_file())
+
+    def test_generate_background_image_moss_starts_a_backend_and_stops_only_its_own(self):
+        with tempfile.TemporaryDirectory() as td:
+            moss_dir = self._moss_checkout(td)
+            backend = mock.Mock()
+            backend.poll.return_value = None
+            with mock.patch("lib.clipper._moss_backend", None), mock.patch(
+                "lib.clipper._moss_backend_ready", side_effect=[False, False, False, True]
+            ), mock.patch("lib.clipper.subprocess.Popen", return_value=backend) as popen, mock.patch(
+                "lib.clipper.time.sleep"
+            ):
+                self.assertTrue(clipper._ensure_moss_backend(moss_dir))
+                self.assertEqual(popen.call_args.args[0], [str(moss_dir / "start_server.sh")])
+                self.assertNotIn("start_new_session", popen.call_args.kwargs)  # stopping the run stops it
+                self.assertTrue((moss_dir / "logs" / ".server.lock").is_file())
+                clipper._stop_own_moss_backend()
+            backend.terminate.assert_called_once_with()
+
+    def test_generate_background_image_moss_fails_when_the_backend_exits_while_starting(self):
+        with tempfile.TemporaryDirectory() as td:
+            moss_dir = self._moss_checkout(td)
+            backend = mock.Mock()
+            backend.poll.return_value = 1
+            with mock.patch("lib.clipper._moss_backend", None), mock.patch(
+                "lib.clipper._moss_backend_ready", return_value=False
+            ), mock.patch("lib.clipper.subprocess.Popen", return_value=backend), mock.patch(
+                "lib.clipper.subprocess.run"
+            ) as run:
+                self.assertFalse(clipper._generate_background_image_moss("prompt", Path(td) / "x.png",
+                                                                         self._moss_config(moss_dir)))
+            run.assert_not_called()
+
+    def test_generate_background_image_moss_needs_a_set_up_checkout(self):
+        with tempfile.TemporaryDirectory() as td:
+            moss_dir = self._moss_checkout(td)
+            (moss_dir / "bin" / "sd-server").unlink()
+            self.assertEqual(clipper.moss_missing(moss_dir), ["bin/sd-server"])
+            with mock.patch("lib.clipper.subprocess.Popen") as popen, mock.patch("lib.clipper.subprocess.run") as run:
+                self.assertFalse(clipper._generate_background_image_moss("prompt", Path(td) / "x.png",
+                                                                         self._moss_config(moss_dir)))
+            popen.assert_not_called()
+            run.assert_not_called()
+
+    def test_generate_background_image_moss_reports_a_client_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            moss_dir = self._moss_checkout(td)
+            failed = clipper.subprocess.CalledProcessError(1, ["moss"], stderr="error: canvas 2000x2000 out of range")
+            with mock.patch("lib.clipper._moss_backend_ready", return_value=True), mock.patch(
+                "lib.clipper.subprocess.run", side_effect=failed
+            ):
+                self.assertFalse(clipper._generate_background_image_moss("prompt", Path(td) / "x.png",
+                                                                         self._moss_config(moss_dir)))
+
+    def test_generate_background_image_dispatches_moss(self):
+        with mock.patch("lib.clipper._generate_background_image_moss", return_value=True) as moss:
+            self.assertTrue(clipper._generate_background_image("prompt", "moss", Path("x.png"), {}))
+        moss.assert_called_once_with("prompt", Path("x.png"), {})
+
     def test_build_ass_subtitles_uses_relative_clip_timestamps(self):
         subtitle_text = clipper._build_ass_subtitles(
             [

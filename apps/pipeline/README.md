@@ -512,6 +512,18 @@ Configurable via `settings.visuals_provider`:
 - **`openrouter`** — image-capable OpenRouter chat model; default: `google/gemini-3.1-flash-image`
 - **`openai`** — gpt-image-1 via direct OpenAI API
 - **`local`** — Stable Diffusion XL Turbo via `scripts/generate_local_visual.py`
+- **`moss`** — MOSS-Image on this Mac through a
+  [moss-image-mac](https://github.com/vitaliyhan/moss-image-mac) checkout (`settings.moss_dir`,
+  default `~/Documents/moss-image-app`; run its `setup.sh` once). Free, about a minute a still at
+  the default 720x1280 `standard` quality.
+
+With `moss`, the clip stage uses a MOSS backend that is already running (its web UI or its MCP
+server start one) or starts one with the checkout's `start_server.sh` and stops it when the run
+ends; loading the models adds about half a minute. It runs the checkout's own `moss_client.py`, so
+the turbo settings stay in that project. `moss_visual_quality` (`draft`, `standard`, `high`),
+`moss_visual_seed` (`-1`: a new seed for every still) and `moss_visual_width`/`height` can be
+tried in a Lab draft. When a run's range includes the clip stage, `scripts/check_run.py` checks
+that the checkout has been set up.
 
 OpenRouter images are requested with the chat-completions image modality and
 written from their base64 data URL as normal PNG backgrounds before the existing

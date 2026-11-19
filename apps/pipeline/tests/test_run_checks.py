@@ -130,6 +130,21 @@ class RunAllTests(unittest.TestCase):
                          "OPENROUTER_API_KEY")
         self.assertIn("ffmpeg-full", checks["ffmpeg"]["detail"])
 
+    def test_a_moss_run_that_renders_clips_checks_the_checkout(self):
+        moss_dir = self.data / "moss-image-app"
+        options = dict(environ=SIGNED_IN, secrets=SECRETS, node=str(self.node), has_libass=lambda: True,
+                       configuration=lambda: "ok")
+        moss = {"paths": {}, "settings": {"visuals_provider": "moss", "moss_dir": str(moss_dir)}}
+        missing = {c["id"]: c for c in run_checks.run_all(moss, "clip", **options)["checks"]}["moss"]
+        self.assertFalse(missing["ok"])
+        self.assertIn("run its setup.sh", missing["detail"])
+        for name in ("start_server.sh", "moss_client.py", ".venv/bin/python", "bin/sd-server"):
+            (moss_dir / name).parent.mkdir(parents=True, exist_ok=True)
+            (moss_dir / name).write_text("")
+        result = run_checks.run_all(moss, "clip", **options)
+        self.assertEqual(result["checks"][-1], {"id": "moss", "label": "MOSS is set up", "ok": True, "detail": str(moss_dir)})
+        self.assertNotIn("moss", [c["id"] for c in run_checks.run_all(moss, "publish", **options)["checks"]])
+
     def test_a_missing_data_directory(self):
         os.environ["BBPC_PIPELINE_DATA_DIR"] = str(self.data / "gone")
         checks = {c["id"]: c for c in self.run_all()["checks"]}

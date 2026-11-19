@@ -1,12 +1,16 @@
 """Clipper stage – renders vertical video clips using locally generated stills plus ffmpeg animation/subtitles."""
 from __future__ import annotations
 
+import atexit
+import fcntl
 import json
 import logging
 import math
+import os
 import shlex
 import subprocess
 import sys
+import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +38,12 @@ ZOOMPAN_WORK_SCALE = 4  # Higher working resolution reduces visible x/y stepping
 DEFAULT_AUDIO_FADE_OUT_SECONDS = settings_schema.default("clip_audio_fade_out_seconds")
 DEFAULT_ZOOM_AMOUNT = settings_schema.default("clip_zoom_amount")
 _CAPTION_BREAK_AFTER = (".", "!", "?")
+# moss-image-mac: the files a run uses, and how long its backend gets to load the models and to make one still.
+MOSS_FILES = ("start_server.sh", "moss_client.py", ".venv/bin/python", "bin/sd-server")
+MOSS_DEFAULT_PORT = 18765
+MOSS_START_TIMEOUT_SECONDS = 180
+MOSS_TIMEOUT_SECONDS = {"draft": 900, "standard": 900, "high": 7200}
+_moss_backend: subprocess.Popen | None = None  # the backend this run started, if it started one
 
 
 @dataclass(frozen=True)
@@ -443,6 +453,113 @@ def _generate_background_image_local(prompt: str, path: Path, config: Dict[str, 
         return False
 
 
+def moss_missing(moss_dir: Path) -> List[str]:
+    """The moss-image-mac files missing from ``moss_dir``; empty when its setup.sh has run there."""
+    return [name for name in MOSS_FILES if not (moss_dir / name).exists()]
+
+
+def _moss_url() -> str:
+    # The same variables moss_client.py reads, so both talk to the same backend.
+    return os.environ.get("MOSS_SERVER") or f"http://127.0.0.1:{os.environ.get('MOSS_PORT', MOSS_DEFAULT_PORT)}"
+
+
+def _moss_backend_ready() -> bool:
+    """Whether a MOSS backend answers: the test moss-image-mac's own scripts make."""
+    try:
+        with urllib.request.urlopen(_moss_url() + "/sdcpp/v1/capabilities", timeout=3) as resp:
+            return b"MOSS-Image-SFT" in resp.read()
+    except (OSError, ValueError):
+        return False
+
+
+def _stop_own_moss_backend() -> None:
+    if _moss_backend is not None and _moss_backend.poll() is None:
+        _moss_backend.terminate()
+
+
+atexit.register(_stop_own_moss_backend)
+
+
+def _ensure_moss_backend(moss_dir: Path) -> bool:
+    """Use the MOSS backend that runs, or start one that this run stops when it ends.
+
+    The backend stays in the run's process group, so stopping the run stops it too.
+    It starts under the lock moss-image-mac's MCP server takes, so the two never load
+    a second copy of the models.
+    """
+    global _moss_backend
+    if _moss_backend_ready():
+        return True
+    logs = moss_dir / "logs"
+    logs.mkdir(exist_ok=True)
+    log_path = logs / "sd-server.log"
+    with open(logs / ".server.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if _moss_backend_ready():
+            return True
+        if _moss_backend is None or _moss_backend.poll() is not None:
+            print(f"  Starting the MOSS backend in {moss_dir} (loads the models once)")
+            with open(log_path, "ab") as log:
+                _moss_backend = subprocess.Popen(
+                    [str(moss_dir / "start_server.sh")], cwd=moss_dir,
+                    stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                )
+        deadline = time.monotonic() + MOSS_START_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            if _moss_backend_ready():
+                return True
+            if _moss_backend.poll() is not None:
+                logger.error("The MOSS backend exited while starting; see %s", log_path)
+                return False
+            time.sleep(0.5)
+    logger.error("The MOSS backend did not start within %d s; see %s", MOSS_START_TIMEOUT_SECONDS, log_path)
+    return False
+
+
+def _generate_background_image_moss(prompt: str, path: Path, config: Dict[str, Any]) -> bool:
+    settings = config.get("settings", {})
+    moss_dir = Path(settings_schema.value(settings, "moss_dir")).expanduser().resolve()
+    missing = moss_missing(moss_dir)
+    if missing:
+        logger.error("moss-image-mac is not set up in %s (missing %s); run its setup.sh", moss_dir, ", ".join(missing))
+        return False
+    if not _ensure_moss_backend(moss_dir):
+        return False
+    quality = settings_schema.value(settings, "moss_visual_quality")
+    output = path.resolve()  # moss_client.py runs from its own checkout
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        str(moss_dir / ".venv" / "bin" / "python"),
+        str(moss_dir / "moss_client.py"),
+        "--width",
+        str(settings_schema.value(settings, "moss_visual_width")),
+        "--height",
+        str(settings_schema.value(settings, "moss_visual_height")),
+        "--seed",
+        str(settings_schema.value(settings, "moss_visual_seed")),
+        "--quality",
+        quality,
+        "-o",
+        str(output),
+        "--",
+        prompt,
+    ]
+    logger.info("Generating MOSS visual via: %s", shlex.join(cmd))
+    try:
+        subprocess.run(cmd, cwd=moss_dir, check=True, capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, timeout=MOSS_TIMEOUT_SECONDS[quality])
+    except subprocess.CalledProcessError as exc:
+        err = (exc.stderr or exc.stdout or "").strip()
+        logger.error("MOSS visual generation failed: %s", err or exc)
+        if err:
+            print(f"  {err.splitlines()[-1]}")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.error("MOSS visual generation took longer than %d s", MOSS_TIMEOUT_SECONDS[quality])
+        return False
+    return output.exists()
+
+
 def _extract_openai_image_bytes(response: Any) -> bytes | None:
     """Pull raw image bytes from an OpenAI images.generate response."""
     data_items = getattr(response, "data", None) or []
@@ -611,8 +728,10 @@ def _generate_background_image(prompt: str, provider: str, path: Path, config: D
         return _generate_background_image_openai(prompt, path, config)
     if provider == "openrouter":
         return _generate_background_image_openrouter(prompt, path, config)
+    if provider == "moss":
+        return _generate_background_image_moss(prompt, path, config)
     logger.error(
-        "Unsupported visuals provider '%s'. Use 'local', 'openai', or 'openrouter'.",
+        "Unsupported visuals provider '%s'. Use 'local', 'moss', 'openai', or 'openrouter'.",
         provider,
     )
     return False

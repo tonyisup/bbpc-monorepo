@@ -12,7 +12,7 @@
     "whisper_model": "large-v3-turbo",
     "clip_duration": 60,
     "clip_audio_fade_out_seconds": 0.8,
-    "visuals_provider": "openrouter",
+    "visuals_provider": "moss",
     "openrouter_visual_model": "google/gemini-3.1-flash-image",
     "openai_visual_model": "gpt-image-1",
     "openai_image_size": "1024x1536",
@@ -26,7 +26,7 @@
     "visual_style_suffix": "Vertical 9:16 abstract cinematic poster art, bold contrast, dramatic composition, symbolic objects and surreal environments grounded in the spoken subject. Never depict people podcasting, hosts at microphones, recording studios, boom arms, or headphones. No text, letters, numbers, typography, logos, captions, titles, watermarks, fake UI, or media player chrome. Subtitles are added separately.",
     "brand_logo_enabled": true,
     "brand_logo_path": "assets/BBPC-LOGO-cropped-transparentbg-5000px.png",
-    "brand_logo_margin_px": 48,
+    "brand_logo_margin_px": 60,
     "brand_logo_max_width_fraction": 0.38,
     "brand_logo_max_height_fraction": 0.14,
     "thumbnail_enabled": true,
@@ -36,6 +36,7 @@
     "thumbnail_logo_position": "top_right",
     "cowork_outputs_dir": "./output/cowork",
     "cowork_headless": true,
-    "cowork_headless_timeout_seconds": 3600
+    "cowork_headless_timeout_seconds": 3600,
+    "caption_style": "pop"
   }
 }

@@ -350,6 +350,11 @@ class CreateRunTests(LabTestCase):
         self.assertEqual((run["paid"], run["provider"]), (False, "local"))
         self.assertEqual(lab.run_env(run, {"OPENROUTER_API_KEY": "sk"}), {"OPENROUTER_API_KEY": "", "OPENAI_API_KEY": ""})
 
+    def test_a_new_background_from_moss_is_free(self):
+        self.draft("Moss", visuals_provider="moss")
+        run = self.run_for(clip="candidate-1", draft="moss", new_background=True)
+        self.assertEqual((run["paid"], run["provider"]), (False, "moss"))
+
     def test_a_different_window_or_image_prompt_goes_into_the_runs_seo_file_only(self):
         run = self.run_for(edits={"start": 40.0, "end": 100.0})
         seo = json.loads((self.lab / run["id"] / "seo" / f"{STEM}.seo.json").read_text())

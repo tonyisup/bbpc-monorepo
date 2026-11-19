@@ -6,7 +6,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 ## Tech Stack
 - **Transcription:** `faster-whisper-large-v3-turbo` with resume support.
 - **Analysis:** Claude Cowork reads the full transcript and writes reviewed movies, SEO, clip choices, and T-shirt phrases (`docs/cowork-handoff.md`); the pipeline makes no text-model calls.
-- **Visuals:** Gemini Flash Image via OpenRouter by default; direct OpenAI and local SDXL-Turbo remain supported alternatives.
+- **Visuals:** Gemini Flash Image via OpenRouter by default; direct OpenAI, local SDXL-Turbo and local MOSS-Image remain supported alternatives.
 - **Rendering:** Python (Pillow) for caption burn-in and FFMPEG for final encoding.
 - **Storage:** Azure Blob Storage for raw episodes.
 - **Application data:** Convex through the least-privilege pipeline service API.

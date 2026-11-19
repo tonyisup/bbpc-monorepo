@@ -223,7 +223,7 @@ class SettingsTests(ViewsTestCase):
         self.assertEqual(self.rows.get("visuals_provider"), {
             "key": "visuals_provider", "type": "choice", "value": "openrouter", "default": "local",
             "source": "config", "stages": ["clip"], "minimum": None, "maximum": None,
-            "choices": ["openrouter", "openai", "local"], "problems": [],
+            "choices": ["openrouter", "openai", "local", "moss"], "problems": [],
             "description": settings_schema.BY_KEY["visuals_provider"].description, "draft": True,
         })
         self.assertEqual({key for key, row in self.rows.items() if row["draft"]},
@@ -244,7 +244,7 @@ class SettingsTests(ViewsTestCase):
 
     def test_config_check_and_an_out_of_range_value(self):
         self.assertEqual(self.view["check"], settings_schema.config_check(self.raw["settings"]))
-        self.assertEqual(len(self.view["check"]["notInConfig"]), 32)
+        self.assertEqual(len(self.view["check"]["notInConfig"]), 37)
         self.raw["settings"]["review_clip_max_per_movie"] = 0
         view = views.settings(self.raw)
         rows = {row["key"]: row for group in view["groups"] for row in group["settings"]}

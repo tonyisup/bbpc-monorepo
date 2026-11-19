@@ -118,8 +118,9 @@ SETTINGS: Tuple[Setting, ...] = (
             "Nothing reads this. It can be removed from config.json.", 1, 600),
 
     Setting("visuals_provider", "choice", "local", "Visuals", _CLIP,
-            "Where a clip's background still comes from. openrouter and openai are paid requests.",
-            choices=("openrouter", "openai", "local"), draft=True),
+            "Where a clip's background still comes from. openrouter and openai are paid requests; "
+            "local and moss run on this Mac.",
+            choices=("openrouter", "openai", "local", "moss"), draft=True),
     Setting("openrouter_visual_model", "str", "google/gemini-3.1-flash-image", "Visuals", _CLIP,
             "Image model when the provider is openrouter.", draft=True),
     Setting("openai_visual_model", "str", "gpt-image-1", "Visuals", _CLIP,
@@ -142,6 +143,21 @@ SETTINGS: Tuple[Setting, ...] = (
             "Width of a local still before it is fitted to the 1080x1920 frame.", 64, 4096, draft=True),
     Setting("local_visual_height", "int", 1920, "Visuals", _CLIP,
             "Height of a local still before it is fitted to the 1080x1920 frame.", 64, 4096, draft=True),
+    Setting("moss_dir", "path", "~/Documents/moss-image-app", "Visuals", _CLIP,
+            "moss-image-mac checkout used when the provider is moss. Its backend is started if it is not "
+            "already running, and stopped after the run if the run started it."),
+    Setting("moss_visual_quality", "choice", "standard", "Visuals", _CLIP,
+            "MOSS quality. draft: 3-step turbo. standard: 4-step turbo, about a minute a still. "
+            "high: the full 50-step model, about 20 minutes a still.",
+            choices=("draft", "standard", "high"), draft=True),
+    Setting("moss_visual_seed", "int", -1, "Visuals", _CLIP,
+            "Seed for a MOSS still. -1: a new random seed for every still.", -1, 2**32 - 1, draft=True),
+    Setting("moss_visual_width", "int", 720, "Visuals", _CLIP,
+            "Width of a MOSS still before it is fitted to the 1080x1920 frame. A multiple of 16; "
+            "width x height at most about 1.1 MP.", 256, 1536, draft=True),
+    Setting("moss_visual_height", "int", 1280, "Visuals", _CLIP,
+            "Height of a MOSS still before it is fitted to the 1080x1920 frame. A multiple of 16; "
+            "width x height at most about 1.1 MP.", 256, 1536, draft=True),
     Setting("local_visual_reuse_cached_still", "bool", False, "Visuals", _CLIP,
             "Reuse a still already in output/visuals/<episode>/ and make no image request."),
     Setting("visual_timeout_seconds", "float", None, "Visuals", _CLIP,

@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from lib import settings_schema
@@ -94,6 +95,17 @@ def node_version(node: str) -> Tuple[bool, str]:
     return True, said
 
 
+def moss_setup(settings: Mapping[str, Any]) -> Tuple[bool, str]:
+    """Whether the moss-image-mac checkout the clip stage would use has been set up, and where it is."""
+    from lib import clipper
+
+    moss_dir = Path(settings_schema.value(settings, "moss_dir")).expanduser()
+    missing = clipper.moss_missing(moss_dir)
+    if missing:
+        return False, f"{moss_dir} is missing {', '.join(missing)}; run its setup.sh"
+    return True, str(moss_dir)
+
+
 def _check(check_id: str, label: str, ok: bool, detail: str) -> Dict[str, Any]:
     return {"id": check_id, "label": label, "ok": ok, "detail": detail}
 
@@ -137,6 +149,9 @@ def run_all(config: Dict[str, Any], stage: Optional[str] = None, *, environ: Opt
     libass = bool(has_libass())
     checks.append(_check("ffmpeg", "ffmpeg has libass", libass, "subtitles filter found" if libass else LIBASS_HINT))
     checks.append(_check("node", f"Node is {NODE_MINIMUM[0]}.{NODE_MINIMUM[1]} or newer", *node_version(node)))
+    settings = config.get("settings") or {}
+    if "clip" in stages_in_range(stage) and settings_schema.value(settings, "visuals_provider") == "moss":
+        checks.append(_check("moss", "MOSS is set up", *moss_setup(settings)))
     for check in checks:
         check["detail"] = redact(check["detail"], secrets)
     return {"ok": all(check["ok"] for check in checks), "stage": stage, "checks": checks, "credentials": rows}
