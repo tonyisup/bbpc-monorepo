@@ -7,6 +7,7 @@ import { Providers } from "@/components/Providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ConvexAccountRecoveryBanner } from "@/components/ConvexAccountRecoveryBanner";
 import { ConvexSiteAnnouncements } from "@/components/ConvexSiteAnnouncements";
+import { SendFeedback } from "@/components/SendFeedback";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -75,6 +76,7 @@ export default function RootLayout({
             </main>
             <footer className="flex w-full flex-col items-center border-t border-white/10 bg-[color:var(--bbpc-surface)]">
               <ListenHere />
+              <SendFeedback />
               <div className="flex flex-wrap justify-center gap-4 pb-8 text-xs text-gray-400">
                 <Link href="/privacy" className="hover:underline">
                   Privacy Policy
