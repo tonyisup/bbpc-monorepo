@@ -362,6 +362,48 @@ describe("public year movie reviews", () => {
     );
   });
 
+  test("shares one review bound across all of a year's movies", async () => {
+    const t = createTestBackend();
+    const movieIds = await Promise.all([
+      seedMovie(t, "Shared Bound A", 2026),
+      seedMovie(t, "Shared Bound B", 2026),
+      seedMovie(t, "Shared Bound C", 2026),
+    ]);
+    await t.run(async (ctx) => {
+      for (
+        let index = 0;
+        index < MAX_PUBLIC_YEAR_REVIEWS;
+        index += 1
+      ) {
+        await ctx.db.insert("reviews", {
+          movieId: movieIds[index % 3] ?? movieIds[0],
+          reviewedAt: Date.UTC(2026, 0, 1) + index,
+        });
+      }
+    });
+
+    // Exactly at the bound, every review is returned.
+    expect(
+      await t.query(api.reviews.public.listMovieReviewsForYear, {
+        year: 2026,
+      }),
+    ).toHaveLength(MAX_PUBLIC_YEAR_REVIEWS);
+
+    // One more, on any movie, crosses the combined bound.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reviews", {
+        movieId: movieIds[1],
+        reviewedAt: Date.UTC(2026, 11, 1),
+      });
+    });
+    await expectDomainError(
+      t.query(api.reviews.public.listMovieReviewsForYear, {
+        year: 2026,
+      }),
+      "CONFLICT",
+    );
+  });
+
   test("fails closed when a year exceeds the public review bound", async () => {
     const t = createTestBackend();
     const movieId = await seedMovie(t, "Overflow Movie", 2026);

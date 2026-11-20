@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import type { Doc } from "../_generated/dataModel.js";
 import { anonymousQuery } from "../functions.js";
 import { domainError } from "../lib/errors.js";
 import { isPublishedStatus } from "../lib/transcriptVisibility.js";
@@ -42,26 +43,28 @@ export const listMovieReviewsForYear = anonymousQuery({
       );
     }
 
-    const reviewsByMovie = await Promise.all(
-      movies.map((movie) =>
-        ctx.db
-          .query("reviews")
-          .withIndex("by_movieId_and_reviewedAt", (index) =>
-            index
-              .eq("movieId", movie._id)
-              .gte("reviewedAt", startedAt)
-              .lt("reviewedAt", endedAt),
-          )
-          .take(MAX_PUBLIC_YEAR_REVIEWS + 1),
-      ),
-    );
-    const reviews = reviewsByMovie.flat();
-    if (reviews.length > MAX_PUBLIC_YEAR_REVIEWS) {
-      domainError(
-        "CONFLICT",
-        "Year reviews exceed the public read limit.",
-        { details: { limit: MAX_PUBLIC_YEAR_REVIEWS } },
-      );
+    // One read budget shared by every movie, so the year as a whole reads at
+    // most MAX_PUBLIC_YEAR_REVIEWS + 1 reviews before failing closed.
+    const reviews: Array<Doc<"reviews">> = [];
+    for (const movie of movies) {
+      const remaining = MAX_PUBLIC_YEAR_REVIEWS + 1 - reviews.length;
+      const movieReviews = await ctx.db
+        .query("reviews")
+        .withIndex("by_movieId_and_reviewedAt", (index) =>
+          index
+            .eq("movieId", movie._id)
+            .gte("reviewedAt", startedAt)
+            .lt("reviewedAt", endedAt),
+        )
+        .take(remaining);
+      reviews.push(...movieReviews);
+      if (reviews.length > MAX_PUBLIC_YEAR_REVIEWS) {
+        domainError(
+          "CONFLICT",
+          "Year reviews exceed the public read limit.",
+          { details: { limit: MAX_PUBLIC_YEAR_REVIEWS } },
+        );
+      }
     }
     // Newest first, with the same creation-time tiebreak an index gives.
     reviews.sort(
