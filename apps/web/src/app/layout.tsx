@@ -22,7 +22,7 @@ function getSiteUrl() {
 }
 
 export const viewport: Viewport = {
-  themeColor: "black",
+  themeColor: "#000000",
   width: "device-width",
   initialScale: 1,
 };
@@ -31,16 +31,25 @@ export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   title: "Bad Boys Podcast",
   description: "Random rants on all things movie",
+  // The manifest, icons and Apple tags below are what make the site
+  // installable from the browser; keep them in step with public/manifest.json.
   manifest: "/manifest.json",
+  applicationName: "BBPC",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
-    title: "Bad Boys Podcast",
+    // The site is dark, so a black status bar keeps the installed app from
+    // showing a white strip at the top on iOS.
+    statusBarStyle: "black",
+    // The home-screen label; a longer name is cut off under the icon.
+    title: "BBPC",
   },
-  icons: [
-    { rel: "icon", url: "/favicon.ico" },
-    { rel: "apple-touch-icon", url: "/icons/icon-192x192.png" },
-  ],
+  icons: {
+    icon: "/favicon.ico",
+    apple: { url: "/icons/apple-touch-icon.png", sizes: "180x180" },
+  },
+  verification: {
+    google: "SC5A9TotM4gBLo9UVqxKOyJG-d4Soj6ayNxE5lk9HNs",
+  },
 };
 
 export default function RootLayout({
@@ -50,19 +59,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <meta name="description" content="Random rants on all things movie" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="black" />
-        <meta
-          name="google-site-verification"
-          content="SC5A9TotM4gBLo9UVqxKOyJG-d4Soj6ayNxE5lk9HNs"
-        />
-        <title>Bad Boys Podcast</title>
-      </head>
       <body className={`font-sans ${inter.variable} dark`}>
         <Providers>
           <div className="flex min-h-[100dvh] w-full min-w-0 flex-col items-center bg-[color:var(--bbpc-bg)]">
@@ -78,6 +74,9 @@ export default function RootLayout({
               <SendFeedback />
               <ListenHere />
               <div className="flex flex-wrap justify-center gap-4 pb-8 text-xs text-gray-400">
+                <Link href="/app" className="hover:underline">
+                  Get the app
+                </Link>
                 <Link href="/privacy" className="hover:underline">
                   Privacy Policy
                 </Link>

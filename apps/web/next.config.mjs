@@ -10,8 +10,27 @@ import createPWA from "@ducanh2912/next-pwa";
 const withPWA = createPWA({
   dest: "public",
   register: true,
+  // A flaky phone connection would otherwise reload the page and throw away
+  // whatever the listener was typing or recording.
+  reloadOnOnline: false,
+  // Pages offline with no cached copy get src/app/~offline instead of the
+  // browser's error page.
+  fallbacks: { document: "/~offline" },
+  extendDefaultRuntimeCaching: true,
   workboxOptions: {
     skipWaiting: true,
+    runtimeCaching: [
+      {
+        // Clerk's session API answers differently per sign-in. The default
+        // cross-origin rule would serve a stale cached answer whenever the
+        // network takes over ten seconds, which can show a signed-in listener
+        // as signed out, so always go to the network.
+        urlPattern: ({ url }) =>
+          url.hostname.startsWith("clerk.") ||
+          url.hostname.endsWith(".clerk.accounts.dev"),
+        handler: "NetworkOnly",
+      },
+    ],
   },
   disable:
     process.env.NODE_ENV === "development" ||
