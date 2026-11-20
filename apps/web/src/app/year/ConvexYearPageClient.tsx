@@ -22,6 +22,7 @@ import { track } from "@/lib/analytics";
 import RatingIcon from "@/components/RatingIcon";
 import UserTag from "@/components/UserTag";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { getMovieLink } from "@/utils/movieLinks";
 import { Button } from "@/components/ui/button";
 import { getConvexDomainErrorCode } from "@/convex/identity";
@@ -515,9 +516,11 @@ export function ConvexYearPageClient() {
       )}
 
       {isArchiveLoading ? (
-        <div className="flex justify-center py-20" aria-label="Loading archive">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        </div>
+        <LoadingIndicator
+          variant="section"
+          label="Loading archive"
+          className="py-20"
+        />
       ) : sortedReviews.length === 0 ? (
         <div className="py-20 text-center text-zinc-500">
           No movies found for {selectedYear}.

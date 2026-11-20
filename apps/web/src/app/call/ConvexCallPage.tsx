@@ -1,6 +1,7 @@
 "use client";
 
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { Button } from "@/components/ui/button";
 
 import { CallContent } from "./CallContent";
@@ -9,12 +10,7 @@ export function ConvexCallPage() {
   const { signIn, status } = useBbpcAuth();
 
   if (status === "loading") {
-    return (
-      <div
-        className="container min-h-[50vh] animate-pulse p-4"
-        aria-label="Loading call access"
-      />
-    );
+    return <LoadingIndicator variant="page" label="Loading call access" />;
   }
 
   if (status === "unauthenticated") {
