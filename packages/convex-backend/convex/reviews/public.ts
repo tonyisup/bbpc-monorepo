@@ -3,7 +3,10 @@ import { v } from "convex/values";
 import { anonymousQuery } from "../functions.js";
 import { domainError } from "../lib/errors.js";
 import { isPublishedStatus } from "../lib/transcriptVisibility.js";
-import { MAX_PUBLIC_YEAR_REVIEWS } from "./limits.js";
+import {
+  MAX_PUBLIC_YEAR_MOVIES,
+  MAX_PUBLIC_YEAR_REVIEWS,
+} from "./limits.js";
 import { hydrateReviewDetail } from "./readModel.js";
 import { yearMovieReviewValidator } from "./validators.js";
 
@@ -24,15 +27,35 @@ export const listMovieReviewsForYear = anonymousQuery({
     const year = validateReviewYear(args.year);
     const startedAt = Date.UTC(year, 0, 1);
     const endedAt = Date.UTC(year + 1, 0, 1);
-    const reviews = await ctx.db
-      .query("reviews")
-      .withIndex("by_reviewedAt", (index) =>
-        index
-          .gte("reviewedAt", startedAt)
-          .lt("reviewedAt", endedAt),
-      )
-      .order("desc")
-      .take(MAX_PUBLIC_YEAR_REVIEWS + 1);
+    // Start from the movies released this year: most reviews written in a
+    // year are of older movies, so scanning reviews by date first would read
+    // far more rows than the archive shows.
+    const movies = await ctx.db
+      .query("movies")
+      .withIndex("by_year", (index) => index.eq("year", year))
+      .take(MAX_PUBLIC_YEAR_MOVIES + 1);
+    if (movies.length > MAX_PUBLIC_YEAR_MOVIES) {
+      domainError(
+        "CONFLICT",
+        "Year movies exceed the public read limit.",
+        { details: { limit: MAX_PUBLIC_YEAR_MOVIES } },
+      );
+    }
+
+    const reviewsByMovie = await Promise.all(
+      movies.map((movie) =>
+        ctx.db
+          .query("reviews")
+          .withIndex("by_movieId_and_reviewedAt", (index) =>
+            index
+              .eq("movieId", movie._id)
+              .gte("reviewedAt", startedAt)
+              .lt("reviewedAt", endedAt),
+          )
+          .take(MAX_PUBLIC_YEAR_REVIEWS + 1),
+      ),
+    );
+    const reviews = reviewsByMovie.flat();
     if (reviews.length > MAX_PUBLIC_YEAR_REVIEWS) {
       domainError(
         "CONFLICT",
@@ -40,6 +63,12 @@ export const listMovieReviewsForYear = anonymousQuery({
         { details: { limit: MAX_PUBLIC_YEAR_REVIEWS } },
       );
     }
+    // Newest first, with the same creation-time tiebreak an index gives.
+    reviews.sort(
+      (left, right) =>
+        (right.reviewedAt ?? 0) - (left.reviewedAt ?? 0) ||
+        right._creationTime - left._creationTime,
+    );
 
     const hydrated = await Promise.all(
       reviews.map((review) => hydrateReviewDetail(ctx, review)),
