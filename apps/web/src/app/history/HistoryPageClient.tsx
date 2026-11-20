@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { Episode, type CompleteEpisode } from "@/components/Episode";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import SearchFilter from "@/components/common/SearchFilter";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -50,7 +51,13 @@ function SearchResults({
   }
 
   if (isLoading && rows.length === 0) {
-    return <div className="text-center text-zinc-300">Searching...</div>;
+    return (
+      <LoadingIndicator
+        variant="section"
+        label="Searching episodes"
+        className="py-12"
+      />
+    );
   }
 
   if (rows.length === 0) {

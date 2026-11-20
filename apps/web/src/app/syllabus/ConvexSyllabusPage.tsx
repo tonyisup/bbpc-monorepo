@@ -3,6 +3,7 @@
 import { Info } from "lucide-react";
 
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import SignOutButton from "@/components/SignOutButton";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,12 +18,7 @@ export function ConvexSyllabusPage() {
   const { accountStatus, refreshAccount, signIn, status, user } = useBbpcAuth();
 
   if (status === "loading" || accountStatus === "resolving") {
-    return (
-      <div
-        className="container min-h-[50vh] animate-pulse p-4"
-        aria-label="Loading syllabus"
-      />
-    );
+    return <LoadingIndicator variant="page" label="Loading syllabus" />;
   }
 
   if (status === "unauthenticated" || user === null) {

@@ -16,6 +16,7 @@ import { flushSync } from "react-dom";
 
 import { track } from "@/lib/analytics";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { LoadingIndicator } from "@/components/LoadingIndicator";
 import { MovieYearSearchHint } from "@/components/MovieYearSearchHint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -337,10 +338,7 @@ export function ConvexAddExtraPageClient({
 
   if (status === "loading" || accountStatus === "resolving") {
     return (
-      <div
-        className="container min-h-[50vh] animate-pulse p-4"
-        aria-label="Loading extra-review form"
-      />
+      <LoadingIndicator variant="page" label="Loading extra-review form" />
     );
   }
 
@@ -458,12 +456,11 @@ export function ConvexAddExtraPageClient({
       )}
 
       {isSearching ? (
-        <div className="flex justify-center p-12">
-          <Loader2
-            className="h-8 w-8 animate-spin text-primary"
-            aria-label="Searching titles"
-          />
-        </div>
+        <LoadingIndicator
+          variant="section"
+          label="Searching titles"
+          className="py-12"
+        />
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((result) => {

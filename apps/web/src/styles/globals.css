@@ -88,6 +88,38 @@
   .bbpc-label {
     @apply text-xs font-bold uppercase tracking-[0.08em] text-zinc-400;
   }
+
+  .bbpc-wave-bar {
+    transform-origin: center;
+    will-change: transform, opacity;
+    animation: bbpc-wave 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+
+  .bbpc-loading-sweep {
+    will-change: transform;
+    animation: bbpc-loading-sweep 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+}
+
+@keyframes bbpc-wave {
+  0%,
+  100% {
+    transform: scaleY(0.42);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bbpc-loading-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
 }
 
 .hero-image {
@@ -110,5 +142,10 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .bbpc-wave-bar,
+  .bbpc-loading-sweep {
+    animation: none !important;
   }
 }
