@@ -14,6 +14,7 @@ import {
   CalendarIcon,
   Menu,
   Smartphone,
+  UsersIcon,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
@@ -48,7 +49,7 @@ const publicNavItems: NavItem[] = [
   { href: "/game", label: "Game", icon: <GamepadIcon className="h-4 w-4" /> },
   { href: "/year", label: "Year", icon: <CalendarIcon className="h-4 w-4" /> },
   { href: "/merch", label: "Merch", icon: <ShirtIcon className="h-4 w-4" /> },
-  { href: "/about", label: "About", icon: <UserIcon className="h-4 w-4" /> },
+  { href: "/about", label: "About", icon: <UsersIcon className="h-4 w-4" /> },
 ];
 
 const authNavItems: NavItem[] = [
@@ -118,7 +119,19 @@ const NavMenu: FC = () => {
                 : "text-zinc-300"
             )}
           >
-            {item.icon}
+            {item.href === "/profile" && visibleUser ? (
+              <Avatar className="h-5 w-5">
+                <AvatarImage
+                  src={visibleUser.image ?? undefined}
+                  alt=""
+                />
+                <AvatarFallback className="text-[10px]">
+                  {visibleUser.name?.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              item.icon
+            )}
             <span>{item.label}</span>
             {gameBadge(item)}
           </Link>

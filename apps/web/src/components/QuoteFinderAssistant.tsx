@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { Sparkles } from "lucide-react";
+import { track } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import type { YouTubeSearch } from "@/hooks/useYouTubeSearch";
 import { formatClipTime } from "@/lib/quoteClip";
@@ -283,6 +284,10 @@ export function useQuoteFinderAssistant({
       }
       const result = quoteLocateResponseSchema.parse(await response.json());
       if (controller.signal.aborted) return;
+      track("quote_locate_finished", {
+        status: result.status,
+        candidate_count: batch.length,
+      });
       // The route checked one video and skipped those it can't check; only
       // `remaining`, and a video that timed out, are still worth a run.
       for (const id of batch)

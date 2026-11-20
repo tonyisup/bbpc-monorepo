@@ -20,6 +20,7 @@ import {
   type RefObject,
 } from "react";
 
+import { track } from "@/lib/analytics";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
 import {
   Dialog,
@@ -171,7 +172,13 @@ export function SendFeedback() {
       message,
       pagePath,
     })
-      .then(() => setSent(true))
+      .then(() => {
+        setSent(true);
+        track("feedback_submitted", {
+          category: category ?? "other",
+          page_path: pagePath,
+        });
+      })
       .catch((reason: unknown) => setError(failureMessage(reason)))
       .finally(() => setSending(false));
   };

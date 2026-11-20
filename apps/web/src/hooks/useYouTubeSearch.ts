@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { track } from "@/lib/analytics";
 import {
   MAX_VIDEO_RESULTS,
   MAX_VIDEO_SEARCH_LENGTH,
@@ -110,6 +111,11 @@ export function useYouTubeSearch(suggestedQuery = "") {
         [...prior, ...result.videos].map((video) => [video.id, video])
       );
       const videos = [...unique.values()].slice(0, MAX_VIDEO_RESULTS);
+      track("youtube_searched", {
+        query_length: normalized.length,
+        result_count: result.videos.length,
+        page: more ? "more" : "first",
+      });
       setState({
         query: normalized,
         videos,

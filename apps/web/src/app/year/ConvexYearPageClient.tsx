@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { track } from "@/lib/analytics";
 import RatingIcon from "@/components/RatingIcon";
 import UserTag from "@/components/UserTag";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
@@ -351,6 +352,7 @@ export function ConvexYearPageClient() {
         movieId,
         rank,
       });
+      track("year_ranking_item_saved", { movie_id: movieId, rank });
       await reloadRankingState(selectedListId);
     } catch (error) {
       setSelectedList(previousList);
@@ -381,6 +383,7 @@ export function ConvexYearPageClient() {
     setRankingError(null);
     try {
       await removeConvexMovieRankingItem(convex, item.id);
+      track("year_ranking_item_removed", {});
       await reloadRankingState(selectedListId);
     } catch (error) {
       setSelectedList(previousList);
@@ -407,6 +410,7 @@ export function ConvexYearPageClient() {
         selectedListId,
         orderedItems.map((item) => item.id)
       );
+      track("year_ranking_reordered", { item_count: updated.items.length });
       setSelectedList(updated);
       setOrderedItems(updated.items);
       const lists = await listMyConvexMovieRankingLists(convex);
