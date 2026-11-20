@@ -13,6 +13,7 @@ import {
   BookOpenIcon,
   CalendarIcon,
   Menu,
+  Smartphone,
   UsersIcon,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -29,6 +30,7 @@ import { ConvexImpersonationControl } from "./ConvexImpersonationControl";
 import { PointChangeBadge, useUnseenPointChange } from "./GamePointChange";
 import { cn } from "@/lib/utils";
 import { useBbpcAuth } from "@/components/auth/BbpcAuthContext";
+import { useInstallApp } from "@/hooks/useInstallApp";
 
 interface NavItem {
   href: string;
@@ -68,6 +70,7 @@ const authNavItems: NavItem[] = [
 const NavMenu: FC = () => {
   const { accountStatus, signIn, signOut, user } = useBbpcAuth();
   const pathname = usePathname();
+  const { mode: installMode } = useInstallApp();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -224,6 +227,21 @@ const NavMenu: FC = () => {
                       </Link>
                     </NavigationMenuLink>
                   ))}
+                {installMode !== null && installMode !== "installed" && (
+                  <NavigationMenuLink asChild>
+                    <Link
+                      href="/app"
+                      aria-current={isActive("/app") ? "page" : undefined}
+                      className={cn(
+                        "flex items-center gap-2 whitespace-nowrap px-4 py-3 transition hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500",
+                        isActive("/app") && "bg-red-500/10 text-red-300"
+                      )}
+                    >
+                      <Smartphone className="h-4 w-4" />
+                      Get the app
+                    </Link>
+                  </NavigationMenuLink>
+                )}
                 {isLoggedIn ? (
                   <NavigationMenuLink asChild>
                     <button
