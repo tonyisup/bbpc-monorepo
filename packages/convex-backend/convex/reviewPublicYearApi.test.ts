@@ -7,7 +7,10 @@ import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api.js";
 import type { Id } from "./_generated/dataModel.js";
 import schema from "./schema.js";
-import { MAX_PUBLIC_YEAR_REVIEWS } from "./reviews/limits.js";
+import {
+  MAX_PUBLIC_YEAR_MOVIES,
+  MAX_PUBLIC_YEAR_REVIEWS,
+} from "./reviews/limits.js";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -287,6 +290,118 @@ describe("public year movie reviews", () => {
     expect(held.map((review) => review.id)).toEqual([
       ids.relationshipFreeReviewId,
     ]);
+  });
+
+  test("ignores reviews of older movies written in the selected year", async () => {
+    const t = createTestBackend();
+    const [currentMovieId, oldMovieId] = await Promise.all([
+      seedMovie(t, "Current Movie", 2026),
+      seedMovie(t, "Old Movie", 1999),
+    ]);
+    const ids = await t.run(async (ctx) => {
+      // More reviews than the public bound, all of a movie from another year.
+      for (
+        let index = 0;
+        index < MAX_PUBLIC_YEAR_REVIEWS + 1;
+        index += 1
+      ) {
+        await ctx.db.insert("reviews", {
+          movieId: oldMovieId,
+          reviewedAt: Date.UTC(2026, 0, 1) + index,
+        });
+      }
+      const earlier = await ctx.db.insert("reviews", {
+        movieId: currentMovieId,
+        reviewedAt: Date.UTC(2026, 1, 1),
+      });
+      const later = await ctx.db.insert("reviews", {
+        movieId: currentMovieId,
+        reviewedAt: Date.UTC(2026, 8, 1),
+      });
+      // Reviewed before the selected year began: excluded.
+      await ctx.db.insert("reviews", {
+        movieId: currentMovieId,
+        reviewedAt: Date.UTC(2025, 11, 31),
+      });
+      return { earlier, later };
+    });
+
+    const reviews = await t.query(
+      api.reviews.public.listMovieReviewsForYear,
+      { year: 2026 },
+    );
+
+    expect(reviews.map((review) => review.id)).toEqual([
+      ids.later,
+      ids.earlier,
+    ]);
+  });
+
+  test("fails closed when a year exceeds the public movie bound", async () => {
+    const t = createTestBackend();
+    await t.run(async (ctx) => {
+      for (
+        let index = 0;
+        index < MAX_PUBLIC_YEAR_MOVIES + 1;
+        index += 1
+      ) {
+        await ctx.db.insert("movies", {
+          title: `Movie ${String(index)}`,
+          normalizedTitle: `movie ${String(index)}`,
+          year: 2026,
+          url: `https://movies.example/${String(index)}`,
+        });
+      }
+    });
+
+    await expectDomainError(
+      t.query(api.reviews.public.listMovieReviewsForYear, {
+        year: 2026,
+      }),
+      "CONFLICT",
+    );
+  });
+
+  test("shares one review bound across all of a year's movies", async () => {
+    const t = createTestBackend();
+    const movieIds = await Promise.all([
+      seedMovie(t, "Shared Bound A", 2026),
+      seedMovie(t, "Shared Bound B", 2026),
+      seedMovie(t, "Shared Bound C", 2026),
+    ]);
+    await t.run(async (ctx) => {
+      for (
+        let index = 0;
+        index < MAX_PUBLIC_YEAR_REVIEWS;
+        index += 1
+      ) {
+        await ctx.db.insert("reviews", {
+          movieId: movieIds[index % 3] ?? movieIds[0],
+          reviewedAt: Date.UTC(2026, 0, 1) + index,
+        });
+      }
+    });
+
+    // Exactly at the bound, every review is returned.
+    expect(
+      await t.query(api.reviews.public.listMovieReviewsForYear, {
+        year: 2026,
+      }),
+    ).toHaveLength(MAX_PUBLIC_YEAR_REVIEWS);
+
+    // One more, on any movie, crosses the combined bound.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("reviews", {
+        movieId: movieIds[1],
+        reviewedAt: Date.UTC(2026, 11, 1),
+      });
+    });
+    await expectDomainError(
+      t.query(api.reviews.public.listMovieReviewsForYear, {
+        year: 2026,
+      }),
+      "CONFLICT",
+    );
   });
 
   test("fails closed when a year exceeds the public review bound", async () => {

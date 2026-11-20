@@ -487,6 +487,7 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_userId_and_movieId", ["userId", "movieId"])
     .index("by_movieId", ["movieId"])
+    .index("by_movieId_and_reviewedAt", ["movieId", "reviewedAt"])
     .index("by_showId", ["showId"])
     .index("by_ratingId", ["ratingId"])
     .index("by_reviewedAt", ["reviewedAt"])
