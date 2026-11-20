@@ -26,7 +26,6 @@ const { act, create } = require('react-test-renderer') as {
 
 function Harness({ displayName }: { displayName: string }) {
   useMeshAudioRoom({
-    enabled: true,
     sessionId: 'session-id',
     clientId: 'client-id',
     accessToken: 'access-token',

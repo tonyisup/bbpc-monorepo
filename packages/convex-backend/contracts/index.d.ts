@@ -15,6 +15,18 @@ export declare const RECORDING_PORTABLE_ID_PATTERN: RegExp;
 
 export declare function isRecordingPortableId(value: unknown): value is string;
 
+/** File extensions a recording take's track may be stored with. */
+export declare const RECORDING_TAKE_EXTENSIONS: readonly ["webm", "ogg", "m4a"];
+
+/** The storage name of one track of one recording take. */
+export declare function recordingTakeBlobName(take: {
+  sessionId: string;
+  clientId: string;
+  startedAt: number;
+  trackType: "mic" | "sounders";
+  extension: (typeof RECORDING_TAKE_EXTENSIONS)[number];
+}): string;
+
 export type DomainErrorCode =
   | "AUTHENTICATION_REQUIRED"
   | "IDENTITY_NOT_LINKED"

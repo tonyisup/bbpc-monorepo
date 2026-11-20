@@ -43,7 +43,6 @@ export interface MeshAudioRoom {
 }
 
 interface UseMeshAudioRoomOptions {
-  enabled: boolean;
   sessionId: string;
   clientId: string;
   accessToken: string;
@@ -97,7 +96,6 @@ function stripUndefined(value: unknown): unknown {
 }
 
 export function useMeshAudioRoom({
-  enabled,
   sessionId,
   clientId,
   accessToken,
@@ -368,10 +366,6 @@ export function useMeshAudioRoom({
   }, [accessToken, clientId, leaveAudioMutation, sendSignal, sessionId, teardownLocal]);
 
   const joinAudio = useCallback(async () => {
-    if (!enabled) {
-      setError('Mesh audio is disabled');
-      return;
-    }
     if (!supportsMeshAudio()) {
       setError('This browser does not support WebRTC audio');
       return;
@@ -439,7 +433,6 @@ export function useMeshAudioRoom({
   }, [
     accessToken,
     clientId,
-    enabled,
     joinAudioMutation,
     joining,
     leaveAudioMutation,

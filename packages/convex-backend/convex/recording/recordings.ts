@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 
 import {
+  RECORDING_TAKE_EXTENSIONS,
+  recordingTakeBlobName,
+} from "../../contracts/index.js";
+
+import {
   adminMutation,
   adminQuery,
   recordingMutation,
@@ -14,7 +19,10 @@ import {
   requireRecordingTimestamp,
 } from "./validators.js";
 
-const MAX_RECORDINGS_PER_SESSION = 100;
+// Each Start/Resume adds a row per track for every participant recording, so
+// the cap is per participant: one guest cannot use up everyone's uploads.
+const MAX_RECORDINGS_PER_PARTICIPANT = 200;
+const MAX_RECORDINGS_PER_SESSION = 1_000;
 // About 18 hours of Opus at the browser default of 128 kbps.
 const MAX_RECORDING_BYTES = 1024 * 1024 * 1024;
 const MAX_BLOB_NAME_LENGTH = 1_024;
@@ -146,16 +154,25 @@ export const saveUpload = recordingMutation({
       "Recording blob name",
       MAX_BLOB_NAME_LENGTH,
     );
-    // The upload route names blobs
-    // `${sessionId}/${startedAt}/${host}-${clientId}-${trackType}.${ext}`.
-    // Requiring that namespace stops a participant from claiming, and later
-    // blocking, a name another participant's upload will use.
-    if (
-      !blobName.startsWith(`${session.publicId}/`) ||
-      !blobName.includes(
-        `-${participant.clientId}-${args.trackType}.`,
-      )
-    ) {
+    const startedAt = requireRecordingTimestamp(
+      args.startedAt,
+      "Recording start time",
+    );
+    // Only the exact name the upload route gives this participant's take is
+    // accepted. A looser check let a crafted name (with `..` segments, which
+    // storage collapses) point at another session's audio, and lets no
+    // participant claim, and later block, a name another participant's upload
+    // will use.
+    const ownNames = RECORDING_TAKE_EXTENSIONS.map((extension) =>
+      recordingTakeBlobName({
+        sessionId: session.publicId,
+        clientId: participant.clientId,
+        startedAt,
+        trackType: args.trackType,
+        extension,
+      }),
+    );
+    if (!ownNames.includes(blobName)) {
       domainError(
         "FORBIDDEN",
         "The recording blob name does not belong to this participant.",
@@ -167,10 +184,7 @@ export const saveUpload = recordingMutation({
       episode,
       hostName,
       trackType: args.trackType,
-      startedAt: requireRecordingTimestamp(
-        args.startedAt,
-        "Recording start time",
-      ),
+      startedAt,
       blobName,
       url: requireHttpsUrl(args.url),
       size: requireRecordingSize(args.size),
@@ -233,6 +247,20 @@ export const saveUpload = recordingMutation({
         {
           details: {
             limit: MAX_RECORDINGS_PER_SESSION,
+          },
+        },
+      );
+    }
+    const own = capacity.filter(
+      (row) => row.clientId === participant.clientId,
+    ).length;
+    if (own >= MAX_RECORDINGS_PER_PARTICIPANT) {
+      domainError(
+        "CONFLICT",
+        "This participant has reached its upload limit.",
+        {
+          details: {
+            limit: MAX_RECORDINGS_PER_PARTICIPANT,
           },
         },
       );

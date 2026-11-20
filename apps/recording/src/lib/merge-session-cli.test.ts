@@ -114,7 +114,7 @@ describe('merge-session CLI', () => {
     expect(plan.inputs.map((input: { delayMs: number; maxDurationMs: number }) => [input.delayMs, input.maxDurationMs])).toEqual([[0, 2_000], [2_000, 2_000]]);
     // Recorded length beside the run window, for rehearsal drift checks.
     expect(plan.inputs.map((input: { audioDurationMs: number | null }) => input.audioDurationMs)).toEqual(hasFfmpeg ? [2_000, 2_000] : [null, null]);
-    expect(plan.ffmpeg.args).toContain('[0:a]atrim=duration=2.000,adelay=0:all=1,aresample=48000,asetpts=PTS-STARTPTS[a0];[1:a]atrim=duration=2.000,adelay=2000:all=1,aresample=48000,asetpts=PTS-STARTPTS[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0,alimiter=limit=0.95[out]');
+    expect(plan.ffmpeg.args).toContain('[0:a]atrim=duration=2.000,adelay=0:all=1,aresample=48000,asetpts=PTS-STARTPTS[a0];[1:a]atrim=duration=2.000,adelay=2000:all=1,aresample=48000,asetpts=PTS-STARTPTS[a1];[a0][a1]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.95[out]');
     expect(plan.warnings).toEqual([]);
   }, 15_000);
 
@@ -158,5 +158,15 @@ describe('merge-session CLI', () => {
     ], { encoding: 'utf8' }));
     expect(duration).toBeGreaterThan(3.95);
     expect(duration).toBeLessThan(4.1);
+
+    // Each run plays at its recorded level, whatever else is in the mix.
+    const meanVolume = (start: number) => {
+      const { stderr } = spawnSync('ffmpeg', [
+        '-hide_banner', '-i', path.join(outDir, 'EP-CLI-merged.wav'),
+        '-af', `atrim=start=${start + 0.25}:duration=1.5,volumedetect`, '-f', 'null', '-',
+      ], { encoding: 'utf8' });
+      return Number(/mean_volume: (-?[\d.]+) dB/.exec(stderr)?.[1]);
+    };
+    expect(Math.abs(meanVolume(0) - meanVolume(2))).toBeLessThan(1);
   }, 30_000);
 });

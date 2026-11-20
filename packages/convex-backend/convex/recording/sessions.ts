@@ -34,6 +34,16 @@ import {
 
 const MAX_SESSION_PARTICIPANTS = 12;
 const MAX_SESSION_EVENTS = 2_000;
+// The last events of a full session are kept for the owner's transport
+// events, so a filled log can never swallow the host's Stop.
+const OWNER_TRANSPORT_EVENT_RESERVE = 100;
+// No one participant may fill the log for everyone else.
+const MAX_EVENTS_PER_PARTICIPANT = 800;
+// Every event is read back on each append and on every listing; this keeps
+// a full session's events within one transaction's read limit.
+const MAX_EVENT_PAYLOAD_BYTES = 4_096;
+// Session-relative times (note, marker and sounder positions, run lengths).
+const MAX_TIMELINE_MS = 7 * 24 * 60 * 60 * 1_000;
 // Even a batch consisting entirely of 512 KiB manifests stays below the read-byte limit.
 const MAX_SESSION_DELETE_ROWS = 25;
 const MAX_CLEANUP_BATCH = 100;
@@ -786,6 +796,36 @@ export const listParticipants = recordingQuery({
   },
 });
 
+const TIMELINE_FIELDS = new Set([
+  "timestamp_ms",
+  "start_ms",
+  "end_ms",
+  "played_at_ms",
+  "durationMs",
+  "duration",
+]);
+
+/**
+ * Session-relative times must be real positions on a session's timeline. An
+ * unbounded value (for example a sounder "played" 270,000 years in) would
+ * make the merge build an impossible mix for everyone.
+ */
+function requireTimelinePositions(value: unknown): void {
+  if (value === null || typeof value !== "object") return;
+  for (const [key, field] of Object.entries(value)) {
+    if (TIMELINE_FIELDS.has(key) && typeof field === "number") {
+      if (!Number.isFinite(field) || field < 0 || field > MAX_TIMELINE_MS) {
+        domainError(
+          "VALIDATION_FAILED",
+          `Recording event ${key} must be a time within a session.`,
+        );
+      }
+    } else {
+      requireTimelinePositions(field);
+    }
+  }
+}
+
 export const appendSessionEvent = recordingMutation({
   args: {
     publicId: v.string(),
@@ -821,9 +861,10 @@ export const appendSessionEvent = recordingMutation({
     requireBoundedPayload(
       args.payload,
       "Recording event payload",
-      32_768,
+      MAX_EVENT_PAYLOAD_BYTES,
     );
     const payload = args.payload;
+    requireTimelinePositions(payload);
     const isTerminalRecordingEvent =
       payload.kind === "recording-left" ||
       payload.kind === "recording-stopped";
@@ -939,11 +980,28 @@ export const appendSessionEvent = recordingMutation({
         query.eq("publicSessionId", session.publicId),
       )
       .take(MAX_SESSION_EVENTS);
-    if (capacity.length >= MAX_SESSION_EVENTS) {
+    const isOwnerTransportEvent =
+      payload.kind === "recording-started" ||
+      payload.kind === "recording-stopped";
+    const sessionLimit = isOwnerTransportEvent
+      ? MAX_SESSION_EVENTS
+      : MAX_SESSION_EVENTS - OWNER_TRANSPORT_EVENT_RESERVE;
+    if (capacity.length >= sessionLimit) {
       domainError(
         "CONFLICT",
         "The recording session has reached its event limit.",
-        { details: { limit: MAX_SESSION_EVENTS } },
+        { details: { limit: sessionLimit } },
+      );
+    }
+    if (
+      !isOwnerTransportEvent &&
+      capacity.filter((event) => event.actorId === participant.clientId)
+        .length >= MAX_EVENTS_PER_PARTICIPANT
+    ) {
+      domainError(
+        "CONFLICT",
+        "This participant has reached its event limit.",
+        { details: { limit: MAX_EVENTS_PER_PARTICIPANT } },
       );
     }
     return await ctx.db.insert(
@@ -1012,13 +1070,15 @@ export const listSessionEvents = recordingQuery({
   },
 });
 
+// Uploads first, so a session's audio is queued for deletion in the first
+// transaction that reaches it rather than after all of its events.
 const sessionChildTables = [
+  ["recordingUploads", "recordings"],
   ["recordingParticipants", "participants"],
   ["recordingSessionInvites", "invites"],
   ["recordingSessionEvents", "events"],
   ["recordingSessionManifests", "manifests"],
   ["recordingSessionFavorites", "favorites"],
-  ["recordingUploads", "recordings"],
   ["recordingRtcPresence", "rtcPresence"],
 ] as const;
 const emptyDeletionResult = () => ({

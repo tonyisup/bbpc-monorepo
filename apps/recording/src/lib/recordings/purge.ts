@@ -35,3 +35,29 @@ export async function purgeDeletedRecordingBlobs(token: string): Promise<{ delet
   }
   return { deleted, failed };
 }
+
+/**
+ * Cleanup deletes large sessions over several scheduled transactions, and
+ * each queues its sessions' audio as it goes, so audio keeps arriving for a
+ * moment after the cleanup request returns. Purge until nothing new has
+ * arrived for `quietMs`, or `maxMs` has passed.
+ */
+export async function purgeDeletedRecordingBlobsUntilQuiet(
+  token: string,
+  { quietMs = 2_000, pollMs = 500, maxMs = 15_000 } = {},
+): Promise<{ deleted: number; failed: number }> {
+  const started = Date.now();
+  let quietSince = Date.now();
+  let deleted = 0;
+  let failed = 0;
+  for (;;) {
+    const pass = await purgeDeletedRecordingBlobs(token);
+    deleted += pass.deleted;
+    // Audio that failed stays queued and is retried by the next cleanup.
+    failed = pass.failed;
+    if (pass.deleted > 0) quietSince = Date.now();
+    if (pass.failed > 0 || Date.now() - quietSince >= quietMs || Date.now() - started >= maxMs) break;
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+  }
+  return { deleted, failed };
+}

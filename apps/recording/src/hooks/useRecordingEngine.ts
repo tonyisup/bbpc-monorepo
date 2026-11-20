@@ -22,11 +22,12 @@ export interface RecordingSink {
   begin: (startedAt: number, mimeTypes: Record<'mic' | 'sounders', string>) => void;
   chunk: (track: 'mic' | 'sounders', data: Blob) => void;
   finish: (durationMs: number) => void;
+  /** False once a write failed, so the device copy is incomplete. */
+  intact?: () => boolean;
 }
 
 export interface StartRecordingOptions {
   mediaStream?: MediaStream;
-  ownsMediaStream?: boolean;
   sink?: RecordingSink;
 }
 
@@ -39,7 +40,6 @@ export interface RecordingEngine {
    * Null means the borrowed stream went away; the engine opens its own.
    */
   replaceMicStream: (stream: MediaStream | null) => Promise<void>;
-  requestMicPermission: () => Promise<boolean>;
 }
 
 export interface RecordingTracks {
@@ -49,6 +49,8 @@ export interface RecordingTracks {
   durationMs: number;
   /** Set when a sink kept this take, so its upload progress can be kept too. */
   takeId?: string;
+  /** The whole take is also saved on this device, so it survives without this copy. */
+  savedOnDevice?: boolean;
 }
 
 const SAMPLE_RATE = 48000;
@@ -173,17 +175,6 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
-  const requestMicPermission = useCallback(async (): Promise<boolean> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS });
-      stream.getTracks().forEach(t => t.stop());
-      return true;
-    } catch {
-      setState(prev => ({ ...prev, error: 'Microphone permission denied' }));
-      return false;
-    }
-  }, []);
-
   // Route a microphone stream into the graph, replacing the previous source.
   const connectMicSource = useCallback((ctx: AudioContext, micStream: MediaStream) => {
     micSourceRef.current?.disconnect();
@@ -214,11 +205,12 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       // --- Mic track ---
       const micStream = options?.mediaStream ?? await navigator.mediaDevices.getUserMedia({ audio: MIC_CONSTRAINTS });
       if (!mountedRef.current) {
-        if (!options?.mediaStream || options.ownsMediaStream) micStream.getTracks().forEach(track => track.stop());
+        if (!options?.mediaStream) micStream.getTracks().forEach(track => track.stop());
         return;
       }
       micStreamRef.current = micStream;
-      ownsMicStreamRef.current = options?.mediaStream ? options.ownsMediaStream ?? false : true;
+      // A borrowed stream (the call's microphone) belongs to the call.
+      ownsMicStreamRef.current = !options?.mediaStream;
 
       // VU meter
       const analyser = ctx.createAnalyser();
@@ -316,7 +308,7 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
       const sink = sinkRef.current;
       sinkRef.current = null;
       sink?.finish(durationMs);
-      return { mic, sounders, startedAt: startedAtRef.current, durationMs, ...(sink ? { takeId: sink.takeId } : {}) };
+      return { mic, sounders, startedAt: startedAtRef.current, durationMs, ...(sink ? { takeId: sink.takeId, savedOnDevice: sink.intact?.() ?? false } : {}) };
     }).finally(() => { stoppingRef.current = null; });
     stoppingRef.current = result;
     return result;
@@ -396,6 +388,5 @@ export function useRecordingEngine(onInterrupted?: (tracks: RecordingTracks) => 
     startRecording,
     stopRecording,
     replaceMicStream,
-    requestMicPermission,
   };
 }

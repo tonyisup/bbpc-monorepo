@@ -203,7 +203,11 @@ function buildFfmpegArgs({ inputs, outputPath, format }) {
     labels.push(`[${label}]`);
   }
 
-  filterParts.push(`${labels.join('')}amix=inputs=${labels.length}:duration=longest:dropout_transition=0,alimiter=limit=0.95[out]`);
+  // Sum the inputs at their recorded level. amix's default normalisation
+  // divides by the inputs still running, and a delayed input counts from the
+  // start, so each run and every reconstructed sounder changed the level of
+  // everything else. The limiter catches overlapping peaks instead.
+  filterParts.push(`${labels.join('')}amix=inputs=${labels.length}:duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.95[out]`);
 
   args.push('-filter_complex', filterParts.join(';'));
   args.push('-map', '[out]', '-ac', '2', '-ar', '48000');

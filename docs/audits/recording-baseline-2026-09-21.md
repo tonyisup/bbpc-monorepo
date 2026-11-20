@@ -206,6 +206,8 @@ As of September 22, 2026. Each fix has a regression test that fails on the audit
 
 Still open: turning off public access on the existing container, TURN credentials for ended sessions (#35), and the real-device rehearsal ([runbook](../recording-rehearsal.md)).
 
+November 13, 2026: TURN credentials for ended sessions were fixed in #35. A [follow-up audit](recording-2026-11-13.md) found that the R06 fix was incomplete, along with new defects, and records their remediation.
+
 ## Acceptance baseline for the next iteration
 
 - Two independent browsers create/join one session and exchange real notes, sounders, start/stop and disconnect events through the actual backend.

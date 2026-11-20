@@ -12,7 +12,7 @@ let session = createInitialState('EP-test', '2026-09-10', 'Host', []);
 const tracks = { mic: new Blob(['mic'], { type: 'audio/mp4' }), sounders: new Blob(['sounders'], { type: 'audio/mp4' }), startedAt: 1000, durationMs: 3000 };
 const recording = {
   state: { isRecording: false, micLevel: 0, durationMs: 3000, error: null },
-  startRecording: vi.fn(), requestMicPermission: vi.fn(async () => true),
+  startRecording: vi.fn(),
   stopRecording: vi.fn(async () => { recording.state.isRecording = false; return tracks; }),
 };
 const dispatch = vi.fn(action => { session = sessionReducer(session, action); });
@@ -29,12 +29,19 @@ vi.mock('@/hooks/useRecordingSync', () => ({ useRecordingSync: (options: { onRem
   remoteStop = options.onRemoteStop;
   return { broadcastStart: vi.fn(async () => {}), broadcastStop, retryPendingEvents, pendingCount: 0, syncError: null };
 } }));
-vi.mock('@/hooks/useMeshAudioRoom', () => ({ useMeshAudioRoom: () => ({
+const meshAudio = {
   state: { joined: false, participants: [], selectedInputDeviceId: null }, inputDevices: [],
-}) }));
+  joinAudio: vi.fn(async () => {}), getLocalStream: vi.fn(() => ({ id: 'call-mic' }) as unknown as MediaStream),
+};
+vi.mock('@/hooks/useMeshAudioRoom', () => ({ useMeshAudioRoom: () => meshAudio }));
+const clock = { synced: true };
+vi.mock('@/lib/clock', () => ({
+  serverNow: () => Date.now(),
+  ensureServerClock: vi.fn(async () => clock.synced ? { offsetMs: 0, roundTripMs: 20, syncedAt: Date.now() } : null),
+}));
 
 beforeEach(() => {
-  vi.stubEnv('NEXT_PUBLIC_RTC_AUDIO_ENABLED', 'false');
+  clock.synced = true;
   vi.stubGlobal('window', {
     confirm: vi.fn(() => true), addEventListener: vi.fn(), removeEventListener: vi.fn(),
     localStorage: { getItem: vi.fn(() => null), setItem: vi.fn() },
@@ -43,10 +50,10 @@ beforeEach(() => {
   recording.state.isRecording = false;
   participantRole = 'owner';
   recording.startRecording.mockReset();
-  recording.requestMicPermission.mockReset().mockResolvedValue(true);
   vi.clearAllMocks();
+  meshAudio.joinAudio.mockReset().mockResolvedValue(undefined);
 });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.unstubAllGlobals(); });
 
 // react-test-renderer exposes the actual handlers and rendered disabled/error state.
 type Node = { type: string; props: { onClick: () => Promise<void>; disabled?: boolean; onBlur: () => Promise<void>; onChange: (event: { target: { value: string } }) => void; placeholder?: string }; children: unknown[] };
@@ -95,13 +102,13 @@ describe('DashboardHeader persistence controls', () => {
   });
 });
 
-it.each(['permission', 'recorder'] as const)('does not keep recording when host stops during guest %s startup', async stage => {
+it.each(['audio', 'recorder'] as const)('does not keep recording when host stops during guest %s startup', async stage => {
   participantRole = 'guest';
   session = { ...session, isRecording: true, recordingStart: 1000 };
   let resume!: () => void;
   const waiting = new Promise<void>(resolve => { resume = resolve; });
-  if (stage === 'permission') {
-    recording.requestMicPermission.mockImplementationOnce(async () => { await waiting; return true; });
+  if (stage === 'audio') {
+    meshAudio.joinAudio.mockImplementationOnce(async () => { await waiting; });
   } else {
     recording.startRecording.mockImplementationOnce(async () => { recording.state.isRecording = true; await waiting; });
   }
@@ -115,12 +122,27 @@ it.each(['permission', 'recorder'] as const)('does not keep recording when host 
   await act(async () => { resume(); await waiting; });
   expect(recording.state.isRecording).toBe(false);
   expect(dispatch.mock.calls.some(([action]) => action.type === 'JOIN_RECORDING')).toBe(false);
-  if (stage === 'permission') {
+  if (stage === 'audio') {
     expect(recording.startRecording).not.toHaveBeenCalled();
   } else {
     expect(recording.stopRecording).toHaveBeenCalledTimes(1);
     // A block and a commit for each track.
     expect(fetchMock).toHaveBeenCalledTimes(4);
   }
+  await act(async () => root.unmount());
+});
+
+it('refuses to start a take until the clock is aligned with the server', async () => {
+  clock.synced = false;
+  vi.stubGlobal('fetch', vi.fn(async () => new Response('{}')));
+  let root: ReturnType<typeof create>;
+  await act(async () => { root = create(createElement(DashboardHeader)); });
+  await act(async () => button(root, 'Start Recording').props.onClick());
+  expect(recording.startRecording).not.toHaveBeenCalled();
+  expect(JSON.stringify(root.toJSON())).toContain('line up clocks');
+  clock.synced = true;
+  await act(async () => button(root, 'Start Recording').props.onClick());
+  expect(recording.startRecording).toHaveBeenCalledWith(expect.objectContaining({ mediaStream: { id: 'call-mic' } }));
+  expect(JSON.stringify(root.toJSON())).not.toContain('line up clocks');
   await act(async () => root.unmount());
 });
