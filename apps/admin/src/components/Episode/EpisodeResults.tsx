@@ -7,17 +7,33 @@ import {
   Quote,
   RefreshCw,
   Target,
+  Trash2,
   Trophy,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-import type {
-  ConvexAssignmentWagerStatus,
-  ConvexAssignmentWorkbench,
+import {
+  type ConvexAssignmentGuess,
+  type ConvexAssignmentReview,
+  type ConvexAssignmentWager,
+  type ConvexAssignmentWagerStatus,
+  type ConvexAssignmentWorkbench,
+  removeConvexAssignmentGuess,
+  removeConvexAssignmentWager,
 } from "@/convex/assignmentDetails";
 import type { ConvexAdminEpisodeDetail } from "@/convex/episodeDetails";
-import type { ConvexAdminQuoteSubmission } from "@/convex/quotabunga";
+import { getConvexDomainErrorCode } from "@/convex/identity";
+import {
+  type ConvexAssignmentLinkedPoint,
+  deleteConvexPoint,
+  loadConvexPointWorkbench,
+} from "@/convex/pointDetails";
+import {
+  type ConvexAdminQuoteSubmission,
+  deleteConvexAdminQuote,
+} from "@/convex/quotabunga";
 import { formatPlainDate, getPacificTodayPlainDate } from "@/lib/dates";
 import {
   getAdminAssignmentPath,
@@ -49,17 +65,20 @@ export type EpisodeResultsState =
   | { status: "ready"; results: EpisodeResults };
 
 /**
- * Loads the episode's season and game results once the episode has loaded;
- * `revision` forces a reload.
+ * Loads the episode's season and game results once the episode has loaded.
+ * `revision` forces a reload behind a spinner; `resultsRevision` refreshes
+ * the results in place so removing an entry keeps the admin's scroll position.
  */
 export function useEpisodeResults(
   episode: ConvexAdminEpisodeDetail | null,
-  revision: number
+  revision: number,
+  resultsRevision = 0
 ): EpisodeResultsState {
   const convex = useConvex();
   const [state, setState] = useState<EpisodeResultsState>({
     status: "loading",
   });
+  const shownKey = useRef<string | null>(null);
   const id = episode?.id ?? null;
   const number = episode?.number ?? 0;
   const date = episode?.date ?? null;
@@ -71,7 +90,10 @@ export function useEpisodeResults(
       return;
     }
     let active = true;
-    setState({ status: "loading" });
+    const loadKey = [id, number, date, assignmentKey, revision].join(":");
+    if (shownKey.current !== loadKey) {
+      setState({ status: "loading" });
+    }
     const assignments = assignmentKey
       .split(",")
       .filter(Boolean)
@@ -82,18 +104,171 @@ export function useEpisodeResults(
       getPacificTodayPlainDate()
     )
       .then((results) => {
-        if (active) setState({ status: "ready", results });
+        if (active) {
+          shownKey.current = loadKey;
+          setState({ status: "ready", results });
+        }
       })
       .catch((error: unknown) => {
         console.error("Episode results could not be loaded.", error);
-        if (active) setState({ status: "failed" });
+        if (active) {
+          shownKey.current = null;
+          setState({ status: "failed" });
+        }
       });
     return () => {
       active = false;
     };
-  }, [assignmentKey, convex, date, id, number, revision]);
+  }, [assignmentKey, convex, date, id, number, resultsRevision, revision]);
 
   return state;
+}
+
+interface EntryRemoval {
+  confirmation: string;
+  commit: () => Promise<void>;
+  success: string;
+}
+
+type RemoveEntry = (
+  prepare: () => EntryRemoval | Promise<EntryRemoval>
+) => void;
+
+function removalErrorMessage(error: unknown): string {
+  switch (getConvexDomainErrorCode(error)) {
+    case "CONFLICT":
+      return "This entry changed, or its point is shared with another record. Refresh and review it before retrying.";
+    case "NOT_FOUND":
+      return "This entry no longer exists. Refresh the results.";
+    case "WRITE_DISABLED":
+      return "Game changes are paused in this environment.";
+    case "STALE_CLIENT":
+      return "This admin client is out of date. Refresh before trying again.";
+    default:
+      return "The entry could not be removed.";
+  }
+}
+
+/**
+ * Confirms and runs one removal at a time. Controls stay disabled until the
+ * refreshed results arrive, so a removed row cannot be acted on twice.
+ */
+function useEntryRemoval(
+  state: EpisodeResultsState,
+  onRemoved: () => void
+): { busy: boolean; removeEntry: RemoveEntry } {
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setBusy(false), [state]);
+
+  const removeEntry: RemoveEntry = (prepare) => {
+    setBusy(true);
+    void (async () => {
+      try {
+        const removal = await prepare();
+        if (!window.confirm(removal.confirmation)) {
+          setBusy(false);
+          return;
+        }
+        await removal.commit();
+        toast.success(removal.success);
+        onRemoved();
+      } catch (error) {
+        toast.error(removalErrorMessage(error));
+        setBusy(false);
+      }
+    })();
+  };
+  return { busy, removeEntry };
+}
+
+function signedPoints(value: number): string {
+  return `${value > 0 ? "+" : ""}${value}`;
+}
+
+function quoteRemovalMessage(quote: ConvexAdminQuoteSubmission): string {
+  const award =
+    quote.point === null
+      ? ""
+      : ` Its award of ${signedPoints(
+          quote.point.adjustment ?? 0
+        )} points is removed too.`;
+  return `Delete the quote “${quote.quoteText}”?${award}`;
+}
+
+function guessRemovalMessage(
+  review: ConvexAssignmentReview,
+  guess: ConvexAssignmentGuess
+): string {
+  const listener = guess.user.name ?? "this listener";
+  const host = review.reviewer?.name ?? "this host";
+  return (
+    `Delete ${listener}'s guess of ${guess.rating.name} for ${host}? ` +
+    "If their guesses on this movie were settled, the settlement and all of its points are removed, and any remaining guesses must be settled again. " +
+    "A point awarded by hand stays on their total."
+  );
+}
+
+function wagerRemovalMessage(wager: ConvexAssignmentWager): string {
+  const listener = wager.user.name ?? "this listener";
+  const effect =
+    wager.awardAdjustment !== null
+      ? ` Its ${signedPoints(wager.awardAdjustment)} point award is removed from their total.`
+      : wager.status === "pending" || wager.status === "locked"
+      ? ` The ${wager.points} points it holds are released.`
+      : "";
+  return `Delete ${listener}'s ${wager.status} wager of ${wager.points} points?${effect}`;
+}
+
+function linkedPointRemovalMessage(
+  point: ConvexAssignmentLinkedPoint,
+  impact: {
+    guessCount: number;
+    gamblingEntryCount: number;
+    tagVoteCount: number;
+    quoteSubmissionCount: number;
+  }
+): string {
+  const shared = [
+    [impact.guessCount, "guess(es)"],
+    [impact.gamblingEntryCount, "wager(s)"],
+    [impact.quoteSubmissionCount, "quote(s)"],
+    [impact.tagVoteCount, "tag vote(s)"],
+  ]
+    .filter(([count]) => Number(count) > 0)
+    .map(([count, label]) => `${count} ${label}`);
+  const listener = point.user.name ?? "this listener";
+  return (
+    `Delete this ${signedPoints(point.value)} point entry for ${listener}?` +
+    (shared.length === 0
+      ? ""
+      : ` It is also attached to ${shared.join(
+          ", "
+        )}, which stay but lose this point.`)
+  );
+}
+
+function RemoveEntryButton({
+  busy,
+  label,
+  onClick,
+}: {
+  busy: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      aria-label={label}
+      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+      disabled={busy}
+      onClick={onClick}
+      size="icon"
+      title={label}
+      variant="ghost"
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
+  );
 }
 
 /** The episode's season, for the page header. */
@@ -185,12 +360,17 @@ function SeasonCard({
 }
 
 function QuotabungaCard({
+  busy,
   episodeId,
   quotes,
+  removeEntry,
 }: {
+  busy: boolean;
   episodeId: string;
   quotes: ConvexAdminQuoteSubmission[];
+  removeEntry: RemoveEntry;
 }) {
+  const convex = useConvex();
   const names = useListenerNames(quotes, episodeId);
   return (
     <Card>
@@ -249,6 +429,19 @@ function QuotabungaCard({
                 >
                   {names.shown ? listenerName(quote) : HIDDEN_NAME}
                 </span>
+                <span className="ml-auto">
+                  <RemoveEntryButton
+                    busy={busy}
+                    label="Remove quote"
+                    onClick={() =>
+                      removeEntry(() => ({
+                        confirmation: quoteRemovalMessage(quote),
+                        commit: () => deleteConvexAdminQuote(convex, quote),
+                        success: "Quote removed.",
+                      }))
+                    }
+                  />
+                </span>
               </div>
               <blockquote className="border-l-2 pl-3 italic">
                 “{quote.quoteText}”
@@ -292,10 +485,15 @@ function AssignmentHeading({
 }
 
 function GuessResultsCard({
+  busy,
+  removeEntry,
   workbenches,
 }: {
+  busy: boolean;
+  removeEntry: RemoveEntry;
   workbenches: ConvexAssignmentWorkbench[];
 }) {
+  const convex = useConvex();
   const guessCount = workbenches.reduce(
     (sum, { reviews }) =>
       sum + reviews.reduce((count, { guesses }) => count + guesses.length, 0),
@@ -381,6 +579,27 @@ function GuessResultsCard({
                                 {guess.hasPoint && (
                                   <Badge variant="secondary">Awarded</Badge>
                                 )}
+                                <RemoveEntryButton
+                                  busy={busy}
+                                  label={`Remove guess by ${
+                                    guess.user.name ?? "unnamed listener"
+                                  }`}
+                                  onClick={() =>
+                                    removeEntry(() => ({
+                                      confirmation: guessRemovalMessage(
+                                        review,
+                                        guess
+                                      ),
+                                      commit: () =>
+                                        removeConvexAssignmentGuess(
+                                          convex,
+                                          review.id,
+                                          guess
+                                        ),
+                                      success: "Guess removed.",
+                                    }))
+                                  }
+                                />
                               </span>
                             </div>
                           ))}
@@ -413,10 +632,15 @@ function wagerStatusClass(status: ConvexAssignmentWagerStatus): string {
 }
 
 function WagerResultsCard({
+  busy,
+  removeEntry,
   workbenches,
 }: {
+  busy: boolean;
+  removeEntry: RemoveEntry;
   workbenches: ConvexAssignmentWorkbench[];
 }) {
+  const convex = useConvex();
   const wagered = workbenches.filter(({ wagers }) => wagers.length > 0);
   const wagerCount = wagered.reduce(
     (sum, { wagers }) => sum + wagers.length,
@@ -475,6 +699,120 @@ function WagerResultsCard({
                         {wager.awardAdjustment} pts
                       </Badge>
                     )}
+                    <RemoveEntryButton
+                      busy={busy}
+                      label={`Remove wager by ${
+                        wager.user.name ?? "unnamed listener"
+                      }`}
+                      onClick={() =>
+                        removeEntry(() => ({
+                          confirmation: wagerRemovalMessage(wager),
+                          commit: () =>
+                            removeConvexAssignmentWager(convex, wager),
+                          success: "Wager removed.",
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
+            </section>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LinkedPointsCard({
+  busy,
+  linkedPoints,
+  removeEntry,
+  workbenches,
+}: {
+  busy: boolean;
+  linkedPoints: ConvexAssignmentLinkedPoint[][] | null;
+  removeEntry: RemoveEntry;
+  workbenches: ConvexAssignmentWorkbench[];
+}) {
+  const convex = useConvex();
+  const groups =
+    linkedPoints === null
+      ? []
+      : workbenches
+          .map(({ assignment }, index) => ({
+            assignment,
+            points: linkedPoints[index] ?? [],
+          }))
+          .filter(({ points }) => points.length > 0);
+  const pointCount = groups.reduce(
+    (sum, { points }) => sum + points.length,
+    0
+  );
+
+  const removePoint = (point: ConvexAssignmentLinkedPoint) =>
+    removeEntry(async () => {
+      const workbench = await loadConvexPointWorkbench(convex, point.pointId);
+      if (workbench === null) {
+        throw new Error("The point no longer exists.");
+      }
+      return {
+        confirmation: linkedPointRemovalMessage(point, workbench.impact),
+        commit: () => deleteConvexPoint(convex, workbench),
+        success: "Point removed.",
+      };
+    });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Trophy className="h-5 w-5" />
+          Assignment points
+          {linkedPoints !== null && ` (${pointCount})`}
+        </CardTitle>
+        <CardDescription>
+          Points linked directly to this episode&apos;s assignments, including
+          settlement bonuses and manual adjustments.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {linkedPoints === null ? (
+          <p className="text-sm text-muted-foreground">
+            Assignment points could not be loaded.
+          </p>
+        ) : groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No points are linked to this episode&apos;s assignments.
+          </p>
+        ) : (
+          groups.map(({ assignment, points }) => (
+            <section className="space-y-3" key={assignment.id}>
+              <AssignmentHeading assignment={assignment} />
+              {points.map((point) => (
+                <div
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+                  key={point.linkId}
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium">
+                      {point.user.name ?? "Unnamed listener"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {point.pointTypeTitle ?? point.reason ?? "Manual point"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">
+                      {signedPoints(point.value)} pts
+                    </Badge>
+                    <RemoveEntryButton
+                      busy={busy}
+                      label={`Remove point for ${
+                        point.user.name ?? "unnamed listener"
+                      }`}
+                      onClick={() => removePoint(point)}
+                    />
                   </div>
                 </div>
               ))}
@@ -488,13 +826,16 @@ function WagerResultsCard({
 
 export function EpisodeResultsPanel({
   episode,
+  onEntryRemoved,
   onRetry,
   state,
 }: {
   episode: ConvexAdminEpisodeDetail;
+  onEntryRemoved: () => void;
   onRetry: () => void;
   state: EpisodeResultsState;
 }) {
+  const { busy, removeEntry } = useEntryRemoval(state, onEntryRemoved);
   if (state.status === "loading") {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
@@ -519,9 +860,28 @@ export function EpisodeResultsPanel({
   return (
     <div className="space-y-8">
       <SeasonCard episode={episode} results={results} />
-      <QuotabungaCard episodeId={episode.id} quotes={results.quotes} />
-      <GuessResultsCard workbenches={results.workbenches} />
-      <WagerResultsCard workbenches={results.workbenches} />
+      <QuotabungaCard
+        busy={busy}
+        episodeId={episode.id}
+        quotes={results.quotes}
+        removeEntry={removeEntry}
+      />
+      <GuessResultsCard
+        busy={busy}
+        removeEntry={removeEntry}
+        workbenches={results.workbenches}
+      />
+      <WagerResultsCard
+        busy={busy}
+        removeEntry={removeEntry}
+        workbenches={results.workbenches}
+      />
+      <LinkedPointsCard
+        busy={busy}
+        linkedPoints={results.linkedPoints}
+        removeEntry={removeEntry}
+        workbenches={results.workbenches}
+      />
     </div>
   );
 }

@@ -143,6 +143,36 @@ const unlinkAssignmentReference = api.games.points.unlinkAssignment;
 
 const removePointReference = api.games.points.remove;
 
+const listForAssignmentReference = api.games.points.listForAssignment;
+
+const assignmentLinkedPointSchema = z.object({
+  linkId: z.string().min(1),
+  pointId: z.string().min(1),
+  user: z.object({ id: z.string().min(1), name: z.string().nullable() }),
+  value: z.number(),
+  reason: z.string().nullable(),
+  pointTypeTitle: z.string().nullable(),
+  earnedAt: z.number(),
+});
+
+export type ConvexAssignmentLinkedPoint = z.infer<
+  typeof assignmentLinkedPointSchema
+>;
+
+export async function loadConvexAssignmentLinkedPoints(
+  client: ConvexReactClient,
+  assignmentId: string
+): Promise<ConvexAssignmentLinkedPoint[]> {
+  return z
+    .array(assignmentLinkedPointSchema)
+    .max(100)
+    .parse(
+      await client.query(listForAssignmentReference, {
+        assignmentId: documentId("assignments", assignmentId),
+      })
+    );
+}
+
 export type ConvexPointWorkbench = z.infer<typeof pointWorkbenchSchema>;
 export type ConvexPoint = ConvexPointWorkbench["point"];
 export type ConvexPointAssignment =

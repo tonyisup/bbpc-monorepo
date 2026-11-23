@@ -145,6 +145,8 @@ const removeGuessReference = api.games.guesses.remove;
 
 const updateWagerStatusReference = api.games.gambling.updateStatus;
 
+const removeWagerReference = api.games.gambling.removeWithAward;
+
 const listAudioReference = api.assignments.admin.listAudioMessages;
 
 const removeAudioReference = api.assignments.admin.removeAudioMessage;
@@ -412,6 +414,23 @@ export async function updateConvexAssignmentWagerStatus(
       id: documentId("gamblingEntries", wager.id),
       status,
       expectedStatus: wager.status,
+    })
+  );
+}
+
+export async function removeConvexAssignmentWager(
+  client: ConvexReactClient,
+  wager: ConvexAssignmentWager
+): Promise<void> {
+  idResultSchema.parse(
+    await client.mutation(removeWagerReference, {
+      clientApiVersion: BBPC_CLIENT_API_VERSION,
+      id: documentId("gamblingEntries", wager.id),
+      expected: {
+        status: wager.status,
+        points: wager.points,
+        awardAdjustment: wager.awardAdjustment,
+      },
     })
   );
 }

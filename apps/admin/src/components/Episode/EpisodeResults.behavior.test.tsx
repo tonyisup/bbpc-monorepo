@@ -15,6 +15,17 @@ const mocks = vi.hoisted(() => ({
   episodes: vi.fn(),
   quotes: vi.fn(),
   workbench: vi.fn(),
+  linkedPoints: vi.fn(),
+  pointWorkbench: vi.fn(),
+  removeQuote: vi.fn(),
+  removeGuess: vi.fn(),
+  removeWager: vi.fn(),
+  removePoint: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("sonner", () => ({
+  toast: { success: mocks.toastSuccess, error: mocks.toastError },
 }));
 vi.mock("convex/react", () => ({ useConvex: () => mocks.client }));
 vi.mock("next/link", () => ({
@@ -28,9 +39,17 @@ vi.mock("@/convex/episodes", () => ({
 }));
 vi.mock("@/convex/quotabunga", () => ({
   loadConvexAdminQuoteSubmissions: mocks.quotes,
+  deleteConvexAdminQuote: mocks.removeQuote,
 }));
 vi.mock("@/convex/assignmentDetails", () => ({
   loadConvexAssignmentWorkbenchById: mocks.workbench,
+  removeConvexAssignmentGuess: mocks.removeGuess,
+  removeConvexAssignmentWager: mocks.removeWager,
+}));
+vi.mock("@/convex/pointDetails", () => ({
+  loadConvexAssignmentLinkedPoints: mocks.linkedPoints,
+  loadConvexPointWorkbench: mocks.pointWorkbench,
+  deleteConvexPoint: mocks.removePoint,
 }));
 vi.mock("@/lib/dates", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -135,16 +154,44 @@ const workbench = {
   ],
 };
 
+const linkedPoint = {
+  linkId: "link-1",
+  pointId: "point-1",
+  user: { id: "l2", name: "Listener Two" },
+  value: 2,
+  reason: "Manual adjustment",
+  pointTypeTitle: null,
+  earnedAt: 1,
+};
+
 let renderer: ReactTestRenderer;
 
 function Harness({ revision = 0 }: { revision?: number }) {
-  const state = useEpisodeResults(episode, revision);
+  const [resultsRevision, setResultsRevision] = React.useState(0);
+  const state = useEpisodeResults(episode, revision, resultsRevision);
   return (
     <div>
       <EpisodeSeasonBadges state={state} />
-      <EpisodeResultsPanel episode={episode} onRetry={vi.fn()} state={state} />
+      <EpisodeResultsPanel
+        episode={episode}
+        onEntryRemoved={() => setResultsRevision((value) => value + 1)}
+        onRetry={vi.fn()}
+        state={state}
+      />
     </div>
   );
+}
+
+function removeButton(label: string): ReactTestInstance {
+  return renderer.root.find(
+    (node) => node.type === "button" && node.props["aria-label"] === label
+  );
+}
+
+async function clickRemove(label: string) {
+  await act(async () => {
+    (removeButton(label).props.onClick as () => void)();
+  });
 }
 
 function nodeText(node: ReactTestInstance | string): string {
@@ -181,11 +228,123 @@ beforeEach(() => {
     quote("q3", { status: "REJECTED" }),
   ]);
   mocks.workbench.mockResolvedValue(workbench);
+  mocks.linkedPoints.mockResolvedValue([linkedPoint]);
+  mocks.pointWorkbench.mockResolvedValue({
+    point: { id: "point-1" },
+    impact: {
+      assignmentLinkCount: 1,
+      guessCount: 0,
+      gamblingEntryCount: 1,
+      tagVoteCount: 0,
+      quoteSubmissionCount: 0,
+    },
+  });
+  mocks.removeQuote.mockResolvedValue(undefined);
+  mocks.removeGuess.mockResolvedValue(undefined);
+  mocks.removeWager.mockResolvedValue(undefined);
+  mocks.removePoint.mockResolvedValue(undefined);
+  vi.stubGlobal("window", { confirm: vi.fn(() => true) });
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
   vi.restoreAllMocks();
+});
+
+test("removes a wager after confirming its award and reloads in place", async () => {
+  await render();
+  const loads = mocks.workbench.mock.calls.length;
+
+  await clickRemove("Remove wager by Listener One");
+
+  expect(window.confirm).toHaveBeenCalledWith(
+    "Delete Listener One's won wager of 5 points? Its +10 point award is removed from their total."
+  );
+  expect(mocks.removeWager).toHaveBeenCalledWith(
+    mocks.client,
+    workbench.wagers[0]
+  );
+  expect(mocks.toastSuccess).toHaveBeenCalledWith("Wager removed.");
+  expect(mocks.workbench.mock.calls.length).toBeGreaterThan(loads);
+  expect(pageText()).toContain("Wagers (1)");
+  expect(removeButton("Remove wager by Listener One").props.disabled).toBe(
+    false
+  );
+});
+
+test("does nothing when a removal is not confirmed", async () => {
+  vi.mocked(window.confirm).mockReturnValue(false);
+  await render();
+
+  await clickRemove("Remove guess by Listener Two");
+
+  expect(mocks.removeGuess).not.toHaveBeenCalled();
+  expect(removeButton("Remove guess by Listener Two").props.disabled).toBe(
+    false
+  );
+});
+
+test("removes a guess against its assignment review", async () => {
+  await render();
+
+  await clickRemove("Remove guess by Listener Two");
+
+  expect(mocks.removeGuess).toHaveBeenCalledWith(
+    mocks.client,
+    "review-1",
+    workbench.reviews[0]?.guesses[1]
+  );
+});
+
+test("names the award but not the listener in the quote confirmation", async () => {
+  mocks.quotes.mockResolvedValue([
+    quote("q2", { placement: 1, awarded: true }),
+  ]);
+  await render();
+
+  await clickRemove("Remove quote");
+
+  const message = vi.mocked(window.confirm).mock.calls[0]?.[0];
+  expect(message).toContain("Quote q2");
+  expect(message).toContain("+3 points");
+  expect(message).not.toContain("Listener");
+  expect(mocks.removeQuote).toHaveBeenCalled();
+});
+
+test("warns what a linked point is shared with before deleting it", async () => {
+  await render();
+  expect(pageText()).toContain("Assignment points (1)");
+
+  await clickRemove("Remove point for Listener Two");
+
+  expect(window.confirm).toHaveBeenCalledWith(
+    "Delete this +2 point entry for Listener Two? It is also attached to 1 wager(s), which stay but lose this point."
+  );
+  expect(mocks.removePoint).toHaveBeenCalled();
+});
+
+test("reports a failed removal and re-enables the controls", async () => {
+  mocks.removeWager.mockRejectedValue(new Error("offline"));
+  await render();
+
+  await clickRemove("Remove wager by Listener One");
+
+  expect(mocks.toastError).toHaveBeenCalledWith(
+    "The entry could not be removed."
+  );
+  expect(removeButton("Remove wager by Listener One").props.disabled).toBe(
+    false
+  );
+});
+
+test("keeps the results when linked points cannot load", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  mocks.linkedPoints.mockRejectedValue(new Error("offline"));
+  await render();
+
+  expect(pageText()).toContain("Wagers (1)");
+  expect(pageText()).toContain("Assignment points could not be loaded.");
 });
 
 test("shows the season, quotes, guess results, and wagers", async () => {
