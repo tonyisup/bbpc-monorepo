@@ -57,6 +57,19 @@ const assignmentPointWithPointValidator = v.object({
   point: pointCoreValidator,
 });
 
+const assignmentLinkedPointValidator = v.object({
+  linkId: v.id("assignmentPointLinks"),
+  pointId: v.id("points"),
+  user: v.object({
+    id: v.id("users"),
+    name: v.union(v.string(), v.null()),
+  }),
+  value: v.number(),
+  reason: v.union(v.string(), v.null()),
+  pointTypeTitle: v.union(v.string(), v.null()),
+  earnedAt: v.number(),
+});
+
 const MAX_POINT_ASSIGNMENT_SEARCH_QUERY = 100;
 const MAX_POINT_ASSIGNMENT_SEARCH_SOURCES = 20;
 const MAX_POINT_ASSIGNMENT_SEARCH_RESULTS = 30;
@@ -456,6 +469,47 @@ export const listForAssignmentAndUser = adminQuery({
         return {
           id: link._id,
           point: await hydratePointCore(ctx, point),
+        };
+      }),
+    );
+  },
+});
+
+export const listForAssignment = adminQuery({
+  args: { assignmentId: v.id("assignments") },
+  returns: v.array(assignmentLinkedPointValidator),
+  handler: async (ctx, args) => {
+    await requirePointAssignment(ctx, args.assignmentId);
+    const links = await ctx.db
+      .query("assignmentPointLinks")
+      .withIndex("by_assignmentId", (index) =>
+        index.eq("assignmentId", args.assignmentId),
+      )
+      .take(MAX_POINT_RELATIONSHIPS + 1);
+    if (links.length > MAX_POINT_RELATIONSHIPS) {
+      domainError(
+        "CONFLICT",
+        "Assignment points exceed the supported read limit.",
+        { details: { limit: MAX_POINT_RELATIONSHIPS } },
+      );
+    }
+    return await Promise.all(
+      links.map(async (link) => {
+        const point = await requirePoint(ctx, link.pointId);
+        const [user, pointType] = await Promise.all([
+          requirePointUser(ctx, point.userId),
+          point.gamePointTypeId === undefined
+            ? null
+            : ctx.db.get("gamePointTypes", point.gamePointTypeId),
+        ]);
+        return {
+          linkId: link._id,
+          pointId: point._id,
+          user: { id: user._id, name: nullable(user.name) },
+          value: pointValue(point, pointType),
+          reason: nullable(point.reason),
+          pointTypeTitle: pointType?.title ?? null,
+          earnedAt: point.earnedAt,
         };
       }),
     );

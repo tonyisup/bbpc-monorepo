@@ -284,7 +284,7 @@ export async function validateGamblingAwardPoint(
   return point;
 }
 
-async function deleteOwnedGamblingAwardPoint(
+export async function deleteOwnedGamblingAwardPoint(
   ctx: GamblingWriteContext,
   entry: Doc<"gamblingEntries">,
 ): Promise<void> {

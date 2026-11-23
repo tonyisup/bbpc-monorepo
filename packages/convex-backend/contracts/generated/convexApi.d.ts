@@ -4674,6 +4674,17 @@ export type PublicApiType = {
             }, {
                 id: Id<"gamblingEntries">;
             }>;
+            removeWithAward: FunctionReference<"mutation", "public", {
+                clientApiVersion: string;
+                expected: {
+                    awardAdjustment: number | null;
+                    points: number;
+                    status: "pending" | "locked" | "won" | "lost" | "rejected";
+                };
+                id: Id<"gamblingEntries">;
+            }, {
+                id: Id<"gamblingEntries">;
+            }>;
             removeType: FunctionReference<"mutation", "public", {
                 clientApiVersion: string;
                 id: Id<"gamblingTypes">;
@@ -7513,6 +7524,20 @@ export type PublicApiType = {
                 };
                 id: Id<"assignmentPointLinks">;
             }>;
+            listForAssignment: FunctionReference<"query", "public", {
+                assignmentId: Id<"assignments">;
+            }, Array<{
+                earnedAt: number;
+                linkId: Id<"assignmentPointLinks">;
+                pointId: Id<"points">;
+                pointTypeTitle: string | null;
+                reason: string | null;
+                user: {
+                    id: Id<"users">;
+                    name: string | null;
+                };
+                value: number;
+            }>>;
             listForAssignmentAndUser: FunctionReference<"query", "public", {
                 assignmentId: Id<"assignments">;
                 userId: Id<"users">;

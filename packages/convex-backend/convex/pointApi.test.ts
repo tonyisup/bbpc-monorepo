@@ -643,6 +643,74 @@ describe("point API", () => {
     );
   });
 
+  test("lists every point linked to an assignment for administrators", async () => {
+    const t = createTestBackend();
+    const { memberId, otherId } = await seedActors(t);
+    const { seasonId, pointTypeId } = await seedGameFoundation(t);
+    await advanceToS3(t);
+    const { assignmentId } = await seedAssignment(t, memberId, "451");
+    const { assignmentId: otherAssignmentId } = await seedAssignment(
+      t,
+      memberId,
+      "452",
+    );
+    const typedPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+      pointTypeId,
+      adjustment: 1,
+    });
+    const manualPoint = await seedPoint(t, {
+      userId: otherId,
+      seasonId,
+      adjustment: -2,
+    });
+    const unrelatedPoint = await seedPoint(t, {
+      userId: memberId,
+      seasonId,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("assignmentPointLinks", {
+        assignmentId,
+        userId: memberId,
+        pointId: typedPoint,
+      });
+      await ctx.db.insert("assignmentPointLinks", {
+        assignmentId,
+        userId: otherId,
+        pointId: manualPoint,
+      });
+      await ctx.db.insert("assignmentPointLinks", {
+        assignmentId: otherAssignmentId,
+        userId: memberId,
+        pointId: unrelatedPoint,
+      });
+    });
+
+    await expectDomainError(
+      t
+        .withIdentity(MEMBER_IDENTITY)
+        .query(api.games.points.listForAssignment, { assignmentId }),
+      "FORBIDDEN",
+    );
+    const listed = await t
+      .withIdentity(ADMIN_IDENTITY)
+      .query(api.games.points.listForAssignment, { assignmentId });
+    expect(listed.map((entry) => entry.pointId).sort()).toEqual(
+      [typedPoint, manualPoint].sort(),
+    );
+    expect(
+      listed.find((entry) => entry.pointId === manualPoint),
+    ).toMatchObject({
+      user: { id: otherId },
+      value: -2,
+      pointTypeTitle: null,
+    });
+    expect(
+      listed.find((entry) => entry.pointId === typedPoint)?.pointTypeTitle,
+    ).toEqual(expect.any(String));
+  });
+
   test("labels season point activity with the episode it was awarded for", async () => {
     const t = createTestBackend();
     const { memberId } = await seedActors(t);

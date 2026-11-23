@@ -11,6 +11,10 @@ import {
   loadConvexAdminQuoteSubmissions,
 } from "@/convex/quotabunga";
 import {
+  type ConvexAssignmentLinkedPoint,
+  loadConvexAssignmentLinkedPoints,
+} from "@/convex/pointDetails";
+import {
   type ConvexAdminSeason,
   loadConvexAdminSeasonsPage,
 } from "@/convex/seasons";
@@ -27,6 +31,8 @@ export interface EpisodeResults {
   seasonPosition: number | null;
   quotes: ConvexAdminQuoteSubmission[];
   workbenches: ConvexAssignmentWorkbench[];
+  /** Points per assignment, in workbench order; null when they could not load. */
+  linkedPoints: ConvexAssignmentLinkedPoint[][] | null;
 }
 
 const QUOTE_STATUS_ORDER = { INCLUDED: 0, SUBMITTED: 1, REJECTED: 2 };
@@ -50,7 +56,7 @@ export async function loadEpisodeResults(
   },
   today: string
 ): Promise<EpisodeResults> {
-  const [seasons, quotes, workbenches] = await Promise.all([
+  const [seasons, quotes, workbenches, linkedPoints] = await Promise.all([
     collectAllRecordingSeasons((cursor) =>
       loadConvexAdminSeasonsPage(client, cursor)
     ),
@@ -66,6 +72,15 @@ export async function loadEpisodeResults(
         return workbench;
       })
     ),
+    // Linked points are a secondary list; never let them block the results.
+    Promise.all(
+      episode.assignments.map(({ id }) =>
+        loadConvexAssignmentLinkedPoints(client, id)
+      )
+    ).catch((error: unknown) => {
+      console.error("Assignment points could not be loaded.", error);
+      return null;
+    }),
   ]);
   const season = findEpisodeSeason(episode, seasons, today);
   const seasonEpisodes =
@@ -89,5 +104,6 @@ export async function loadEpisodeResults(
         : getEpisodeSeasonPosition(episode, season, seasonEpisodes, today),
     quotes: orderEpisodeQuotes(quotes),
     workbenches,
+    linkedPoints,
   };
 }

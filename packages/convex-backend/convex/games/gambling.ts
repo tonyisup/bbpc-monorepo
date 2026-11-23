@@ -36,6 +36,7 @@ import {
   assertGamblingBudget,
   assertGamblingTypeUnreferenced,
   assertUniqueGamblingTypeLookup,
+  deleteOwnedGamblingAwardPoint,
   findCanonicalGamblingEntry,
   transitionGamblingStatus,
   updateResolvedGamblingAward,
@@ -849,6 +850,53 @@ export const remove = adminMutation({
       targetType: "gamblingEntry",
       targetId: entry._id,
       cutoverRunId: ctx.systemState.cutoverRunId,
+    });
+    return { id: entry._id };
+  },
+});
+
+/**
+ * Deletes a wager in any status along with the award point it solely owns.
+ * A point shared with another record fails closed.
+ */
+export const removeWithAward = adminMutation({
+  args: {
+    id: v.id("gamblingEntries"),
+    expected: v.object({
+      status: gamblingStatusValidator,
+      points: v.number(),
+      awardAdjustment: v.union(v.number(), v.null()),
+    }),
+  },
+  returns: v.object({ id: v.id("gamblingEntries") }),
+  handler: async (ctx, args) => {
+    const entry = await requireGamblingEntry(ctx, args.id);
+    const awardPoint =
+      entry.awardPointId === undefined
+        ? null
+        : await validateGamblingAwardPoint(ctx, entry, entry.awardPointId);
+    if (
+      entry.status !== args.expected.status ||
+      entry.points !== args.expected.points ||
+      (awardPoint?.adjustment ?? null) !== args.expected.awardAdjustment
+    ) {
+      domainError(
+        "CONFLICT",
+        "The wager changed after deletion was requested.",
+      );
+    }
+    await deleteOwnedGamblingAwardPoint(ctx, entry);
+    await ctx.db.delete("gamblingEntries", entry._id);
+    await writeAuditEvent(ctx, {
+      actor: ctx.actor,
+      action: "games.admin.gamblingEntryDeletedWithAward",
+      targetType: "gamblingEntry",
+      targetId: entry._id,
+      cutoverRunId: ctx.systemState.cutoverRunId,
+      metadata: {
+        status: entry.status,
+        awardDeleted: awardPoint !== null,
+      },
     });
     return { id: entry._id };
   },

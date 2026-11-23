@@ -378,7 +378,12 @@ export function ConvexEpisodeDetailPage() {
   const [notes, setNotes] = useState("");
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("general");
-  const results = useEpisodeResults(episode ?? null, revision);
+  const [resultsRevision, setResultsRevision] = useState(0);
+  const results = useEpisodeResults(
+    episode ?? null,
+    revision,
+    resultsRevision
+  );
 
   useEffect(() => {
     if (slug === null) {
@@ -953,6 +958,7 @@ export function ConvexEpisodeDetailPage() {
           <TabsContent className="pt-6" value="results">
             <EpisodeResultsPanel
               episode={episode}
+              onEntryRemoved={() => setResultsRevision((value) => value + 1)}
               onRetry={refresh}
               state={results}
             />

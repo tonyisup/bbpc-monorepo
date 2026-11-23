@@ -1349,6 +1349,112 @@ describe("gambling API", () => {
     });
   });
 
+  test("removes a wager in any status with its owned award and fails closed", async () => {
+    const t = createTestBackend();
+    const { adminId, memberId, hostId } = await seedActors(t);
+    const { seasonId, ratingId, alternateTypeId } = await seedFoundation(t);
+    const round = await seedRound(t, {
+      ownerId: adminId,
+      hostId,
+      ratingId,
+      suffix: "9",
+    });
+    await seedBalance(t, { userId: memberId, seasonId, adjustment: 100 });
+    await advanceToS3(t);
+    const admin = t.withIdentity(ADMIN_IDENTITY);
+    const entry = await admin.mutation(api.games.gambling.create, {
+      clientApiVersion: BBPC_API_VERSION,
+      userId: memberId,
+      points: 5,
+      season: { kind: "season", seasonId },
+      assignmentId: round.assignmentId,
+    });
+    const won = await admin.mutation(api.games.gambling.confirm, {
+      clientApiVersion: BBPC_API_VERSION,
+      id: entry.id,
+    });
+    const awardId = requirePresent(won.awardPoint, "win award").id;
+    const expected = {
+      status: "won" as const,
+      points: 5,
+      awardAdjustment: 7,
+    };
+
+    await expectDomainError(
+      t.withIdentity(MEMBER_IDENTITY).mutation(
+        api.games.gambling.removeWithAward,
+        { clientApiVersion: BBPC_API_VERSION, id: entry.id, expected },
+      ),
+      "FORBIDDEN",
+    );
+    await expectDomainError(
+      admin.mutation(api.games.gambling.removeWithAward, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+        expected: { ...expected, awardAdjustment: 8 },
+      }),
+      "CONFLICT",
+    );
+
+    const sharedEntryId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("gamblingEntries", {
+          userId: memberId,
+          points: 1,
+          createdAt: 2,
+          seasonId,
+          gamblingTypeId: alternateTypeId,
+          status: "won",
+          awardPointId: awardId,
+        }),
+    );
+    await expectDomainError(
+      admin.mutation(api.games.gambling.removeWithAward, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+        expected,
+      }),
+      "CONFLICT",
+    );
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get("gamblingEntries", entry.id)).not.toBeNull();
+      expect(await ctx.db.get("points", awardId)).not.toBeNull();
+      await ctx.db.delete("gamblingEntries", sharedEntryId);
+    });
+
+    await expect(
+      admin.mutation(api.games.gambling.removeWithAward, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: entry.id,
+        expected,
+      }),
+    ).resolves.toEqual({ id: entry.id });
+    await t.run(async (ctx) => {
+      expect(await ctx.db.get("gamblingEntries", entry.id)).toBeNull();
+      expect(await ctx.db.get("points", awardId)).toBeNull();
+    });
+
+    const locked = await admin.mutation(api.games.gambling.create, {
+      clientApiVersion: BBPC_API_VERSION,
+      userId: memberId,
+      points: 3,
+      season: { kind: "season", seasonId },
+      assignmentId: round.assignmentId,
+    });
+    await admin.mutation(api.games.gambling.updateStatus, {
+      clientApiVersion: BBPC_API_VERSION,
+      id: locked.id,
+      status: "locked",
+    });
+    await expect(
+      admin.mutation(api.games.gambling.removeWithAward, {
+        clientApiVersion: BBPC_API_VERSION,
+        id: locked.id,
+        expected: { status: "locked", points: 3, awardAdjustment: null },
+      }),
+    ).resolves.toEqual({ id: locked.id });
+  });
+
   test("resolves a migrated seasonless wager only with an explicit season and rejects broken rows", async () => {
     const t = createTestBackend();
     const { memberId } = await seedActors(t);
