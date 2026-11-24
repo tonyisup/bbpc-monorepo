@@ -214,12 +214,20 @@ export async function assertMovieUnreferenced(
         index.eq("movieId", movieId),
       )
       .first(),
+    ctx.db
+      .query("scorecardEntries")
+      .withIndex("by_movieId", (index) =>
+        index.eq("movieId", movieId),
+      )
+      .first(),
   ]);
+  // Scorecards are private: name the relationship only, never the owner.
   const relationship = [
     "assignment",
     "syllabus entry",
     "review",
     "ranked item",
+    "private scorecard entry",
   ].find((_, index) => references[index] !== null);
   if (relationship !== undefined) {
     domainError(

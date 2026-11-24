@@ -464,6 +464,32 @@ export default defineSchema({
     .index("by_movieId", ["movieId"])
     .index("by_assignmentId", ["assignmentId"]),
 
+  // Private per-user movie scores for a year. Owner-only: never read by
+  // admin endpoints or under impersonation (see scorecard/access.ts).
+  // Scores are top-level scalars because catalog merge fingerprints every
+  // movie reference row and rejects object-valued fields.
+  scorecardEntries: defineTable({
+    userId: v.id("users"),
+    year: v.number(),
+    movieId: v.id("movies"),
+    story: v.optional(v.number()),
+    performance: v.optional(v.number()),
+    emotion: v.optional(v.number()),
+    visual: v.optional(v.number()),
+    audio: v.optional(v.number()),
+    importance: v.optional(v.number()),
+    engagement: v.optional(v.number()),
+    fun: v.optional(v.number()),
+    replay: v.optional(v.number()),
+    unseen: v.boolean(),
+    tieOrder: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId_and_year", ["userId", "year"])
+    .index("by_userId_and_year_and_movieId", ["userId", "year", "movieId"])
+    .index("by_movieId", ["movieId"]),
+
   ratings: defineTable({
     legacyId: v.optional(v.string()),
     name: v.string(),
