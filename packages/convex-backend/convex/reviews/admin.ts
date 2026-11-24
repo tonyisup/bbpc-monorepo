@@ -312,7 +312,15 @@ export const setRating = adminMutation({
       args.ratingId === null
         ? undefined
         : (await requireRating(ctx, args.ratingId))._id;
-    await ctx.db.patch("reviews", review._id, { ratingId });
+    // A host review created by an early guess has no reviewedAt. Rating it is
+    // the review, so stamp it then; dated archives such as the public year
+    // review read reviews by that date and would otherwise skip it.
+    await ctx.db.patch("reviews", review._id, {
+      ratingId,
+      ...(ratingId !== undefined && review.reviewedAt === undefined
+        ? { reviewedAt: Date.now() }
+        : {}),
+    });
     await writeAuditEvent(ctx, {
       actor: ctx.actor,
       action: "reviews.admin.ratingUpdated",
