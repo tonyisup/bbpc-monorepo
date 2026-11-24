@@ -145,6 +145,22 @@ class RunAllTests(unittest.TestCase):
         self.assertEqual(result["checks"][-1], {"id": "moss", "label": "MOSS is set up", "ok": True, "detail": str(moss_dir)})
         self.assertNotIn("moss", [c["id"] for c in run_checks.run_all(moss, "publish", **options)["checks"]])
 
+    # Value: protects=with moss_dir unset (as in the checked-in config.json) the MOSS check looks in ~/moss-image-app,
+    # outside iCloud-synced ~/Documents; fails_when=the moss_dir default is reverted to ~/Documents/moss-image-app or
+    # mistyped; why_new=every other moss test sets moss_dir explicitly; seam=none (HOME env var);
+    # no_claim=real MOSS model loading or iCloud offload (empty placeholder files stand in for the checkout)
+    def test_a_moss_run_without_moss_dir_checks_the_checkout_in_the_home_folder(self):
+        os.environ["HOME"] = str(self.data)
+        moss_dir = self.data / "moss-image-app"
+        for name in ("start_server.sh", "moss_client.py", ".venv/bin/python", "bin/sd-server"):
+            (moss_dir / name).parent.mkdir(parents=True, exist_ok=True)
+            (moss_dir / name).write_text("")
+        options = dict(environ=SIGNED_IN, secrets=SECRETS, node=str(self.node), has_libass=lambda: True,
+                       configuration=lambda: "ok")
+        moss = {"paths": {}, "settings": {"visuals_provider": "moss"}}
+        checks = {c["id"]: c for c in run_checks.run_all(moss, "clip", **options)["checks"]}
+        self.assertEqual(checks["moss"], {"id": "moss", "label": "MOSS is set up", "ok": True, "detail": str(moss_dir)})
+
     def test_a_missing_data_directory(self):
         os.environ["BBPC_PIPELINE_DATA_DIR"] = str(self.data / "gone")
         checks = {c["id"]: c for c in self.run_all()["checks"]}

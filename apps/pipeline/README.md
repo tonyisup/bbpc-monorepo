@@ -514,8 +514,9 @@ Configurable via `settings.visuals_provider`:
 - **`local`** — Stable Diffusion XL Turbo via `scripts/generate_local_visual.py`
 - **`moss`** — MOSS-Image on this Mac through a
   [moss-image-mac](https://github.com/vitaliyhan/moss-image-mac) checkout (`settings.moss_dir`,
-  default `~/Documents/moss-image-app`; run its `setup.sh` once). Free, about a minute a still at
-  the default 720x1280 `standard` quality.
+  default `~/moss-image-app`; run its `setup.sh` once). Keep it out of iCloud-synced folders such as
+  `~/Documents`: macOS can offload the model files, which then fail to load as `unknown format`.
+  Free, about a minute a still at the default 720x1280 `standard` quality.
 
 With `moss`, the clip stage uses a MOSS backend that is already running (its web UI or its MCP
 server start one) or starts one with the checkout's `start_server.sh` and stops it when the run
