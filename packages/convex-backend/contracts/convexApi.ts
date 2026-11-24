@@ -11610,6 +11610,290 @@ export type PublicApiType = {
       >;
     };
   };
+  scorecard: {
+    mine: {
+      add: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; movieId: Id<"movies">; year: number },
+        {
+          average: number | null;
+          complete: boolean;
+          createdAt: number;
+          id: Id<"scorecardEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          myRating: { icon: string | null; name: string; value: number } | null;
+          position: number | null;
+          scores: {
+            audio?: number;
+            emotion?: number;
+            engagement?: number;
+            fun?: number;
+            importance?: number;
+            performance?: number;
+            replay?: number;
+            story?: number;
+            visual?: number;
+          };
+          tied: boolean;
+          unseen: boolean;
+          updatedAt: number;
+          year: number;
+        }
+      >;
+      applyToRankedList: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          expectedMovieIds: Array<Id<"movies">>;
+          target:
+            | { kind: "existing"; rankedListId: Id<"rankedLists"> }
+            | {
+                kind: "create";
+                rankedListTypeId: Id<"rankedListTypes">;
+                title: string;
+              };
+          year: number;
+        },
+                {
+          createdAt: number;
+          id: Id<"rankedLists">;
+          itemCount: number;
+          items: Array<{
+            comment: string | null;
+            createdAt: number;
+            episode: {
+              date: string | null;
+              id: Id<"episodes">;
+              number: number;
+              status: string | null;
+              title: string;
+            } | null;
+            episodeId: Id<"episodes"> | null;
+            id: Id<"rankedItems">;
+            movie: {
+              id: Id<"movies">;
+              poster: string | null;
+              title: string;
+              tmdbId: number | null;
+              url: string;
+              year: number;
+            } | null;
+            movieId: Id<"movies"> | null;
+            rank: number;
+            rankedListId: Id<"rankedLists">;
+            show: {
+              id: Id<"shows">;
+              poster: string | null;
+              title: string;
+              url: string;
+              year: number;
+            } | null;
+            showId: Id<"shows"> | null;
+            targetType: "movie" | "show" | "episode";
+            updatedAt: number;
+          }>;
+          rankedListTypeId: Id<"rankedListTypes">;
+          status: "DRAFT" | "PUBLISHED";
+          title: string | null;
+          type: {
+            createdAt: number;
+            description: string | null;
+            id: Id<"rankedListTypes">;
+            maxItems: number;
+            name: string;
+            targetType: "MOVIE" | "SHOW" | "EPISODE";
+            updatedAt: number;
+          };
+          updatedAt: number;
+          user: { id: Id<"users">; image: string | null; name: string | null };
+          userId: Id<"users">;
+        }
+      >;
+      clear: FunctionReference<
+        "mutation",
+        "public",
+        { clientApiVersion: string; movieId: Id<"movies">; year: number },
+        { movieId: Id<"movies"> }
+      >;
+      listForYear: FunctionReference<
+        "query",
+        "public",
+        { year: number },
+        Array<{
+          average: number | null;
+          complete: boolean;
+          createdAt: number;
+          id: Id<"scorecardEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          myRating: { icon: string | null; name: string; value: number } | null;
+          position: number | null;
+          scores: {
+            audio?: number;
+            emotion?: number;
+            engagement?: number;
+            fun?: number;
+            importance?: number;
+            performance?: number;
+            replay?: number;
+            story?: number;
+            visual?: number;
+          };
+          tied: boolean;
+          unseen: boolean;
+          updatedAt: number;
+          year: number;
+        }>
+      >;
+      orderTie: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          movieIds: Array<Id<"movies">>;
+          year: number;
+        },
+        Array<{
+          average: number | null;
+          complete: boolean;
+          createdAt: number;
+          id: Id<"scorecardEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          myRating: { icon: string | null; name: string; value: number } | null;
+          position: number | null;
+          scores: {
+            audio?: number;
+            emotion?: number;
+            engagement?: number;
+            fun?: number;
+            importance?: number;
+            performance?: number;
+            replay?: number;
+            story?: number;
+            visual?: number;
+          };
+          tied: boolean;
+          unseen: boolean;
+          updatedAt: number;
+          year: number;
+        }>
+      >;
+      setScore: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          criterion:
+            | "story"
+            | "performance"
+            | "emotion"
+            | "visual"
+            | "audio"
+            | "importance"
+            | "engagement"
+            | "fun"
+            | "replay";
+          movieId: Id<"movies">;
+          value: number;
+          year: number;
+        },
+        {
+          average: number | null;
+          complete: boolean;
+          createdAt: number;
+          id: Id<"scorecardEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          myRating: { icon: string | null; name: string; value: number } | null;
+          position: number | null;
+          scores: {
+            audio?: number;
+            emotion?: number;
+            engagement?: number;
+            fun?: number;
+            importance?: number;
+            performance?: number;
+            replay?: number;
+            story?: number;
+            visual?: number;
+          };
+          tied: boolean;
+          unseen: boolean;
+          updatedAt: number;
+          year: number;
+        }
+      >;
+      setUnseen: FunctionReference<
+        "mutation",
+        "public",
+        {
+          clientApiVersion: string;
+          movieId: Id<"movies">;
+          unseen: boolean;
+          year: number;
+        },
+        {
+          average: number | null;
+          complete: boolean;
+          createdAt: number;
+          id: Id<"scorecardEntries">;
+          movie: {
+            id: Id<"movies">;
+            poster: string | null;
+            title: string;
+            tmdbId: number | null;
+            url: string;
+            year: number;
+          };
+          myRating: { icon: string | null; name: string; value: number } | null;
+          position: number | null;
+          scores: {
+            audio?: number;
+            emotion?: number;
+            engagement?: number;
+            fun?: number;
+            importance?: number;
+            performance?: number;
+            replay?: number;
+            story?: number;
+            visual?: number;
+          };
+          tied: boolean;
+          unseen: boolean;
+          updatedAt: number;
+          year: number;
+        }
+      >;
+    };
+  };
   sideEffects: {
     intents: {
       list: FunctionReference<

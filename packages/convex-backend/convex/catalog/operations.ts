@@ -68,12 +68,14 @@ async function movieReferences(
     reviews: [],
     syllabusEntries: [],
     rankedItems: [],
+    scorecardEntries: [],
   } as {
     [Table in
       | "assignments"
       | "reviews"
       | "syllabusEntries"
-      | "rankedItems"]: Array<Doc<Table>>;
+      | "rankedItems"
+      | "scorecardEntries"]: Array<Doc<Table>>;
   };
   for (const movieId of movieIds) {
     const assignments = await ctx.db
@@ -92,8 +94,18 @@ async function movieReferences(
       .query("rankedItems")
       .withIndex("by_movieId", (q) => q.eq("movieId", movieId))
       .take(101);
+    const scorecardEntries = await ctx.db
+      .query("scorecardEntries")
+      .withIndex("by_movieId", (q) => q.eq("movieId", movieId))
+      .take(101);
     if (
-      [assignments, reviews, syllabusEntries, rankedItems].some(
+      [
+        assignments,
+        reviews,
+        syllabusEntries,
+        rankedItems,
+        scorecardEntries,
+      ].some(
         (rows) => rows.length > 100
       )
     ) {
@@ -103,6 +115,7 @@ async function movieReferences(
     references.reviews.push(...reviews);
     references.syllabusEntries.push(...syllabusEntries);
     references.rankedItems.push(...rankedItems);
+    references.scorecardEntries.push(...scorecardEntries);
   }
   if (Object.values(references).flat().length > 100) {
     domainError("CONFLICT", "Group references exceed the maintenance limit.");
@@ -229,12 +242,17 @@ async function mergeReviewedMovies(
   rejectCrossMovieCollisions(refs.reviews, (row) => row.userId);
   rejectCrossMovieCollisions(refs.syllabusEntries, (row) => row.userId);
   rejectCrossMovieCollisions(refs.rankedItems, (row) => row.rankedListId);
+  rejectCrossMovieCollisions(
+    refs.scorecardEntries,
+    (row) => `${row.userId}:${String(row.year)}`
+  );
   let movedReferences = 0;
   for (const table of [
     "assignments",
     "reviews",
     "syllabusEntries",
     "rankedItems",
+    "scorecardEntries",
   ] as const) {
     for (const row of refs[table]) {
       if (row.movieId === args.survivorId) continue;

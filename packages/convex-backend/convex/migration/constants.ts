@@ -282,6 +282,7 @@ export const PORTABLE_BACKUP_TABLES = [
   "announcements",
   "merchItems",
   "feedback",
+  "scorecardEntries",
 ] as const;
 
 // Rebuilt from canonical rows when the administrator opens the dashboard.
