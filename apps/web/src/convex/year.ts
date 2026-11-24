@@ -50,7 +50,7 @@ const yearReviewSchema = z.object({
   reviewedAt: z.number(),
 });
 
-const rankingListTypeSchema = z.object({
+export const rankingListTypeSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
   description: z.string().nullable(),
@@ -86,7 +86,7 @@ const rankingListSummarySchema = z.object({
   itemCount: z.number().int().nonnegative(),
 });
 
-const rankingListDetailSchema = rankingListSummarySchema.extend({
+export const rankingListDetailSchema = rankingListSummarySchema.extend({
   items: z.array(rankingItemSchema),
 });
 

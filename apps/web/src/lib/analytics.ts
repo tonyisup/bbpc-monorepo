@@ -47,6 +47,10 @@ export interface AnalyticsEvents {
   year_ranking_item_saved: { movie_id: string; rank: number };
   year_ranking_item_removed: Record<string, never>;
   year_ranking_reordered: { item_count: number };
+  scorecard_viewed: { year: number };
+  scorecard_movie_completed: { year: number };
+  scorecard_applied_to_list: { item_count: number };
+  scorecard_csv_downloaded: { year: number };
   profile_updated: { changed_image: boolean };
   movie_link_preference_saved: { preference: string };
   transcript_searched: {

@@ -5,6 +5,7 @@ import {
   ArrowDownUp,
   Check,
   ChevronDown,
+  ClipboardList,
   ExternalLink,
   GripVertical,
   LayoutGrid,
@@ -462,6 +463,13 @@ export function ConvexYearPageClient() {
               <ChevronDown className="h-4 w-4" aria-hidden="true" />
             </div>
           </div>
+
+          <Button asChild variant="outline" className="h-11">
+            <Link href={`/year/scorecard?year=${String(selectedYear)}`}>
+              <ClipboardList className="mr-2 h-4 w-4" aria-hidden="true" />
+              My scorecard
+            </Link>
+          </Button>
 
           <Button
             variant="ghost"
