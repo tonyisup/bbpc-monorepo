@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     user: { appUserId: "user-1", isAdmin: false } as {
       appUserId: string | null;
       isAdmin: boolean;
+      movieLinkPreference?: "imdb" | "tmdb";
     } | null,
   },
   params: new URLSearchParams("year=2026"),
@@ -345,6 +346,32 @@ describe("scorecard page", () => {
       buttonWith("Next movie").props.onClick();
     });
     expect(cardTitle()).toBe("Late Movie");
+  });
+
+  test("the poster opens the movie page in a new tab, honoring the link preference", async () => {
+    // protects=poster link; fails_when=the poster is not a new-tab link or ignores the TMDB preference; no_claim=browser tab behavior
+    const tmdbMovie = { ...early, tmdbId: 42 };
+    mocks.reviews.mockResolvedValue([review(tmdbMovie, 100)]);
+    await render();
+    const posterLink = () =>
+      renderer.root.find(
+        (node) =>
+          node.type === "a" &&
+          node.props["aria-label"] === "Open Early Movie in a new tab"
+      );
+    expect(posterLink().props).toMatchObject({
+      href: "https://example.test/m-early",
+      target: "_blank",
+      rel: "noreferrer",
+    });
+    act(() => renderer.unmount());
+    mocks.auth.user = {
+      appUserId: "user-1",
+      isAdmin: false,
+      movieLinkPreference: "tmdb",
+    };
+    await render();
+    expect(posterLink().props.href).toBe("https://www.themoviedb.org/movie/42");
   });
 
   test("an unscored slider has no value until set", async () => {

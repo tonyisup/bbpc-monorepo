@@ -9,7 +9,6 @@ import {
   Loader2,
   RotateCcw,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -22,6 +21,7 @@ import {
   type ScorecardScores,
 } from "@/lib/scorecard";
 
+import { MoviePosterLink } from "./MoviePosterLink";
 import { ScoreSlider } from "./ScoreSlider";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -31,6 +31,8 @@ export interface ScoreCardMovie {
   title: string;
   year: number;
   poster: string | null;
+  url: string;
+  tmdbId: number | null;
 }
 
 export function ScoreCard({
@@ -76,18 +78,7 @@ export function ScoreCard({
     <section aria-label={`Score ${movie.title}`} className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          {movie.poster ? (
-            <Image
-              src={movie.poster}
-              alt=""
-              width={40}
-              height={60}
-              sizes="40px"
-              className="h-[60px] w-10 flex-shrink-0 rounded object-cover"
-            />
-          ) : (
-            <div className="h-[60px] w-10 flex-shrink-0 rounded bg-zinc-800" />
-          )}
+          <MoviePosterLink movie={movie} width={40} height={60} />
           <div className="min-w-0">
             <h2 className="truncate text-lg font-bold">{movie.title}</h2>
             <p className="text-xs text-muted-foreground">

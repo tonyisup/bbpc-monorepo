@@ -2,7 +2,6 @@
 
 import { GripVertical, Pencil } from "lucide-react";
 import { Reorder, useDragControls } from "motion/react";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import type { ConvexScorecardEntry } from "@/convex/scorecard";
@@ -11,6 +10,8 @@ import {
   SCORECARD_TOP_COUNT,
   type ScorecardCriterion,
 } from "@/lib/scorecard";
+
+import { MoviePosterLink } from "./MoviePosterLink";
 
 type Entry = ConvexScorecardEntry;
 
@@ -291,18 +292,7 @@ function LeaderboardRow({
       <span className="w-6 flex-shrink-0 text-center text-sm font-bold tabular-nums">
         {entry.position ?? "–"}
       </span>
-      {entry.movie.poster ? (
-        <Image
-          src={entry.movie.poster}
-          alt=""
-          width={28}
-          height={42}
-          sizes="28px"
-          className="h-[42px] w-7 flex-shrink-0 rounded object-cover"
-        />
-      ) : (
-        <div className="h-[42px] w-7 flex-shrink-0 rounded bg-zinc-800" />
-      )}
+      <MoviePosterLink movie={entry.movie} width={28} height={42} />
       <button
         type="button"
         className="min-w-0 flex-1 text-left"
