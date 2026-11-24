@@ -2,7 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { BBPC_API_VERSION } from "../contracts/index.js";
 import { api, internal } from "./_generated/api.js";
@@ -1090,5 +1090,150 @@ describe("rating and review API", () => {
       "CONFLICT",
       { limit: 100 },
     );
+  });
+
+  test("dates a guess-created host review when it is first rated so the year archive lists it", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const movieId = await seedMovie(t, "guessed");
+    const episodeId = await seedEpisode(t, 796);
+    const assignmentId = await seedAssignment(t, {
+      userId: memberId,
+      movieId,
+      episodeId,
+    });
+    const ratingA = await seedRating(t, { name: "A", value: 1 });
+    const ratingB = await seedRating(t, { name: "B", value: 2 });
+    // The shape a guess leaves behind before the host has rated.
+    const reviewId = await t.run(async (ctx) => {
+      await ctx.db.patch("episodes", episodeId, { status: "published" });
+      const id = await ctx.db.insert("reviews", {
+        userId: memberId,
+        movieId,
+      });
+      await ctx.db.insert("assignmentReviews", {
+        assignmentId,
+        reviewId: id,
+      });
+      return id;
+    });
+    await advanceToS3(t);
+
+    const rated = await t.withIdentity(ADMIN_IDENTITY).mutation(
+      api.reviews.admin.setRating,
+      {
+        clientApiVersion: BBPC_API_VERSION,
+        reviewId,
+        ratingId: ratingA,
+      },
+    );
+    expect(rated.reviewedAt).not.toBeNull();
+    const reviewedAt = rated.reviewedAt ?? 0;
+    const year = new Date(reviewedAt).getUTCFullYear();
+    await t.run(async (ctx) => {
+      await ctx.db.patch("movies", movieId, { year });
+    });
+    const archive = await t.query(
+      api.reviews.public.listMovieReviewsForYear,
+      { year },
+    );
+    expect(archive.map((review) => review.id)).toEqual([reviewId]);
+
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.reviews.admin.setRating,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          reviewId,
+          ratingId: ratingB,
+        },
+      ),
+    ).resolves.toMatchObject({ rating: { id: ratingB }, reviewedAt });
+    await expect(
+      t.withIdentity(ADMIN_IDENTITY).mutation(
+        api.reviews.admin.setRating,
+        {
+          clientApiVersion: BBPC_API_VERSION,
+          reviewId,
+          ratingId: null,
+        },
+      ),
+    ).resolves.toMatchObject({ rating: null, reviewedAt });
+  });
+
+  test("backfills reviewedAt on rated undated reviews only, across batches", async () => {
+    const t = createTestBackend();
+    const { memberId } = await seedActors(t);
+    const movieId = await seedMovie(t, "backfill");
+    const ratingId = await seedRating(t);
+    const ids = await t.run(async (ctx) => {
+      const ratedUndated = [];
+      for (let index = 0; index < 101; index += 1) {
+        ratedUndated.push(
+          await ctx.db.insert("reviews", {
+            userId: memberId,
+            movieId,
+            ratingId,
+          }),
+        );
+      }
+      return {
+        ratedUndated,
+        legacy: await ctx.db.insert("reviews", {
+          legacyId: "legacy-undated",
+          userId: memberId,
+          movieId,
+          ratingId,
+        }),
+        unrated: await ctx.db.insert("reviews", {
+          userId: memberId,
+          movieId,
+        }),
+        dated: await ctx.db.insert("reviews", {
+          userId: memberId,
+          movieId,
+          ratingId,
+          reviewedAt: 5,
+        }),
+      };
+    });
+    await advanceToS3(t);
+
+    vi.useFakeTimers();
+    try {
+      await expect(
+        t.mutation(internal.reviews.maintenance.backfillMissingReviewedAt, {
+          cursor: null,
+          cutoverRunId: CUTOVER_RUN_ID,
+          clientApiVersion: BBPC_API_VERSION,
+        }),
+      ).resolves.toEqual({ dated: 100, isDone: false });
+      await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const reviews = await t.run(async (ctx) => ({
+      ratedUndated: await Promise.all(
+        ids.ratedUndated.map((id) => ctx.db.get("reviews", id)),
+      ),
+      legacy: await ctx.db.get("reviews", ids.legacy),
+      unrated: await ctx.db.get("reviews", ids.unrated),
+      dated: await ctx.db.get("reviews", ids.dated),
+    }));
+    for (const review of reviews.ratedUndated) {
+      expect(review?.reviewedAt).toBe(review?._creationTime);
+    }
+    expect(reviews.legacy?.reviewedAt).toBeUndefined();
+    expect(reviews.unrated?.reviewedAt).toBeUndefined();
+    expect(reviews.dated?.reviewedAt).toBe(5);
+
+    await expect(
+      t.mutation(internal.reviews.maintenance.backfillMissingReviewedAt, {
+        cursor: null,
+        cutoverRunId: CUTOVER_RUN_ID,
+        clientApiVersion: BBPC_API_VERSION,
+      }),
+    ).resolves.toEqual({ dated: 0, isDone: true });
   });
 });

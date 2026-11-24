@@ -161,6 +161,7 @@ import type * as recording_templates from "../recording/templates.js";
 import type * as recording_validators from "../recording/validators.js";
 import type * as reviews_admin from "../reviews/admin.js";
 import type * as reviews_limits from "../reviews/limits.js";
+import type * as reviews_maintenance from "../reviews/maintenance.js";
 import type * as reviews_mine from "../reviews/mine.js";
 import type * as reviews_public from "../reviews/public.js";
 import type * as reviews_readModel from "../reviews/readModel.js";
@@ -339,6 +340,7 @@ declare const fullApi: ApiFromModules<{
   "recording/validators": typeof recording_validators;
   "reviews/admin": typeof reviews_admin;
   "reviews/limits": typeof reviews_limits;
+  "reviews/maintenance": typeof reviews_maintenance;
   "reviews/mine": typeof reviews_mine;
   "reviews/public": typeof reviews_public;
   "reviews/readModel": typeof reviews_readModel;
