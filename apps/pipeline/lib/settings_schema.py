@@ -143,7 +143,7 @@ SETTINGS: Tuple[Setting, ...] = (
             "Width of a local still before it is fitted to the 1080x1920 frame.", 64, 4096, draft=True),
     Setting("local_visual_height", "int", 1920, "Visuals", _CLIP,
             "Height of a local still before it is fitted to the 1080x1920 frame.", 64, 4096, draft=True),
-    Setting("moss_dir", "path", "~/Documents/moss-image-app", "Visuals", _CLIP,
+    Setting("moss_dir", "path", "~/moss-image-app", "Visuals", _CLIP,
             "moss-image-mac checkout used when the provider is moss. Its backend is started if it is not "
             "already running, and stopped after the run if the run started it."),
     Setting("moss_visual_quality", "choice", "standard", "Visuals", _CLIP,
