@@ -17,3 +17,18 @@ export const RECORDING_PORTABLE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 export function isRecordingPortableId(value) {
   return typeof value === "string" && RECORDING_PORTABLE_ID_PATTERN.test(value);
 }
+
+// Recording audio is stored per take, one blob per track, named from values
+// fixed for the take. The upload route writes this name and the backend
+// accepts no other, so a participant can only describe its own takes.
+export const RECORDING_TAKE_EXTENSIONS = ["webm", "ogg", "m4a"];
+
+export function recordingTakeBlobName({ sessionId, clientId, startedAt, trackType, extension }) {
+  const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, "-");
+  const participant = clientId
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 80) || "participant";
+  return `${sessionId}/${stamp}/take-${participant}-${trackType}.${extension}`;
+}

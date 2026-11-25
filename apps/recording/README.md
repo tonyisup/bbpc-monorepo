@@ -27,10 +27,13 @@ by the primary BBPC applications. Clerk must have a JWT template named
 `convex` with audience `convex`.
 
 Creating a session requires a linked BBPC Host or Administrator identity.
-Invited guests do not need a Clerk account: the invite route exchanges the
-one-time invite capability for a session-scoped participant capability stored
-in an HTTP-only cookie. Invite and participant capabilities are never stored
-in plaintext by Convex.
+Invited guests do not need a Clerk account. The invite link works until the
+session ends and can be shared with every guest. Opening it shows a Join page;
+pressing Join exchanges the invite capability for a session-scoped participant
+capability stored in an HTTP-only cookie. Nothing joins on a plain visit, so
+link previews and crawlers cannot use up the session's 12 places, and a browser
+that already joined goes straight to the session. Invite and participant
+capabilities are never stored in plaintext by Convex.
 
 The old standalone `SESSION_ADMIN_SECRET` maintenance boundary is retired.
 Sounder/template administration and ended-session retention use the shared
@@ -42,11 +45,10 @@ After deploying this consumer, set `NEXT_PUBLIC_BBPC_RECORDING_URL` in
 route and administrator sidebar then hand off to this app. If the variable is
 absent, the admin route remains fail-closed behind its unavailable-page flow.
 
-This repository intentionally contains no deployable Convex function directory.
-All recording schema and server functions live under `convex/recording` in the
-shared `bbpc-convex` project. The legacy standalone deployment is retained only
-through its approved private backup archive and must not receive new deployments
-or imports.
+This app contains no deployable Convex function directory. All recording schema
+and server functions live under `packages/convex-backend/convex/recording` in this
+monorepo. The legacy standalone deployment is retained only through its approved
+private backup archive and must not receive new deployments or imports.
 
 ## Capture and Upload
 
@@ -56,7 +58,7 @@ Uploads go to Azure Blob Storage in 3 MiB blocks through `/api/recordings/blocks
 
 ## Clock Alignment
 
-Participants' device clocks can differ by seconds, and every timeline timestamp is compared across devices. Each browser estimates its offset from the server clock (`/api/time`, keeping the fastest of several round trips) when a session opens, every 10 minutes, and when the tab becomes visible again, and stamps takes, joins, leaves, disconnects, sounders and event order with server-referenced time. The same clock drives call presence and signaling windows, so a skewed device no longer drops signals or reports false disconnects. A take is stamped when capture actually begins, after microphone startup.
+Participants' device clocks can differ by seconds, and every timeline timestamp is compared across devices. Each browser estimates its offset from the server clock (`/api/time`, keeping the fastest of several round trips) when a session opens, every 10 minutes, and when the tab becomes visible again, and stamps takes, joins, leaves, disconnects, sounders and event order with server-referenced time. The same clock drives call presence and signaling windows, so a skewed device no longer drops signals or reports false disconnects. A take is stamped when capture actually begins, after microphone startup. Start Recording and Join Recording wait for a successful clock sync (one from the last 10 minutes, or a fresh one); if the server cannot be reached they refuse with an error rather than record a take that would sit on the timeline by the device clock's error.
 
 The offset is only as accurate as half the fastest round trip, typically tens of milliseconds. Drift between a device's audio clock and real time over a long take is not measured or corrected; the real-device rehearsal should listen for it at the end of a long recording.
 
@@ -70,7 +72,7 @@ A container created before this change keeps public access until an operator tur
 az storage container set-permission --name recordings --public-access off --connection-string "$AZURE_STORAGE_ACCOUNT_CONNECTION_STRING"
 ```
 
-Deleting a recording session, by retention cleanup or explicitly, queues its audio for deletion. The admin page's cleanup deletes queued audio from storage after deleting sessions and keeps anything it could not delete queued for the next run.
+Deleting a recording session, by retention cleanup or explicitly, queues its audio for deletion. Large sessions finish deleting in background transactions, so the admin page's cleanup keeps deleting queued audio from storage until none has arrived for two seconds (at most 15 seconds), and keeps anything it could not delete queued for the next run.
 
 ## Merge Bundle Workflow
 
@@ -95,6 +97,8 @@ Option values may follow `=` or a space.
 
 A session has one timeline. Stopping pauses it and starting again resumes it: paused time is not part of the timeline, the timer and every label keep counting from where the pause began, and a `⏸ Paused` label marks each resume point. The merge places each upload on that timeline and trims it at its run's stop, so repeated Start/Stop runs play back to back. The bundle warns when a participant who recorded in a run has no upload for that run, or when a segment or edit cue was never ended.
 
+The merge sums every track at its recorded level, so a voice stays at the same loudness across runs, late joins and sounders; a limiter catches overlapping peaks.
+
 Sounder modes:
 
 - `auto`: use uploaded sounder tracks if present, otherwise reconstruct from sounder asset URLs.
@@ -107,7 +111,7 @@ The merge script requires `ffmpeg` on your PATH. Sounder asset URLs point at the
 
 ## TURN Server
 
-Peer-to-peer mesh audio is enabled by default. Set `NEXT_PUBLIC_RTC_AUDIO_ENABLED=false` to hide the audio room controls and fall back to the pre-existing local recording behavior.
+The app is the call: participants talk over a peer-to-peer WebRTC audio mesh, and recording always captures the call's microphone. There is no mode for recording alongside a separate call service.
 
 The mesh room uses WebRTC audio only. V1 targets Chrome on Windows 10 and Chrome on iOS; Chrome on iOS uses the iOS WebKit runtime, so autoplay and mic permission must be verified on a real iPhone before relying on it for a live show.
 

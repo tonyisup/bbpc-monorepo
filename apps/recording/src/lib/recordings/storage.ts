@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { BlobSASPermissions, BlobServiceClient, type ContainerClient } from '@azure/storage-blob';
-import { recordingExtension, safeBlobSegment } from './upload';
+import { recordingTakeBlobName } from '@tonyisup/bbpc-convex-api/contracts';
+import { recordingExtension } from './upload';
 
 const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME_RECORDINGS || 'recordings';
 
@@ -42,10 +43,10 @@ export function recordingBlobName(input: {
   trackType: 'mic' | 'sounders';
   contentType: string;
 }): string {
-  const timestamp = new Date(input.startedAt).toISOString().replace(/[:.]/g, '-');
   const extension = recordingExtension(input.contentType);
   if (!extension) throw new Error('Unsupported recording content type');
-  return `${input.sessionId}/${timestamp}/take-${safeBlobSegment(input.clientId)}-${input.trackType}.${extension}`;
+  // Shared with the backend, which accepts no other name for this take.
+  return recordingTakeBlobName({ ...input, extension });
 }
 
 /** Azure block IDs must be base64 and the same length within a blob. */
@@ -65,6 +66,11 @@ function urlTtlMs(): number {
  * with RECORDING_URL_TTL_HOURS). Signed locally with the account key.
  */
 export async function signedRecordingUrl(blobName: string, now = Date.now()): Promise<{ url: string; expiresAt: number }> {
+  // Storage collapses `.` and `..` segments, so such a name could sign a link
+  // to a different blob than the one recorded.
+  if (blobName.split('/').some(segment => segment === '' || segment === '.' || segment === '..')) {
+    throw new Error('Refusing to sign an unexpected recording name');
+  }
   const expiresAt = now + urlTtlMs();
   const url = await recordingsContainerClient().getBlobClient(blobName).generateSasUrl({
     permissions: BlobSASPermissions.parse('r'),

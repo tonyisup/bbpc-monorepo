@@ -38,4 +38,20 @@ describe('server clock', () => {
     await expect(clock.syncServerClock(2)).resolves.toBeNull();
     expect(clock.serverNow() - Date.now()).toBe(2_000);
   });
+
+  it('syncs before a take only when there is no recent sync', async () => {
+    fakeNetwork(-1_500, [30, 30]);
+    const clock = await import('./clock');
+    const fetchMock = vi.mocked(fetch);
+    await expect(clock.ensureServerClock()).resolves.toMatchObject({ offsetMs: -1_500 });
+    const calls = fetchMock.mock.calls.length;
+    await clock.ensureServerClock();
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it('reports no sync when the server was never reached', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+    const clock = await import('./clock');
+    await expect(clock.ensureServerClock()).resolves.toBeNull();
+  });
 });

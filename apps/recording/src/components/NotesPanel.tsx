@@ -33,6 +33,7 @@ export function NotesPanel() {
         <input
           type="text"
           value={text}
+          maxLength={1000}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleAddNote()}
           placeholder="Type a note..."

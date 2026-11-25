@@ -22,7 +22,7 @@ Keep a written log with the wall time of each numbered step below.
 ## Script
 
 1. **Create and invite.** Host creates a session, copies the invite, and opens it in the same browser. *Pass:* the host stays owner (Invite and Start Recording still shown).
-2. **Join.** Guests open the invite and select Join Audio. *Pass:* everyone hears everyone; the iPhone plays audio at once, or after one press of "Tap to enable audio".
+2. **Join.** Guests open the invite, press Join session, and select Join Audio. *Pass:* everyone hears everyone; the iPhone plays audio at once, or after one press of "Tap to enable audio".
 3. **Relay check.** On Guest C, open `chrome://webrtc-internals`. *Pass:* the selected candidate pair is `relay`.
 4. **Start.** Host starts recording; guests select Join Recording. *Pass:* every header shows REC, and none shows "Not saved on this device".
 5. **Count-off.** In turn, Host, A, B and C each say their seat name and the time on the host's timer. This is the alignment marker for the merge.

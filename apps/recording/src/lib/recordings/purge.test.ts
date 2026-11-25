@@ -20,7 +20,7 @@ vi.mock('@/lib/convex/http', () => ({
   }),
 }));
 
-const { purgeDeletedRecordingBlobs } = await import('./purge');
+const { purgeDeletedRecordingBlobs, purgeDeletedRecordingBlobsUntilQuiet } = await import('./purge');
 
 afterEach(() => {
   mocks.pending = [];
@@ -47,5 +47,13 @@ describe('recording audio purge', () => {
     mocks.pending.unshift({ id: 'a', blobName: 'blob-a' });
     await expect(purgeDeletedRecordingBlobs('token')).resolves.toEqual({ deleted: 0, failed: 2 });
     expect(mocks.pending).toHaveLength(2);
+  });
+
+  it('keeps purging while deletion continues in the background', async () => {
+    // The first pass finds nothing; the session's audio is queued a moment later.
+    setTimeout(() => { mocks.pending.push({ id: 'late', blobName: 'blob-late' }); }, 20);
+    await expect(purgeDeletedRecordingBlobsUntilQuiet('token', { quietMs: 60, pollMs: 10, maxMs: 1_000 }))
+      .resolves.toEqual({ deleted: 1, failed: 0 });
+    expect(mocks.pending).toEqual([]);
   });
 });

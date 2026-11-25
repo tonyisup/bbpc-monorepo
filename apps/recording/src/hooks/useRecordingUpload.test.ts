@@ -66,6 +66,28 @@ describe('recording upload recovery', () => {
     await act(async () => root.unmount());
   });
 
+  it('keeps a take that is only in memory when a take saved on this device is already offered', async () => {
+    let hook!: ReturnType<typeof useRecordingUpload>;
+    function Harness() { hook = useRecordingUpload('collision-test', 'EP', 'Host'); return null; }
+    let root: { unmount: () => void };
+    await act(async () => { root = create(createElement(Harness)); });
+    await act(async () => { await hook.whenRestored(); });
+    const restored = { mic: new Blob(['old']), sounders: new Blob([]), startedAt: 1, durationMs: 1, takeId: 'take-old', savedOnDevice: true };
+    const fresh = { mic: new Blob(['new']), sounders: new Blob([]), startedAt: 2, durationMs: 1 };
+    await act(async () => hook.retain(restored));
+    // The device copy waits; the in-memory take must not be lost or throw.
+    await act(async () => hook.retain(fresh));
+    expect(hook.pending?.tracks).toBe(fresh);
+    // A second take saved on the device leaves the pending one alone.
+    const alsoSaved = { ...fresh, mic: new Blob(['saved']), takeId: 'take-saved', savedOnDevice: true };
+    await act(async () => hook.retain(alsoSaved));
+    expect(hook.pending?.tracks).toBe(fresh);
+    // Two takes that exist only in memory still refuse to replace each other.
+    expect(() => hook.retain({ ...fresh, mic: new Blob(['other']) })).toThrow(/Upload or discard/);
+    await act(async () => hook.discard());
+    await act(async () => root.unmount());
+  });
+
   it('keeps audio available after client navigation and only clears it on explicit disposal', async () => {
     let hook!: ReturnType<typeof useRecordingUpload>;
     function Harness() { hook = useRecordingUpload('navigation-test', 'EP', 'Host'); return null; }

@@ -26,6 +26,17 @@ describe('recording storage privacy', () => {
     expect(expiresAt - now).toBe(24 * 60 * 60 * 1000);
   });
 
+  it('refuses to sign a name that storage would resolve elsewhere', async () => {
+    const { signedRecordingUrl } = await import('./storage');
+    await expect(signedRecordingUrl('sess_1/-client_a-mic./../../sess_2/take/take-victim-mic.webm')).rejects.toThrow(/unexpected recording name/);
+  });
+
+  it('names a take exactly as the backend requires', async () => {
+    const { recordingBlobName } = await import('./storage');
+    expect(recordingBlobName({ sessionId: 'sess_1', clientId: 'client_a', startedAt: Date.UTC(2026, 10, 18, 9, 30, 1, 250), trackType: 'mic', contentType: 'audio/webm;codecs=opus' }))
+      .toBe('sess_1/2026-11-18T09-30-01-250Z/take-client_a-mic.webm');
+  });
+
   it('caps the configured link lifetime at a week', async () => {
     vi.stubEnv('RECORDING_URL_TTL_HOURS', '10000');
     const { signedRecordingUrl } = await import('./storage');

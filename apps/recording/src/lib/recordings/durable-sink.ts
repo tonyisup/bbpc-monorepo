@@ -43,6 +43,7 @@ export function createDurableSink(
       enqueue(() => store.finishTake(takeId, durationMs));
       void writes.finally(releaseLock);
     },
+    intact: () => !failed,
     settled: () => writes,
   };
 }

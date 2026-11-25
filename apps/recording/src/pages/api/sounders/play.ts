@@ -1,12 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { BlobServiceClient } from '@azure/storage-blob';
+import { byteRange, sounderPath } from '@/lib/catalog/sounder-playback';
 
 const CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME_SOUNDERS || 'sounders';
 const CONN_STR = process.env.AZURE_STORAGE_ACCOUNT_CONNECTION_STRING;
 
 // ---------------------------------------------------------------------------
 // GET /api/sounders/play?path=Intros/Base.mp3
-// Streams a sounder blob from Azure, bypassing CORS
+// Streams a sounder blob from Azure, bypassing CORS. It needs no sign-in: the
+// merge CLI downloads sounders from here to reconstruct them.
 // ---------------------------------------------------------------------------
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -14,13 +16,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const blobPath = req.query.path as string;
+  const blobPath = sounderPath(req.query.path);
   if (!blobPath) {
-    return res.status(400).json({ message: 'Missing path' });
-  }
-
-  // Security: prevent path traversal
-  if (blobPath.includes('..') || blobPath.startsWith('/')) {
     return res.status(400).json({ message: 'Invalid path' });
   }
 
@@ -41,28 +38,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get blob properties for headers
     const props = await blobClient.getProperties();
+    const size = props.contentLength ?? 0;
 
     // Set response headers
     res.setHeader('Content-Type', props.contentType || 'audio/mpeg');
-    res.setHeader('Content-Length', props.contentLength || 0);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
 
     // Handle range requests (for seeking / partial content)
-    const range = req.headers.range;
+    const range = byteRange(req.headers.range, size);
+    if (range === 'unsatisfiable') {
+      res.setHeader('Content-Range', `bytes */${size}`);
+      return res.status(416).end();
+    }
     if (range) {
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : (props.contentLength || 0) - 1;
-      const chunkSize = end - start + 1;
-
+      const chunkSize = range.end - range.start + 1;
       res.statusCode = 206;
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${props.contentLength}`);
+      res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
       res.setHeader('Content-Length', chunkSize);
 
-      const stream = await blobClient.download(start, chunkSize);
+      const stream = await blobClient.download(range.start, chunkSize);
       stream.readableStreamBody?.pipe(res);
     } else {
+      res.setHeader('Content-Length', size);
       const stream = await blobClient.download();
       stream.readableStreamBody?.pipe(res);
     }

@@ -1191,6 +1191,115 @@ describe("shared recording session boundary", () => {
     ]);
   });
 
+  test("keeps the owner's Stop deliverable when the event log fills", async () => {
+    const t = createTestBackend();
+    await seedUser(t, {
+      identity: HOST_IDENTITY,
+      name: "Host",
+      email: "host@example.test",
+      role: "host",
+    });
+    await initializeAtS1(t);
+    await advanceToS3(t);
+    const owner = ownerInput("event_capacity");
+    await t
+      .withIdentity(HOST_IDENTITY)
+      .mutation(api.recording.sessions.createSession, owner);
+    const guest = {
+      clientApiVersion: BBPC_API_VERSION,
+      inviteToken: owner.inviteToken,
+      participant: {
+        clientId: "client_capacity_guest",
+        accessToken: "access_capacity_guest_abcdefghijklmnopqrstuvwxyz",
+        displayName: "Capacity Guest",
+        joinedAt: 1_001,
+      },
+    };
+    await t.mutation(api.recording.sessions.joinSessionByInviteToken, guest);
+    const ownerGrant = {
+      clientApiVersion: BBPC_API_VERSION,
+      publicId: owner.publicId,
+      clientId: owner.participant.clientId,
+      accessToken: owner.participant.accessToken,
+    };
+    const guestGrant = {
+      clientApiVersion: BBPC_API_VERSION,
+      publicId: owner.publicId,
+      clientId: guest.participant.clientId,
+      accessToken: guest.participant.accessToken,
+    };
+    const note = (eventId: string, timestamp_ms = 3_000) => ({
+      eventId,
+      createdAt: 3_000,
+      payload: {
+        kind: "note" as const,
+        note: { id: `note_${eventId}`, timestamp_ms, text: "note", author: "Guest" },
+      },
+    });
+    const insertEvents = async (count: number, actorId: string) => {
+      await t.run(async (ctx) => {
+        for (let index = 0; index < count; index += 1) {
+          const eventId = `event_fill_${actorId}_${String(index)}`;
+          await ctx.db.insert("recordingSessionEvents", {
+            publicSessionId: owner.publicId,
+            actorId,
+            ...note(eventId),
+          });
+        }
+      });
+    };
+
+    // A position no session can reach would break the merge for everyone.
+    await expectDomainError(
+      t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...guestGrant,
+        ...note("event_far_future", 8_640_000_000_000_000),
+      }),
+      "VALIDATION_FAILED",
+    );
+    await expectDomainError(
+      t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...guestGrant,
+        ...note("event_oversized"),
+        payload: {
+          kind: "note" as const,
+          note: { id: "note_oversized", timestamp_ms: 3_000, text: "x".repeat(5_000), author: "Guest" },
+        },
+      }),
+      "VALIDATION_FAILED",
+    );
+
+    // One participant cannot fill the log for everyone.
+    await insertEvents(800, guest.participant.clientId);
+    await expectDomainError(
+      t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...guestGrant,
+        ...note("event_guest_over"),
+      }),
+      "CONFLICT",
+    );
+    await t.mutation(api.recording.sessions.appendSessionEvent, {
+      ...ownerGrant,
+      ...note("event_owner_note"),
+    });
+
+    // A nearly full log refuses notes but still takes the owner's Stop.
+    await insertEvents(1_099, "client_other");
+    await expectDomainError(
+      t.mutation(api.recording.sessions.appendSessionEvent, {
+        ...ownerGrant,
+        ...note("event_owner_late_note"),
+      }),
+      "CONFLICT",
+    );
+    await t.mutation(api.recording.sessions.appendSessionEvent, {
+      ...ownerGrant,
+      eventId: "event_owner_stop",
+      createdAt: 4_000,
+      payload: { kind: "recording-stopped", startedAt: 2_000, durationMs: 2_000 },
+    });
+  });
+
   test("validates administrative cleanup and explicit deletion", async () => {
     const t = createTestBackend();
     await seedUser(t, {

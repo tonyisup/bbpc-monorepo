@@ -1,5 +1,5 @@
-import type { IncomingMessage, ServerResponse } from 'http';
-import type { NextApiRequest, NextApiResponse } from 'next';
+import type { IncomingMessage } from 'http';
+import type { NextApiRequest } from 'next';
 import type { SessionAccessGrant } from './types';
 
 export const SESSION_GRANTS_COOKIE = 'bbpc-session-grants';
@@ -99,13 +99,4 @@ export function readSessionGrantsFromCookieHeader(rawCookie: string | undefined)
 
 export function readSessionGrantsFromRequest(req: IncomingMessage | NextApiRequest): SessionAccessGrant[] {
   return readSessionGrantsFromCookieHeader(req.headers.cookie);
-}
-
-export function writeSessionGrantCookie(
-  req: NextApiRequest,
-  res: NextApiResponse | ServerResponse,
-  grant: SessionAccessGrant,
-): void {
-  const grants = upsertSessionGrant(readSessionGrantsFromRequest(req), grant);
-  res.setHeader('Set-Cookie', serializeSessionGrantsCookie(grants));
 }

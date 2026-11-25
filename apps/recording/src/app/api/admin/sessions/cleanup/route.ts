@@ -8,9 +8,11 @@ import {
   mutateSharedConvexAsUser,
 } from '@/lib/convex/http';
 import { getRequiredConvexToken } from '@/lib/convex/server';
-import { purgeDeletedRecordingBlobs } from '@/lib/recordings/purge';
+import { purgeDeletedRecordingBlobsUntilQuiet } from '@/lib/recordings/purge';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Room to wait out background session deletion (up to 15 s) before purging.
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const input = await request.json().catch(() => null) as {
@@ -48,7 +50,8 @@ export async function POST(request: Request) {
       token,
     );
     // The deleted sessions' audio, plus any left over from earlier cleanups.
-    const blobs = await purgeDeletedRecordingBlobs(token);
+    // Large sessions finish deleting in the background, so wait for them.
+    const blobs = await purgeDeletedRecordingBlobsUntilQuiet(token);
     return NextResponse.json({ ...result, audioDeleted: blobs.deleted, audioFailed: blobs.failed });
   } catch (error) {
     console.error('[Recording Admin] Session cleanup failed:', error);

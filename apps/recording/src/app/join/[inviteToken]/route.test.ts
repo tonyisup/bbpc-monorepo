@@ -23,7 +23,7 @@ const store = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/sessions/store', () => store);
 
-const { GET } = await import('./route');
+const { GET, POST } = await import('./route');
 
 const ownerGrant: SessionAccessGrant = {
   sessionId: 'sess_owner',
@@ -44,6 +44,16 @@ function storeGrants(grants: SessionAccessGrant[]) {
 async function openInvite(inviteToken = ownerGrant.inviteToken!) {
   return await GET(
     new Request(`https://recording.example.test/join/${inviteToken}`),
+    { params: Promise.resolve({ inviteToken }) },
+  );
+}
+
+async function confirmJoin(inviteToken = ownerGrant.inviteToken!, origin: string | null = 'https://recording.example.test') {
+  return await POST(
+    new Request(`https://recording.example.test/join/${inviteToken}`, {
+      method: 'POST',
+      headers: origin === null ? {} : { origin },
+    }),
     { params: Promise.resolve({ inviteToken }) },
   );
 }
@@ -96,10 +106,34 @@ describe('invite route', () => {
     const joinedGrant = { sessionId: 'sess_owner', clientId: 'client_new', accessToken: 'access_new_abcdefghijklmnopqrstuvwxyz' };
     store.joinSessionByInviteToken.mockResolvedValue({ session: { id: 'sess_owner' }, grant: joinedGrant });
 
-    const response = await openInvite();
+    expect((await openInvite()).status).toBe(200);
+    expect(store.joinSessionByInviteToken).not.toHaveBeenCalled();
+    const response = await confirmJoin();
 
-    expect(response.status).toBe(307);
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('https://recording.example.test/sessions/sess_owner');
     expect(grantsSetBy(response)).toEqual([otherGrant, joinedGrant]);
+  });
+
+  it('only shows the join page when the link is opened, so previews cannot fill the session', async () => {
+    store.resolveInviteSession.mockResolvedValue('sess_owner');
+
+    for (let index = 0; index < 12; index += 1) {
+      const response = await openInvite();
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+      expect(await response.text()).toContain('<form method="post">');
+    }
+    expect(store.joinSessionByInviteToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a join posted from another site', async () => {
+    store.resolveInviteSession.mockResolvedValue('sess_owner');
+
+    const response = await confirmJoin(undefined, 'https://attacker.example.test');
+
+    expect(response.status).toBe(403);
+    expect(store.joinSessionByInviteToken).not.toHaveBeenCalled();
   });
 
   it('does not replace an owner grant when access cannot be checked', async () => {
