@@ -161,6 +161,24 @@ class RunAllTests(unittest.TestCase):
         checks = {c["id"]: c for c in run_checks.run_all(moss, "clip", **options)["checks"]}
         self.assertEqual(checks["moss"], {"id": "moss", "label": "MOSS is set up", "ok": True, "detail": str(moss_dir)})
 
+    def test_a_parallax_run_that_renders_clips_checks_blender(self):
+        options = dict(environ=SIGNED_IN, secrets=SECRETS, node=str(self.node), has_libass=lambda: True,
+                       configuration=lambda: "ok")
+        blender = self.data / "bin" / "Blender"
+        settings = {"visuals_provider": "openrouter", "background_motion": "parallax", "blender_path": str(blender)}
+        moving = {"paths": {}, "settings": settings}
+        missing = {c["id"]: c for c in run_checks.run_all(moving, "clip", **options)["checks"]}["parallax"]
+        self.assertFalse(missing["ok"])
+        self.assertIn(f"Blender not found at {blender}", missing["detail"])
+        blender.write_text("#!/bin/sh\necho 'Blender 5.0.1 (hash abc)'\n")
+        blender.chmod(0o755)
+        check = run_checks.run_all(moving, "clip", **options)["checks"][-1]
+        self.assertEqual((check["id"], check["label"]), ("parallax", "Blender and the depth model are ready"))
+        self.assertEqual(check["ok"], all(__import__("importlib").util.find_spec(n) for n in ("torch", "transformers")))
+        self.assertNotIn("parallax", [c["id"] for c in run_checks.run_all(moving, "publish", **options)["checks"]])
+        zoom = {"paths": {}, "settings": {**settings, "background_motion": "zoom"}}
+        self.assertNotIn("parallax", [c["id"] for c in run_checks.run_all(zoom, "clip", **options)["checks"]])
+
     def test_a_missing_data_directory(self):
         os.environ["BBPC_PIPELINE_DATA_DIR"] = str(self.data / "gone")
         checks = {c["id"]: c for c in self.run_all()["checks"]}

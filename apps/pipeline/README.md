@@ -18,7 +18,7 @@ transcribe → import_transcript → movies → review_clip → parse → clip �
 | 3 | `movies` | `lib/movie_extractor.py` | Adopts Cowork's reviewed movies and matches them to Convex movie IDs |
 | 4 | `review_clip` | `lib/review_clipper.py` | Cuts audio clips around movie-review evidence windows |
 | 5 | `parse` | `lib/parser.py` | Adopts Cowork's SEO metadata and clip candidates |
-| 6 | `clip` | `lib/clipper.py` | Renders vertical 9:16 video with AI backgrounds, Ken Burns zoom, ASS subtitles |
+| 6 | `clip` | `lib/clipper.py` | Renders vertical 9:16 video with AI backgrounds, a zoom or a Blender parallax loop, ASS subtitles |
 | 7 | `thumbnail` | `lib/thumbnail.py` | Generates 1920x1920 episode thumbnail from reviewed movie and TV show extra posters + BBPC logo |
 | 8 | `publish` | `lib/publisher.py` | Idempotently publishes SEO metadata to Convex |
 
@@ -73,7 +73,8 @@ venv/bin/python scripts/check_run.py --from clip     # before pipeline.py <episo
 The checks the dashboard's Runs tab makes: the data directory exists,
 `check_configuration()` passes (the Convex target matches its pins, through the
 Node importer), the credentials the run needs are set, ffmpeg has libass and
-Node is 22.6 or newer. Credentials are listed by name, set or not set; no
+Node is 22.6 or newer. A run that renders clips also checks MOSS and Blender when
+the settings use them. Credentials are listed by name, set or not set; no
 `.env` value is printed. It exits 1 if a check fails.
 
 `scripts/redacted_run.py -- <command>` runs a command with every `.env` value in
@@ -536,6 +537,36 @@ timeout (otherwise the provider default applies).
 
 Brand logo overlay is composited onto clip backgrounds when `settings.brand_logo_enabled` is `true`.
 
+### Background motion
+
+`settings.background_motion` sets how the still moves under the captions:
+
+- **`zoom`** (the default when unset): ffmpeg pushes slowly into the still (`clip_zoom_amount`).
+- **`parallax`** (`config.json`): `lib/parallax.py` turns the still into a 2.5D scene. Depth
+  Anything V2 (`transformers`, on the GPU) estimates how far away each pixel is. Then Blender
+  runs `scripts/blender_parallax_scene.py`, which places every pixel along its camera ray at that
+  depth, so the camera at rest frames exactly the still. The camera then sways and pushes in, with
+  haze lit from the brightest part of the still, dust motes, a little light flicker and depth of
+  field. Every motion repeats once per loop, so ffmpeg repeats the loop for the whole clip and lays
+  the logo and captions over it unchanged.
+
+A 10 s loop takes about 2.5 minutes per clip on an M4 Pro, whatever the clip's length. The loop is
+cached beside the still as `<clip>_vertical_parallax-<key>.mp4`; the key covers the parallax
+settings and the scene script, so changing either renders a new one. If Blender or the depth
+model fails, the clip renders with the zoom instead, and the log says why. The first run downloads
+the depth model (about 400 MB) into the Hugging Face cache.
+
+Needs Blender 5 at `blender_path` (default `/Applications/Blender.app/Contents/MacOS/Blender`).
+`parallax_loop_seconds`, `parallax_camera_drift` (more shows more depth, and more stretching at
+the edges of near things), `parallax_dust` and `parallax_haze` can be tried on one clip in a Lab
+draft. To look at a few frames without the pipeline:
+
+```bash
+venv/bin/python -c "from pathlib import Path; from lib import parallax; parallax.estimate_depth(Path('still.png'), Path('/tmp/depth.npy'))"
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P scripts/blender_parallax_scene.py -- \
+  --image still.png --depth /tmp/depth.npy --out /tmp/frames --frames 1,75,150,225
+```
+
 ## Testing
 
 ```bash
@@ -584,7 +615,7 @@ Inside the data directory:
 ```
 output/
 ├── clips/<episode>/          # Rendered vertical .mp4 clips
-├── visuals/<episode>/        # AI-generated background images
+├── visuals/<episode>/        # AI-generated background images, and parallax loops when background_motion is parallax
 ├── movies/<episode>.movies.json  # Extracted movie data
 ├── seo/<episode>.seo.json    # SEO metadata
 ├── publish-decisions.json    # published/skipped per rendered clip (scripts/publish_decisions.py)
@@ -603,7 +634,7 @@ output/
 - **Transcriber** uses Parakeet (MLX) by default or `faster-whisper` with int8 quantization, with resume support and a trailing-silence-aware coverage gate
 - **Movie extractor** matches Cowork's titles (and original titles) to the Convex catalog, preferring the episode's assigned movies
 - **Laughter detector** (`lib/laughter_detector.py`) runs before the Cowork hand-off; `lib/laughter_hints.py` writes the times it hears for Cowork
-- **Clipper** uses ffmpeg with ASS subtitle burn-in and Ken Burns zoom; requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in the caption font, 32 characters max; all `caption_*` settings) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments. `caption_style` picks how a caption appears: `chunk` (whole, the default), `pop` (each word fades in, in its final place, as it is said) or `highlight` (whole, with the word being said in `caption_highlight_color`); try one on a clip in the Lab before changing `config.json`
+- **Clipper** uses ffmpeg with ASS subtitle burn-in over a Ken Burns zoom or a Blender parallax loop (see Background motion); requires `ffmpeg-full` (Homebrew) for libass support. Captions are cut into chunks of at most two lines (measured in the caption font, 32 characters max; all `caption_*` settings) on word timings and punctuation; transcripts without `words` get proportional timings, which also merges Whisper's one- and two-word fragments. `caption_style` picks how a caption appears: `chunk` (whole, the default), `pop` (each word fades in, in its final place, as it is said) or `highlight` (whole, with the word being said in `caption_highlight_color`); try one on a clip in the Lab before changing `config.json`
 - **Convex client** uses the documented Functions API with bearer authentication, runtime response validation, typed errors, bounded retries, and cached Clerk M2M JWT refresh
 - **Pipeline identity** must be pre-provisioned with `pipeline:publish`; the Clerk pipeline machine must be scoped to the receiver machine configured as `CLERK_M2M_AUDIENCE`
 - **Backfill** processes Azure Blob episodes with a Rich dashboard and idempotent Convex episode creation from MP3 ID3 tags

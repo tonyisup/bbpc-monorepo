@@ -13,6 +13,7 @@
     "clip_duration": 60,
     "clip_audio_fade_out_seconds": 0.8,
     "visuals_provider": "moss",
+    "background_motion": "parallax",
     "openrouter_visual_model": "google/gemini-3.1-flash-image",
     "openai_visual_model": "gpt-image-1",
     "openai_image_size": "1024x1536",

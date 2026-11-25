@@ -563,6 +563,84 @@ class ClipLookSettingsTests(unittest.TestCase):
             self.assertEqual(render.call_args.kwargs.get("zoom_amount"), 0.25)
             self.assertIn("Style: Caption,Arial Bold,60,", (still.parent / "01-bit.ass").read_text())
 
+    def test_logo_layer_is_a_transparent_frame_with_the_logo_where_the_still_gets_it(self):
+        with tempfile.TemporaryDirectory() as td:
+            vertical = Path(td) / "test_vertical.png"
+            Image.new("RGB", (clipper.VIDEO_WIDTH, clipper.VIDEO_HEIGHT), (20, 40, 60)).save(vertical)
+            cfg = {"settings": {"brand_logo_path": "assets/logo-short.png"}}
+            if clipper._placed_logo(cfg) is None:
+                self.skipTest("assets/logo-short.png missing")
+            layer_path = clipper._brand_logo_layer(vertical, cfg)
+            self.assertEqual(layer_path.name, "test_vertical_logo_layer.png")
+            with Image.open(layer_path) as layer, Image.open(clipper._apply_brand_logo(vertical, cfg)) as still:
+                self.assertEqual((layer.mode, layer.size), ("RGBA", (clipper.VIDEO_WIDTH, clipper.VIDEO_HEIGHT)))
+                self.assertEqual(layer.getpixel((0, 0))[3], 0)
+                box = layer.getbbox()
+                self.assertIsNotNone(box)
+                self.assertNotEqual(still.crop(box).getcolors(1), [(box[2] - box[0]) * (box[3] - box[1]), (20, 40, 60)])
+            self.assertIsNone(clipper._brand_logo_layer(vertical, {"settings": {"brand_logo_enabled": False}}))
+
+    def test_a_loop_background_repeats_under_a_still_logo_and_captions(self):
+        with mock.patch("lib.clipper.subprocess.run") as run_mock:
+            clipper._render_clip_loop_video(Path("/v/loop.mp4"), Path("/v/logo.png"), Path("/v/c.ass"), "/e/ep.mp3",
+                                            Path("/c/out.mp4"), 101.0, 126.5, True, 0.8)
+        cmd = run_mock.call_args.args[0]
+        self.assertEqual(cmd[:13], ["ffmpeg", "-y", "-stream_loop", "-1", "-i", "/v/loop.mp4",
+                                    "-ss", "101.0", "-t", "25.5", "-i", "/e/ep.mp3", "-i"])
+        self.assertEqual(cmd[cmd.index("-filter_complex") + 1], "[0:v][2:v]overlay=0:0,subtitles=/v/c.ass[v]")
+        self.assertEqual(cmd[cmd.index("-af") + 1], "afade=t=out:st=24.700:d=0.800")
+        self.assertEqual(cmd[-4:], ["-t", "25.500", "-shortest", "/c/out.mp4"])
+        self.assertNotIn("zoompan", " ".join(cmd))
+
+        with mock.patch("lib.clipper.subprocess.run") as run_mock:
+            clipper._render_clip_loop_video(Path("loop.mp4"), None, Path("c.ass"), "ep.mp3", Path("out.mp4"),
+                                            0.0, 20.0, False, 0.0)
+        cmd = run_mock.call_args.args[0]
+        self.assertEqual(cmd.count("-i"), 2)
+        self.assertEqual(cmd[cmd.index("-filter_complex") + 1], "[0:v]null[v]")
+        self.assertNotIn("-af", cmd)
+
+    def _run_stage(self, settings, loop):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            seo = root / "seo" / "20260101.seo.json"
+            seo.parent.mkdir()
+            seo.write_text('{"clipAnalysis": [{"start": 0.0, "end": 30.0, "headline": "Bit", "imagePrompt": "p"}]}')
+            still = root / "output" / "visuals" / "20260101" / "01-bit.png"
+            still.parent.mkdir(parents=True)
+            Image.new("RGB", (540, 960), (20, 40, 60)).save(still)
+            context = {
+                "config": {"paths": {"output_dir": str(root / "output")}, "settings": {
+                    "local_visual_reuse_cached_still": True, "brand_logo_enabled": False, **settings}},
+                "seo_path": str(seo), "transcript_path": str(root / "none.json"),
+                "episode_path": str(root / "20260101.mp3"),
+            }
+            with mock.patch.object(clipper, "_ffmpeg_has_subtitles_filter", return_value=True), \
+                    mock.patch.object(clipper.parallax, "render_loop", return_value=loop) as render_loop, \
+                    mock.patch.object(clipper, "_render_clip_video") as zoom, \
+                    mock.patch.object(clipper, "_render_clip_loop_video") as looped:
+                clipper.run(context)
+            return render_loop, zoom, looped, still.with_name("01-bit_vertical.png")
+
+    def test_the_clip_stage_renders_over_a_parallax_loop_when_asked(self):
+        render_loop, zoom, looped, vertical = self._run_stage({"background_motion": "parallax"}, Path("/v/loop.mp4"))
+        self.assertEqual(render_loop.call_args.args[0], vertical)
+        self.assertEqual(render_loop.call_args.kwargs, {"width": 1080, "height": 1920, "fps": 30})
+        self.assertEqual(looped.call_args.args[:2], (Path("/v/loop.mp4"), None))
+        zoom.assert_not_called()
+
+    def test_the_clip_stage_falls_back_to_the_zoom_when_the_loop_fails(self):
+        render_loop, zoom, looped, _ = self._run_stage({"background_motion": "parallax", "clip_zoom_amount": 0.2}, None)
+        render_loop.assert_called_once()
+        looped.assert_not_called()
+        self.assertEqual(zoom.call_args.kwargs.get("zoom_amount"), 0.2)
+
+    def test_the_clip_stage_zooms_without_blender_by_default(self):
+        render_loop, zoom, looped, _ = self._run_stage({}, Path("/v/loop.mp4"))
+        render_loop.assert_not_called()
+        looped.assert_not_called()
+        zoom.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
