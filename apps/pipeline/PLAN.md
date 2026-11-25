@@ -55,7 +55,7 @@ Automate the production of 5 high-energy "Hormozi-style" vertical clips (30-60s)
 - [ ] **T-shirt report:** shirts files for past episodes, so the Shirts tab has Cowork's picks for the back catalogue. (The cross-episode list joined with the phrase scan is the Shirts tab.)
 - [x] **Shirts tab, ignore from the page:** "Ignore…" on a phrase of the report, and `scripts/shirt_ideas.py ignore`, add it to `output/phrases/ignore.txt` (`phrase_scan.add_ignored`); the next Rescan leaves it out.
 - [x] **Laughter → Cowork:** before the hand-off the pipeline writes the detector's times to `output/laughter/<stem>.laughter.json` (`lib/laughter_hints.py`); the headless prompt carries them and `--pending` lists the file.
-- [x] **Advanced Captions:** `caption_style` `pop` (each word appears as it is said) and `highlight` (the word being said in `caption_highlight_color`) follow the word timings; `chunk` stays the default, and a Lab draft can try either.
+- [x] **Advanced Captions:** `caption_style` `pop` (each word appears as it is said) and `highlight` (the word being said in `caption_highlight_color`) follow the word timings; `chunk` stays the default, and a Lab draft can try either. `kinetic` draws each word as its own animated event (rise, overshoot, settle, highlight), after the kinetic-typography recipes in iart-ai/motion-skills, still burned in by libass.
 - [x] **YouTube upload:** the Lab's "Publish to YouTube" uploads a finished test render as a private video (`lib/youtube_upload.py`, `scripts/youtube_upload.py`, one-time sign-in with `scripts/youtube_auth.py`) and records it as published.
 - [ ] **Social Upload:** TikTok and Instagram.
 - [ ] **Web Integration:** Sync clip paths to the Next.js frontend content directory.
