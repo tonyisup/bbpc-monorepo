@@ -221,7 +221,7 @@ class SettingsTests(ViewsTestCase):
 
     def test_each_setting_shows_value_default_and_where_the_value_comes_from(self):
         self.assertEqual(self.rows.get("visuals_provider"), {
-            "key": "visuals_provider", "type": "choice", "value": "openrouter", "default": "local",
+            "key": "visuals_provider", "type": "choice", "value": "moss", "default": "local",
             "source": "config", "stages": ["clip"], "minimum": None, "maximum": None,
             "choices": ["openrouter", "openai", "local", "moss"], "problems": [],
             "description": settings_schema.BY_KEY["visuals_provider"].description, "draft": True,
@@ -240,11 +240,11 @@ class SettingsTests(ViewsTestCase):
         del self.raw["settings"]["thumbnail_logo_margin_px"]
         rows = {row["key"]: row for group in views.settings(self.raw)["groups"] for row in group["settings"]}
         row = rows.get("thumbnail_logo_margin_px") or {}
-        self.assertEqual((row.get("value"), row.get("default"), row.get("source")), (48, 40, "brand_logo_margin_px"))
+        self.assertEqual((row.get("value"), row.get("default"), row.get("source")), (60, 40, "brand_logo_margin_px"))
 
     def test_config_check_and_an_out_of_range_value(self):
         self.assertEqual(self.view["check"], settings_schema.config_check(self.raw["settings"]))
-        self.assertEqual(len(self.view["check"]["notInConfig"]), 37)
+        self.assertEqual(len(self.view["check"]["notInConfig"]), 41)
         self.raw["settings"]["review_clip_max_per_movie"] = 0
         view = views.settings(self.raw)
         rows = {row["key"]: row for group in view["groups"] for row in group["settings"]}
