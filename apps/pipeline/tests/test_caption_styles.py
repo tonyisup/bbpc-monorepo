@@ -111,6 +111,33 @@ class CaptionStyleTests(unittest.TestCase):
         left, right = a - font.getlength("A") / 2, wheel + font.getlength("{WHEEL}") / 2
         self.assertAlmostEqual((left + right) / 2, clipper.VIDEO_WIDTH / 2, delta=2)
 
+    def test_kinetic_leaves_room_for_the_letters_libass_draws_unkerned(self):
+        # Value: protects=kinetic words are spaced on libass's unkerned widths, so neighbours never touch; fails_when=layout uses PIL's kerned length and WAVY AVATAR runs together; why_new=sample words have no kerning pairs; seam=none; no_claim=PIL advances stand in for libass
+        words = [{"start": 10.0 + i / 2, "end": 10.4 + i / 2, "text": w} for i, w in enumerate(["WAVY", "AVATAR", "TOWN"])]
+        rows = dialogues({"caption_style": "kinetic"}, [{"start": 10.0, "end": 11.4, "text": "", "words": words}])
+        centres = [int(re.search(r"\\move\(\d+,\d+,(\d+),", text).group(1)) for _, _, text in rows]
+        font = clipper._caption_font()
+        drawn = [sum(font.getlength(letter) for letter in word["text"]) for word in words]
+        for left in range(2):
+            gap = (centres[left + 1] - drawn[left + 1] / 2) - (centres[left] + drawn[left] / 2)
+            self.assertGreater(gap, font.getlength(" ") - 2, (words[left]["text"], gap))
+
+    def test_kinetic_ends_a_caption_when_the_next_one_starts(self):
+        # Value: protects=kinetic never shows two captions at once; fails_when=a caption whose last word runs past the next caption's start keeps its words, drawn over the next ones; why_new=sample captions never overlap; seam=none; no_claim=does not render frames
+        words = [
+            {"start": 10.0, "end": 10.4, "text": "great"},
+            {"start": 10.5, "end": 11.6, "text": "movie."},   # stretched past the next word
+            {"start": 11.2, "end": 11.5, "text": "terrible"},
+            {"start": 11.6, "end": 12.0, "text": "ending"},
+        ]
+        rows = dialogues({"caption_style": "kinetic"}, [{"start": 10.0, "end": 12.0, "text": "", "words": words}])
+        self.assertEqual([(start, end, plain(text)) for start, end, text in rows], [
+            ("0:00:00.00", "0:00:01.20", "GREAT"),
+            ("0:00:00.50", "0:00:01.20", "MOVIE."),
+            ("0:00:01.20", "0:00:02.00", "TERRIBLE"),
+            ("0:00:01.60", "0:00:02.00", "ENDING"),
+        ])
+
     def test_kinetic_falls_back_to_pop_without_the_caption_font(self):
         settings = {"caption_font_path": "/nonexistent/font.ttf"}
         self.assertEqual(dialogues({**settings, "caption_style": "kinetic"}),
