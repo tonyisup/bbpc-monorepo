@@ -102,6 +102,15 @@ class CaptionStyleTests(unittest.TestCase):
         for x, _ in (momma, wants, wombat):
             self.assertTrue(look.margin_side_px <= x <= clipper.VIDEO_WIDTH - look.margin_side_px)
 
+    def test_kinetic_centres_a_line_on_its_words_as_drawn(self):
+        # Value: protects=a word with ASS-escaped characters is placed on its drawn width; fails_when=layout measures the escaped text (backslashes) and shifts the line off-centre; why_new=other layout cases have no escaped characters; seam=none; no_claim=PIL widths stand in for libass
+        words = [{"start": 10.0, "end": 10.5, "text": "a"}, {"start": 10.5, "end": 11.0, "text": "{wheel}"}]
+        rows = dialogues({"caption_style": "kinetic"}, [{"start": 10.0, "end": 11.0, "text": "a {wheel}", "words": words}])
+        a, wheel = (int(re.search(r"\\move\(\d+,\d+,(\d+),", text).group(1)) for _, _, text in rows)
+        font = clipper._caption_font()
+        left, right = a - font.getlength("A") / 2, wheel + font.getlength("{WHEEL}") / 2
+        self.assertAlmostEqual((left + right) / 2, clipper.VIDEO_WIDTH / 2, delta=2)
+
     def test_kinetic_falls_back_to_pop_without_the_caption_font(self):
         settings = {"caption_font_path": "/nonexistent/font.ttf"}
         self.assertEqual(dialogues({**settings, "caption_style": "kinetic"}),

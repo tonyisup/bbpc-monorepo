@@ -389,17 +389,18 @@ _KINETIC_BLUR = 4
 
 
 def _kinetic_layout(words: List[Dict[str, Any]], look: CaptionLook, font: Any) -> List[tuple[int, int]]:
-    """The centre of each word, laid out as libass lays out the whole caption.
+    """The centre of each word, measured as it is drawn (upper case, unescaped).
 
-    Lines break where _caption_fits breaks them, each line is centred, and the
-    last line sits on the bottom margin. Lines are ``font_size`` apart, as libass
-    sizes the font by its ascent + descent.
+    Lines break where _caption_fits breaks them (greedily, where libass's own
+    wrapping would even the lines out), each line is centred, and the last line
+    sits on the bottom margin. Lines are ``font_size`` apart, as libass sizes the
+    font by its ascent + descent.
     """
     space = font.getlength(" ")
     rows: List[List[tuple[int, float]]] = [[]]
     width = 0.0
     for index, word in enumerate(words):
-        word_width = font.getlength(_ass_escape(word["text"]))
+        word_width = font.getlength(str(word["text"]).upper().strip())
         if rows[-1] and width + space + word_width > look.line_width:
             rows.append([])
             width = 0.0
