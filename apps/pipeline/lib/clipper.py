@@ -1,4 +1,4 @@
-"""Clipper stage – renders vertical video clips using locally generated stills plus ffmpeg animation/subtitles."""
+"""Clipper stage – renders vertical video clips from generated stills: a zoom or a Blender parallax loop, plus captions."""
 from __future__ import annotations
 
 import atexit
@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Mapping, cast
 
 from PIL import Image
 
-from lib import clip_files, settings_schema
+from lib import clip_files, parallax, settings_schema
 from lib.visual_prompts import (
     ABSTRACT_VISUAL_GUARDRAIL,
     normalize_clip_image_prompt,
@@ -104,6 +104,39 @@ def _pipeline_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _placed_logo(config: Dict[str, Any]) -> tuple[Image.Image, int, int] | None:
+    """The podcast logo scaled for a clip, and where its top-left corner goes (bottom-right).
+
+    None if branding is disabled or the logo file is missing or empty.
+    """
+    settings = config.get("settings", {})
+    if not settings_schema.value(settings, "brand_logo_enabled"):
+        return None
+    rel = settings_schema.value(settings, "brand_logo_path")
+    logo_path = (_pipeline_root() / rel).expanduser().resolve()
+    if not logo_path.is_file():
+        logger.info("Brand logo not found at %s, skipping overlay", logo_path)
+        return None
+
+    margin = int(settings_schema.value(settings, "brand_logo_margin_px"))
+    max_w = int(VIDEO_WIDTH * float(settings_schema.value(settings, "brand_logo_max_width_fraction")))
+    max_h = int(VIDEO_HEIGHT * float(settings_schema.value(settings, "brand_logo_max_height_fraction")))
+
+    with Image.open(logo_path) as logo_im:
+        logo = logo_im.convert("RGBA")
+    lw, lh = logo.size
+    if lw < 1 or lh < 1:
+        logger.warning("Brand logo has invalid size, skipping overlay")
+        return None
+    scale = min(max_w / lw, max_h / lh, 1.0)
+    new_w = max(1, int(lw * scale))
+    new_h = max(1, int(lh * scale))
+    logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    x = max(0, VIDEO_WIDTH - new_w - margin)
+    y = max(0, VIDEO_HEIGHT - new_h - margin)
+    return logo, x, y
+
+
 def _apply_brand_logo(vertical_path: Path, config: Dict[str, Any]) -> Path:
     """Composite the podcast logo onto the cropped vertical still (bottom-right).
 
@@ -112,43 +145,33 @@ def _apply_brand_logo(vertical_path: Path, config: Dict[str, Any]) -> Path:
 
     Returns ``vertical_path`` unchanged if branding is disabled or the logo file is missing.
     """
-    settings = config.get("settings", {})
-    if not settings_schema.value(settings, "brand_logo_enabled"):
+    placed = _placed_logo(config)
+    if placed is None:
         return vertical_path
-    rel = settings_schema.value(settings, "brand_logo_path")
-    logo_path = (_pipeline_root() / rel).expanduser().resolve()
-    if not logo_path.is_file():
-        logger.info("Brand logo not found at %s, skipping overlay", logo_path)
-        return vertical_path
-
-    margin = int(settings_schema.value(settings, "brand_logo_margin_px"))
-    max_w = int(VIDEO_WIDTH * float(settings_schema.value(settings, "brand_logo_max_width_fraction")))
-    max_h = int(VIDEO_HEIGHT * float(settings_schema.value(settings, "brand_logo_max_height_fraction")))
-
+    logo, x, y = placed
     out_path = vertical_path.with_name(f"{vertical_path.stem}_logo{vertical_path.suffix}")
-
     with Image.open(vertical_path) as base_im:
         base = base_im.convert("RGBA")
-    with Image.open(logo_path) as logo_im:
-        logo = logo_im.convert("RGBA")
-    lw, lh = logo.size
-    if lw < 1 or lh < 1:
-        logger.warning("Brand logo has invalid size, skipping overlay")
-        return vertical_path
-    scale = min(max_w / lw, max_h / lh, 1.0)
-    new_w = max(1, int(lw * scale))
-    new_h = max(1, int(lh * scale))
-    logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
-
-    x = VIDEO_WIDTH - new_w - margin
-    y = VIDEO_HEIGHT - new_h - margin
-    x = max(0, x)
-    y = max(0, y)
-
     base.paste(logo, (x, y), logo)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     base.convert("RGB").save(out_path, format="PNG", optimize=True)
     logger.info("Wrote branded still: %s", out_path.name)
+    return out_path
+
+
+def _brand_logo_layer(vertical_path: Path, config: Dict[str, Any]) -> Path | None:
+    """A transparent full-frame PNG holding only the logo, for laying over a moving background.
+
+    Written as ``{stem}_logo_layer.png`` beside the vertical crop; None without a logo.
+    """
+    placed = _placed_logo(config)
+    if placed is None:
+        return None
+    logo, x, y = placed
+    layer = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
+    layer.paste(logo, (x, y), logo)
+    out_path = vertical_path.with_name(f"{vertical_path.stem}_logo_layer.png")
+    layer.save(out_path, format="PNG", optimize=True)
     return out_path
 DEFAULT_STYLE_SUFFIX = settings_schema.default("visual_style_suffix")
 
@@ -876,6 +899,52 @@ def _render_clip_video(
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
+def _build_loop_filter(subtitle_path: Path | None, logo_layer: Path | None) -> str:
+    """filter_complex for a looping background (input 0), with the logo layer (input 2) and captions on top."""
+    steps = "[0:v][2:v]overlay=0:0" if logo_layer is not None else "[0:v]null"
+    if subtitle_path is not None:
+        steps += f",subtitles={_escape_subtitle_path_for_filter(subtitle_path)}"
+    return steps + "[v]"
+
+
+def _render_clip_loop_video(
+    background_loop: Path,
+    logo_layer: Path | None,
+    subtitle_path: Path,
+    episode_audio: str,
+    clip_output: Path,
+    start: float,
+    end: float,
+    burn_subtitles: bool,
+    audio_fade_out_seconds: float = DEFAULT_AUDIO_FADE_OUT_SECONDS,
+) -> None:
+    """Render a clip over a background video that repeats for as long as the clip runs.
+
+    The logo and captions stay still on top; the zoom (clip_zoom_amount) does not apply.
+    """
+    duration = end - start
+    audio_filter = _build_audio_fade_filter(duration, audio_fade_out_seconds)
+    cmd = [
+        "ffmpeg", "-y",
+        "-stream_loop", "-1", "-i", str(background_loop),
+        "-ss", str(start), "-t", str(duration), "-i", episode_audio,
+    ]
+    if logo_layer is not None:
+        cmd.extend(["-i", str(logo_layer)])
+    cmd.extend([
+        "-filter_complex", _build_loop_filter(subtitle_path if burn_subtitles else None, logo_layer),
+        "-map", "[v]", "-map", "1:a",
+        "-r", str(CLIP_FPS),
+    ])
+    if audio_filter:
+        cmd.extend(["-af", audio_filter])
+    cmd.extend([
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+        "-t", f"{duration:.3f}", "-shortest", str(clip_output),
+    ])
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
 def _load_json(path: Path) -> Any:
     with path.open(encoding="utf-8") as f:
         return json.load(f)
@@ -921,6 +990,7 @@ def run(context: dict) -> None:
     )
     look = _caption_look(settings)
     zoom_amount = float(settings_schema.value(settings, "clip_zoom_amount"))
+    background_motion = settings_schema.value(settings, "background_motion")
     episode_audio = context.get("episode_audio") or context.get("episode_path")
 
     burn_subtitles = _ffmpeg_has_subtitles_filter()
@@ -975,21 +1045,38 @@ def run(context: dict) -> None:
                 continue
 
         prepared_bg = _prepare_vertical_background(image_path)
-        clip_still = _apply_brand_logo(prepared_bg, config)
         _write_ass_subtitles(subtitle_path, segments, start, end, look)
+        loop = None
+        if background_motion == "parallax":
+            loop = parallax.render_loop(prepared_bg, settings, width=VIDEO_WIDTH, height=VIDEO_HEIGHT, fps=CLIP_FPS)
+            if loop is None:
+                print("  Parallax background failed (see the log); using the zoom instead")
 
         try:
-            _render_clip_video(
-                clip_still,
-                subtitle_path,
-                str(episode_audio),
-                clip_output,
-                start,
-                end,
-                burn_subtitles,
-                audio_fade_out_seconds,
-                zoom_amount=zoom_amount,
-            )
+            if loop is not None:
+                _render_clip_loop_video(
+                    loop,
+                    _brand_logo_layer(prepared_bg, config),
+                    subtitle_path,
+                    str(episode_audio),
+                    clip_output,
+                    start,
+                    end,
+                    burn_subtitles,
+                    audio_fade_out_seconds,
+                )
+            else:
+                _render_clip_video(
+                    _apply_brand_logo(prepared_bg, config),
+                    subtitle_path,
+                    str(episode_audio),
+                    clip_output,
+                    start,
+                    end,
+                    burn_subtitles,
+                    audio_fade_out_seconds,
+                    zoom_amount=zoom_amount,
+                )
             print(f"  Clip saved: {clip_output}")
         except subprocess.CalledProcessError as exc:
             print(f"  FFMPEG failed for {clip_name}: {exc.stderr or exc.stdout}")

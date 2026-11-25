@@ -12,5 +12,6 @@ mutagen
 diffusers
 pillow>=11.3
 torch>=2.6
+transformers  # depth for parallax clip backgrounds (lib/parallax.py)
 accelerate
 sentencepiece

@@ -152,6 +152,9 @@ def run_all(config: Dict[str, Any], stage: Optional[str] = None, *, environ: Opt
     settings = config.get("settings") or {}
     if "clip" in stages_in_range(stage) and settings_schema.value(settings, "visuals_provider") == "moss":
         checks.append(_check("moss", "MOSS is set up", *moss_setup(settings)))
+    if "clip" in stages_in_range(stage) and settings_schema.value(settings, "background_motion") == "parallax":
+        from lib import parallax
+        checks.append(_check("parallax", "Blender and the depth model are ready", *parallax.setup(settings)))
     for check in checks:
         check["detail"] = redact(check["detail"], secrets)
     return {"ok": all(check["ok"] for check in checks), "stage": stage, "checks": checks, "credentials": rows}

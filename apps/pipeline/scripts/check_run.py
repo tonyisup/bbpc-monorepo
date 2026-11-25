@@ -7,7 +7,8 @@
 
 Checks that the data directory exists, that check_configuration() passes
 (the Convex target matches its pins), that the credentials the run needs are
-set, that ffmpeg has libass and that Node is 22.6 or newer. Credentials are
+set, that ffmpeg has libass and that Node is 22.6 or newer. A run that renders
+clips also checks MOSS and Blender when the settings use them. Credentials are
 listed by name, set or not set; no .env value is printed. Exits 1 if a check
 fails.
 """

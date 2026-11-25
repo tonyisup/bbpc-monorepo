@@ -75,7 +75,8 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("clip_audio_fade_out_seconds", "float", 0.8, "Clips and captions", _CLIP,
             "Length of the audio fade at the end of each rendered clip. 0 turns it off.", 0, 10, draft=True),
     Setting("clip_zoom_amount", "float", 0.12, "Clips and captions", _CLIP,
-            "How far the background zooms in over the clip. 0.12 ends at 112%; 0 holds it still.", 0, 1,
+            "How far the background zooms in over the clip when background_motion is zoom. 0.12 ends at 112%; "
+            "0 holds it still.", 0, 1,
             draft=True),
     Setting("caption_font_name", "str", "Arial Bold", "Clips and captions", _CLIP,
             "Font the captions are drawn in, by name.", draft=True, **_FONT_NAME),
@@ -158,6 +159,23 @@ SETTINGS: Tuple[Setting, ...] = (
     Setting("moss_visual_height", "int", 1280, "Visuals", _CLIP,
             "Height of a MOSS still before it is fitted to the 1080x1920 frame. A multiple of 16; "
             "width x height at most about 1.1 MP.", 256, 1536, draft=True),
+    Setting("background_motion", "choice", "zoom", "Visuals", _CLIP,
+            "How the background moves. zoom: a slow push into the still (clip_zoom_amount). parallax: "
+            "Blender turns the still into a 3D scene with a drifting camera, haze and dust, about "
+            "2.5 minutes a clip; it falls back to zoom if Blender or the depth model fails.",
+            choices=("zoom", "parallax"), draft=True),
+    Setting("blender_path", "path", "/Applications/Blender.app/Contents/MacOS/Blender", "Visuals", _CLIP,
+            "Blender 5 executable used when background_motion is parallax."),
+    Setting("parallax_loop_seconds", "float", 10.0, "Visuals", _CLIP,
+            "Length of the parallax loop, repeated for the length of the clip. Render time grows with it.",
+            2, 30, draft=True),
+    Setting("parallax_camera_drift", "float", 0.13, "Visuals", _CLIP,
+            "How far the parallax camera sways. More shows more depth, and more stretching at the "
+            "edges of near things.", 0, 0.5, draft=True),
+    Setting("parallax_dust", "int", 70, "Visuals", _CLIP,
+            "Number of floating dust motes in a parallax background. 0: none.", 0, 400, draft=True),
+    Setting("parallax_haze", "float", 0.015, "Visuals", _CLIP,
+            "Density of the haze in a parallax background. 0: none.", 0, 0.2, draft=True),
     Setting("local_visual_reuse_cached_still", "bool", False, "Visuals", _CLIP,
             "Reuse a still already in output/visuals/<episode>/ and make no image request."),
     Setting("visual_timeout_seconds", "float", None, "Visuals", _CLIP,

@@ -289,6 +289,8 @@ class DraftableTests(unittest.TestCase):
             "brand_logo_enabled", "brand_logo_path", "brand_logo_margin_px",
             "brand_logo_max_width_fraction", "brand_logo_max_height_fraction",
             "caption_style", "caption_highlight_color",
+            "background_motion", "parallax_loop_seconds", "parallax_camera_drift", "parallax_dust",
+            "parallax_haze",
         })
         for setting in settings_schema.SETTINGS:
             if setting.draft:
