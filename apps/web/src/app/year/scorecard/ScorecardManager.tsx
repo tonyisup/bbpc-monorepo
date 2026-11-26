@@ -41,10 +41,23 @@ import {
 } from "@/lib/scorecard";
 
 import { ApplyTopTenDialog } from "./ApplyTopTenDialog";
-import { type SaveState, ScoreCard } from "./ScoreCard";
+import { IllustratedScoreCard } from "./IllustratedScoreCard";
+import { type SaveState, ScoreCard, type ScoreCardProps } from "./ScoreCard";
 import { ScorecardLeaderboard } from "./ScorecardLeaderboard";
 
 type Tab = "score" | "leaderboard";
+type EntryMode = "list" | "illustrated";
+const ENTRY_MODE_STORAGE_KEY = "bbpc:scorecard-entry-mode";
+
+function readEntryMode(): EntryMode {
+  try {
+    return window.localStorage.getItem(ENTRY_MODE_STORAGE_KEY) === "illustrated"
+      ? "illustrated"
+      : "list";
+  } catch {
+    return "list";
+  }
+}
 type MovieInfo = ConvexScorecardEntry["movie"];
 type YearMovie = {
   movie: MovieInfo;
@@ -145,6 +158,7 @@ export function ScorecardManager({
   const [error, setError] = useState<string | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
   const [showUnseen, setShowUnseen] = useState(false);
+  const [entryMode, setEntryMode] = useState<EntryMode>("list");
   const loadGeneration = useRef(0);
   const loadedYearRef = useRef<number | null>(null);
   const pendingSaves = useRef(0);
@@ -184,6 +198,21 @@ export function ScorecardManager({
   useEffect(() => {
     void reload(year);
   }, [reload, year]);
+
+  // Read after mount so the server render and first client render agree.
+  useEffect(() => {
+    if (typeof window !== "undefined") setEntryMode(readEntryMode());
+  }, []);
+
+  const changeEntryMode = (mode: EntryMode) => {
+    setEntryMode(mode);
+    try {
+      window.localStorage.setItem(ENTRY_MODE_STORAGE_KEY, mode);
+    } catch {
+      // Private browsing can refuse storage; the choice still applies now.
+    }
+    track("scorecard_entry_mode_changed", { mode });
+  };
 
   const items = useMemo(
     () =>
@@ -424,8 +453,33 @@ export function ScorecardManager({
 
       {tab === "score" ? (
         <div className="space-y-6">
+          {current && (
+            <div
+              role="radiogroup"
+              aria-label="Scoring style"
+              className="flex w-fit rounded-md border border-zinc-700 p-0.5 text-xs"
+            >
+              {(["list", "illustrated"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={entryMode === mode}
+                  onClick={() => changeEntryMode(mode)}
+                  className={`min-h-9 rounded px-3 font-semibold ${
+                    entryMode === mode
+                      ? "bg-zinc-100 text-zinc-950"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {mode === "list" ? "All at once" : "With pictures"}
+                </button>
+              ))}
+            </div>
+          )}
           {current ? (
-            <ScoreCard
+            <CardForMode
+              mode={entryMode}
               key={current.movie.id}
               movie={current.movie}
               scores={currentScores}
@@ -576,6 +630,14 @@ export function ScorecardManager({
         </div>
       )}
     </div>
+  );
+}
+
+function CardForMode({ mode, ...props }: ScoreCardProps & { mode: EntryMode }) {
+  return mode === "illustrated" ? (
+    <IllustratedScoreCard {...props} />
+  ) : (
+    <ScoreCard {...props} />
   );
 }
 

@@ -51,6 +51,7 @@ export interface AnalyticsEvents {
   scorecard_movie_completed: { year: number };
   scorecard_applied_to_list: { item_count: number };
   scorecard_csv_downloaded: { year: number };
+  scorecard_entry_mode_changed: { mode: "list" | "illustrated" };
   profile_updated: { changed_image: boolean };
   movie_link_preference_saved: { preference: string };
   transcript_searched: {

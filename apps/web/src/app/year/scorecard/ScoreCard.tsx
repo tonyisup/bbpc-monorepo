@@ -35,22 +35,7 @@ export interface ScoreCardMovie {
   tmdbId: number | null;
 }
 
-export function ScoreCard({
-  movie,
-  scores,
-  myRatingName,
-  episode,
-  saveState,
-  progressText,
-  busy,
-  canGoNext,
-  nextLabel,
-  onCommit,
-  onNext,
-  onSkip,
-  onUnseen,
-  onClear,
-}: {
+export interface ScoreCardProps {
   movie: ScoreCardMovie;
   scores: ScorecardScores;
   myRatingName: string | null;
@@ -65,58 +50,17 @@ export function ScoreCard({
   onSkip: () => void;
   onUnseen: () => void;
   onClear: () => void;
-}) {
+}
+
+/** All nine criteria as a list of sliders. */
+export function ScoreCard(props: ScoreCardProps) {
+  const { movie, scores, busy, onCommit } = props;
   const [openHint, setOpenHint] = useState<ScorecardCriterion | null>(null);
   const scored = countScored(scores);
-  const complete = scored === SCORECARD_CRITERIA.length;
-  const sum = SCORECARD_CRITERIA.reduce(
-    (total, criterion) => total + (scores[criterion.key] ?? 0),
-    0
-  );
 
   return (
     <section aria-label={`Score ${movie.title}`} className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <MoviePosterLink movie={movie} width={40} height={60} />
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-bold">{movie.title}</h2>
-            <p className="text-xs text-muted-foreground">
-              {movie.year}
-              {myRatingName && (
-                <>
-                  {" · Your BBPC rating: "}
-                  <span className="text-foreground">{myRatingName}</span>
-                </>
-              )}
-              {episode && (
-                <>
-                  {" · "}
-                  <Link
-                    className="underline"
-                    href={getEpisodePath(episode.slug)}
-                  >
-                    Ep {episode.number}
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex-shrink-0 text-right">
-          <p className="text-2xl font-black tabular-nums" aria-live="polite">
-            {complete ? (sum / SCORECARD_CRITERIA.length).toFixed(2) : "–"}
-          </p>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {scored}/9 scored
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{progressText}</span>
-        <SaveIndicator state={saveState} />
-      </div>
+      <ScoreCardHeader {...props} />
 
       <ul className="space-y-0.5">
         {SCORECARD_CRITERIA.map((criterion) => (
@@ -159,6 +103,90 @@ export function ScoreCard({
         </p>
       )}
 
+      <ScoreCardActions {...props} />
+    </section>
+  );
+}
+
+/** Poster, title, running average, progress and save state. */
+export function ScoreCardHeader({
+  movie,
+  scores,
+  myRatingName,
+  episode,
+  saveState,
+  progressText,
+}: ScoreCardProps) {
+  const scored = countScored(scores);
+  const complete = scored === SCORECARD_CRITERIA.length;
+  const sum = SCORECARD_CRITERIA.reduce(
+    (total, criterion) => total + (scores[criterion.key] ?? 0),
+    0
+  );
+
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <MoviePosterLink movie={movie} width={40} height={60} />
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-bold">{movie.title}</h2>
+            <p className="text-xs text-muted-foreground">
+              {movie.year}
+              {myRatingName && (
+                <>
+                  {" · Your BBPC rating: "}
+                  <span className="text-foreground">{myRatingName}</span>
+                </>
+              )}
+              {episode && (
+                <>
+                  {" · "}
+                  <Link
+                    className="underline"
+                    href={getEpisodePath(episode.slug)}
+                  >
+                    Ep {episode.number}
+                  </Link>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <p className="text-2xl font-black tabular-nums" aria-live="polite">
+            {complete ? (sum / SCORECARD_CRITERIA.length).toFixed(2) : "–"}
+          </p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {scored}/9 scored
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>{progressText}</span>
+        <SaveIndicator state={saveState} />
+      </div>
+    </>
+  );
+}
+
+/** Next movie, Skip, Haven't seen and Clear. */
+export function ScoreCardActions({
+  scores,
+  busy,
+  canGoNext,
+  nextLabel,
+  onNext,
+  onSkip,
+  onUnseen,
+  onClear,
+}: ScoreCardProps) {
+  const scored = countScored(scores);
+  const complete = scored === SCORECARD_CRITERIA.length;
+
+  return (
+    <>
       {/* Right padding keeps the row clear of the site's floating feedback button. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pr-16 pt-1">
         <Button
@@ -200,7 +228,7 @@ export function ScoreCard({
           <RotateCcw className="h-4 w-4" /> Clear this movie
         </button>
       </div>
-    </section>
+    </>
   );
 }
 

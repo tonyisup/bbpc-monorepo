@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import React from "react";
 import {
   act,
@@ -97,6 +100,11 @@ import {
   scoreFromTrackPosition,
   type ScorecardScores,
 } from "@/lib/scorecard";
+import {
+  SCORECARD_ILLUSTRATION_CAPTIONS,
+  scorecardIllustrationCaption,
+  scorecardIllustrationSrc,
+} from "@/lib/scorecard-illustrations";
 
 type Entry = {
   id: string;
@@ -384,6 +392,39 @@ describe("scorecard page", () => {
     expect(slider?.props["aria-valuetext"]).toBe("Not scored");
   });
 
+  test("tapping a criterion name shows its meaning, and the empty-card tip goes after the first score", async () => {
+    // Value: protects=list hints after the ScoreCard split; fails_when=a name tap shows no hint or the empty tip stays after scoring; why_new=hint toggle and tip had no test; seam=none; no_claim=hint wording
+    await render();
+    const storyName = () =>
+      renderer.root.find(
+        (node) =>
+          node.type === "button" &&
+          node.props["aria-expanded"] !== undefined &&
+          textOf(node) === "Story"
+      );
+    const storyHint = SCORECARD_CRITERIA[0]?.hint ?? "missing";
+    expect(textOf(renderer.root)).toContain("Tap or drag a track to score.");
+    expect(storyName().props["aria-expanded"]).toBe(false);
+    expect(textOf(renderer.root)).not.toContain(storyHint);
+    await act(async () => {
+      storyName().props.onClick();
+    });
+    expect(storyName().props["aria-expanded"]).toBe(true);
+    expect(textOf(renderer.root)).toContain(storyHint);
+    await act(async () => {
+      storyName().props.onClick();
+    });
+    expect(textOf(renderer.root)).not.toContain(storyHint);
+
+    await act(async () => {
+      renderer.root
+        .findAll((node) => node.props.role === "slider" && node.type === "div")[0]
+        ?.props.onKeyDown({ key: "5", preventDefault: vi.fn() });
+    });
+    expect(mocks.setScore).toHaveBeenCalledTimes(1);
+    expect(textOf(renderer.root)).not.toContain("Tap or drag a track to score.");
+  });
+
   test("Haven't seen marks the movie and moves to the next one", async () => {
     // protects=unseen flow; fails_when=the movie stays in the queue; no_claim=none beyond protects
     await render();
@@ -453,4 +494,356 @@ describe("scorecard page", () => {
       ).toBe(true);
     }
   });
+});
+
+describe("scorecard pictures mode", () => {
+  const slider = () =>
+    renderer.root.find(
+      (node) => node.props.role === "slider" && node.type === "div"
+    );
+  const pictures = () =>
+    renderer.root.findAll(
+      (node) =>
+        typeof node.props.src === "string" &&
+        node.props.src.startsWith("/scorecard/")
+    );
+  const criterionHeading = () =>
+    renderer.root.findByType("h3").children.join("");
+  async function choosePictures() {
+    await act(async () => {
+      renderer.root
+        .find(
+          (node) =>
+            node.type === "button" &&
+            node.props.role === "radio" &&
+            textOf(node) === "With pictures"
+        )
+        .props.onClick();
+    });
+  }
+
+  test("shows one criterion at a time and saves through the same score call", async () => {
+    // Value: protects=one-criterion flow, picture and caption; fails_when=>1 slider, picture/caption ignore the score, or saving differs from list; why_new=caption text was unchecked; seam=none; no_claim=image contents
+    await render();
+    await choosePictures();
+    expect(
+      renderer.root.findAll(
+        (node) => node.props.role === "slider" && node.type === "div"
+      )
+    ).toHaveLength(1);
+    expect(criterionHeading()).toBe("Story");
+    expect(pictures()).toHaveLength(0);
+    expect(textOf(renderer.root)).toContain("Drag the slider");
+    const caption = () => textOf(renderer.root.findByType("figcaption"));
+    expect(caption()).toBe("");
+
+    await act(async () => {
+      slider().props.onKeyDown({ key: "7", preventDefault: vi.fn() });
+    });
+    expect(mocks.setScore).toHaveBeenLastCalledWith(mocks.convex, {
+      year: 2026,
+      movieId: "m-early",
+      criterion: "story",
+      value: 7,
+    });
+    expect(pictures()[0]?.props).toMatchObject({
+      src: "/scorecard/story/07.webp",
+      alt: "A storm on the switchbacks; he hauls her up.",
+    });
+    expect(caption()).toBe("7A storm on the switchbacks; he hauls her up.");
+    // Scoring never auto-advances; Next does.
+    expect(criterionHeading()).toBe("Story");
+    await act(async () => {
+      buttonWith("Next: Performance").props.onClick();
+    });
+    expect(criterionHeading()).toBe("Performance");
+    expect(pictures()).toHaveLength(0);
+    expect(
+      renderer.root.find(
+        (node) =>
+          node.type === "button" && node.props["aria-label"] === "Story: 7"
+      )
+    ).toBeTruthy();
+  });
+
+  test("the picture follows a drag before anything is saved", async () => {
+    // Value: protects=live preview while dragging, saved on release; fails_when=the picture waits for release, a cancelled drag saves, or release does not save; why_new=keyboard saves were the only tested path; seam=none; no_claim=pointer geometry
+    await render();
+    await choosePictures();
+    // With no layout in the test renderer, any pointer position reads as 1.
+    await act(async () => {
+      slider().props.onPointerDown({
+        clientX: 0,
+        pointerId: 1,
+        currentTarget: { setPointerCapture: vi.fn() },
+      });
+    });
+    expect(pictures()[0]?.props.src).toBe("/scorecard/story/01.webp");
+    await act(async () => {
+      slider().props.onPointerCancel();
+    });
+    expect(pictures()).toHaveLength(0);
+    expect(mocks.setScore).not.toHaveBeenCalled();
+    // Releasing a drag saves the value and the picture stays on it.
+    await act(async () => {
+      slider().props.onPointerDown({
+        clientX: 0,
+        pointerId: 2,
+        currentTarget: { setPointerCapture: vi.fn() },
+      });
+    });
+    await act(async () => {
+      slider().props.onPointerUp({ clientX: 0 });
+    });
+    expect(mocks.setScore).toHaveBeenLastCalledWith(mocks.convex, {
+      year: 2026,
+      movieId: "m-early",
+      criterion: "story",
+      value: 1,
+    });
+    expect(pictures()[0]?.props.src).toBe("/scorecard/story/01.webp");
+  });
+
+  test("opens on the first unscored criterion, or on Story once all nine are scored", async () => {
+    // Value: protects=initial step choice; fails_when=pictures mode reopens at Story with criteria left or crashes when none are; why_new=only the empty card was tested; seam=none; no_claim=step memory across reloads
+    await render();
+    const listSliders = () =>
+      renderer.root.findAll(
+        (node) => node.props.role === "slider" && node.type === "div"
+      );
+    for (const index of [0, 1]) {
+      await act(async () => {
+        listSliders()[index]?.props.onKeyDown({
+          key: "6",
+          preventDefault: vi.fn(),
+        });
+      });
+    }
+    await choosePictures();
+    expect(criterionHeading()).toBe("Emotion");
+    expect(textOf(renderer.root)).toContain("3 of 9");
+
+    await act(async () => {
+      buttonWith("All at once").props.onClick();
+    });
+    for (let index = 2; index < 9; index += 1) {
+      await act(async () => {
+        listSliders()[index]?.props.onKeyDown({
+          key: "6",
+          preventDefault: vi.fn(),
+        });
+      });
+    }
+    await choosePictures();
+    expect(criterionHeading()).toBe("Story");
+    expect(pictures()[0]?.props.src).toBe("/scorecard/story/06.webp");
+  });
+
+  test("Back, Next and the criterion strip move between criteria and drop a stale drag", async () => {
+    // Value: protects=step navigation bounds; fails_when=Back is live on Story, the last step offers Next, or a drag picture leaks to another criterion; why_new=only Next was used; seam=none; no_claim=styling
+    await render();
+    await choosePictures();
+    expect(buttonWith("Back").props.disabled).toBe(true);
+
+    // A drag in progress, then a jump: the new criterion shows no picture.
+    await act(async () => {
+      slider().props.onPointerDown({
+        clientX: 0,
+        pointerId: 1,
+        currentTarget: { setPointerCapture: vi.fn() },
+      });
+    });
+    expect(pictures()).toHaveLength(1);
+    await act(async () => {
+      buttonWith("Next: Performance").props.onClick();
+    });
+    expect(criterionHeading()).toBe("Performance");
+    expect(pictures()).toHaveLength(0);
+    expect(mocks.setScore).not.toHaveBeenCalled();
+
+    await act(async () => {
+      renderer.root
+        .find(
+          (node) =>
+            node.type === "button" &&
+            node.props["aria-label"] === "Replay: not scored"
+        )
+        .props.onClick();
+    });
+    expect(criterionHeading()).toBe("Replay");
+    expect(textOf(renderer.root)).toContain("9 of 9");
+    expect(() => buttonWith("Next:")).toThrow();
+    expect(buttonWith("Back").props.disabled).toBe(false);
+    await act(async () => {
+      buttonWith("Back").props.onClick();
+    });
+    expect(criterionHeading()).toBe("Fun");
+  });
+
+  test("Haven't seen works from pictures mode and the next movie starts fresh", async () => {
+    // Value: protects=movie actions in pictures mode; fails_when=pictures mode drops the action row or carries the step to the next movie; why_new=actions only tested in list mode; seam=none; no_claim=Skip/Clear wiring
+    await render();
+    await choosePictures();
+    await act(async () => {
+      buttonWith("Next: Performance").props.onClick();
+    });
+    expect(criterionHeading()).toBe("Performance");
+    await act(async () => {
+      buttonWith("seen").props.onClick();
+    });
+    expect(mocks.setUnseen).toHaveBeenCalledWith(mocks.convex, {
+      year: 2026,
+      movieId: "m-early",
+      unseen: true,
+    });
+    expect(cardTitle()).toBe("Late Movie");
+    expect(criterionHeading()).toBe("Story");
+    expect(buttonWith("See leaderboard").props.disabled).toBe(true);
+  });
+
+  test("a browser that refuses storage still opens the list and switches styles", async () => {
+    // Value: protects=storage error paths; fails_when=a throwing localStorage crashes the page or blocks the switch; why_new=storage only tested when it works; seam=none; no_claim=real private-mode quirks
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: () => {
+          throw new Error("SecurityError");
+        },
+        setItem: () => {
+          throw new Error("QuotaExceededError");
+        },
+      },
+      scrollTo: vi.fn(),
+      Image: class {
+        src = "";
+      },
+    });
+    try {
+      await render();
+      expect(cardTitle()).toBe("Early Movie");
+      expect(criterionHeadingOrNull()).toBeNull();
+      await choosePictures();
+      expect(criterionHeading()).toBe("Story");
+      expect(mocks.track).toHaveBeenCalledWith("scorecard_entry_mode_changed", {
+        mode: "illustrated",
+      });
+      await act(async () => {
+        buttonWith("All at once").props.onClick();
+      });
+      expect(criterionHeadingOrNull()).toBeNull();
+      expect(
+        renderer.root.findAll(
+          (node) => node.props.role === "slider" && node.type === "div"
+        )
+      ).toHaveLength(9);
+      expect(mocks.track).toHaveBeenLastCalledWith(
+        "scorecard_entry_mode_changed",
+        { mode: "list" }
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("the slider and movie actions lock while Haven't seen is saving", async () => {
+    // Value: protects=busy lock in pictures mode; fails_when=the pictures slider or action buttons stay live mid-operation and a score saves; why_new=busy only reached list mode; seam=none; no_claim=Clear/Add busy
+    let finish: (() => void) | undefined;
+    mocks.setUnseen.mockImplementationOnce(
+      (_client, input: { movieId: string; unseen: boolean }) =>
+        new Promise((resolve) => {
+          finish = () => resolve(entry(early, {}, { unseen: input.unseen }));
+        })
+    );
+    await render();
+    await choosePictures();
+    expect(slider().props["aria-disabled"]).toBe(false);
+    await act(async () => {
+      buttonWith("seen").props.onClick();
+    });
+    expect(slider().props["aria-disabled"]).toBe(true);
+    expect(buttonWith("seen").props.disabled).toBe(true);
+    expect(buttonWith("Skip").props.disabled).toBe(true);
+    expect(buttonWith("Next movie").props.disabled).toBe(true);
+    await act(async () => {
+      slider().props.onKeyDown({ key: "7", preventDefault: vi.fn() });
+    });
+    expect(mocks.setScore).not.toHaveBeenCalled();
+    await act(async () => {
+      finish?.();
+    });
+    expect(cardTitle()).toBe("Late Movie");
+    expect(slider().props["aria-disabled"]).toBe(false);
+  });
+
+  test("the scoring style toggle is hidden when there is no movie to score", async () => {
+    // Value: protects=toggle only beside a card; fails_when=an empty year shows a Scoring style switch with nothing to switch; why_new=toggle only tested with a movie; seam=none; no_claim=Everything-scored state
+    mocks.reviews.mockResolvedValue([]);
+    mocks.list.mockResolvedValue([]);
+    await render();
+    expect(textOf(renderer.root)).toContain("No 2026 movies yet.");
+    expect(
+      renderer.root.findAll(
+        (node) =>
+          node.props.role === "radiogroup" &&
+          node.props["aria-label"] === "Scoring style"
+      )
+    ).toHaveLength(0);
+    expect(
+      renderer.root.findAll(
+        (node) => node.type === "button" && node.props.role === "radio"
+      )
+    ).toHaveLength(0);
+  });
+
+  test("every criterion has ten captions and ten picture files", () => {
+    // Value: protects=illustration ladder completeness; fails_when=a webp is missing/misnamed or a caption is missing, so a score shows a broken image; why_new=only story/07 was checked; seam=none; no_claim=image content
+    const publicDir = fileURLToPath(new URL("../public", import.meta.url));
+    for (const criterion of SCORECARD_CRITERIA) {
+      const captions = SCORECARD_ILLUSTRATION_CAPTIONS[criterion.key];
+      expect(captions, criterion.key).toHaveLength(10);
+      for (let score = 1; score <= 10; score += 1) {
+        expect(
+          scorecardIllustrationCaption(criterion.key, score),
+          `${criterion.key} ${String(score)}`
+        ).not.toBe("");
+        const src = scorecardIllustrationSrc(criterion.key, score);
+        expect(existsSync(`${publicDir}${src}`), src).toBe(true);
+      }
+    }
+    expect(scorecardIllustrationSrc("replay", 10)).toBe(
+      "/scorecard/replay/10.webp"
+    );
+  });
+
+  test("remembers the chosen scoring style on this device", async () => {
+    // protects=entry-mode persistence; fails_when=the choice is lost on reload; no_claim=cross-device sync
+    const stored = new Map<string, string>();
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+      },
+      scrollTo: vi.fn(),
+      Image: class {
+        src = "";
+      },
+    });
+    try {
+      await render();
+      expect(criterionHeadingOrNull()).toBeNull();
+      await choosePictures();
+      expect(stored.get("bbpc:scorecard-entry-mode")).toBe("illustrated");
+      expect(mocks.track).toHaveBeenCalledWith("scorecard_entry_mode_changed", {
+        mode: "illustrated",
+      });
+      act(() => renderer.unmount());
+      await render();
+      expect(criterionHeading()).toBe("Story");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  function criterionHeadingOrNull() {
+    return renderer.root.findAllByType("h3")[0] ?? null;
+  }
 });
