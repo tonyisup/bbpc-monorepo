@@ -30,15 +30,23 @@ export function ScoreSlider({
   value,
   disabled = false,
   onCommit,
+  onPreview,
 }: {
   label: string;
   value: number | undefined;
   disabled?: boolean;
   onCommit: (value: number) => void;
+  /** Called with the value under the pointer while dragging, then null. */
+  onPreview?: (value: number | null) => void;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [preview, setPreview] = useState<number | null>(null);
+  const [preview, setPreviewState] = useState<number | null>(null);
   const shown = preview ?? value;
+
+  const setPreview = (next: number | null) => {
+    setPreviewState(next);
+    onPreview?.(next);
+  };
 
   const valueAt = (clientX: number) => {
     const rect = trackRef.current?.getBoundingClientRect();
