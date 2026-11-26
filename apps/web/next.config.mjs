@@ -16,6 +16,9 @@ const withPWA = createPWA({
   // Pages offline with no cached copy get src/app/~offline instead of the
   // browser's error page.
   fallbacks: { document: "/~offline" },
+  // The scorecard's 90 illustrations (about 2 MB) load only on that private
+  // page, so keep them out of the precache every visitor downloads.
+  publicExcludes: ["!noprecache/**/*", "!scorecard/**/*"],
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
     skipWaiting: true,
