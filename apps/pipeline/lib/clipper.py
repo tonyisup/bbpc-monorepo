@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from functools import lru_cache
 from typing import Any, Dict, List, Mapping, cast
@@ -66,8 +66,8 @@ class CaptionLook:
     pause_seconds: float      # a longer pause between words starts a new caption
     max_word_seconds: float   # Parakeet sometimes stretches a word over following music
     bridge_seconds: float     # hold a caption until the next one across a shorter gap
-    style: str                # chunk, pop or highlight (_styled_caption)
-    highlight_color: str      # the word being said, when style is highlight
+    style: str                # chunk, pop, highlight (_styled_caption) or kinetic (_kinetic_dialogues)
+    highlight_color: str      # the word being said, when style is highlight or kinetic
 
     @property
     def line_width(self) -> int:
@@ -375,6 +375,90 @@ def _styled_caption(caption: Dict[str, Any], look: CaptionLook) -> str:
     return " ".join(parts)
 
 
+# caption_style kinetic: each word is its own Dialogue, placed by _kinetic_layout,
+# so it can move and scale without libass re-laying the rest of the line. Timings
+# follow the kinetic-typography recipes in iart-ai/motion-skills: a short ease-out
+# entrance per word (fade, rise, overshoot, settle), no exit.
+_KINETIC_FADE_MS = 60
+_KINETIC_PUNCH_MS = 90     # grows from _KINETIC_FROM_SCALE to _KINETIC_PEAK_SCALE...
+_KINETIC_SETTLE_MS = 180   # ...and settles back to 100% by here
+_KINETIC_FROM_SCALE = 60
+_KINETIC_PEAK_SCALE = 112
+_KINETIC_RISE = 0.25       # of the font size: how far below its place a word starts
+_KINETIC_BLUR = 4
+
+
+def _kinetic_layout(words: List[Dict[str, Any]], look: CaptionLook, font: Any) -> List[tuple[int, int]]:
+    """The centre of each word, measured as it is drawn (upper case, unescaped).
+
+    libass does not kern unless the script asks it to, so a word's width is the
+    sum of its letters' advances, not PIL's kerned length.
+
+    Lines break where _caption_fits breaks them (greedily, where libass's own
+    wrapping would even the lines out), each line is centred, and the last line
+    sits on the bottom margin. Lines are ``font_size`` apart, as libass sizes the
+    font by its ascent + descent.
+    """
+    space = font.getlength(" ")
+    rows: List[List[tuple[int, float]]] = [[]]
+    width = 0.0
+    for index, word in enumerate(words):
+        word_width = sum(font.getlength(letter) for letter in str(word["text"]).upper().strip())
+        if rows[-1] and width + space + word_width > look.line_width:
+            rows.append([])
+            width = 0.0
+        width += (space if rows[-1] else 0.0) + word_width
+        rows[-1].append((index, word_width))
+    centres: List[tuple[int, int]] = [(0, 0)] * len(words)
+    for row_index, row in enumerate(rows):
+        lines_below = len(rows) - 1 - row_index
+        y = VIDEO_HEIGHT - look.margin_bottom_px - look.font_size * (lines_below + 0.5)
+        row_width = sum(word_width for _, word_width in row) + space * (len(row) - 1)
+        x = (VIDEO_WIDTH - row_width) / 2
+        for index, word_width in row:
+            centres[index] = (round(x + word_width / 2), round(y))
+            x += word_width + space
+    return centres
+
+
+def _kinetic_dialogues(
+    caption: Dict[str, Any], clip_start: float, look: CaptionLook, font: Any, next_start: float | None = None,
+) -> List[str]:
+    """One Dialogue per word: it enters as it is said, lit in caption_highlight_color
+    until the next word starts, and stays until the caption ends.
+
+    Placed events are left out of libass's collision handling, so a caption also
+    ends when the next one (starting at ``next_start``) begins, rather than being
+    drawn over it.
+    """
+    words = [word for word in caption["words"] if _ass_escape(word["text"])]
+    centres = _kinetic_layout(words, look, font)
+    base, lit = _ass_inline_colour(look.color), _ass_inline_colour(look.highlight_color)
+    caption_end = float(caption["end"]) if next_start is None else min(float(caption["end"]), next_start)
+    caption_end -= clip_start
+    rise = round(look.font_size * _KINETIC_RISE)
+    dialogues = []
+    for index, (word, (x, y)) in enumerate(zip(words, centres)):
+        # Times on the centisecond grid ASS keeps, so the tags below line up with the event.
+        word_start = round((float(word["start"]) - clip_start) * 100) / 100
+        word_end = max(caption_end, word_start + 0.01)
+        tags = (
+            f"\\an5\\move({x},{y + rise},{x},{y},0,{_KINETIC_PUNCH_MS})"
+            f"\\alpha&HFF&\\blur{_KINETIC_BLUR}\\fscx{_KINETIC_FROM_SCALE}\\fscy{_KINETIC_FROM_SCALE}\\1c{lit}"
+            f"\\t(0,{_KINETIC_FADE_MS},\\alpha&H00&)"
+            f"\\t(0,{_KINETIC_PUNCH_MS},0.5,\\fscx{_KINETIC_PEAK_SCALE}\\fscy{_KINETIC_PEAK_SCALE}\\blur0)"
+            f"\\t({_KINETIC_PUNCH_MS},{_KINETIC_SETTLE_MS},\\fscx100\\fscy100)"
+        )
+        if index + 1 < len(words):
+            unlit = round((float(words[index + 1]["start"]) - clip_start - word_start) * 1000)
+            tags += f"\\t({unlit},{unlit + 1},\\1c{base})"
+        dialogues.append(
+            f"Dialogue: 0,{_ass_timestamp(word_start)},{_ass_timestamp(word_end)},Caption,,0,0,0,,"
+            f"{{{tags}}}{_ass_escape(word['text'])}"
+        )
+    return dialogues
+
+
 def _build_ass_subtitles(
     segments: List[Dict[str, Any]], start: float, end: float, look: CaptionLook = DEFAULT_LOOK,
 ) -> str:
@@ -396,8 +480,17 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
     captions = _caption_chunks(_caption_words(segments, start, end, look), look)
     if not captions:
         return header
-    for caption in captions:
+    font = _caption_font(look.font_path, look.font_size) if look.style == "kinetic" else None
+    if look.style == "kinetic" and font is None:
+        # Kinetic places every word itself, so it needs the font to measure them.
+        logger.info("Caption font %s not found; kinetic captions fall back to pop", look.font_path)
+        look = replace(look, style="pop")
+    for index, caption in enumerate(captions):
         if not _ass_escape(caption["text"]):
+            continue
+        if font is not None:
+            following = captions[index + 1]["start"] if index + 1 < len(captions) else None
+            lines.extend(_kinetic_dialogues(caption, start, look, font, following))
             continue
         text = _styled_caption(caption, look)
         rel_start = float(caption["start"]) - start

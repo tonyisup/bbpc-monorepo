@@ -1,4 +1,4 @@
-"""caption_style: captions that follow the transcript's word timings (pop and highlight)."""
+"""caption_style: captions that follow the transcript's word timings (pop, highlight and kinetic)."""
 import re
 import unittest
 
@@ -65,6 +65,126 @@ class CaptionStyleTests(unittest.TestCase):
                 self.assertEqual([(start, end, plain(text)) for start, end, text in styled], chunk)
                 self.assertIn(r"\{WHEEL\}", styled[-2][2] + styled[-1][2])
 
+    def test_kinetic_gives_each_word_its_own_event_from_when_it_is_said_to_the_caption_end(self):
+        rows = dialogues({"caption_style": "kinetic", "caption_highlight_color": "#00ff88"})
+        self.assertEqual([(start, end, plain(text)) for start, end, text in rows], [
+            ("0:00:00.00", "0:00:01.20", "MOMMA"),
+            ("0:00:00.40", "0:00:01.20", "WANTS"),
+            ("0:00:00.80", "0:00:01.20", "WOMBAT."),
+            ("0:00:02.00", "0:00:02.30", "OKAY."),
+        ])
+        momma, wants, wombat, okay = (text for _, _, text in rows)
+        # Lit from its start, back to caption_color when the next word starts (ms from its own start).
+        self.assertIn(r"\1c&H88FF00&", momma)
+        self.assertIn(r"\t(400,401,\1c&H00FFFF&)", momma)
+        self.assertIn(r"\t(400,401,\1c&H00FFFF&)", wants)
+        self.assertNotIn(r"\1c&H00FFFF&", wombat)
+        # Enters hidden, small and blurred, then fades in, overshoots and settles.
+        for text in (momma, okay):
+            self.assertIn(r"\alpha&HFF&\blur4\fscx60\fscy60", text)
+            self.assertIn(r"\t(0,90,0.5,\fscx112\fscy112\blur0)\t(90,180,\fscx100\fscy100)", text)
+
+    def test_kinetic_lays_words_out_on_centred_lines_above_the_bottom_margin(self):
+        def centres(rows):
+            return [tuple(map(int, re.search(r"\\move\(\d+,\d+,(\d+),(\d+)", text).groups())) for _, _, text in rows]
+
+        look = clipper._caption_look({"caption_style": "kinetic"})
+        bottom_row = clipper.VIDEO_HEIGHT - look.margin_bottom_px - look.font_size // 2
+        top_row = bottom_row - look.font_size
+        momma, wants, wombat, okay = centres(dialogues({"caption_style": "kinetic"}))
+        # "MOMMA WANTS WOMBAT." is wider than a line, so it breaks as libass would break it.
+        self.assertEqual((momma[1], wants[1], wombat[1]), (top_row, top_row, bottom_row))
+        self.assertLess(momma[0], clipper.VIDEO_WIDTH // 2)
+        self.assertGreater(wants[0], clipper.VIDEO_WIDTH // 2)
+        self.assertAlmostEqual((momma[0] + wants[0]) / 2, clipper.VIDEO_WIDTH / 2, delta=40)
+        self.assertEqual(wombat, (clipper.VIDEO_WIDTH // 2, bottom_row))
+        self.assertEqual(okay, (clipper.VIDEO_WIDTH // 2, bottom_row))
+        for x, _ in (momma, wants, wombat):
+            self.assertTrue(look.margin_side_px <= x <= clipper.VIDEO_WIDTH - look.margin_side_px)
+
+    def test_kinetic_centres_a_line_on_its_words_as_drawn(self):
+        # Value: protects=a word with ASS-escaped characters is placed on its drawn width; fails_when=layout measures the escaped text (backslashes) and shifts the line off-centre; why_new=other layout cases have no escaped characters; seam=none; no_claim=PIL widths stand in for libass
+        words = [{"start": 10.0, "end": 10.5, "text": "a"}, {"start": 10.5, "end": 11.0, "text": "{wheel}"}]
+        rows = dialogues({"caption_style": "kinetic"}, [{"start": 10.0, "end": 11.0, "text": "a {wheel}", "words": words}])
+        a, wheel = (int(re.search(r"\\move\(\d+,\d+,(\d+),", text).group(1)) for _, _, text in rows)
+        font = clipper._caption_font()
+        left, right = a - font.getlength("A") / 2, wheel + font.getlength("{WHEEL}") / 2
+        self.assertAlmostEqual((left + right) / 2, clipper.VIDEO_WIDTH / 2, delta=2)
+
+    def test_kinetic_leaves_room_for_the_letters_libass_draws_unkerned(self):
+        # Value: protects=kinetic words are spaced on libass's unkerned widths, so neighbours never touch; fails_when=layout uses PIL's kerned length and WAVY AVATAR runs together; why_new=sample words have no kerning pairs; seam=none; no_claim=PIL advances stand in for libass
+        words = [{"start": 10.0 + i / 2, "end": 10.4 + i / 2, "text": w} for i, w in enumerate(["WAVY", "AVATAR", "TOWN"])]
+        rows = dialogues({"caption_style": "kinetic"}, [{"start": 10.0, "end": 11.4, "text": "", "words": words}])
+        centres = [int(re.search(r"\\move\(\d+,\d+,(\d+),", text).group(1)) for _, _, text in rows]
+        font = clipper._caption_font()
+        drawn = [sum(font.getlength(letter) for letter in word["text"]) for word in words]
+        for left in range(2):
+            gap = (centres[left + 1] - drawn[left + 1] / 2) - (centres[left] + drawn[left] / 2)
+            self.assertGreater(gap, font.getlength(" ") - 2, (words[left]["text"], gap))
+
+    def test_kinetic_ends_a_caption_when_the_next_one_starts(self):
+        # Value: protects=kinetic never shows two captions at once; fails_when=a caption whose last word runs past the next caption's start keeps its words, drawn over the next ones; why_new=sample captions never overlap; seam=none; no_claim=does not render frames
+        words = [
+            {"start": 10.0, "end": 10.4, "text": "great"},
+            {"start": 10.5, "end": 11.6, "text": "movie."},   # stretched past the next word
+            {"start": 11.2, "end": 11.5, "text": "terrible"},
+            {"start": 11.6, "end": 12.0, "text": "ending"},
+        ]
+        rows = dialogues({"caption_style": "kinetic"}, [{"start": 10.0, "end": 12.0, "text": "", "words": words}])
+        self.assertEqual([(start, end, plain(text)) for start, end, text in rows], [
+            ("0:00:00.00", "0:00:01.20", "GREAT"),
+            ("0:00:00.50", "0:00:01.20", "MOVIE."),
+            ("0:00:01.20", "0:00:02.00", "TERRIBLE"),
+            ("0:00:01.60", "0:00:02.00", "ENDING"),
+        ])
+
+    def test_kinetic_falls_back_to_pop_without_the_caption_font(self):
+        settings = {"caption_font_path": "/nonexistent/font.ttf"}
+        self.assertEqual(dialogues({**settings, "caption_style": "kinetic"}),
+                         dialogues({**settings, "caption_style": "pop"}))
+
+    def test_kinetic_shows_the_same_captions_as_chunk_at_the_same_times(self):
+        # Value: protects=kinetic shows every word of each chunk caption, escaped, from its start to its end, also for estimated timings; fails_when=kinetic drops/unescapes words or event times stray from the caption's; why_new=pop/highlight check only covers those two styles; seam=none; no_claim=does not check libass draws them
+        segments = SEGMENTS + [
+            {"start": 13.0, "end": 19.0, "text": "and then he walks into the bar with a {wheel} of cheese"},
+        ]
+        chunk = dialogues({}, segments)
+        rows = dialogues({"caption_style": "kinetic"}, segments)
+        captions = []
+        for start, end, text in rows:
+            if captions and captions[-1][1] == end:
+                captions[-1][2].append(plain(text))
+            else:
+                captions.append((start, end, [plain(text)]))
+        self.assertEqual([(start, end, " ".join(words)) for start, end, words in captions], chunk)
+        self.assertIn(r"\{WHEEL\}", [plain(text) for _, _, text in rows])
+
+    def test_kinetic_words_rise_into_their_place_centred_on_it(self):
+        # Value: protects=each word is anchored on its centre (an5) and rises straight up into the place the layout gives it; fails_when=an5 is dropped so move points anchor bottom-centre, or the word slides sideways/drops from above; why_new=layout test reads only the move end point; seam=none; no_claim=does not render frames
+        for _, _, text in dialogues({"caption_style": "kinetic"}):
+            with self.subTest(plain(text)):
+                match = re.match(r"\{\\an5\\move\((\d+),(\d+),(\d+),(\d+),0,(\d+)\)", text)
+                self.assertIsNotNone(match, text)
+                from_x, from_y, to_x, to_y, ms = map(int, match.groups())
+                self.assertEqual(from_x, to_x)
+                self.assertGreater(from_y, to_y)
+                self.assertGreater(ms, 0)
+
+    def test_a_kinetic_word_said_at_the_very_end_of_its_caption_is_still_an_event(self):
+        # Value: protects=a word whose start rounds to or past its caption's end still gets an event that ends after it starts; fails_when=word_end is just the caption end, giving a zero or negative event libass drops; why_new=sample words all end well after they start; seam=none; no_claim=a 10 ms event may fall between frames
+        words = [
+            {"start": 10.0, "end": 10.3, "text": "so"},
+            {"start": 10.4, "end": 10.4, "text": "yes."},      # zero length, last in its caption
+            {"start": 10.996, "end": 10.998, "text": "no."},   # starts on 0:00:01.00, caption ends at 0.998
+        ]
+        segments = [{"start": 10.0, "end": 11.0, "text": "so yes. no.", "words": words}]
+        rows = dialogues({"caption_style": "kinetic"}, segments)
+        self.assertEqual([(start, plain(text)) for start, _, text in rows],
+                         [("0:00:00.00", "SO"), ("0:00:00.40", "YES."), ("0:00:01.00", "NO.")])
+        for start, end, text in rows:
+            with self.subTest(plain(text)):
+                self.assertGreater(end, start)
+
     def test_the_styles_are_settings_a_lab_draft_may_change(self):
         for key in ("caption_style", "caption_highlight_color"):
             with self.subTest(key):
@@ -72,8 +192,9 @@ class CaptionStyleTests(unittest.TestCase):
                 self.assertIsNotNone(setting)
                 self.assertTrue(setting.draft)
                 self.assertEqual(setting.stages, ("clip",))
-        self.assertEqual(settings_schema.BY_KEY["caption_style"].choices, ("chunk", "pop", "highlight"))
+        self.assertEqual(settings_schema.BY_KEY["caption_style"].choices, ("chunk", "pop", "highlight", "kinetic"))
         self.assertEqual(lab.check_overrides({"caption_style": "pop", "caption_highlight_color": "#00FF88"}), [])
+        self.assertEqual(lab.check_overrides({"caption_style": "kinetic"}), [])
         self.assertTrue(lab.check_overrides({"caption_style": "karaoke"}))
         self.assertTrue(lab.check_overrides({"caption_highlight_color": "green"}))
 
