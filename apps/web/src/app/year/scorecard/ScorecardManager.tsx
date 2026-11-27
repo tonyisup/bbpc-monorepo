@@ -1,7 +1,15 @@
 "use client";
 
 import { useConvex } from "convex/react";
-import { ChevronDown, Download, ListOrdered, Plus, Search } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  ImageIcon,
+  ListOrdered,
+  Plus,
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -400,8 +408,8 @@ export function ScorecardManager({
   const info = current ? yearInfo.get(current.movie.id) : undefined;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
         <label htmlFor="scorecard-year" className="sr-only">
           Scorecard year
         </label>
@@ -409,7 +417,7 @@ export function ScorecardManager({
           id="scorecard-year"
           value={year}
           onChange={(event) => changeYear(Number(event.target.value))}
-          className="h-11 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm font-semibold"
+          className="h-11 rounded-md border border-zinc-700 bg-zinc-950 px-2 text-sm font-semibold sm:px-3"
         >
           {!years.includes(year) && <option value={year}>{year}</option>}
           {years.map((option) => (
@@ -430,7 +438,7 @@ export function ScorecardManager({
               role="tab"
               aria-selected={tab === option}
               onClick={() => setTab(option)}
-              className={`min-h-10 rounded px-4 text-sm font-semibold ${
+              className={`min-h-10 rounded px-2.5 text-sm font-semibold sm:px-4 ${
                 tab === option
                   ? "bg-zinc-100 text-zinc-950"
                   : "text-muted-foreground"
@@ -440,6 +448,38 @@ export function ScorecardManager({
             </button>
           ))}
         </div>
+        {tab === "score" && current && (
+          <div
+            role="radiogroup"
+            aria-label="Scoring style"
+            className="ml-auto flex rounded-md border border-zinc-700 p-0.5 text-xs"
+          >
+            {(["list", "illustrated"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={entryMode === mode}
+                title={mode === "list" ? "All at once" : "With pictures"}
+                onClick={() => changeEntryMode(mode)}
+                className={`inline-flex min-h-10 min-w-9 items-center justify-center gap-1.5 rounded px-2 font-semibold sm:min-w-10 sm:px-2.5 ${
+                  entryMode === mode
+                    ? "bg-zinc-100 text-zinc-950"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {mode === "list" ? (
+                  <SlidersHorizontal aria-hidden className="h-4 w-4" />
+                ) : (
+                  <ImageIcon aria-hidden className="h-4 w-4" />
+                )}
+                <span className="sr-only sm:not-sr-only">
+                  {mode === "list" ? "All at once" : "With pictures"}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -453,30 +493,6 @@ export function ScorecardManager({
 
       {tab === "score" ? (
         <div className="space-y-6">
-          {current && (
-            <div
-              role="radiogroup"
-              aria-label="Scoring style"
-              className="flex w-fit rounded-md border border-zinc-700 p-0.5 text-xs"
-            >
-              {(["list", "illustrated"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  role="radio"
-                  aria-checked={entryMode === mode}
-                  onClick={() => changeEntryMode(mode)}
-                  className={`min-h-9 rounded px-3 font-semibold ${
-                    entryMode === mode
-                      ? "bg-zinc-100 text-zinc-950"
-                      : "text-muted-foreground"
-                  }`}
-                >
-                  {mode === "list" ? "All at once" : "With pictures"}
-                </button>
-              ))}
-            </div>
-          )}
           {current ? (
             <CardForMode
               mode={entryMode}

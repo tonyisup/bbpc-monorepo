@@ -71,7 +71,7 @@ export function ScoreSlider({
       aria-valuenow={shown}
       aria-valuetext={shown === undefined ? "Not scored" : String(shown)}
       aria-disabled={disabled}
-      className="relative h-11 w-full cursor-pointer touch-none select-none outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-amber-400 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+      className="relative h-10 w-full cursor-pointer touch-none select-none outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-amber-400 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
       onPointerDown={(event) => {
         if (disabled) return;
         event.currentTarget.setPointerCapture(event.pointerId);

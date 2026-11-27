@@ -50,17 +50,17 @@ export function ConvexScorecardPage() {
   }
 
   return (
-    <div className="bbpc-page w-full max-w-4xl space-y-6">
+    <div className="bbpc-page w-full max-w-4xl space-y-4 pt-4 sm:space-y-6 sm:pt-12">
       <header>
         <p className="bbpc-kicker">
           <Link href="/year" className="hover:underline">
             Year in review
           </Link>
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">
+        <h1 className="mt-1 text-2xl font-black tracking-tight sm:text-4xl">
           My Scorecard
         </h1>
-        <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+        <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground sm:mt-2 sm:text-sm">
           <Lock className="h-3.5 w-3.5" /> Private to you. Score each movie to
           find your top 10.
         </p>
