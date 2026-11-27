@@ -34,7 +34,7 @@ const SCORES = Array.from(
 );
 
 /**
- * One criterion at a time, with a picture of what the score means above the
+ * One criterion at a time, with a picture of what the score means below the
  * slider. The picture follows the slider while dragging; the score saves on
  * release, exactly as in the list view.
  */
@@ -144,6 +144,25 @@ export function IllustratedScoreCard(props: ScoreCardProps) {
         <p className="text-sm text-muted-foreground">{criterion.hint}</p>
       </div>
 
+      <div className="flex items-center gap-2">
+        <span aria-hidden className="text-[10px] text-muted-foreground">
+          {SCORECARD_MIN_SCORE}
+        </span>
+        <div className="min-w-0 flex-1">
+          <ScoreSlider
+            key={criterion.key}
+            label={criterion.label}
+            value={scores[criterion.key]}
+            disabled={busy}
+            onCommit={(value) => onCommit(criterion.key, value)}
+            onPreview={setPreview}
+          />
+        </div>
+        <span aria-hidden className="text-[10px] text-muted-foreground">
+          {SCORECARD_MAX_SCORE}
+        </span>
+      </div>
+
       {/* Sized to the room left on screen so the whole card fits without scrolling. */}
       <figure
         ref={pictureRef}
@@ -185,25 +204,6 @@ export function IllustratedScoreCard(props: ScoreCardProps) {
           )}
         </figcaption>
       </figure>
-
-      <div className="flex items-center gap-2">
-        <span aria-hidden className="text-[10px] text-muted-foreground">
-          {SCORECARD_MIN_SCORE}
-        </span>
-        <div className="min-w-0 flex-1">
-          <ScoreSlider
-            key={criterion.key}
-            label={criterion.label}
-            value={scores[criterion.key]}
-            disabled={busy}
-            onCommit={(value) => onCommit(criterion.key, value)}
-            onPreview={setPreview}
-          />
-        </div>
-        <span aria-hidden className="text-[10px] text-muted-foreground">
-          {SCORECARD_MAX_SCORE}
-        </span>
-      </div>
 
       <ScoreCardActions {...props} />
     </section>
